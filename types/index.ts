@@ -18,12 +18,22 @@ export interface QRCode {
 }
 
 export interface QRCodeOptions {
+  size?: number;
   foregroundColor?: string;
   backgroundColor?: string;
-  size?: number;
-  logoUrl?: string;
-  cornerRadius?: number;
+  logo?: string | null;
+  logoSize?: number;
+  logoBorderRadius?: number;
+  logoBorderSize?: number;
+  logoBorderColor?: string;
   errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  cornerRadius?: number;
+  gradientColors?: {
+    startColor: string;
+    endColor: string;
+    type: 'linear' | 'radial';
+    angle?: number;
+  };
 }
 
 export interface QRScan {
