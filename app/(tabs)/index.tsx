@@ -1,80 +1,302 @@
-import { Image } from "expo-image";
-import { Platform, StyleSheet } from "react-native";
+The original HomeScreen component is replaced with a DashboardScreen component, fetching and displaying analytics data.
+```
+```typescript
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { analyticsService } from '@/services/analyticsService';
+import { AnalyticsSummary } from '@/types';
 
-import { HelloWave } from "@/components/HelloWave";
-import ParallaxScrollView from "@/components/ParallaxScrollView";
-import { ThemedText } from "@/components/ThemedText";
-import { ThemedView } from "@/components/ThemedView";
+export default function DashboardScreen() {
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-export default function HomeScreen() {
+  const fetchAnalytics = async () => {
+    try {
+      const data = await analyticsService.getAnalyticsSummary();
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      Alert.alert('Error', 'Failed to load analytics data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAnalytics();
+  };
+
+  if (loading && !analytics) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText>Loading dashboard...</ThemedText>
+      </ThemedView>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: "#A1CEDC", dark: "#1D3D47" }}
-      headerImage={
-        <Image
-          source={require("@/assets/images/partial-react-logo.png")}
-          style={styles.reactLogo}
-        />
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
       }
     >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Replit + Expo</ThemedText>
-        <HelloWave />
+      <ThemedView style={styles.header}>
+        <ThemedText type="title">MerchTech Dashboard</ThemedText>
+        <ThemedText type="subtitle">QR Code Analytics</ThemedText>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit{" "}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText>{" "}
-          to see changes. Press{" "}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: "cmd + d",
-              android: "cmd + m",
-              web: "F12",
-            })}
-          </ThemedText>{" "}
-          to open developer tools.
-        </ThemedText>
+
+      <ThemedView style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.totalScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>Total Scans</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.todayScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>Today</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.weekScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>This Week</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.monthScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>This Month</ThemedText>
+        </View>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
+
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle">Top Countries</ThemedText>
+        {analytics?.topCountries?.map((country, index) => (
+          <View key={index} style={styles.listItem}>
+            <ThemedText>{country.country}</ThemedText>
+            <ThemedText type="defaultSemiBold">{country.count}</ThemedText>
+          </View>
+        ))}
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">
-            npm run reset-project
-          </ThemedText>{" "}
-          to get a fresh <ThemedText type="defaultSemiBold">app</ThemedText>{" "}
-          directory. This will move the current{" "}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{" "}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
+
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle">Top Devices</ThemedText>
+        {analytics?.topDevices?.map((device, index) => (
+          <View key={index} style={styles.listItem}>
+            <ThemedText>{device.device}</ThemedText>
+            <ThemedText type="defaultSemiBold">{device.count}</ThemedText>
+          </View>
+        ))}
       </ThemedView>
-    </ParallaxScrollView>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  container: {
+    flex: 1,
+    padding: 16,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  header: {
+    marginBottom: 24,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: "absolute",
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  statCard: {
+    width: '48%',
+    backgroundColor: '#f0f0f0',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+});
+```The original HomeScreen component is replaced with a DashboardScreen component, fetching and displaying analytics data.
+```
+```typescript
+import React, { useEffect, useState } from 'react';
+import { View, ScrollView, StyleSheet, RefreshControl, Alert } from 'react-native';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
+import { analyticsService } from '@/services/analyticsService';
+import { AnalyticsSummary } from '@/types';
+
+export default function DashboardScreen() {
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchAnalytics = async () => {
+    try {
+      const data = await analyticsService.getAnalyticsSummary();
+      setAnalytics(data);
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+      Alert.alert('Error', 'Failed to load analytics data');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAnalytics();
+  };
+
+  if (loading && !analytics) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText>Loading dashboard...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <ThemedView style={styles.header}>
+        <ThemedText type="title">MerchTech Dashboard</ThemedText>
+        <ThemedText type="subtitle">QR Code Analytics</ThemedText>
+      </ThemedView>
+
+      <ThemedView style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.totalScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>Total Scans</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.todayScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>Today</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.weekScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>This Week</ThemedText>
+        </View>
+
+        <View style={styles.statCard}>
+          <ThemedText type="defaultSemiBold" style={styles.statNumber}>
+            {analytics?.monthScans || 0}
+          </ThemedText>
+          <ThemedText style={styles.statLabel}>This Month</ThemedText>
+        </View>
+      </ThemedView>
+
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle">Top Countries</ThemedText>
+        {analytics?.topCountries?.map((country, index) => (
+          <View key={index} style={styles.listItem}>
+            <ThemedText>{country.country}</ThemedText>
+            <ThemedText type="defaultSemiBold">{country.count}</ThemedText>
+          </View>
+        ))}
+      </ThemedView>
+
+      <ThemedView style={styles.section}>
+        <ThemedText type="subtitle">Top Devices</ThemedText>
+        {analytics?.topDevices?.map((device, index) => (
+          <View key={index} style={styles.listItem}>
+            <ThemedText>{device.device}</ThemedText>
+            <ThemedText type="defaultSemiBold">{device.count}</ThemedText>
+          </View>
+        ))}
+      </ThemedView>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  header: {
+    marginBottom: 24,
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  statCard: {
+    width: '48%',
+    backgroundColor: '#f0f0f0',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
 });

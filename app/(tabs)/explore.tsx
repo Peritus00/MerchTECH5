@@ -8,91 +8,143 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
 
-export default function TabTwoScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#D0D0D0', dark: '#353636' }}
-      headerImage={
-        <IconSymbol
-          size={310}
-          color="#808080"
-          name="chevron.left.forwardslash.chevron.right"
-          style={styles.headerImage}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Explore</ThemedText>
+import React, { useState, useEffect } from 'react';
+import { ScrollView, RefreshControl, View, TouchableOpacity, Alert } from 'react-native';
+import { QRCode } from 'react-native-qrcode-svg';
+
+// Placeholder types and services - replace with your actual implementations
+type QRCode = {
+  id: number;
+  name: string;
+  url: string;
+  createdAt: string;
+  options: any;
+};
+
+const qrCodeService = {
+  getQRCodes: async (): Promise<QRCode[]> => {
+    // Replace with actual API call
+    return Promise.resolve([
+      { id: 1, name: 'QR 1', url: 'https://example.com/1', createdAt: new Date().toISOString(), options: {} },
+      { id: 2, name: 'QR 2', url: 'https://example.com/2', createdAt: new Date().toISOString(), options: {} },
+    ]);
+  },
+  deleteQRCode: async (id: number): Promise<void> => {
+    // Replace with actual API call
+    return Promise.resolve();
+  },
+};
+
+const QRCodeGenerator = ({ value, size, options }: { value: string; size: number; options: any }) => (
+  <QRCode value={value} size={size} {...options} />
+);
+
+export default function QRCodesScreen() {
+  const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchQRCodes = async () => {
+    try {
+      const codes = await qrCodeService.getQRCodes();
+      setQrCodes(codes);
+    } catch (error) {
+      console.error('Error fetching QR codes:', error);
+      Alert.alert('Error', 'Failed to load QR codes');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchQRCodes();
+  }, []);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchQRCodes();
+  };
+
+  const handleDeleteQR = async (id: number) => {
+    Alert.alert(
+      'Delete QR Code',
+      'Are you sure you want to delete this QR code?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await qrCodeService.deleteQRCode(id);
+              setQrCodes(qrCodes.filter(qr => qr.id !== id));
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete QR code');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  if (loading && qrCodes.length === 0) {
+    return (
+      <ThemedView style={styles.container}>
+        <ThemedText>Loading QR codes...</ThemedText>
       </ThemedView>
-      <ThemedText>This app includes example code to help you get started.</ThemedText>
-      <Collapsible title="File-based routing">
-        <ThemedText>
-          This app has two screens:{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">app/(tabs)/explore.tsx</ThemedText>
-        </ThemedText>
-        <ThemedText>
-          The layout file in <ThemedText type="defaultSemiBold">app/(tabs)/_layout.tsx</ThemedText>{' '}
-          sets up the tab navigator.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/router/introduction">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Android, iOS, and web support">
-        <ThemedText>
-          You can open this project on Android, iOS, and the web. To open the web version, press{' '}
-          <ThemedText type="defaultSemiBold">w</ThemedText> in the terminal running this project.
-        </ThemedText>
-      </Collapsible>
-      <Collapsible title="Images">
-        <ThemedText>
-          For static images, you can use the <ThemedText type="defaultSemiBold">@2x</ThemedText> and{' '}
-          <ThemedText type="defaultSemiBold">@3x</ThemedText> suffixes to provide files for
-          different screen densities
-        </ThemedText>
-        <Image source={require('@/assets/images/react-logo.png')} style={{ alignSelf: 'center' }} />
-        <ExternalLink href="https://reactnative.dev/docs/images">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Custom fonts">
-        <ThemedText>
-          Open <ThemedText type="defaultSemiBold">app/_layout.tsx</ThemedText> to see how to load{' '}
-          <ThemedText style={{ fontFamily: 'SpaceMono' }}>
-            custom fonts such as this one.
-          </ThemedText>
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/versions/latest/sdk/font">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Light and dark mode components">
-        <ThemedText>
-          This template has light and dark mode support. The{' '}
-          <ThemedText type="defaultSemiBold">useColorScheme()</ThemedText> hook lets you inspect
-          what the user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-        </ThemedText>
-        <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-          <ThemedText type="link">Learn more</ThemedText>
-        </ExternalLink>
-      </Collapsible>
-      <Collapsible title="Animations">
-        <ThemedText>
-          This template includes an example of an animated component. The{' '}
-          <ThemedText type="defaultSemiBold">components/HelloWave.tsx</ThemedText> component uses
-          the powerful <ThemedText type="defaultSemiBold">react-native-reanimated</ThemedText>{' '}
-          library to create a waving hand animation.
-        </ThemedText>
-        {Platform.select({
-          ios: (
-            <ThemedText>
-              The <ThemedText type="defaultSemiBold">components/ParallaxScrollView.tsx</ThemedText>{' '}
-              component provides a parallax effect for the header image.
-            </ThemedText>
-          ),
-        })}
-      </Collapsible>
-    </ParallaxScrollView>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+      }
+    >
+      <ThemedView style={styles.header}>
+        <ThemedText type="title">My QR Codes</ThemedText>
+        <TouchableOpacity style={styles.createButton}>
+          <ThemedText style={styles.createButtonText}>+ Create New</ThemedText>
+        </TouchableOpacity>
+      </ThemedView>
+
+      {qrCodes.length === 0 ? (
+        <ThemedView style={styles.emptyState}>
+          <ThemedText type="subtitle">No QR codes yet</ThemedText>
+          <ThemedText>Create your first QR code to get started</ThemedText>
+        </ThemedView>
+      ) : (
+        qrCodes.map((qrCode) => (
+          <ThemedView key={qrCode.id} style={styles.qrCodeCard}>
+            <View style={styles.qrCodeHeader}>
+              <View style={styles.qrCodeInfo}>
+                <ThemedText type="defaultSemiBold">{qrCode.name}</ThemedText>
+                <ThemedText style={styles.qrCodeUrl}>{qrCode.url}</ThemedText>
+                <ThemedText style={styles.qrCodeDate}>
+                  Created: {new Date(qrCode.createdAt).toLocaleDateString()}
+                </ThemedText>
+              </View>
+              <TouchableOpacity
+                style={styles.deleteButton}
+                onPress={() => handleDeleteQR(qrCode.id)}
+              >
+                <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.qrCodePreview}>
+              <QRCodeGenerator
+                value={qrCode.url}
+                size={150}
+                options={qrCode.options}
+              />
+            </View>
+          </ThemedView>
+        ))
+      )}
+    </ScrollView>
   );
 }
 
@@ -106,5 +158,61 @@ const styles = StyleSheet.create({
   titleContainer: {
     flexDirection: 'row',
     gap: 8,
+  },
+  container: {
+    flex: 1,
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  createButton: {
+    backgroundColor: '#007BFF',
+    padding: 10,
+    borderRadius: 5,
+  },
+  createButtonText: {
+    color: 'white',
+  },
+  qrCodeCard: {
+    backgroundColor: '#f0f0f0',
+    borderRadius: 5,
+    padding: 15,
+    marginBottom: 15,
+  },
+  qrCodeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  qrCodeInfo: {
+    flex: 1,
+  },
+  qrCodeUrl: {
+    fontSize: 12,
+    color: 'gray',
+  },
+  qrCodeDate: {
+    fontSize: 12,
+    color: 'gray',
+  },
+  deleteButton: {
+    backgroundColor: '#DC3545',
+    padding: 8,
+    borderRadius: 5,
+  },
+  deleteButtonText: {
+    color: 'white',
+  },
+  qrCodePreview: {
+    alignItems: 'center',
+  },
+  emptyState: {
+    alignItems: 'center',
+    marginTop: 50,
   },
 });
