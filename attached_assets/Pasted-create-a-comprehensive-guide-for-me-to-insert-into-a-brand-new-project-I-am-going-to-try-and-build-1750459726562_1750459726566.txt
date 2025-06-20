@@ -1,0 +1,324 @@
+create a comprehensive guide for me to insert into a brand new project , I am going to try and build this EXACT same application as a react native apllication from scratch. Leave out anything that has to do with paypal, or streaming aka webrtc. I want you to tell yourself how to recreate this thing properly , take no action just give yourself instructions step by step
+
+17 minutes ago
+PB
+
+perriebenton
+Complete Guide: Building MerchTech QR Code Tracking Platform in React Native
+Project Overview
+You're building a comprehensive QR code tracking and analytics platform with product sales capabilities, fanmail management, slideshow features, and AI-powered design suggestions. This is a full-stack React Native application with PostgreSQL database and Express.js backend.
+
+Phase 1: Project Setup & Architecture
+1.1 Initialize React Native Project
+npx react-native@latest init MerchTechApp
+cd MerchTechApp
+1.2 Install Core Dependencies
+# Navigation
+npm install @react-navigation/native @react-navigation/stack @react-navigation/bottom-tabs
+npm install react-native-screens react-native-safe-area-context
+# State Management & API
+npm install @tanstack/react-query @tanstack/react-query-devtools
+npm install axios
+# UI Components
+npm install react-native-elements react-native-vector-icons
+npm install react-native-paper
+npm install react-native-modal
+# QR Code Functionality
+npm install react-native-qrcode-scanner
+npm install react-native-qrcode-svg
+npm install react-native-camera
+# Forms & Validation
+npm install react-hook-form
+npm install zod
+# Charts & Analytics
+npm install react-native-chart-kit
+npm install react-native-svg
+# File Handling
+npm install react-native-image-picker
+npm install react-native-document-picker
+# Storage
+npm install @react-native-async-storage/async-storage
+# Networking
+npm install @react-native-community/netinfo
+# Date/Time
+npm install date-fns
+# Additional Utilities
+npm install react-native-uuid
+npm install react-native-share
+1.3 Backend Setup (Express.js + PostgreSQL)
+mkdir server && cd server
+npm init -y
+npm install express cors helmet morgan
+npm install pg drizzle-orm drizzle-kit
+npm install zod
+npm install @google/generative-ai
+npm install stripe
+npm install @types/node @types/express typescript tsx
+Phase 2: Database Schema & Models
+2.1 Create Database Schema (shared/schema.ts)
+// Core entities you need to replicate:
+// Users table
+export const users = pgTable('users', {
+  id: serial('id').primaryKey(),
+  email: varchar('email', { length: 255 }).unique().notNull(),
+  username: varchar('username', { length: 100 }).unique(),
+  subscriptionTier: varchar('subscription_tier', { length: 50 }).default('free'),
+  createdAt: timestamp('created_at').defaultNow()
+});
+// QR Codes table
+export const qrCodes = pgTable('qr_codes', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').references(() => users.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  qrCodeData: text('qr_code_data'),
+  options: jsonb('options'),
+  createdAt: timestamp('created_at').defaultNow(),
+  isActive: boolean('is_active').default(true)
+});
+// QR Scans table
+export const qrScans = pgTable('qr_scans', {
+  id: serial('id').primaryKey(),
+  qrCodeId: integer('qr_code_id').references(() => qrCodes.id),
+  scannedAt: timestamp('scanned_at').defaultNow(),
+  location: varchar('location', { length: 255 }),
+  device: varchar('device', { length: 255 }),
+  countryName: varchar('country_name', { length: 100 }),
+  countryCode: varchar('country_code', { length: 10 }),
+  deviceType: varchar('device_type', { length: 50 }),
+  browserName: varchar('browser_name', { length: 100 }),
+  operatingSystem: varchar('operating_system', { length: 100 })
+});
+// Products table
+export const products = pgTable('products', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').references(() => users.id),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  price: decimal('price', { precision: 10, scale: 2 }),
+  imageUrl: varchar('image_url', { length: 500 }),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow()
+});
+// Slideshows table
+export const slideshows = pgTable('slideshows', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').references(() => users.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  description: text('description'),
+  isActive: boolean('is_active').default(true),
+  createdAt: timestamp('created_at').defaultNow()
+});
+// Slideshow Images table
+export const slideshowImages = pgTable('slideshow_images', {
+  id: serial('id').primaryKey(),
+  slideshowId: integer('slideshow_id').references(() => slideshows.id),
+  imageUrl: varchar('image_url', { length: 500 }).notNull(),
+  caption: text('caption'),
+  orderIndex: integer('order_index').default(0)
+});
+// Achievement Levels
+export const achievementLevels = pgTable('achievement_levels', {
+  id: serial('id').primaryKey(),
+  level: integer('level').unique().notNull(),
+  name: varchar('name', { length: 100 }).notNull(),
+  description: text('description'),
+  scansRequired: integer('scans_required').notNull()
+});
+// Fanmail table
+export const fanmail = pgTable('fanmail', {
+  id: serial('id').primaryKey(),
+  ownerId: integer('owner_id').references(() => users.id),
+  qrCodeId: integer('qr_code_id').references(() => qrCodes.id),
+  slideshowId: integer('slideshow_id').references(() => slideshows.id),
+  title: varchar('title', { length: 255 }).notNull(),
+  status: varchar('status', { length: 20 }).default('unread'),
+  contentType: varchar('content_type', { length: 100 }),
+  visitorCountry: varchar('visitor_country', { length: 100 }),
+  visitorDevice: varchar('visitor_device', { length: 100 }),
+  scannedAt: timestamp('scanned_at').defaultNow()
+});
+Phase 3: Backend API Structure
+3.1 Core API Routes (server/routes.ts)
+// Essential endpoints to implement:
+// Authentication
+app.post('/api/auth/login', loginHandler);
+app.post('/api/auth/register', registerHandler);
+app.get('/api/user', getUserHandler);
+// QR Code Management
+app.get('/api/qrcodes', getQRCodesHandler);
+app.post('/api/qrcodes', createQRCodeHandler);
+app.get('/api/qrcodes/:id', getQRCodeHandler);
+app.put('/api/qrcodes/:id', updateQRCodeHandler);
+app.delete('/api/qrcodes/:id', deleteQRCodeHandler);
+// QR Scan Tracking
+app.post('/api/qr-scans', recordScanHandler);
+app.get('/api/qr-scans/:qrCodeId', getScanHistoryHandler);
+// Analytics
+app.get('/api/analytics/summary', getAnalyticsSummaryHandler);
+app.get('/api/analytics/history/:days', getAnalyticsHistoryHandler);
+// Products
+app.get('/api/products', getProductsHandler);
+app.post('/api/products', createProductHandler);
+app.get('/api/products/:id', getProductHandler);
+// Slideshows
+app.get('/api/slideshows', getSlideshowsHandler);
+app.post('/api/slideshows', createSlideshowHandler);
+app.post('/api/slideshows/:id/images', uploadSlideshowImageHandler);
+// Fanmail
+app.get('/api/fanmail', getFanmailHandler);
+app.post('/api/fanmail', createFanmailHandler);
+app.get('/api/fanmail/stats', getFanmailStatsHandler);
+// AI Design Suggestions
+app.post('/api/ai/qr-suggestions', getQRDesignSuggestionsHandler);
+// Achievements
+app.get('/api/achievements', getAchievementsHandler);
+app.get('/api/achievements/next-level', getNextLevelHandler);
+3.2 Database Service Layer
+// Create services for each major feature:
+// - userService.ts
+// - qrCodeService.ts  
+// - scanTrackingService.ts
+// - analyticsService.ts
+// - productService.ts
+// - slideshowService.ts
+// - fanmailService.ts
+// - achievementService.ts
+// - aiSuggestionService.ts
+Phase 4: React Native App Structure
+4.1 App Architecture
+src/
+├── components/           # Reusable UI components
+├── screens/             # Screen components
+├── navigation/          # Navigation configuration
+├── services/           # API services
+├── hooks/              # Custom hooks
+├── utils/              # Utility functions
+├── types/              # TypeScript types
+├── store/              # State management
+└── assets/             # Images, icons
+4.2 Core Screens to Build
+Authentication Screens
+LoginScreen.tsx
+RegisterScreen.tsx
+ProfileScreen.tsx
+Dashboard Screens
+DashboardScreen.tsx (main analytics view)
+QRCodeListScreen.tsx
+CreateQRCodeScreen.tsx
+EditQRCodeScreen.tsx
+Analytics Screens
+AnalyticsDetailScreen.tsx
+ScanHistoryScreen.tsx
+Product Management
+ProductListScreen.tsx
+CreateProductScreen.tsx
+ProductDetailScreen.tsx
+Slideshow Management
+SlideshowListScreen.tsx
+CreateSlideshowScreen.tsx
+SlideshowViewerScreen.tsx
+Fanmail Management
+FanmailListScreen.tsx
+FanmailDetailScreen.tsx
+QR Code Scanner
+QRScannerScreen.tsx
+4.3 Key Components to Build
+QR Code Components
+// QRCodeGenerator.tsx - Generate QR codes with customization
+// QRCodePreview.tsx - Preview QR code designs
+// QRCodeScanner.tsx - Camera-based QR scanning
+// QRCodeOptionsForm.tsx - Customization form
+Analytics Components
+// AnalyticsChart.tsx - Charts using react-native-chart-kit
+// ScanMetrics.tsx - Key metrics display
+// GeographicMap.tsx - Location-based scan data
+// DeviceBreakdown.tsx - Device/browser analytics
+Product Components
+// ProductCard.tsx - Product display component
+// ProductForm.tsx - Create/edit product form
+// ProductGallery.tsx - Image gallery
+Slideshow Components
+// SlideshowPlayer.tsx - Image slideshow player
+// ImageUploader.tsx - Multi-image upload
+// SlideshowControls.tsx - Play/pause controls
+Phase 5: Key Features Implementation
+5.1 QR Code Generation & Customization
+// Implement QR code generation with options:
+// - Colors (foreground/background)
+// - Logo embedding
+// - Corner radius
+// - Size customization
+// - Error correction levels
+5.2 Scan Tracking & Analytics
+// Track scan events with metadata:
+// - Geolocation data
+// - Device information
+// - Timestamp tracking
+// - User agent parsing
+// - Real-time updates
+5.3 Achievement System
+// Gamification features:
+// - Level progression based on scans
+// - Achievement unlocking
+// - Progress tracking
+// - Notification system
+5.4 AI-Powered Design Suggestions
+// Google Gemini integration:
+// - Analyze QR code purpose
+// - Generate color suggestions
+// - Recommend design patterns
+// - Contextual improvements
+5.5 Fanmail System
+// Visitor engagement tracking:
+// - Detailed scan information
+// - Content interaction metrics
+// - Visitor demographics
+// - Engagement duration
+Phase 6: Mobile-Specific Considerations
+6.1 Camera Integration
+// QR code scanning capabilities
+// Image capture for products
+// Gallery access for slideshows
+6.2 Offline Functionality
+// Local storage for offline access
+// Sync when connection restored
+// Cached analytics data
+6.3 Push Notifications
+// Real-time scan notifications
+// Achievement unlocks
+// Fanmail updates
+6.4 Performance Optimization
+// Image optimization
+// Lazy loading for lists
+// Memory management
+// Battery efficiency
+Phase 7: Integration Points
+7.1 Stripe Payment Integration
+// Product sales processing
+// Subscription management
+// Transaction history
+7.2 Google Services
+// Gemini AI for design suggestions
+// Analytics integration
+// Maps for location data
+7.3 File Storage
+// Image upload handling
+// QR code asset storage
+// User content management
+Phase 8: Testing & Deployment
+8.1 Testing Strategy
+Unit tests for services
+Integration tests for API
+E2E tests for critical flows
+Device compatibility testing
+8.2 Deployment Preparation
+Environment configuration
+Build optimization
+App store requirements
+Backend deployment setup
+This comprehensive guide provides the complete roadmap for recreating the MerchTech platform as a React Native application, maintaining all core functionality while adapting to mobile-specific requirements and capabilities.
+
+
+Scroll to latest
+Agent is waiting for your response
