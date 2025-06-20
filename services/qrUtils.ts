@@ -1,8 +1,9 @@
 
-import { Alert, PermissionsAndroid, Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
+import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
-import Share from 'react-native-share';
-import RNFS from 'react-native-fs';
 
 export enum QRCodeFormat {
   PNG = 'png',
@@ -16,15 +17,11 @@ export const downloadQRCode = async (
   format: QRCodeFormat = QRCodeFormat.PNG
 ): Promise<void> => {
   try {
-    // Request storage permission on Android
-    if (Platform.OS === 'android') {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE
-      );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        Alert.alert('Permission Denied', 'Storage permission is required to save QR codes');
-        return;
-      }
+    // Request media library permission
+    const { status } = await MediaLibrary.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Media library permission is required to save QR codes');
+      return;
     }
 
     // Capture the QR code as image
@@ -36,13 +33,13 @@ export const downloadQRCode = async (
     });
 
     if (format === QRCodeFormat.PDF) {
-      // For PDF, we would need additional processing
-      // For now, we'll save as PNG and show sharing options
+      // For PDF, we'll share as PNG since PDF generation is complex
       await shareQRCode(uri, `${filename}.png`);
     } else {
-      const downloadPath = `${RNFS.DownloadDirectoryPath}/${filename}.${format}`;
-      await RNFS.copyFile(uri, downloadPath);
-      Alert.alert('Success', `QR code saved to Downloads folder as ${filename}.${format}`);
+      // Save to media library
+      const asset = await MediaLibrary.createAssetAsync(uri);
+      await MediaLibrary.createAlbumAsync('QR Codes', asset, false);
+      Alert.alert('Success', `QR code saved to Photos as ${filename}.${format}`);
     }
   } catch (error) {
     console.error('Download failed:', error);
@@ -52,14 +49,16 @@ export const downloadQRCode = async (
 
 export const shareQRCode = async (uri: string, filename: string): Promise<void> => {
   try {
-    const shareOptions = {
-      title: 'Share QR Code',
-      message: 'Check out this QR code',
-      url: uri,
-      filename: filename,
-    };
+    const isAvailable = await Sharing.isAvailableAsync();
+    if (!isAvailable) {
+      Alert.alert('Error', 'Sharing is not available on this device');
+      return;
+    }
 
-    await Share.open(shareOptions);
+    await Sharing.shareAsync(uri, {
+      mimeType: 'image/png',
+      dialogTitle: 'Share QR Code',
+    });
   } catch (error) {
     console.error('Share failed:', error);
     Alert.alert('Error', 'Failed to share QR code');

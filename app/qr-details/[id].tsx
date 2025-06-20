@@ -15,6 +15,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { QRCodeGenerator } from '@/components/QRCodeGenerator';
 import { qrCodeService } from '@/services/qrCodeService';
 import { downloadQRCode, shareQRCode, QRCodeFormat } from '@/services/qrUtils';
+import { captureRef } from 'react-native-view-shot';
 import { QRCode } from '@/types';
 
 export default function QRCodeDetailsScreen() {
