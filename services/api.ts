@@ -3,7 +3,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = __DEV__ 
-  ? 'http://localhost:5000/api' 
+  ? 'https://jsonplaceholder.typicode.com' 
   : 'https://your-production-url.com/api';
 
 export const api = axios.create({

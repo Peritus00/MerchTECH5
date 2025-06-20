@@ -10,34 +10,9 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 
 import React, { useState, useEffect } from 'react';
 import { ScrollView, RefreshControl, View, TouchableOpacity, Alert } from 'react-native';
-import { QRCode } from 'react-native-qrcode-svg';
-
-// Placeholder types and services - replace with your actual implementations
-type QRCode = {
-  id: number;
-  name: string;
-  url: string;
-  createdAt: string;
-  options: any;
-};
-
-const qrCodeService = {
-  getQRCodes: async (): Promise<QRCode[]> => {
-    // Replace with actual API call
-    return Promise.resolve([
-      { id: 1, name: 'QR 1', url: 'https://example.com/1', createdAt: new Date().toISOString(), options: {} },
-      { id: 2, name: 'QR 2', url: 'https://example.com/2', createdAt: new Date().toISOString(), options: {} },
-    ]);
-  },
-  deleteQRCode: async (id: number): Promise<void> => {
-    // Replace with actual API call
-    return Promise.resolve();
-  },
-};
-
-const QRCodeGenerator = ({ value, size, options }: { value: string; size: number; options: any }) => (
-  <QRCode value={value} size={size} {...options} />
-);
+import { QRCodeGenerator } from '@/components/QRCodeGenerator';
+import { qrCodeService } from '@/services/qrCodeService';
+import { QRCode } from '@/types';
 
 export default function QRCodesScreen() {
   const [qrCodes, setQrCodes] = useState<QRCode[]>([]);

@@ -1,52 +1,30 @@
-
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { QRCodeOptions } from '../types';
 
 interface QRCodeGeneratorProps {
   value: string;
   size?: number;
-  options?: QRCodeOptions;
-  getRef?: (ref: any) => void;
+  options?: {
+    foregroundColor?: string;
+    backgroundColor?: string;
+    logo?: string | null;
+  };
 }
 
-export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({
-  value,
-  size = 200,
-  options = {},
-  getRef,
+export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({ 
+  value, 
+  size = 200, 
+  options = {} 
 }) => {
-  const {
-    foregroundColor = '#000000',
-    backgroundColor = '#FFFFFF',
-    errorCorrectionLevel = 'M',
-    logoUrl,
-  } = options;
-
   return (
-    <View style={styles.container}>
-      <QRCode
-        value={value}
-        size={size}
-        color={foregroundColor}
-        backgroundColor={backgroundColor}
-        ecl={errorCorrectionLevel}
-        logo={logoUrl ? { uri: logoUrl } : undefined}
-        logoSize={logoUrl ? size * 0.2 : 0}
-        logoBackgroundColor={backgroundColor}
-        logoMargin={2}
-        logoBorderRadius={4}
-        getRef={getRef}
-      />
-    </View>
+    <QRCode
+      value={value}
+      size={size}
+      color={options.foregroundColor || '#000000'}
+      backgroundColor={options.backgroundColor || '#FFFFFF'}
+      logo={options.logo ? { uri: options.logo } : undefined}
+    />
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  },
-});
+export default QRCodeGenerator;
