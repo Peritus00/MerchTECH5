@@ -1,0 +1,231 @@
+I'll provide you with the complete file structure of the MerchTech QR code tracking platform. Let me analyze the current project structure and generate a comprehensive directory listing.
+
+
+Executed tree -I 'node_modules|.next|out|uploads' -a --dirsfirst
+
+Executed ls -la
+Complete MerchTech File Structure
+Here's the comprehensive file structure of the original MerchTech QR code tracking platform:
+
+
+Executed find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.json" -o -name "*.md" -o -name "*.sql" \) ! -path "./node_modules/*" ! -path "./.next/*" ! -path "./out/*" | head -50
+
+Executed find . -maxdepth 3 -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" \) ! -path "./node_modules/*" ! -path "./.next/*" ! -path "./out/*" ! -path "./.cache/*" | sort
+
+Executed find . -type d -maxdepth 3 ! -path "./node_modules/*" ! -path "./.next/*" ! -path "./out/*" ! -path "./.cache/*" ! -path "./.git/*" | sort
+Complete MerchTech File Structure for React Native Migration
+Here's the comprehensive file structure of the original MerchTech QR code tracking platform organized by functional areas:
+
+Root Configuration Files
+/
+├── package.json                    # Main dependencies and scripts
+├── package-lock.json              # Dependency lock file
+├── tsconfig.json                  # TypeScript configuration
+├── next.config.js                 # Next.js configuration
+├── tailwind.config.js             # Tailwind CSS configuration
+├── postcss.config.js              # PostCSS configuration
+├── drizzle.config.ts              # Database ORM configuration
+├── middleware.ts                  # Next.js middleware
+├── .env                           # Environment variables
+├── .env.example                   # Environment template
+├── .gitignore                     # Git ignore rules
+└── .replit                        # Replit configuration
+Next.js App Router Structure
+app/
+├── layout.tsx                     # Root layout component
+├── page.tsx                       # Home page
+├── components/
+│   ├── ClientWrapper.tsx          # Client-side wrapper
+│   ├── EnvPolyfill.tsx            # Environment polyfill
+│   ├── GoogleAnalytics.tsx        # Analytics integration
+│   └── NoSSR.tsx                  # No server-side rendering wrapper
+├── api/                           # API routes
+│   ├── fanmail/
+│   │   ├── route.ts               # Fanmail CRUD operations
+│   │   └── stats/route.ts         # Fanmail statistics
+│   ├── achievements/route.ts      # Achievement system
+│   ├── activation-codes/route.ts  # QR activation codes
+│   ├── analytics/route.ts         # Analytics data
+│   ├── playlists/route.ts         # Media playlists
+│   ├── products/route.ts          # Product management
+│   ├── qrcodes/route.ts           # QR code generation
+│   ├── slideshows/route.ts        # Slideshow management
+│   ├── store/route.ts             # E-commerce store
+│   ├── upload/route.ts            # File upload handling
+│   └── user/route.ts              # User management
+└── [feature-pages]/
+    ├── dashboard/page.tsx         # Main dashboard
+    ├── analytics/page.tsx         # Analytics view
+    ├── achievements/page.tsx      # Achievement tracking
+    ├── fanmail/page.tsx           # Fanmail management
+    ├── playlists/page.tsx         # Media playlist manager
+    ├── slideshow-manager/page.tsx # Slideshow creation
+    ├── store/page.tsx             # Product store
+    ├── auth/page.tsx              # Authentication
+    └── profile/page.tsx           # User profile
+Legacy Client Structure (Vite-based)
+client/
+├── src/
+│   ├── App.tsx                    # Main application component
+│   ├── main.tsx                   # Application entry point
+│   ├── components/                # Reusable UI components
+│   ├── pages/                     # Page components
+│   ├── hooks/                     # Custom React hooks
+│   ├── lib/                       # Utility libraries
+│   ├── contexts/                  # React contexts
+│   ├── types/                     # TypeScript type definitions
+│   └── assets/                    # Static assets
+├── env.d.ts                       # Environment type definitions
+└── vite-env.d.ts                  # Vite environment types
+Shared Components Library
+components/
+├── ui/                            # Base UI components
+│   ├── button.tsx                 # Button component
+│   ├── input.tsx                  # Input field
+│   ├── dialog.tsx                 # Modal dialogs
+│   ├── form.tsx                   # Form components
+│   ├── table.tsx                  # Data tables
+│   ├── chart.tsx                  # Chart components
+│   ├── calendar.tsx               # Date picker
+│   ├── toast.tsx                  # Notification toasts
+│   └── [50+ other UI components]
+├── ErrorBoundary.tsx              # Error handling
+├── custom-date-range.tsx          # Date range picker
+└── date-range-picker.tsx          # Alternative date picker
+Deployment-Ready Components
+deployment-ready/
+├── app/
+│   └── page-minimal.tsx           # Minimal page template
+├── components/
+│   ├── analytics/                 # Analytics components
+│   ├── ui/                        # UI components
+│   ├── ActivationCodeManager.tsx  # Code management
+│   ├── AIDesignSuggestions.tsx    # AI-powered suggestions
+│   ├── AppSidebar.tsx             # Navigation sidebar
+│   ├── CheckoutModal.tsx          # Payment checkout
+│   ├── CreateQRModal.tsx          # QR code creation
+│   ├── EnhancedSlideshowViewer.tsx # Slideshow display
+│   ├── InteractiveQREditor.tsx    # QR code editor
+│   ├── MediaPlaylist.tsx          # Media player
+│   ├── Navbar.tsx                 # Navigation bar
+│   ├── PageLoader.tsx             # Loading component
+│   └── [30+ specialized components]
+└── lib/
+    └── [utility libraries]
+Custom Hooks
+hooks/
+├── use-auth.tsx                   # Authentication management
+├── use-analytics.tsx              # Analytics tracking
+├── use-achievements.tsx           # Achievement system
+├── use-activation-codes.tsx       # QR activation codes
+├── use-ai-suggestions.tsx         # AI design suggestions
+├── use-playlists.tsx              # Media playlist management
+├── use-slideshows.tsx             # Slideshow operations
+├── use-websocket.tsx              # Real-time WebSocket
+├── use-monitoring.tsx             # Performance monitoring
+├── use-mobile.tsx                 # Mobile device detection
+└── use-toast.ts                   # Toast notifications
+Utility Libraries
+lib/
+├── queryClient.ts                 # React Query configuration
+├── utils.ts                       # General utilities
+├── qrUtils.ts                     # QR code utilities
+├── geolocationService.ts          # Location services
+├── monitoring.ts                  # Performance monitoring
+├── performance-utils.ts           # Performance optimization
+└── starQRRenderer.ts              # Custom QR renderer
+Backend Server
+server/
+├── index.ts                       # Server entry point
+├── routes.ts                      # API route definitions
+├── db.ts                          # Database connection
+├── storage.ts                     # Data storage layer
+├── auth.ts                        # Authentication logic
+├── activation-code-service.ts     # QR activation codes
+├── fanmail-service.ts             # Fanmail management
+├── gemini-design-service.ts       # AI design suggestions
+├── geo-service.ts                 # Geolocation services
+├── stripe-service.ts              # Payment processing
+├── brevo-service.ts               # Email services
+├── rate-limiter.ts                # API rate limiting
+├── admin-routes.ts                # Admin functionality
+└── verification-service.ts        # User verification
+Database & Schema
+shared/
+├── schema.ts                      # Database schema definition
+├── db.ts                          # Database utilities
+└── subscription-tiers.ts          # Subscription management
+migrations/
+└── add_fanmail_table.sql          # Database migrations
+Type Definitions
+types/
+├── global.d.ts                    # Global type definitions
+├── declarations.d.ts              # Module declarations
+├── geoip-lite.d.ts                # Geolocation types
+└── node-iplocate.d.ts             # IP location types
+Static Assets & Uploads
+public/
+├── returns/                       # Return policy assets
+└── [static files]
+uploads/
+├── products/                      # Product images
+└── slideshows/
+    └── audio/                     # Slideshow audio files
+attached_assets/                   # User-uploaded assets
+Mobile Application (Expo/React Native)
+mobile/
+├── app/
+│   ├── index.tsx                  # Mobile app entry
+│   ├── _layout.tsx                # Layout configuration
+│   ├── login.tsx                  # Authentication screen
+│   ├── products.tsx               # Product management
+│   ├── scanner.tsx                # QR code scanner
+│   └── config.ts                  # App configuration
+├── scripts/
+│   └── build.js                   # Build scripts
+├── babel.config.js                # Babel configuration
+└── metro.config.js                # Metro bundler config
+Configuration & Deployment
+├── Dockerfile                     # Docker configuration
+├── vercel.json                    # Vercel deployment
+├── render.yaml                    # Render.com deployment
+├── netlify.toml                   # Netlify deployment
+├── DEPLOYMENT_GUIDE.md            # Deployment instructions
+├── MONITORING_SETUP.md            # Monitoring setup
+├── SAFE_DEPLOYMENT_STEPS.md       # Safety guidelines
+└── SUBDOMAIN_SETUP.md             # Subdomain configuration
+Key Features Implemented
+Core QR Code System
+QR code generation with customization options
+Scan tracking with detailed analytics
+Geolocation and device information capture
+Achievement system based on scan metrics
+E-commerce Integration
+Product management and display
+Stripe payment processing
+Shopping cart functionality
+Order management
+Media Management
+Slideshow creation and viewing
+Media playlist management
+File upload and storage
+Real-time media streaming capabilities
+Analytics & Monitoring
+Comprehensive scan analytics
+Performance monitoring
+User engagement tracking
+Geographic distribution analysis
+AI-Powered Features
+Google Gemini integration for design suggestions
+Contextual QR code optimization
+Smart color scheme recommendations
+User Management
+Authentication system
+Subscription tier management
+Achievement tracking
+Fanmail system for visitor engagement
+This structure provides a complete foundation for recreating the MerchTech platform in React Native, maintaining all core functionality while adapting to mobile-specific requirements and capabilities.
+
+
+Scroll to latest
+Agent is waiting for your response
