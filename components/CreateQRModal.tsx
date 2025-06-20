@@ -22,53 +22,55 @@ interface CreateQRModalProps {
   onQRCreated: () => void;
 }
 
-export const CreateQRModal: React.FC<CreateQRModalProps> = ({
-  visible,
-  onClose,
-  onQRCreated,
-}) => {
+export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalProps) {
   const [formData, setFormData] = useState<CreateQRCodeData>({
     name: '',
     url: '',
+    description: '',
     options: {
-      size: 200,
       foregroundColor: '#000000',
-      backgroundColor: '#ffffff',
+      backgroundColor: '#FFFFFF',
+      logo: null,
     },
   });
-  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
 
   const handleCreate = async () => {
     if (!formData.name.trim() || !formData.url.trim()) {
-      Alert.alert('Error', 'Please fill in all required fields');
+      Alert.alert('Error', 'Please fill in name and URL fields');
       return;
     }
 
-    setLoading(true);
+    setCreating(true);
     try {
       await qrCodeService.createQRCode(formData);
       Alert.alert('Success', 'QR Code created successfully!');
       onQRCreated();
-      handleClose();
+      resetForm();
     } catch (error) {
       Alert.alert('Error', 'Failed to create QR code');
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
-  const handleClose = () => {
+  const resetForm = () => {
     setFormData({
       name: '',
       url: '',
+      description: '',
       options: {
-        size: 200,
         foregroundColor: '#000000',
-        backgroundColor: '#ffffff',
+        backgroundColor: '#FFFFFF',
+        logo: null,
       },
     });
     setPreviewMode(false);
+  };
+
+  const handleClose = () => {
+    resetForm();
     onClose();
   };
 
@@ -79,10 +81,10 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
           <TouchableOpacity onPress={handleClose}>
             <ThemedText style={styles.cancelButton}>Cancel</ThemedText>
           </TouchableOpacity>
-          <ThemedText type="title">Create QR Code</ThemedText>
-          <TouchableOpacity onPress={handleCreate} disabled={loading}>
-            <ThemedText style={[styles.createButton, loading && styles.disabled]}>
-              {loading ? 'Creating...' : 'Create'}
+          <ThemedText type="defaultSemiBold">Create QR Code</ThemedText>
+          <TouchableOpacity onPress={handleCreate} disabled={creating}>
+            <ThemedText style={[styles.createButton, creating && styles.disabled]}>
+              {creating ? 'Creating...' : 'Create'}
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -114,13 +116,26 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
                 keyboardType="url"
               />
             </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Description</ThemedText>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={formData.description}
+                onChangeText={(text) => setFormData({ ...formData, description: text })}
+                placeholder="Optional description"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
           </View>
 
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <ThemedText type="subtitle">Customization</ThemedText>
-              <View style={styles.switchContainer}>
-                <ThemedText>Preview</ThemedText>
+              <View style={styles.previewToggle}>
+                <ThemedText style={styles.previewLabel}>Preview</ThemedText>
                 <Switch
                   value={previewMode}
                   onValueChange={setPreviewMode}
@@ -129,34 +144,16 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
             </View>
 
             <View style={styles.inputGroup}>
-              <ThemedText style={styles.label}>Size</ThemedText>
-              <TextInput
-                style={styles.input}
-                value={formData.options?.size?.toString() || '200'}
-                onChangeText={(text) => {
-                  const size = parseInt(text) || 200;
-                  setFormData({
-                    ...formData,
-                    options: { ...formData.options, size },
-                  });
-                }}
-                placeholder="200"
-                keyboardType="numeric"
-              />
-            </View>
-
-            <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Foreground Color</ThemedText>
               <TextInput
                 style={styles.input}
-                value={formData.options?.foregroundColor || '#000000'}
-                onChangeText={(text) =>
-                  setFormData({
-                    ...formData,
-                    options: { ...formData.options, foregroundColor: text },
-                  })
-                }
+                value={formData.options?.foregroundColor}
+                onChangeText={(text) => setFormData({
+                  ...formData,
+                  options: { ...formData.options, foregroundColor: text }
+                })}
                 placeholder="#000000"
+                placeholderTextColor="#999"
               />
             </View>
 
@@ -164,25 +161,24 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
               <ThemedText style={styles.label}>Background Color</ThemedText>
               <TextInput
                 style={styles.input}
-                value={formData.options?.backgroundColor || '#ffffff'}
-                onChangeText={(text) =>
-                  setFormData({
-                    ...formData,
-                    options: { ...formData.options, backgroundColor: text },
-                  })
-                }
-                placeholder="#ffffff"
+                value={formData.options?.backgroundColor}
+                onChangeText={(text) => setFormData({
+                  ...formData,
+                  options: { ...formData.options, backgroundColor: text }
+                })}
+                placeholder="#FFFFFF"
+                placeholderTextColor="#999"
               />
             </View>
           </View>
 
           {previewMode && formData.url && (
-            <View style={styles.section}>
+            <View style={styles.previewSection}>
               <ThemedText type="subtitle">Preview</ThemedText>
               <View style={styles.previewContainer}>
                 <QRCodeGenerator
                   value={formData.url}
-                  size={formData.options?.size || 200}
+                  size={200}
                   options={formData.options}
                 />
               </View>
@@ -192,7 +188,7 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
       </ThemedView>
     </Modal>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: {
@@ -202,19 +198,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
   cancelButton: {
     color: '#007BFF',
-    fontSize: 16,
   },
   createButton: {
     color: '#007BFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '600',
   },
   disabled: {
     opacity: 0.5,
@@ -232,30 +225,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
-  switchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   inputGroup: {
     marginBottom: 16,
   },
   label: {
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#d0d0d0',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: '#fff',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  previewToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  previewLabel: {
+    marginRight: 8,
+    fontSize: 14,
+  },
+  previewSection: {
+    alignItems: 'center',
+    marginTop: 16,
   },
   previewContainer: {
-    alignItems: 'center',
-    padding: 20,
+    marginTop: 16,
+    padding: 16,
     backgroundColor: '#f9f9f9',
     borderRadius: 8,
   },
