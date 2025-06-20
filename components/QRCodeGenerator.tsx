@@ -1,5 +1,7 @@
+
 import React from 'react';
-import QRCode from 'react-native-qrcode-svg';
+import { View, StyleSheet } from 'react-native';
+import { ThemedText } from './ThemedText';
 
 interface QRCodeGeneratorProps {
   value: string;
@@ -7,6 +9,7 @@ interface QRCodeGeneratorProps {
   options?: {
     foregroundColor?: string;
     backgroundColor?: string;
+    size?: number;
     logo?: string | null;
   };
 }
@@ -14,17 +17,46 @@ interface QRCodeGeneratorProps {
 export const QRCodeGenerator: React.FC<QRCodeGeneratorProps> = ({ 
   value, 
   size = 200, 
-  options = {} 
+  options 
 }) => {
+  // For now, showing a placeholder since we need to implement actual QR code generation
+  // You'll need to install a QR code library like react-native-qrcode-svg
+  
   return (
-    <QRCode
-      value={value}
-      size={size}
-      color={options.foregroundColor || '#000000'}
-      backgroundColor={options.backgroundColor || '#FFFFFF'}
-      logo={options.logo ? { uri: options.logo } : undefined}
-    />
+    <View style={[
+      styles.container, 
+      { 
+        width: size, 
+        height: size,
+        backgroundColor: options?.backgroundColor || '#FFFFFF'
+      }
+    ]}>
+      <ThemedText style={styles.placeholder}>
+        QR Code
+      </ThemedText>
+      <ThemedText style={styles.value} numberOfLines={2}>
+        {value}
+      </ThemedText>
+    </View>
   );
 };
 
-export default QRCodeGenerator;
+const styles = StyleSheet.create({
+  container: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#000000',
+    borderRadius: 8,
+  },
+  placeholder: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  value: {
+    fontSize: 10,
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+});
