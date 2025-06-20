@@ -1,4 +1,3 @@
-
 import { AnalyticsSummary, ScanData } from '../types';
 
 export const analyticsService = {
@@ -6,24 +5,52 @@ export const analyticsService = {
   async getAnalyticsSummary(): Promise<AnalyticsSummary> {
     // Mock data for development
     return Promise.resolve({
-      totalScans: 1250,
-      todayScans: 45,
-      weekScans: 234,
-      monthScans: 892,
+      totalScans: 1247,
+      todayScans: 89,
+      weekScans: 423,
+      monthScans: 856,
+      uniqueVisitors: 789,
+      avgScansPerDay: 42,
+      conversionRate: 12.5,
+      scanGrowth: 15.2,
+      visitorGrowth: 8.7,
+      dailyGrowth: 22.1,
+      conversionGrowth: 5.3,
       topCountries: [
-        { country: 'United States', count: 345 },
-        { country: 'Canada', count: 189 },
-        { country: 'United Kingdom', count: 156 },
-        { country: 'Germany', count: 134 },
-        { country: 'France', count: 98 }
+        { country: 'United States', count: 456, flag: '🇺🇸' },
+        { country: 'Canada', count: 234, flag: '🇨🇦' },
+        { country: 'United Kingdom', count: 189, flag: '🇬🇧' },
+        { country: 'Germany', count: 167, flag: '🇩🇪' },
+        { country: 'France', count: 98, flag: '🇫🇷' },
       ],
       topDevices: [
-        { device: 'iPhone', count: 567 },
-        { device: 'Android', count: 432 },
-        { device: 'iPad', count: 123 },
-        { device: 'Desktop', count: 89 },
-        { device: 'Other', count: 39 }
-      ]
+        { device: 'iPhone 15 Pro', count: 234 },
+        { device: 'Samsung Galaxy S24', count: 189 },
+        { device: 'iPhone 14', count: 156 },
+        { device: 'Google Pixel 8', count: 134 },
+        { device: 'OnePlus 12', count: 98 },
+      ],
+      hourlyData: [2, 1, 0, 1, 3, 8, 15, 25, 35, 42, 38, 45, 52, 48, 44, 51, 58, 62, 45, 38, 28, 18, 12, 6],
+      recentScans: [
+        {
+          qrName: 'Website Homepage',
+          location: 'New York, US',
+          device: 'iPhone 15 Pro',
+          timestamp: new Date().toISOString(),
+        },
+        {
+          qrName: 'Product Catalog',
+          location: 'Toronto, CA',
+          device: 'Samsung Galaxy S24',
+          timestamp: new Date(Date.now() - 300000).toISOString(),
+        },
+        {
+          qrName: 'Contact Info',
+          location: 'London, UK',
+          device: 'iPhone 14',
+          timestamp: new Date(Date.now() - 600000).toISOString(),
+        },
+      ],
     });
   },
 

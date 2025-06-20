@@ -11,6 +11,7 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import React, { useState, useEffect } from 'react';
 import { ScrollView, RefreshControl, View, TouchableOpacity, Alert } from 'react-native';
 import { QRCodeGenerator } from '@/components/QRCodeGenerator';
+import { CreateQRModal } from '@/components/CreateQRModal';
 import { qrCodeService } from '@/services/qrCodeService';
 import { QRCode } from '@/types';
 
@@ -18,6 +19,7 @@ export default function QRCodesScreen() {
   const [qrCodes, setQrCodes] = useState<QRCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [createModalVisible, setCreateModalVisible] = useState(false);
 
   const fetchQRCodes = async () => {
     try {
@@ -80,7 +82,10 @@ export default function QRCodesScreen() {
     >
       <ThemedView style={styles.header}>
         <ThemedText type="title">My QR Codes</ThemedText>
-        <TouchableOpacity style={styles.createButton}>
+        <TouchableOpacity 
+          style={styles.createButton}
+          onPress={() => setCreateModalVisible(true)}
+        >
           <ThemedText style={styles.createButtonText}>+ Create New</ThemedText>
         </TouchableOpacity>
       </ThemedView>
@@ -119,6 +124,15 @@ export default function QRCodesScreen() {
           </ThemedView>
         ))
       )}
+
+      <CreateQRModal
+        visible={createModalVisible}
+        onClose={() => setCreateModalVisible(false)}
+        onQRCreated={() => {
+          setCreateModalVisible(false);
+          fetchQRCodes();
+        }}
+      />
     </ScrollView>
   );
 }

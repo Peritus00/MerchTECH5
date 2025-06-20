@@ -1,4 +1,3 @@
-
 export interface User {
   id: number;
   email: string;
@@ -95,7 +94,24 @@ export interface AnalyticsSummary {
   todayScans: number;
   weekScans: number;
   monthScans: number;
-  topCountries: Array<{ country: string; count: number }>;
+  uniqueVisitors: number;
+  avgScansPerDay: number;
+  conversionRate: number;
+  scanGrowth: number;
+  visitorGrowth: number;
+  dailyGrowth: number;
+  conversionGrowth: number;
+  topCountries: Array<{ 
+    country: string; 
+    count: number; 
+    flag?: string;
+  }>;
   topDevices: Array<{ device: string; count: number }>;
-  scanHistory: Array<{ date: string; count: number }>;
+  hourlyData: number[];
+  recentScans: Array<{
+    qrName: string;
+    location: string;
+    device: string;
+    timestamp: string;
+  }>;
 }
