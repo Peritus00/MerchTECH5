@@ -161,16 +161,8 @@ export default function RegisterScreen() {
       );
       
       if (result.success) {
-        Alert.alert(
-          'Registration Successful!',
-          'Please check your email to verify your account. You will need to verify your email before you can sign in.',
-          [
-            {
-              text: 'OK',
-              onPress: () => router.push('/auth/login')
-            }
-          ]
-        );
+        // User is automatically logged in, redirect to subscription selection
+        router.push('/subscription?newUser=true');
       } else {
         setErrors({ general: result.error || 'Registration failed' });
       }

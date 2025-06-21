@@ -44,7 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState(prev => ({ ...prev, isLoading: true }));
       // Clear any stale authentication data on app start
       await authService.logout();
-      
+
       setState({
         user: null,
         isAuthenticated: false,

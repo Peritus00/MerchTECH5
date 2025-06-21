@@ -319,93 +319,61 @@ app.post('/api/auth/register', async (req, res) => {
 
     console.log('Registration attempt for:', { email, username });
 
-    // Check if user already exists in users table
+    // Check if user already exists
     const existingUser = await pool.query(
       'SELECT email, username FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
-
-    console.log('Existing users check:', { 
-      rowCount: existingUser.rows.length, 
-      rows: existingUser.rows 
-    });
+    console.log('Existing users check:', { rowCount: existingUser.rowCount, rows: existingUser.rows });
 
     if (existingUser.rows.length > 0) {
-      const existing = existingUser.rows[0];
-      console.log('User conflict found:', existing);
-      if (existing.email === email) {
-        const errorMsg = 'An account with this email address already exists. Please try logging in instead.';
-        console.log('Email conflict:', errorMsg);
-        return res.status(400).json({ error: errorMsg });
+      const user = existingUser.rows[0];
+      if (user.email === email) {
+        return res.status(400).json({ error: 'Email already registered' });
       }
-      if (existing.username === username) {
-        const errorMsg = 'This username is already taken. Please choose a different username.';
-        console.log('Username conflict:', errorMsg);
-        return res.status(400).json({ error: errorMsg });
-      }
-    }
-
-    // Check if pending registration exists
-    const existingPending = await pool.query(
-      'SELECT email, username FROM pending_users WHERE email = $1 OR username = $2',
-      [email, username]
-    );
-
-    console.log('Existing pending check:', { 
-      rowCount: existingPending.rows.length, 
-      rows: existingPending.rows 
-    });
-
-    if (existingPending.rows.length > 0) {
-      const pending = existingPending.rows[0];
-      console.log('Pending conflict found:', pending);
-      if (pending.email === email) {
-        const errorMsg = 'Registration already pending for this email. Please check your email for verification or try resending the verification email.';
-        console.log('Pending email conflict:', errorMsg);
-        return res.status(400).json({ error: errorMsg });
-      }
-      if (pending.username === username) {
-        const errorMsg = 'This username is already reserved by a pending registration. Please choose a different username.';
-        console.log('Pending username conflict:', errorMsg);
-        return res.status(400).json({ error: errorMsg });
+      if (user.username === username) {
+        return res.status(400).json({ error: 'Username already taken' });
       }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const verificationToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-    // Save to pending_users table
-    await pool.query(
-      `INSERT INTO pending_users (email, username, password_hash, first_name, last_name, verification_token, expires_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [email, username, passwordHash, firstName, lastName, verificationToken, expiresAt]
+    // Create user directly in users table with free tier by default
+    const newUser = await pool.query(
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, subscription_tier, is_new_user, created_at, updated_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) 
+       RETURNING id, email, username, first_name, last_name, subscription_tier, is_new_user, is_admin, created_at`,
+      [email, username, passwordHash, firstName, lastName, 'free', true]
     );
 
-    // Send verification email
-    try {
-      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
-      
-      await transporter.sendMail({
-        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
-        to: email,
-        subject: 'Verify Your MerchTech Account',
-        html: `
-          <h2>Welcome to MerchTech!</h2>
-          <p>Thank you for registering. Please click the link below to verify your email address:</p>
-          <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
-          <p>This link will expire in 24 hours.</p>
-          <p>If you didn't create this account, please ignore this email.</p>
-        `
-      });
-    } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      // Continue with registration even if email fails
-    }
+    console.log('User created successfully:', newUser.rows[0]);
+
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { 
+        userId: newUser.rows[0].id, 
+        email: newUser.rows[0].email,
+        subscriptionTier: newUser.rows[0].subscription_tier
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
 
     res.status(201).json({
-      message: 'Registration successful. Please check your email to verify your account.',
-      requiresVerification: true
+      message: 'Registration successful!',
+      user: {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        username: newUser.rows[0].username,
+        firstName: newUser.rows[0].first_name,
+        lastName: newUser.rows[0].last_name,
+        subscriptionTier: newUser.rows[0].subscription_tier,
+        isNewUser: newUser.rows[0].is_new_user,
+        isAdmin: newUser.rows[0].is_admin,
+        createdAt: newUser.rows[0].created_at
+      },
+      token,
+      requiresVerification: false
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -515,7 +483,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
     // Send verification email
     try {
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
-      
+
       await transporter.sendMail({
         from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
         to: email,
