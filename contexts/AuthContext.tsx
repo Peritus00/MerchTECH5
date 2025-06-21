@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { User } from '@/types';
@@ -44,7 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
       const currentUser = await authService.getCurrentUser();
-      
+
       setState({
         user: currentUser,
         isAuthenticated: !!currentUser,
@@ -65,9 +64,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      
+
       const response = await authService.login({ email, password });
-      
+
       setState({
         user: response.user,
         isAuthenticated: true,
@@ -89,9 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const register = async (email: string, password: string, username: string): Promise<{ success: boolean; error?: string }> => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      
+
       const response = await authService.register({ email, password, username });
-      
+
       setState({
         user: response.user,
         isAuthenticated: true,
@@ -114,14 +113,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
       await authService.logout();
-      
+
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
       });
-      
+
       // Navigate to login screen after logout
       router.replace('/auth/login');
     } catch (error) {
@@ -133,7 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isInitialized: true,
       });
-      
+
       // Navigate to login screen even if logout fails
       router.replace('/auth/login');
     }
@@ -142,12 +141,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const verifyEmail = async (token: string) => {
     try {
       const result = await authService.verifyEmailToken(token);
-      
+
       if (result.success && state.user) {
         const updatedUser = { ...state.user, isEmailVerified: true };
         setState(prev => ({ ...prev, user: updatedUser }));
       }
-      
+
       return result;
     } catch (error: any) {
       console.error('Email verification failed:', error);
@@ -197,9 +196,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (updates: Partial<User>): Promise<{ success: boolean; user?: User; error?: string }> => {
     try {
       const updatedUser = await authService.updateProfile(updates);
-      
+
       setState(prev => ({ ...prev, user: updatedUser }));
-      
+
       return { success: true, user: updatedUser };
     } catch (error: any) {
       console.error('Profile update failed:', error);

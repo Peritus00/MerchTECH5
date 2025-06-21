@@ -8,17 +8,19 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
 export default function SubscriptionCheckoutScreen() {
-  const { tier } = useLocalSearchParams();
+  const { tier, newUser } = useLocalSearchParams();
   const { user } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
+  const isNewUser = newUser === 'true';
 
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
 
@@ -53,8 +55,27 @@ export default function SubscriptionCheckoutScreen() {
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 2000));
       
+      // Update user subscription tier
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            subscriptionTier: tier
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to update subscription');
+        }
+      }
+      
       // Navigate to success screen
-      router.push(`/subscription/success?tier=${tier}`);
+      router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}`);
     } catch (error) {
       Alert.alert('Payment Failed', 'Please try again.');
     } finally {

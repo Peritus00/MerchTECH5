@@ -240,6 +240,74 @@ app.get('/api/profile', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
+// Protected route to get user profile
+app.get('/api/user/profile', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const result = await pool.query(
+      'SELECT id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+    res.json({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      isEmailVerified: user.is_email_verified,
+      subscriptionTier: user.subscriptionTier,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({ error: 'Failed to get user profile' });
+  }
+});
+
+// Update user subscription
+app.put('/api/user/subscription', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { subscriptionTier } = req.body;
+
+    // Validate subscription tier
+    const validTiers = ['free', 'basic', 'premium'];
+    if (!validTiers.includes(subscriptionTier)) {
+      return res.status(400).json({ error: 'Invalid subscription tier' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at',
+      [subscriptionTier, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = result.rows[0];
+    res.json({
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      isEmailVerified: user.is_email_verified,
+      subscriptionTier: user.subscription_tier,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error('Update subscription error:', error);
+    res.status(500).json({ error: 'Failed to update subscription' });
+  }
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);

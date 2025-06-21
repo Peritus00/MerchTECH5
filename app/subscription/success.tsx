@@ -11,8 +11,9 @@ import { ThemedView } from '@/components/ThemedView';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
 export default function SubscriptionSuccessScreen() {
-  const { tier } = useLocalSearchParams();
+  const { tier, newUser } = useLocalSearchParams();
   const router = useRouter();
+  const isNewUser = newUser === 'true';
   
   const selectedTier = SUBSCRIPTION_TIERS[tier as string];
 
@@ -31,10 +32,15 @@ export default function SubscriptionSuccessScreen() {
           <ThemedText style={styles.successIcon}>✅</ThemedText>
         </View>
         
-        <ThemedText type="title" style={styles.title}>Welcome to {selectedTier.name}!</ThemedText>
-        <ThemedText style={styles.subtitle}>
-          Your subscription is now active and ready to use.
+        <ThemedText type="title" style={styles.title}>
+          {isNewUser ? `Welcome to MerchTech ${selectedTier.name}!` : `Welcome to ${selectedTier.name}!`}
         </ThemedText>
+        <ThemedText style={styles.subtitle}>
+          {isNewUser 
+            ? 'Your account is set up and your subscription is active! You can now start creating QR codes and managing your media.'
+            : 'Your subscription is now active and ready to use.'
+          }
+        </ThemedText>t>
 
         <ThemedView style={styles.planDetails}>
           <ThemedText type="subtitle" style={styles.planName}>{selectedTier.name} Plan</ThemedText>

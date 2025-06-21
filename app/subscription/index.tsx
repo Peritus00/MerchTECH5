@@ -9,7 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,7 +18,9 @@ import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 export default function SubscriptionScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const { newUser } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const isNewUser = newUser === 'true';
 
   const getTierIcon = (tierKey: string) => {
     switch (tierKey) {
@@ -52,6 +54,22 @@ export default function SubscriptionScreen() {
 
   const handleSelectPlan = async (tierKey: string) => {
     if (tierKey === 'free') {
+      if (isNewUser) {
+        // Show confirmation for new users choosing free tier
+        Alert.alert(
+          'Confirm Free Plan',
+          'Are you sure you want to continue with the free plan? You can upgrade anytime.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Continue with Free', 
+              onPress: () => router.push('/(tabs)/') 
+            }
+          ]
+        );
+        return;
+      }
+      
       if (user) {
         router.push('/(tabs)/');
       } else {
@@ -65,7 +83,7 @@ export default function SubscriptionScreen() {
       return;
     }
 
-    router.push(`/subscription/checkout?tier=${tierKey}`);
+    router.push(`/subscription/checkout?tier=${tierKey}&newUser=${isNewUser}`);
   };
 
   const renderTierCard = (tierKey: string, tier: any) => {
@@ -138,12 +156,19 @@ export default function SubscriptionScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <ThemedView style={styles.content}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <ThemedText style={styles.backButton}>← Back</ThemedText>
-          </TouchableOpacity>
-          <ThemedText type="title" style={styles.title}>Choose Your Plan</ThemedText>
+          {!isNewUser && (
+            <TouchableOpacity onPress={() => router.back()}>
+              <ThemedText style={styles.backButton}>← Back</ThemedText>
+            </TouchableOpacity>
+          )}
+          <ThemedText type="title" style={styles.title}>
+            {isNewUser ? 'Welcome! Choose Your Plan' : 'Choose Your Plan'}
+          </ThemedText>
           <ThemedText style={styles.subtitle}>
-            Select the perfect plan for your QR code and media management needs
+            {isNewUser 
+              ? 'Get started with MerchTech by selecting the perfect plan for your needs'
+              : 'Select the perfect plan for your QR code and media management needs'
+            }
           </ThemedText>
         </View>
 
