@@ -85,6 +85,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="my-sales"
+        options={{
+          title: 'My Sales',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'receipt' : 'receipt-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="resources"
         options={{
           title: 'Resources',
