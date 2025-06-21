@@ -12,7 +12,25 @@ const PORT = process.env.PORT || 5000;
 // Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 10, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+});
+
+// Test database connection
+pool.connect((err, client, release) => {
+  if (err) {
+    console.error('Error acquiring client from pool:', err.stack);
+  } else {
+    console.log('Database connected successfully');
+    release();
+  }
+});
+
+// Handle pool errors
+pool.on('error', (err, client) => {
+  console.error('Unexpected error on idle client', err);
 });
 
 // Middleware
@@ -454,11 +472,38 @@ app.use((error, req, res, next) => {
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
+  console.log(`Process ID: ${process.pid}`);
+  console.log(`Memory usage: ${Math.round(process.memoryUsage().heapUsed / 1024 / 1024)} MB`);
 });
 
 // Handle server errors
 server.on('error', (error) => {
   console.error('Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.log(`Port ${PORT} is already in use. Trying to restart...`);
+    setTimeout(() => {
+      server.close();
+      server.listen(PORT, '0.0.0.0');
+    }, 1000);
+  }
+});
+
+// Monitor server health
+setInterval(() => {
+  const memUsage = process.memoryUsage();
+  console.log(`[${new Date().toISOString()}] Server health check - Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB, Uptime: ${Math.round(process.uptime())} seconds`);
+}, 30000); // Log every 30 seconds
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process, just log the error
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process, just log the error
 });
 
 // Graceful shutdown
@@ -466,5 +511,15 @@ process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   server.close(() => {
     console.log('Process terminated');
+    pool.end();
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Process terminated');
+    pool.end();
+    process.exit(0);
   });
 });
