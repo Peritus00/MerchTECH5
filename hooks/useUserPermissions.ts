@@ -193,10 +193,15 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   };
 
   const deleteUser = async (userId: number | string): Promise<boolean> => {
+    console.log('=== DELETE USER FUNCTION CALLED ===');
+    console.log('User ID to delete:', userId, 'Type:', typeof userId);
+    
     try {
       const token = await AsyncStorage.getItem('authToken');
+      console.log('Auth token available:', !!token);
       
       if (!token) {
+        console.error('No auth token found');
         Alert.alert('Error', 'Authentication required');
         return false;
       }
@@ -205,14 +210,15 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('pending_')) {
         actualUserId = userId.replace('pending_', '');
+        console.log('Converted pending user ID:', actualUserId);
       }
       
-      console.log('Deleting user with ID:', actualUserId);
-      console.log('Original user ID:', userId);
+      console.log('Final user ID for API call:', actualUserId);
       
       const apiUrl = `${getApiUrl()}/admin/users/${actualUserId}`;
       console.log('Delete API URL:', apiUrl);
       
+      console.log('Making DELETE request...');
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
@@ -225,33 +231,43 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       console.log('Delete response ok:', response.ok);
       
       if (response.ok) {
+        console.log('Delete successful - updating local state');
         // Remove from local state using the original userId (which might be a string)
         setUsers(prev => {
+          const before = prev.length;
           const filteredUsers = prev.filter(u => u.id !== userId);
-          console.log('Users after deletion:', filteredUsers.length);
+          const after = filteredUsers.length;
+          console.log(`Users before deletion: ${before}, after: ${after}`);
+          console.log('Removed user with ID:', userId);
           return filteredUsers;
         });
-        Alert.alert('Success', 'User deleted successfully');
+        
+        console.log('User deleted successfully from state');
         return true;
       } else {
         const errorText = await response.text();
         console.error('Delete error response:', errorText);
+        console.error('Response status:', response.status);
+        
         let errorMessage = 'Failed to delete user';
         try {
           const errorJson = JSON.parse(errorText);
           errorMessage = errorJson.error || errorJson.message || errorMessage;
         } catch (e) {
+          console.log('Could not parse error response as JSON');
           errorMessage = errorText || errorMessage;
         }
+        
+        console.error('Final error message:', errorMessage);
         Alert.alert('Error', errorMessage);
         return false;
       }
     } catch (error) {
+      console.error('=== DELETE USER ERROR ===');
       console.error('Error deleting user:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack
-      });
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+      
       Alert.alert('Error', `Failed to delete user: ${error.message}`);
       return false;
     }

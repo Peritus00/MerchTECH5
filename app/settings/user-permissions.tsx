@@ -156,7 +156,14 @@ const UserPermissionCard = ({
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
+            <TouchableOpacity 
+              style={styles.deleteButton} 
+              onPress={() => {
+                console.log('Delete button pressed for user:', user.username);
+                onDelete();
+              }}
+              activeOpacity={0.7}
+            >
               <MaterialIcons name="delete" size={18} color="#ef4444" />
               <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
@@ -224,11 +231,16 @@ export default function UserPermissionsScreen() {
   };
 
   const handleDeleteUser = async (userId: number | string) => {
+    console.log('Delete button clicked for user ID:', userId);
+    
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) {
       console.log('User not found for deletion:', userId);
+      Alert.alert('Error', 'User not found');
       return;
     }
+
+    console.log('Target user found:', targetUser);
 
     if (targetUser.username === 'djjetfuel') {
       Alert.alert('Error', 'Cannot delete the protected master admin account');
@@ -238,28 +250,40 @@ export default function UserPermissionsScreen() {
     const isPending = typeof userId === 'string' && userId.startsWith('pending_');
     const actionText = isPending ? 'remove this pending registration' : 'permanently delete this user';
 
+    console.log('Showing delete confirmation dialog');
+    
     Alert.alert(
       isPending ? 'Remove Pending User' : 'Delete User',
       `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('Delete cancelled')
+        },
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
           onPress: async () => {
-            console.log('Attempting to delete user with ID:', userId);
+            console.log('Delete confirmed - attempting to delete user with ID:', userId);
             console.log('Target user:', targetUser);
+            
             try {
               const success = await deleteUser(userId);
               console.log('Delete operation result:', success);
+              
               if (success) {
                 console.log('User deleted successfully');
+                Alert.alert('Success', 'User deleted successfully');
+                // Refresh the user list
+                await refreshUsers();
               } else {
                 console.log('Delete operation failed');
+                Alert.alert('Error', 'Failed to delete user. Please try again.');
               }
             } catch (error) {
               console.error('Error in delete handler:', error);
-              Alert.alert('Error', 'An unexpected error occurred while deleting the user');
+              Alert.alert('Error', `An unexpected error occurred: ${error.message}`);
             }
           },
         },
@@ -756,6 +780,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     gap: 4,
+    minHeight: 36,
+    minWidth: 80,
+    justifyContent: 'center',
   },
   deleteButtonText: {
     color: '#ef4444',
