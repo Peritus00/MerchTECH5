@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -47,7 +46,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     if (process.env.EXPO_PUBLIC_API_URL) {
       return process.env.EXPO_PUBLIC_API_URL;
     }
-    
+
     // For Replit environment
     if (typeof window !== 'undefined' && window.location) {
       const hostname = window.location.hostname;
@@ -57,7 +56,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       }
       return `${window.location.protocol}//${hostname}:5000/api`;
     }
-    
+
     return 'http://localhost:5000/api';
   };
 
@@ -66,15 +65,15 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     try {
       const token = await AsyncStorage.getItem('authToken');
       console.log('Fetching users with token:', token ? 'Present' : 'Missing');
-      
+
       const apiUrl = `${getApiUrl()}/admin/all-users`;
       console.log('API URL:', apiUrl);
-      
+
       if (!token) {
         console.error('No auth token found');
         throw new Error('Authentication required');
       }
-      
+
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -85,18 +84,18 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
 
       console.log('Response status:', response.status);
       console.log('Response headers:', response.headers);
-      
+
       if (response.ok) {
         const data = await response.json();
         console.log('Raw user data received:', data);
         console.log('Number of users:', Array.isArray(data) ? data.length : 'Not an array');
-        
+
         // Transform the API data to match our UserPermissions interface
         const transformedUsers: UserPermissions[] = data.map((user: any) => {
           // Use the correct field names from the API response
           const subscriptionTier = user.subscriptionTier || user.subscription_tier || 'free';
           const isPending = user.isPending || user.status === 'pending' || false;
-          
+
           return {
             id: user.id,
             username: user.username || user.email?.split('@')[0] || 'Unknown',
@@ -124,7 +123,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
             isPending: isPending
           };
         });
-        
+
         console.log('Transformed users:', transformedUsers);
         setUsers(transformedUsers);
       } else {
@@ -139,7 +138,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         stack: error.stack,
         apiUrl: `${getApiUrl()}/admin/all-users`
       });
-      
+
       // Don't show alert for network errors, just log them
       if (error.message?.includes('Network Error') || error.message?.includes('fetch') || error.message?.includes('TypeError')) {
         console.log('Network connectivity issue - users list will be empty');
@@ -196,29 +195,29 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   const deleteUser = async (userId: number | string): Promise<boolean> => {
     console.log('=== DELETE USER FUNCTION CALLED ===');
     console.log('User ID to delete:', userId, 'Type:', typeof userId);
-    
+
     try {
       const token = await AsyncStorage.getItem('authToken');
       console.log('Auth token available:', !!token);
-      
+
       if (!token) {
         console.error('No auth token found');
         Alert.alert('Error', 'Authentication required');
         return false;
       }
-      
+
       // Handle pending user IDs (format: "pending_123")
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('pending_')) {
         actualUserId = userId.replace('pending_', '');
         console.log('Converted pending user ID:', actualUserId);
       }
-      
+
       console.log('Final user ID for API call:', actualUserId);
-      
+
       const apiUrl = `${getApiUrl()}/admin/users/${actualUserId}`;
       console.log('Delete API URL:', apiUrl);
-      
+
       console.log('Making DELETE request...');
       const response = await fetch(apiUrl, {
         method: 'DELETE',
@@ -227,10 +226,10 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
           'Content-Type': 'application/json'
         }
       });
-      
+
       console.log('Delete response status:', response.status);
       console.log('Delete response ok:', response.ok);
-      
+
       if (response.ok) {
         console.log('Delete successful - updating local state');
         // Remove from local state using the original userId (which might be a string)
@@ -242,14 +241,14 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
           console.log('Removed user with ID:', userId);
           return filteredUsers;
         });
-        
+
         console.log('User deleted successfully from state');
         return true;
       } else {
         const errorText = await response.text();
         console.error('Delete error response:', errorText);
         console.error('Response status:', response.status);
-        
+
         let errorMessage = 'Failed to delete user';
         try {
           const errorJson = JSON.parse(errorText);
@@ -258,7 +257,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
           console.log('Could not parse error response as JSON');
           errorMessage = errorText || errorMessage;
         }
-        
+
         console.error('Final error message:', errorMessage);
         Alert.alert('Error', errorMessage);
         return false;
@@ -268,7 +267,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       console.error('Error deleting user:', error);
       console.error('Error message:', error.message);
       console.error('Error stack:', error.stack);
-      
+
       Alert.alert('Error', `Failed to delete user: ${error.message}`);
       return false;
     }

@@ -232,7 +232,7 @@ export default function UserPermissionsScreen() {
 
   const handleDeleteUser = async (userId: number | string) => {
     console.log('Delete button clicked for user ID:', userId);
-    
+
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) {
       console.log('User not found for deletion:', userId);
@@ -251,7 +251,7 @@ export default function UserPermissionsScreen() {
     const actionText = isPending ? 'remove this pending registration' : 'permanently delete this user';
 
     console.log('Showing delete confirmation dialog');
-    
+
     Alert.alert(
       isPending ? 'Remove Pending User' : 'Delete User',
       `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
@@ -267,11 +267,11 @@ export default function UserPermissionsScreen() {
           onPress: async () => {
             console.log('Delete confirmed - attempting to delete user with ID:', userId);
             console.log('Target user:', targetUser);
-            
+
             try {
               const success = await deleteUser(userId);
               console.log('Delete operation result:', success);
-              
+
               if (success) {
                 console.log('User deleted successfully');
                 Alert.alert('Success', 'User deleted successfully');
@@ -430,7 +430,7 @@ export default function UserPermissionsScreen() {
         </View>
 
         {/* Filter Tabs */}
-        
+
         <View style={styles.filterTabs}>
           {[
             { key: 'all', label: 'All Users' },
@@ -807,5 +807,41 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 32,
     lineHeight: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  refreshButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#eff6ff',
+  },
+  retryButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 12,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  refreshText: {
+    color: '#3b82f6',
+    fontWeight: '600',
   },
 });
