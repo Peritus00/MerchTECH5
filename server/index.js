@@ -67,6 +67,20 @@ if (process.env.BREVO_API_KEY) {
   });
 }
 
+// Cleanup expired pending users
+async function cleanupExpiredPendingUsers() {
+  try {
+    const result = await pool.query(
+      'DELETE FROM pending_users WHERE expires_at < NOW()'
+    );
+    if (result.rowCount > 0) {
+      console.log(`Cleaned up ${result.rowCount} expired pending users`);
+    }
+  } catch (error) {
+    console.error('Error cleaning up expired pending users:', error);
+  }
+}
+
 // Initialize database tables
 async function initializeDatabase() {
   try {
@@ -620,6 +634,12 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
   await initializeDatabase();
+  
+  // Start periodic cleanup of expired pending users (every hour)
+  setInterval(cleanupExpiredPendingUsers, 60 * 60 * 1000);
+  
+  // Run initial cleanup
+  await cleanupExpiredPendingUsers();
 });
 
 // Graceful shutdown
