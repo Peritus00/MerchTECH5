@@ -10,6 +10,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -19,6 +20,7 @@ import MediaFileCard from '@/components/MediaFileCard';
 import UploadProgressModal from '@/components/UploadProgressModal';
 
 export default function MediaScreen() {
+  const router = useRouter();
   const { uploadProgress, isUploading, selectAndUploadFile } = useMediaUpload();
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -96,8 +98,8 @@ export default function MediaScreen() {
   };
 
   const handlePlay = (file: MediaFile) => {
-    Alert.alert('Play File', `Playing: ${file.title}`);
-    // Navigate to media player screen
+    // Navigate to media player screen with the file
+    router.push(`/media-player/${file.id}`);
   };
 
   const filteredFiles = mediaFiles.filter(file => {
