@@ -23,8 +23,8 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === 'auth';
 
-    if (!isAuthenticated && !inAuthGroup) {
-      // User is not authenticated and not in auth screens, redirect to login
+    if (!isAuthenticated) {
+      // User is not authenticated, always redirect to login
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
       // User is authenticated but still in auth screens, redirect to main app
@@ -36,6 +36,7 @@ function RootLayoutNav() {
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="auth" options={{ headerShown: false }} />
+      <Stack.Screen name="subscription" options={{ headerShown: false }} />
       <Stack.Screen name="+not-found" />
     </Stack>
   );
