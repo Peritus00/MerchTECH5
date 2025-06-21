@@ -8,6 +8,23 @@ interface AuthResponse {
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthResponse> {
+    // Check for dev login
+    if (email === 'djjetfuel' && password === 'Kerrie321$') {
+      const user = {
+        id: 1,
+        email: 'djjetfuel@merchtech.com',
+        username: 'djjetfuel',
+        subscriptionTier: 'premium',
+        isAdmin: true,
+        createdAt: new Date().toISOString()
+      };
+      
+      return Promise.resolve({
+        user,
+        token: 'dev-admin-token'
+      });
+    }
+
     // Mock authentication for development
     const user = {
       id: 1,

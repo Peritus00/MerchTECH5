@@ -1,8 +1,9 @@
 export interface User {
   id: number;
   email: string;
-  username?: string;
+  username: string;
   subscriptionTier: 'free' | 'basic' | 'premium';
+  isAdmin?: boolean;
   createdAt: string;
 }
 
