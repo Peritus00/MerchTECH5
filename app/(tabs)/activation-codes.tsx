@@ -573,6 +573,7 @@ const ActivationCodesScreen = () => {
             </View>
           )}
         </View>
+        )}
 
         {/* Search Bar - Only for allGenerated tab */}
         {activeTab === 'allGenerated' && selectedContentId && activationCodes.length > 0 && (
