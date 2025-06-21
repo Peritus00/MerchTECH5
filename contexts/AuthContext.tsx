@@ -92,6 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const response = await authService.register({ email, password, username });
 
+      // If registration requires verification, don't authenticate yet
+      if (response.message && !response.user) {
+        setState(prev => ({ ...prev, isLoading: false }));
+        return { success: true };
+      }
+
       setState({
         user: { ...response.user, isNewUser: true },
         isAuthenticated: true,

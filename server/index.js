@@ -40,10 +40,35 @@ if (!process.env.JWT_SECRET) {
   console.log('WARNING: Using fallback JWT_SECRET. Set JWT_SECRET environment variable for production.');
 }
 
+// Email service configuration
+const transporter = nodemailer.createTransporter({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: 'your-brevo-email@example.com',
+    pass: process.env.BREVO_API_KEY
+  }
+});
+
 // Initialize database tables
 async function initializeDatabase() {
   try {
-    // Only create refresh_tokens table since main tables are handled by migrations
+    // Create all necessary tables
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        username VARCHAR(100),
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        verification_token VARCHAR(255) NOT NULL,
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         id SERIAL PRIMARY KEY,
@@ -276,7 +301,7 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username, firstName, lastName } = req.body;
 
-    // Check if user exists
+    // Check if user already exists in users table
     const existingUser = await pool.query(
       'SELECT * FROM users WHERE email = $1 OR username = $2',
       [email, username]
@@ -286,17 +311,101 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'User already exists' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    const result = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [email, username, passwordHash, firstName, lastName]
+    // Check if pending registration exists
+    const existingPending = await pool.query(
+      'SELECT * FROM pending_users WHERE email = $1 OR username = $2',
+      [email, username]
     );
 
-    const user = result.rows[0];
+    if (existingPending.rows.length > 0) {
+      return res.status(400).json({ error: 'Registration pending. Please check your email for verification.' });
+    }
 
-    const token = jwt.sign(
+    const passwordHash = await bcrypt.hash(password, 10);
+    const verificationToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+    // Save to pending_users table
+    await pool.query(
+      `INSERT INTO pending_users (email, username, password_hash, first_name, last_name, verification_token, expires_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [email, username, passwordHash, firstName, lastName, verificationToken, expiresAt]
+    );
+
+    // Send verification email
+    try {
+      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+      
+      await transporter.sendMail({
+        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
+        to: email,
+        subject: 'Verify Your MerchTech Account',
+        html: `
+          <h2>Welcome to MerchTech!</h2>
+          <p>Thank you for registering. Please click the link below to verify your email address:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
+          <p>This link will expire in 24 hours.</p>
+          <p>If you didn't create this account, please ignore this email.</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      // Continue with registration even if email fails
+    }
+
+    res.status(201).json({
+      message: 'Registration successful. Please check your email to verify your account.',
+      requiresVerification: true
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Email verification endpoint
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token required' });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    // Find pending user
+    const pendingResult = await pool.query(
+      'SELECT * FROM pending_users WHERE verification_token = $1 AND expires_at > NOW()',
+      [token]
+    );
+
+    if (pendingResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired verification token' });
+    }
+
+    const pendingUser = pendingResult.rows[0];
+
+    // Move user from pending_users to users table
+    const userResult = await pool.query(
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified) 
+       VALUES ($1, $2, $3, $4, $5, true) RETURNING *`,
+      [pendingUser.email, pendingUser.username, pendingUser.password_hash, pendingUser.first_name, pendingUser.last_name]
+    );
+
+    const user = userResult.rows[0];
+
+    // Remove from pending_users
+    await pool.query('DELETE FROM pending_users WHERE id = $1', [pendingUser.id]);
+
+    // Create JWT token for immediate login
+    const authToken = jwt.sign(
       { 
         id: user.id, 
         email: user.email, 
@@ -307,7 +416,8 @@ app.post('/api/auth/register', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    res.status(201).json({
+    res.json({
+      message: 'Email verified successfully',
       user: {
         id: user.id,
         email: user.email,
@@ -320,10 +430,61 @@ app.post('/api/auth/register', async (req, res) => {
         createdAt: user.created_at,
         updatedAt: user.updated_at
       },
-      token
+      token: authToken
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Email verification error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Resend verification email
+app.post('/api/auth/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const pendingResult = await pool.query(
+      'SELECT * FROM pending_users WHERE email = $1',
+      [email]
+    );
+
+    if (pendingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'No pending registration found for this email' });
+    }
+
+    const pendingUser = pendingResult.rows[0];
+    const newToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
+    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    // Update token
+    await pool.query(
+      'UPDATE pending_users SET verification_token = $1, expires_at = $2 WHERE email = $3',
+      [newToken, newExpiresAt, email]
+    );
+
+    // Send verification email
+    try {
+      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
+      
+      await transporter.sendMail({
+        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
+        to: email,
+        subject: 'Verify Your MerchTech Account',
+        html: `
+          <h2>Welcome to MerchTech!</h2>
+          <p>Please click the link below to verify your email address:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
+          <p>This link will expire in 24 hours.</p>
+        `
+      });
+
+      res.json({ message: 'Verification email sent successfully' });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ error: 'Failed to send verification email' });
+    }
+  } catch (error) {
+    console.error('Resend verification error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

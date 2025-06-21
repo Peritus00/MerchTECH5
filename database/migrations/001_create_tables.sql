@@ -1,3 +1,16 @@
+-- Create pending_users table for email verification
+CREATE TABLE IF NOT EXISTS pending_users (
+  id SERIAL PRIMARY KEY,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  username VARCHAR(100),
+  password_hash VARCHAR(255) NOT NULL,
+  first_name VARCHAR(100),
+  last_name VARCHAR(100),
+  verification_token VARCHAR(255) NOT NULL,
+  expires_at TIMESTAMP NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
@@ -7,7 +20,10 @@ CREATE TABLE IF NOT EXISTS users (
   first_name VARCHAR(100),
   last_name VARCHAR(100),
   subscription_tier VARCHAR(50) DEFAULT 'free',
-  is_verified BOOLEAN DEFAULT false,
+  is_email_verified BOOLEAN DEFAULT true,
+  is_admin BOOLEAN DEFAULT false,
+  stripe_customer_id VARCHAR(255),
+  stripe_subscription_id VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

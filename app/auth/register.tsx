@@ -163,11 +163,11 @@ export default function RegisterScreen() {
       if (result.success) {
         Alert.alert(
           'Registration Successful!',
-          'Welcome to MerchTech! Please choose your subscription plan to get started.',
+          'Please check your email to verify your account. You will need to verify your email before you can sign in.',
           [
             {
-              text: 'Choose Plan',
-              onPress: () => router.push('/subscription/?newUser=true')
+              text: 'OK',
+              onPress: () => router.push('/auth/login')
             }
           ]
         );
