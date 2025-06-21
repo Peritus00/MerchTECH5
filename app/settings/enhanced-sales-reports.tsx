@@ -580,8 +580,8 @@ const styles = StyleSheet.create({
   },
   metricLabel: {
     fontSize: 14,
-    opacity: 0.7,
-    color: '#6b7280',
+    fontWeight: '500',
+    color: '#374151',
   },
   metricValue: {
     fontSize: 14,
