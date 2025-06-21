@@ -74,15 +74,28 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
+      console.log('AuthService: Starting logout...');
+      
       // Clear all stored authentication data
       await Promise.all([
         AsyncStorage.removeItem(AuthService.TOKEN_KEY),
         AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
         AsyncStorage.removeItem(AuthService.USER_KEY),
       ]);
+      
+      console.log('AuthService: All tokens cleared successfully');
     } catch (error) {
-      console.error('Logout error:', error);
-      throw new Error('Failed to logout properly');
+      console.error('AuthService logout error:', error);
+      
+      // Try to clear items individually if batch clear fails
+      try {
+        await AsyncStorage.removeItem(AuthService.TOKEN_KEY);
+        await AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY);
+        await AsyncStorage.removeItem(AuthService.USER_KEY);
+        console.log('AuthService: Individual token cleanup completed');
+      } catch (individualError) {
+        console.error('AuthService: Individual cleanup also failed:', individualError);
+      }
     }
   }
 

@@ -24,17 +24,28 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
 
+    console.log('Route navigation check:', { 
+      isAuthenticated, 
+      inAuthGroup, 
+      inSubscriptionGroup, 
+      currentSegments: segments,
+      userIsNew: user?.isNewUser 
+    });
+
     if (!isAuthenticated) {
       // User is not authenticated, always redirect to login
       if (!inAuthGroup) {
+        console.log('Redirecting to login - user not authenticated');
         router.replace('/auth/login');
       }
     } else if (isAuthenticated) {
       // Check if user is new and needs to select subscription
       if (user?.isNewUser && !inSubscriptionGroup) {
+        console.log('Redirecting to subscription - new user');
         router.replace('/subscription/?newUser=true');
       } else if (inAuthGroup && !user?.isNewUser) {
         // User is authenticated but still in auth screens, redirect to main app
+        console.log('Redirecting to main app - user authenticated');
         router.replace('/(tabs)');
       }
     }

@@ -118,9 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log('Starting logout process...');
       setState(prev => ({ ...prev, isLoading: true }));
+      
+      // Clear authentication data
       await authService.logout();
+      console.log('Auth service logout completed');
 
+      // Update state
       setState({
         user: null,
         isAuthenticated: false,
@@ -128,10 +133,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized: true,
       });
 
-      // Navigate to login screen after logout
-      router.replace('/auth/login');
+      console.log('State updated, navigating to login...');
+      
+      // Force navigation to login screen
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 100);
+      
     } catch (error) {
       console.error('Logout failed:', error);
+      
       // Even if logout fails, clear the local state
       setState({
         user: null,
@@ -141,7 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Navigate to login screen even if logout fails
-      router.replace('/auth/login');
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 100);
     }
   };
 

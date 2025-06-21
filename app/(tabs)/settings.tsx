@@ -237,4 +237,12 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '300',
   },
+  logoutButtonText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '600',
+  },
+  logoutButtonDisabled: {
+    opacity: 0.6,
+  },
 });
