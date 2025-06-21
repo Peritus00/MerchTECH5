@@ -1,0 +1,1445 @@
+give me the neccessary code to integrate product links in the playlist manager on the new react native project
+
+3 minutes ago
+PB
+
+perriebenton
+I'll search for the product link integration implementation to provide the complete React Native code for playlist product links.
+
+
+Searched for "Product links, playlist products, shopping integration, product management, playlist shopping, e-commerce links"
+I'll create the complete React Native product link integration for playlist management based on your current implementation.
+
+1. Product Link Schema Extension (shared/media-schema.ts)
+// Add to existing schema
+export interface ProductLink {
+  id: number;
+  playlistId: string;
+  title: string;
+  url: string;
+  description?: string;
+  imageUrl?: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+// Extend Playlist interface
+export interface Playlist {
+  id: string;
+  userId?: number;
+  name: string;
+  requiresActivationCode: boolean;
+  isPublic: boolean;
+  instagramUrl?: string;
+  twitterUrl?: string;
+  facebookUrl?: string;
+  youtubeUrl?: string;
+  websiteUrl?: string;
+  productLink?: string; // Legacy field
+  productLinkTitle?: string; // Legacy field
+  createdAt: string;
+  updatedAt?: string;
+  mediaFiles: MediaFile[];
+  productLinks?: ProductLink[]; // New product links
+}
+2. Product Link Manager Screen (screens/ProductLinkManagerScreen.tsx)
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { Playlist, ProductLink } from '../shared/media-schema';
+import ProductLinkCard from '../components/ProductLinkCard';
+import CreateProductLinkModal from '../components/CreateProductLinkModal';
+import ReorderProductLinksModal from '../components/ReorderProductLinksModal';
+const ProductLinkManagerScreen = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { playlist } = route.params as { playlist: Playlist };
+  
+  const [productLinks, setProductLinks] = useState<ProductLink[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showReorderModal, setShowReorderModal] = useState(false);
+  const [editingLink, setEditingLink] = useState<ProductLink | null>(null);
+  useEffect(() => {
+    fetchProductLinks();
+  }, []);
+  const fetchProductLinks = async () => {
+    try {
+      const response = await fetch(`/api/playlists/${playlist.id}/product-links`);
+      const data = await response.json();
+      setProductLinks(data.sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder));
+    } catch (error) {
+      console.error('Error fetching product links:', error);
+      Alert.alert('Error', 'Failed to load product links');
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+  const handleCreateLink = async (linkData: {
+    title: string;
+    url: string;
+    description?: string;
+    imageUrl?: string;
+  }) => {
+    try {
+      const response = await fetch(`/api/playlists/${playlist.id}/product-links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...linkData,
+          displayOrder: productLinks.length,
+        }),
+      });
+      if (response.ok) {
+        const newLink = await response.json();
+        setProductLinks(prev => [...prev, newLink]);
+        setShowCreateModal(false);
+        Alert.alert('Success', 'Product link created successfully');
+      } else {
+        throw new Error('Failed to create product link');
+      }
+    } catch (error) {
+      console.error('Error creating product link:', error);
+      Alert.alert('Error', 'Failed to create product link');
+    }
+  };
+  const handleUpdateLink = async (linkId: number, updateData: Partial<ProductLink>) => {
+    try {
+      const response = await fetch(`/api/product-links/${linkId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData),
+      });
+      if (response.ok) {
+        const updatedLink = await response.json();
+        setProductLinks(prev => 
+          prev.map(link => link.id === linkId ? updatedLink : link)
+        );
+        setEditingLink(null);
+        Alert.alert('Success', 'Product link updated successfully');
+      } else {
+        throw new Error('Failed to update product link');
+      }
+    } catch (error) {
+      console.error('Error updating product link:', error);
+      Alert.alert('Error', 'Failed to update product link');
+    }
+  };
+  const handleDeleteLink = async (linkId: number) => {
+    Alert.alert(
+      'Delete Product Link',
+      'Are you sure you want to delete this product link?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`/api/product-links/${linkId}`, {
+                method: 'DELETE',
+              });
+              if (response.ok) {
+                setProductLinks(prev => prev.filter(link => link.id !== linkId));
+                Alert.alert('Success', 'Product link deleted');
+              } else {
+                throw new Error('Failed to delete product link');
+              }
+            } catch (error) {
+              console.error('Error deleting product link:', error);
+              Alert.alert('Error', 'Failed to delete product link');
+            }
+          },
+        },
+      ]
+    );
+  };
+  const handleToggleLinkStatus = async (linkId: number, isActive: boolean) => {
+    try {
+      const response = await fetch(`/api/product-links/${linkId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (response.ok) {
+        const updatedLink = await response.json();
+        setProductLinks(prev => 
+          prev.map(link => link.id === linkId ? updatedLink : link)
+        );
+      } else {
+        throw new Error('Failed to update product link');
+      }
+    } catch (error) {
+      console.error('Error updating product link:', error);
+      Alert.alert('Error', 'Failed to update product link');
+    }
+  };
+  const handleReorderLinks = async (reorderedLinks: ProductLink[]) => {
+    try {
+      const updates = reorderedLinks.map((link, index) => ({
+        id: link.id,
+        displayOrder: index,
+      }));
+      const response = await fetch(`/api/playlists/${playlist.id}/product-links/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      if (response.ok) {
+        setProductLinks(reorderedLinks);
+        setShowReorderModal(false);
+        Alert.alert('Success', 'Product links reordered successfully');
+      } else {
+        throw new Error('Failed to reorder product links');
+      }
+    } catch (error) {
+      console.error('Error reordering product links:', error);
+      Alert.alert('Error', 'Failed to reorder product links');
+    }
+  };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchProductLinks();
+  };
+  const activeLinks = productLinks.filter(link => link.isActive);
+  const inactiveLinks = productLinks.filter(link => !link.isActive);
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Product Links</Text>
+        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
+          <MaterialIcons name="add" size={24} color="#3b82f6" />
+        </TouchableOpacity>
+      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Playlist Info */}
+        <View style={styles.playlistInfo}>
+          <Text style={styles.playlistName} numberOfLines={2}>
+            {playlist.name}
+          </Text>
+          <Text style={styles.playlistSubtitle}>
+            {productLinks.length} product links
+          </Text>
+        </View>
+        {/* Quick Actions */}
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <MaterialIcons name="add" size={20} color="#3b82f6" />
+            <Text style={styles.actionButtonText}>Add Link</Text>
+          </TouchableOpacity>
+          {productLinks.length > 1 && (
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setShowReorderModal(true)}
+            >
+              <MaterialIcons name="reorder" size={20} color="#6b7280" />
+              <Text style={styles.actionButtonText}>Reorder</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        {/* Product Links List */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Loading product links...</Text>
+          </View>
+        ) : (
+          <>
+            {/* Active Links */}
+            {activeLinks.length > 0 && (
+              <View style={styles.linkGroup}>
+                <Text style={styles.groupTitle}>
+                  Active Links ({activeLinks.length})
+                </Text>
+                {activeLinks.map((link) => (
+                  <ProductLinkCard
+                    key={link.id}
+                    link={link}
+                    onEdit={() => setEditingLink(link)}
+                    onDelete={() => handleDeleteLink(link.id)}
+                    onToggleStatus={(isActive) => handleToggleLinkStatus(link.id, isActive)}
+                  />
+                ))}
+              </View>
+            )}
+            {/* Inactive Links */}
+            {inactiveLinks.length > 0 && (
+              <View style={styles.linkGroup}>
+                <Text style={styles.groupTitle}>
+                  Inactive Links ({inactiveLinks.length})
+                </Text>
+                {inactiveLinks.map((link) => (
+                  <ProductLinkCard
+                    key={link.id}
+                    link={link}
+                    onEdit={() => setEditingLink(link)}
+                    onDelete={() => handleDeleteLink(link.id)}
+                    onToggleStatus={(isActive) => handleToggleLinkStatus(link.id, isActive)}
+                  />
+                ))}
+              </View>
+            )}
+            {/* Empty State */}
+            {productLinks.length === 0 && (
+              <View style={styles.emptyContainer}>
+                <MaterialIcons name="shopping-bag" size={64} color="#9ca3af" />
+                <Text style={styles.emptyText}>No product links yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Add product links to promote merchandise and products related to this playlist
+                </Text>
+                <TouchableOpacity
+                  style={styles.createButton}
+                  onPress={() => setShowCreateModal(true)}
+                >
+                  <MaterialIcons name="add" size={20} color="#fff" />
+                  <Text style={styles.createButtonText}>Add First Link</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+      {/* Create/Edit Product Link Modal */}
+      <CreateProductLinkModal
+        visible={showCreateModal || !!editingLink}
+        onClose={() => {
+          setShowCreateModal(false);
+          setEditingLink(null);
+        }}
+        onSave={editingLink 
+          ? (data) => handleUpdateLink(editingLink.id, data)
+          : handleCreateLink
+        }
+        initialData={editingLink}
+        playlistName={playlist.name}
+      />
+      {/* Reorder Modal */}
+      <ReorderProductLinksModal
+        visible={showReorderModal}
+        onClose={() => setShowReorderModal(false)}
+        productLinks={productLinks}
+        onReorder={handleReorderLinks}
+      />
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  playlistInfo: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  playlistName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  playlistSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  linkGroup: {
+    marginBottom: 24,
+  },
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    marginBottom: 24,
+  },
+  createButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 8,
+  },
+  createButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+export default ProductLinkManagerScreen;
+3. Product Link Card Component (components/ProductLinkCard.tsx)
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Image,
+  Linking,
+  Alert,
+  Switch,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ProductLink } from '../shared/media-schema';
+interface ProductLinkCardProps {
+  link: ProductLink;
+  onEdit: () => void;
+  onDelete: () => void;
+  onToggleStatus: (isActive: boolean) => void;
+}
+const ProductLinkCard: React.FC<ProductLinkCardProps> = ({
+  link,
+  onEdit,
+  onDelete,
+  onToggleStatus,
+}) => {
+  const [imageError, setImageError] = useState(false);
+  const handleOpenLink = async () => {
+    try {
+      const supported = await Linking.canOpenURL(link.url);
+      if (supported) {
+        await Linking.openURL(link.url);
+      } else {
+        Alert.alert('Error', 'Cannot open this URL');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open link');
+    }
+  };
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+  const getDomainFromUrl = (url: string) => {
+    try {
+      const domain = new URL(url).hostname;
+      return domain.replace('www.', '');
+    } catch {
+      return url;
+    }
+  };
+  return (
+    <View style={[styles.card, !link.isActive && styles.inactiveCard]}>
+      <View style={styles.content}>
+        {/* Image/Icon */}
+        <View style={styles.imageContainer}>
+          {link.imageUrl && !imageError ? (
+            <Image
+              source={{ uri: link.imageUrl }}
+              style={styles.image}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <View style={styles.placeholderImage}>
+              <MaterialIcons name="shopping-bag" size={24} color="#9ca3af" />
+            </View>
+          )}
+        </View>
+        {/* Link Info */}
+        <View style={styles.linkInfo}>
+          <Text style={styles.linkTitle} numberOfLines={2}>
+            {link.title}
+          </Text>
+          
+          <Text style={styles.linkUrl} numberOfLines={1}>
+            {getDomainFromUrl(link.url)}
+          </Text>
+          {link.description && (
+            <Text style={styles.linkDescription} numberOfLines={2}>
+              {link.description}
+            </Text>
+          )}
+          <View style={styles.metadata}>
+            <Text style={styles.metadataText}>
+              Order: {link.displayOrder + 1}
+            </Text>
+            <Text style={styles.separator}>•</Text>
+            <Text style={styles.metadataText}>
+              {formatDate(link.createdAt)}
+            </Text>
+          </View>
+        </View>
+        {/* Status */}
+        <View style={styles.statusContainer}>
+          <View style={[
+            styles.statusBadge,
+            link.isActive ? styles.activeBadge : styles.inactiveBadge
+          ]}>
+            <View style={[
+              styles.statusDot,
+              { backgroundColor: link.isActive ? '#10b981' : '#6b7280' }
+            ]} />
+            <Text style={[
+              styles.statusText,
+              { color: link.isActive ? '#10b981' : '#6b7280' }
+            ]}>
+              {link.isActive ? 'Active' : 'Inactive'}
+            </Text>
+          </View>
+        </View>
+      </View>
+      {/* Actions */}
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={handleOpenLink}
+        >
+          <MaterialIcons name="open-in-new" size={18} color="#3b82f6" />
+          <Text style={styles.actionButtonText}>Open</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={onEdit}
+        >
+          <MaterialIcons name="edit" size={18} color="#6b7280" />
+          <Text style={styles.actionButtonText}>Edit</Text>
+        </TouchableOpacity>
+        <View style={styles.switchContainer}>
+          <Switch
+            value={link.isActive}
+            onValueChange={onToggleStatus}
+            trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+            thumbColor={link.isActive ? '#3b82f6' : '#9ca3af'}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => {
+            Alert.alert(
+              'Delete Product Link',
+              'Are you sure you want to delete this product link?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: onDelete },
+              ]
+            );
+          }}
+        >
+          <MaterialIcons name="delete" size={18} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  inactiveCard: {
+    opacity: 0.7,
+  },
+  content: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  imageContainer: {
+    marginRight: 12,
+  },
+  image: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+  },
+  placeholderImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  linkInfo: {
+    flex: 1,
+  },
+  linkTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  linkUrl: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginBottom: 4,
+  },
+  linkDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  metadata: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metadataText: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  separator: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginHorizontal: 6,
+  },
+  statusContainer: {
+    marginLeft: 12,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  activeBadge: {
+    backgroundColor: '#d1fae5',
+  },
+  inactiveBadge: {
+    backgroundColor: '#f3f4f6',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+    gap: 12,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#f8fafc',
+    gap: 4,
+  },
+  actionButtonText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  switchContainer: {
+    marginLeft: 'auto',
+    marginRight: 8,
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#fef2f2',
+  },
+});
+export default ProductLinkCard;
+4. Create Product Link Modal (components/CreateProductLinkModal.tsx)
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ProductLink } from '../shared/media-schema';
+interface CreateProductLinkModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSave: (linkData: {
+    title: string;
+    url: string;
+    description?: string;
+    imageUrl?: string;
+  }) => void;
+  initialData?: ProductLink | null;
+  playlistName: string;
+}
+const CreateProductLinkModal: React.FC<CreateProductLinkModalProps> = ({
+  visible,
+  onClose,
+  onSave,
+  initialData,
+  playlistName,
+}) => {
+  const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
+  const [description, setDescription] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title);
+      setUrl(initialData.url);
+      setDescription(initialData.description || '');
+      setImageUrl(initialData.imageUrl || '');
+    } else {
+      resetForm();
+    }
+  }, [initialData, visible]);
+  const resetForm = () => {
+    setTitle('');
+    setUrl('');
+    setDescription('');
+    setImageUrl('');
+    setErrors({});
+  };
+  const validateForm = () => {
+    const newErrors: {[key: string]: string} = {};
+    if (!title.trim()) {
+      newErrors.title = 'Product title is required';
+    }
+    if (!url.trim()) {
+      newErrors.url = 'Product URL is required';
+    } else {
+      try {
+        new URL(url);
+      } catch {
+        newErrors.url = 'Please enter a valid URL';
+      }
+    }
+    if (imageUrl.trim()) {
+      try {
+        new URL(imageUrl);
+      } catch {
+        newErrors.imageUrl = 'Please enter a valid image URL';
+      }
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+  const handleSave = () => {
+    if (!validateForm()) {
+      return;
+    }
+    onSave({
+      title: title.trim(),
+      url: url.trim(),
+      description: description.trim() || undefined,
+      imageUrl: imageUrl.trim() || undefined,
+    });
+    if (!initialData) {
+      resetForm();
+    }
+  };
+  const handleClose = () => {
+    if (!initialData) {
+      resetForm();
+    }
+    onClose();
+  };
+  const isEditing = !!initialData;
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleClose}>
+            <MaterialIcons name="close" size={24} color="#1f2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>
+            {isEditing ? 'Edit Product Link' : 'Add Product Link'}
+          </Text>
+          <TouchableOpacity onPress={handleSave}>
+            <Text style={styles.saveButton}>Save</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {/* Playlist Info */}
+          <View style={styles.playlistInfo}>
+            <MaterialIcons name="queue-music" size={16} color="#3b82f6" />
+            <Text style={styles.playlistName} numberOfLines={1}>
+              {playlistName}
+            </Text>
+          </View>
+          {/* Form */}
+          <View style={styles.form}>
+            {/* Product Title */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product Title *</Text>
+              <TextInput
+                style={[styles.input, errors.title && styles.inputError]}
+                value={title}
+                onChangeText={setTitle}
+                placeholder="e.g., Limited Edition T-Shirt"
+                placeholderTextColor="#9ca3af"
+                maxLength={100}
+              />
+              {errors.title && (
+                <Text style={styles.errorText}>{errors.title}</Text>
+              )}
+            </View>
+            {/* Product URL */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Product URL *</Text>
+              <TextInput
+                style={[styles.input, errors.url && styles.inputError]}
+                value={url}
+                onChangeText={setUrl}
+                placeholder="https://example.com/product"
+                placeholderTextColor="#9ca3af"
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {errors.url && (
+                <Text style={styles.errorText}>{errors.url}</Text>
+              )}
+            </View>
+            {/* Description */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Description</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Optional description of the product"
+                placeholderTextColor="#9ca3af"
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+              />
+            </View>
+            {/* Image URL */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Image URL</Text>
+              <TextInput
+                style={[styles.input, errors.imageUrl && styles.inputError]}
+                value={imageUrl}
+                onChangeText={setImageUrl}
+                placeholder="https://example.com/image.jpg"
+                placeholderTextColor="#9ca3af"
+                keyboardType="url"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {errors.imageUrl && (
+                <Text style={styles.errorText}>{errors.imageUrl}</Text>
+              )}
+            </View>
+            {/* Tips */}
+            <View style={styles.tipBox}>
+              <MaterialIcons name="lightbulb" size={16} color="#f59e0b" />
+              <View style={styles.tipContent}>
+                <Text style={styles.tipTitle}>Tips for better results:</Text>
+                <Text style={styles.tipText}>
+                  • Use descriptive titles that clearly identify the product
+                </Text>
+                <Text style={styles.tipText}>
+                  • Ensure URLs are working and lead directly to the product
+                </Text>
+                <Text style={styles.tipText}>
+                  • Add images to make links more appealing and clickable
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  saveButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  content: {
+    flex: 1,
+  },
+  playlistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    gap: 8,
+  },
+  playlistName: {
+    fontSize: 14,
+    color: '#1e40af',
+    fontWeight: '500',
+  },
+  form: {
+    padding: 16,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1f2937',
+    backgroundColor: '#fff',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  textArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  errorText: {
+    fontSize: 14,
+    color: '#ef4444',
+    marginTop: 4,
+  },
+  tipBox: {
+    flexDirection: 'row',
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+    marginTop: 8,
+  },
+  tipContent: {
+    flex: 1,
+  },
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#92400e',
+    marginBottom: 4,
+  },
+  tipText: {
+    fontSize: 12,
+    color: '#92400e',
+    lineHeight: 16,
+    marginBottom: 2,
+  },
+});
+export default CreateProductLinkModal;
+5. Reorder Product Links Modal (components/ReorderProductLinksModal.tsx)
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import { ProductLink } from '../shared/media-schema';
+interface ReorderProductLinksModalProps {
+  visible: boolean;
+  onClose: () => void;
+  productLinks: ProductLink[];
+  onReorder: (reorderedLinks: ProductLink[]) => void;
+}
+const ReorderProductLinksModal: React.FC<ReorderProductLinksModalProps> = ({
+  visible,
+  onClose,
+  productLinks,
+  onReorder,
+}) => {
+  const [links, setLinks] = useState<ProductLink[]>(productLinks);
+  const handleSave = () => {
+    onReorder(links);
+  };
+  const handleReset = () => {
+    setLinks(productLinks);
+  };
+  const renderItem = ({ item, drag, isActive }: RenderItemParams<ProductLink>) => {
+    return (
+      <ScaleDecorator>
+        <TouchableOpacity
+          onLongPress={drag}
+          disabled={isActive}
+          style={[
+            styles.linkItem,
+            isActive && styles.activeItem,
+          ]}
+          activeOpacity={0.8}
+        >
+          <View style={styles.dragHandle}>
+            <MaterialIcons name="drag-indicator" size={20} color="#9ca3af" />
+          </View>
+          
+          <View style={styles.linkContent}>
+            <Text style={styles.linkTitle} numberOfLines={1}>
+              {item.title}
+            </Text>
+            <Text style={styles.linkUrl} numberOfLines={1}>
+              {item.url}
+            </Text>
+          </View>
+          <View style={styles.orderBadge}>
+            <Text style={styles.orderText}>
+              {links.findIndex(link => link.id === item.id) + 1}
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </ScaleDecorator>
+    );
+  };
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose}>
+            <MaterialIcons name="close" size={24} color="#1f2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Reorder Links</Text>
+          <TouchableOpacity onPress={handleSave}>
+            <Text style={styles.saveButton}>Save</Text>
+          </TouchableOpacity>
+        </View>
+        {/* Instructions */}
+        <View style={styles.instructions}>
+          <MaterialIcons name="info" size={16} color="#3b82f6" />
+          <Text style={styles.instructionText}>
+            Long press and drag items to reorder them. The first item will appear at the top of the product list.
+          </Text>
+        </View>
+        {/* Draggable List */}
+        <View style={styles.listContainer}>
+          <DraggableFlatList
+            data={links}
+            onDragEnd={({ data }) => setLinks(data)}
+            keyExtractor={(item) => item.id.toString()}
+            renderItem={renderItem}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+          />
+        </View>
+        {/* Actions */}
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={styles.resetButton}
+            onPress={handleReset}
+          >
+            <MaterialIcons name="refresh" size={20} color="#6b7280" />
+            <Text style={styles.resetButtonText}>Reset Order</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  saveButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  instructions: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#eff6ff',
+    marginHorizontal: 16,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  instructionText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e40af',
+    lineHeight: 20,
+  },
+  listContainer: {
+    flex: 1,
+    marginTop: 16,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  linkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  activeItem: {
+    backgroundColor: '#f3f4f6',
+    shadowColor: '#3b82f6',
+    shadowOpacity: 0.3,
+  },
+  dragHandle: {
+    marginRight: 12,
+  },
+  linkContent: {
+    flex: 1,
+  },
+  linkTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  linkUrl: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  orderBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  orderText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  actions: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+    gap: 8,
+  },
+  resetButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+});
+export default ReorderProductLinksModal;
+6. Product Links Hook (hooks/useProductLinks.ts)
+import { useState, useEffect } from 'react';
+import { ProductLink } from '../shared/media-schema';
+interface UseProductLinksResult {
+  productLinks: ProductLink[];
+  isLoading: boolean;
+  error: Error | null;
+  refreshProductLinks: () => Promise<void>;
+  createProductLink: (playlistId: string, linkData: Partial<ProductLink>) => Promise<ProductLink>;
+  updateProductLink: (linkId: number, updateData: Partial<ProductLink>) => Promise<ProductLink>;
+  deleteProductLink: (linkId: number) => Promise<boolean>;
+  reorderProductLinks: (playlistId: string, updates: { id: number; displayOrder: number }[]) => Promise<boolean>;
+}
+export const useProductLinks = (playlistId?: string): UseProductLinksResult => {
+  const [productLinks, setProductLinks] = useState<ProductLink[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  const fetchProductLinks = async () => {
+    if (!playlistId) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      setError(null);
+      const response = await fetch(`/api/playlists/${playlistId}/product-links`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch product links');
+      }
+      
+      const data = await response.json();
+      setProductLinks(data.sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder));
+    } catch (err) {
+      setError(err as Error);
+      console.error('Error fetching product links:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const refreshProductLinks = async () => {
+    setIsLoading(true);
+    await fetchProductLinks();
+  };
+  const createProductLink = async (playlistId: string, linkData: Partial<ProductLink>): Promise<ProductLink> => {
+    const response = await fetch(`/api/playlists/${playlistId}/product-links`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(linkData),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to create product link');
+    }
+    const newLink = await response.json();
+    setProductLinks(prev => [...prev, newLink].sort((a, b) => a.displayOrder - b.displayOrder));
+    return newLink;
+  };
+  const updateProductLink = async (linkId: number, updateData: Partial<ProductLink>): Promise<ProductLink> => {
+    const response = await fetch(`/api/product-links/${linkId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updateData),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to update product link');
+    }
+    const updatedLink = await response.json();
+    setProductLinks(prev => prev.map(link => link.id === linkId ? updatedLink : link));
+    return updatedLink;
+  };
+  const deleteProductLink = async (linkId: number): Promise<boolean> => {
+    const response = await fetch(`/api/product-links/${linkId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete product link');
+    }
+    setProductLinks(prev => prev.filter(link => link.id !== linkId));
+    return true;
+  };
+  const reorderProductLinks = async (
+    playlistId: string, 
+    updates: { id: number; displayOrder: number }[]
+  ): Promise<boolean> => {
+    const response = await fetch(`/api/playlists/${playlistId}/product-links/reorder`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to reorder product links');
+    }
+    // Update local state with new order
+    const updatedLinks = productLinks.map(link => {
+      const update = updates.find(u => u.id === link.id);
+      return update ? { ...link, displayOrder: update.displayOrder } : link;
+    }).sort((a, b) => a.displayOrder - b.displayOrder);
+    
+    setProductLinks(updatedLinks);
+    return true;
+  };
+  useEffect(() => {
+    fetchProductLinks();
+  }, [playlistId]);
+  return {
+    productLinks,
+    isLoading,
+    error,
+    refreshProductLinks,
+    createProductLink,
+    updateProductLink,
+    deleteProductLink,
+    reorderProductLinks,
+  };
+};
+This complete React Native product link integration provides:
+
+Full CRUD operations for product links within playlists
+Drag-and-drop reordering with visual feedback
+Rich product information including images, descriptions, and URLs
+Status management with active/inactive toggles
+Form validation and error handling
+Deep linking to external product pages
+Responsive design optimized for mobile interfaces
+The implementation follows React Native best practices with proper state management, error handling, and user experience considerations.
