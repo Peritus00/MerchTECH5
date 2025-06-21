@@ -496,10 +496,11 @@ const styles = StyleSheet.create({
   statsValue: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#1f2937',
   },
   statsTitle: {
     fontSize: 14,
-    opacity: 0.7,
+    color: '#6b7280',
   },
   searchContainer: {
     flexDirection: 'row',
@@ -594,10 +595,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 4,
+    color: '#1f2937',
   },
   userEmail: {
     fontSize: 14,
-    opacity: 0.7,
+    color: '#6b7280',
   },
   userBadges: {
     gap: 6,
@@ -642,13 +644,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 6,
+    color: '#1f2937',
   },
   permissionsList: {
     gap: 2,
   },
   permissionItem: {
     fontSize: 12,
-    opacity: 0.8,
+    color: '#4b5563',
   },
   userLimits: {
     marginBottom: 12,
@@ -657,6 +660,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 6,
+    color: '#1f2937',
   },
   limitsGrid: {
     flexDirection: 'row',
@@ -665,7 +669,7 @@ const styles = StyleSheet.create({
   },
   limitItem: {
     fontSize: 12,
-    opacity: 0.8,
+    color: '#4b5563',
     minWidth: '45%',
   },
   userActions: {
