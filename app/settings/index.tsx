@@ -1,54 +1,141 @@
 import React from 'react';
-import { useRouter } from 'next/router'; // Assuming Next.js for routing
+import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ThemedView, ThemedText } from '../components/Themed';
+import { MaterialIcons } from '@expo/vector-icons';
 
 function SettingsPage({ user }) {
   const router = useRouter();
 
-  const QuickAccessCard = ({ title, description, icon, onPress }) => (
-    <div
-      style={{
-        border: '1px solid #ccc',
-        padding: '10px',
-        margin: '10px',
-        cursor: 'pointer',
-      }}
-      onClick={onPress}
-    >
-      <h3>{title}</h3>
-      <p>{description}</p>
-      <span>{icon}</span>
-    </div>
+  const settingsOptions = [
+    {
+      title: 'Profile Settings',
+      subtitle: 'Manage your account information',
+      icon: 'person',
+      route: '/settings/profile',
+    },
+    {
+      title: 'User Permissions',
+      subtitle: 'Manage user access and permissions',
+      icon: 'security',
+      route: '/settings/user-permissions',
+      adminOnly: true,
+    },
+    {
+      title: 'Master Store Manager',
+      subtitle: 'Manage products and store settings',
+      icon: 'store',
+      route: '/settings/master-store-manager',
+      adminOnly: true,
+    },
+    {
+      title: 'Enhanced Sales Reports',
+      subtitle: 'View detailed sales analytics',
+      icon: 'analytics',
+      route: '/settings/enhanced-sales-reports',
+      adminOnly: true,
+    },
+  ];
+
+  const filteredOptions = settingsOptions.filter(
+    option => !option.adminOnly || (user && user.isAdmin)
   );
 
   return (
-    <div>
-      <h1>Settings</h1>
-      <QuickAccessCard
-        title="User Permissions"
-        description="Manage user permissions and access levels"
-        icon="👥"
-        onPress={() => router.push('/settings/user-permissions')}
-      />
+    <ThemedView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ThemedView style={styles.header}>
+          <ThemedText type="title">Settings</ThemedText>
+          <ThemedText style={styles.subtitle}>Manage your account and preferences</ThemedText>
+        </ThemedView>
 
-      {user?.email === 'djjetfuel@gmail.com' && (
-        <>
-          <QuickAccessCard
-            title="Master Store Manager"
-            description="Manage all store products and inventory"
-            icon="🏪"
-            onPress={() => router.push('/settings/master-store-manager')}
-          />
-
-          <QuickAccessCard
-            title="Enhanced Sales Reports"
-            description="View detailed sales analytics and reports"
-            icon="📊"
-            onPress={() => router.push('/settings/enhanced-sales-reports')}
-          />
-        </>
-      )}
-    </div>
+        <ThemedView style={styles.optionsContainer}>
+          {filteredOptions.map((option, index) => (
+            <TouchableOpacity
+              key={index}
+              style={styles.optionCard}
+              onPress={() => router.push(option.route)}
+            >
+              <ThemedView style={styles.optionContent}>
+                <ThemedView style={styles.optionIcon}>
+                  <MaterialIcons name={option.icon as any} size={24} color="#8b5cf6" />
+                </ThemedView>
+                <ThemedView style={styles.optionText}>
+                  <ThemedText style={styles.optionTitle}>{option.title}</ThemedText>
+                  <ThemedText style={styles.optionSubtitle}>{option.subtitle}</ThemedText>
+                </ThemedView>
+                <MaterialIcons name="chevron-right" size={24} color="#6b7280" />
+              </ThemedView>
+            </TouchableOpacity>
+          ))}
+        </ThemedView>
+      </ScrollView>
+    </ThemedView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
+  },
+  header: {
+    padding: 20,
+    alignItems: 'center',
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  optionsContainer: {
+    padding: 16,
+  },
+  optionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  optionContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  optionIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f3f4f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 16,
+  },
+  optionText: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  optionSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+});
 
 export default SettingsPage;
