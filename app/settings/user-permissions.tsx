@@ -19,7 +19,7 @@ import EditUserPermissionsModal from '@/components/EditUserPermissionsModal';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 interface UserPermissions {
-  id: number;
+  id: number | string;
   username: string;
   email: string;
   subscriptionTier: 'free' | 'basic' | 'premium';
@@ -195,9 +195,15 @@ export default function UserPermissionsScreen() {
     }
   }, [user, router]);
 
-  const handleSuspendUser = async (userId: number, suspend: boolean) => {
+  const handleSuspendUser = async (userId: number | string, suspend: boolean) => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
+
+    // Don't allow suspending pending users
+    if (typeof userId === 'string' && userId.startsWith('pending_')) {
+      Alert.alert('Error', 'Cannot suspend pending users. Please approve or delete them instead.');
+      return;
+    }
 
     Alert.alert(
       suspend ? 'Suspend User' : 'Unsuspend User',
@@ -208,14 +214,16 @@ export default function UserPermissionsScreen() {
           text: suspend ? 'Suspend' : 'Unsuspend',
           style: suspend ? 'destructive' : 'default',
           onPress: async () => {
-            await updateUserPermissions(userId, { isSuspended: suspend });
+            if (typeof userId === 'number') {
+              await updateUserPermissions(userId, { isSuspended: suspend });
+            }
           },
         },
       ]
     );
   };
 
-  const handleDeleteUser = async (userId: number) => {
+  const handleDeleteUser = async (userId: number | string) => {
     const targetUser = users.find(u => u.id === userId);
     if (!targetUser) return;
 
@@ -224,15 +232,19 @@ export default function UserPermissionsScreen() {
       return;
     }
 
+    const isPending = typeof userId === 'string' && userId.startsWith('pending_');
+    const actionText = isPending ? 'remove this pending registration' : 'permanently delete this user';
+
     Alert.alert(
-      'Delete User',
-      `Are you sure you want to permanently delete ${targetUser.username}? This action cannot be undone.`,
+      isPending ? 'Remove Pending User' : 'Delete User',
+      `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete',
+          text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
           onPress: async () => {
+            console.log('Attempting to delete user with ID:', userId);
             await deleteUser(userId);
           },
         },
@@ -240,7 +252,7 @@ export default function UserPermissionsScreen() {
     );
   };
 
-  const handleEditUser = (userId: number) => {
+  const handleEditUser = (userId: number | string) => {
     const targetUser = users.find(u => u.id === userId);
     if (targetUser) {
       setSelectedUser(targetUser);

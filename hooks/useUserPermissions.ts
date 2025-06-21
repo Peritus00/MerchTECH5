@@ -4,7 +4,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserPermissions {
-  id: number;
+  id: number | string;
   username: string;
   email: string;
   subscriptionTier: 'free' | 'basic' | 'premium';
@@ -35,7 +35,7 @@ interface UseUserPermissionsResult {
   isLoading: boolean;
   refreshUsers: () => Promise<void>;
   updateUserPermissions: (userId: number, permissions: Partial<UserPermissions>) => Promise<boolean>;
-  deleteUser: (userId: number) => Promise<boolean>;
+  deleteUser: (userId: number | string) => Promise<boolean>;
 }
 
 export const useUserPermissions = (): UseUserPermissionsResult => {
@@ -192,23 +192,47 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     }
   };
 
-  const deleteUser = async (userId: number): Promise<boolean> => {
+  const deleteUser = async (userId: number | string): Promise<boolean> => {
     try {
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/admin/users/${userId}`, {
+      
+      // Handle pending user IDs (format: "pending_123")
+      let actualUserId = userId;
+      if (typeof userId === 'string' && userId.startsWith('pending_')) {
+        actualUserId = userId.replace('pending_', '');
+      }
+      
+      console.log('Deleting user with ID:', actualUserId);
+      
+      const apiUrl = `${getApiUrl()}/admin/users/${actualUserId}`;
+      console.log('Delete API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         }
       });
       
+      console.log('Delete response status:', response.status);
+      
       if (response.ok) {
+        // Remove from local state using the original userId (which might be a string)
         setUsers(prev => prev.filter(u => u.id !== userId));
         Alert.alert('Success', 'User deleted successfully');
         return true;
       } else {
-        const error = await response.json();
-        Alert.alert('Error', error.message || 'Failed to delete user');
+        const errorText = await response.text();
+        console.error('Delete error response:', errorText);
+        let errorMessage = 'Failed to delete user';
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.message || errorMessage;
+        } catch (e) {
+          errorMessage = errorText || errorMessage;
+        }
+        Alert.alert('Error', errorMessage);
         return false;
       }
     } catch (error) {
