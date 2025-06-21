@@ -73,6 +73,7 @@
     "react-native-view-shot": "^4.0.3",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
+    "stripe": "^18.2.1",
     "uuid": "^11.1.0",
     "zod": "^3.25.67"
   },

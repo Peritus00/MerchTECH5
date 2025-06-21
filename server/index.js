@@ -1,8 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const { Pool } = require('pg');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs').promises;
+const { Pool } = require('pg');
+const nodemailer = require('nodemailer');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY || 'sk_test_your_stripe_secret_key');
 require('dotenv').config();
 
 const app = express();
@@ -89,6 +94,114 @@ app.get('/api/health', async (req, res) => {
       status: 'error', 
       database: 'disconnected',
       timestamp: new Date().toISOString() 
+    });
+  }
+});
+
+// Stripe payment endpoints
+app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, amount } = req.body;
+
+    // Create or retrieve customer
+    let customer;
+    const existingCustomers = await stripe.customers.list({
+      email: req.user.email,
+      limit: 1
+    });
+
+    if (existingCustomers.data.length > 0) {
+      customer = existingCustomers.data[0];
+    } else {
+      customer = await stripe.customers.create({
+        email: req.user.email,
+        name: req.user.username,
+      });
+    }
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'usd',
+      customer: customer.id,
+      setup_future_usage: 'off_session',
+      metadata: {
+        subscriptionTier,
+        userId: req.user.id.toString()
+      }
+    });
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      customerId: customer.id
+    });
+  } catch (error) {
+    console.error('Stripe payment intent error:', error);
+    res.status(500).json({ message: 'Failed to create payment intent' });
+  }
+});
+
+app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
+  try {
+    const { clientSecret, paymentMethod, subscriptionTier } = req.body;
+
+    // Get the payment intent
+    const paymentIntentId = clientSecret.split('_secret_')[0];
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    // Create payment method
+    const stripePaymentMethod = await stripe.paymentMethods.create({
+      type: 'card',
+      card: paymentMethod.card,
+      billing_details: paymentMethod.billing_details
+    });
+
+    // Attach payment method to customer
+    await stripe.paymentMethods.attach(stripePaymentMethod.id, {
+      customer: paymentIntent.customer
+    });
+
+    // Confirm payment intent
+    const confirmedPayment = await stripe.paymentIntents.confirm(paymentIntentId, {
+      payment_method: stripePaymentMethod.id
+    });
+
+    if (confirmedPayment.status === 'succeeded') {
+      // Create subscription for recurring billing
+      const subscription = await stripe.subscriptions.create({
+        customer: paymentIntent.customer,
+        items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`
+            },
+            unit_amount: paymentIntent.amount,
+            recurring: {
+              interval: 'month'
+            }
+          }
+        }],
+        default_payment_method: stripePaymentMethod.id
+      });
+
+      res.json({
+        success: true,
+        customerId: paymentIntent.customer,
+        subscriptionId: subscription.id,
+        paymentIntentId: confirmedPayment.id
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Payment failed'
+      });
+    }
+  } catch (error) {
+    console.error('Stripe process payment error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Payment processing failed'
     });
   }
 });
@@ -273,38 +386,18 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
 // Update user subscription
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
-    const { subscriptionTier } = req.body;
+    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const userId = req.user.id;
 
-    // Validate subscription tier
-    const validTiers = ['free', 'basic', 'premium'];
-    if (!validTiers.includes(subscriptionTier)) {
-      return res.status(400).json({ error: 'Invalid subscription tier' });
-    }
-
-    const result = await pool.query(
-      'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at',
-      [subscriptionTier, userId]
+    await pool.query(
+      'UPDATE users SET subscription_tier = $1, stripe_customer_id = $2, stripe_subscription_id = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+      [subscriptionTier, stripeCustomerId, stripeSubscriptionId, userId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const user = result.rows[0];
-    res.json({
-      id: user.id,
-      email: user.email,
-      username: user.username,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      isEmailVerified: user.is_email_verified,
-      subscriptionTier: user.subscription_tier,
-      createdAt: user.createdAt
-    });
+    res.json({ message: 'Subscription updated successfully' });
   } catch (error) {
-    console.error('Update subscription error:', error);
-    res.status(500).json({ error: 'Failed to update subscription' });
+    console.error('Subscription update error:', error);
+    res.status(500).json({ message: 'Failed to update subscription' });
   }
 });
 
