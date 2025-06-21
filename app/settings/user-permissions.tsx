@@ -173,13 +173,19 @@ export default function UserPermissionsScreen() {
 
   // Check if current user is admin
   React.useEffect(() => {
-    if (!user?.isAdmin || user.username !== 'djjetfuel') {
+    // Only check permissions after user data is loaded
+    if (user === null) {
+      // Still loading user data
+      return;
+    }
+    
+    if (!user?.isAdmin && user?.username !== 'djjetfuel') {
       Alert.alert('Access Denied', 'You do not have permission to access this page', [
         { text: 'OK', onPress: () => router.back() }
       ]);
       return;
     }
-  }, [user]);
+  }, [user, router]);
 
   const handleSuspendUser = async (userId: number, suspend: boolean) => {
     const targetUser = users.find(u => u.id === userId);
@@ -281,7 +287,20 @@ export default function UserPermissionsScreen() {
 
   const stats = getUserStats();
 
-  if (!user?.isAdmin || user.username !== 'djjetfuel') {
+  // Show loading state while user data is being fetched
+  if (user === null) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+          <ThemedText style={styles.loadingText}>Loading...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Check permissions - allow djjetfuel user or admin users
+  if (!user?.isAdmin && user?.username !== 'djjetfuel') {
     return null;
   }
 
