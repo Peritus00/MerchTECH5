@@ -22,6 +22,15 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="slideshows"
+        options={{
+          title: 'Slideshows',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="store"
         options={{
           title: 'Store',
