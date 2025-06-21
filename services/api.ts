@@ -1,9 +1,25 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
-const API_BASE_URL = process.env.API_BASE_URL || (__DEV__ 
-  ? `https://${window.location.hostname}/api` 
-  : 'https://your-production-url.com/api');
+const getApiBaseUrl = () => {
+  if (process.env.API_BASE_URL) {
+    return process.env.API_BASE_URL;
+  }
+  
+  if (__DEV__) {
+    if (Platform.OS === 'web') {
+      return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    } else {
+      // For React Native, use the Replit domain
+      return 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
+    }
+  }
+  
+  return 'https://your-production-url.com/api';
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
