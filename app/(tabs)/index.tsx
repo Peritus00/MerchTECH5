@@ -401,7 +401,7 @@ export default function DashboardScreen() {
             <View style={styles.contentCard}>
               <MaterialIcons name="photo-library" size={24} color="#8b5cf6" />
               <Text style={styles.contentValue}>{dashboardData.summary.totalSlideshows}</Text>
-              <Text style={styles.contentLabel">Slideshows</Text>
+              <Text style={styles.contentLabel}>Slideshows</Text>
             </View>
             <View style={styles.contentCard}>
               <MaterialIcons name="shopping-bag" size={24} color="#f59e0b" />
