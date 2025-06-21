@@ -107,8 +107,15 @@ export const authAPI = {
   },
 
   register: async (email: string, password: string, username?: string) => {
-    const response = await api.post('/auth/register', { email, password, username });
-    return response.data;
+    try {
+      const response = await api.post('/auth/register', { email, password, username });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 400) {
+        throw new Error('Username or email already exists. Please try a different one.');
+      }
+      throw new Error(error.response?.data?.error || 'Registration failed. Please try again.');
+    }
   },
 
   verifyEmail: async (token: string) => {
