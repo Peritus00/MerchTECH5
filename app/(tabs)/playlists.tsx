@@ -12,6 +12,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Playlist, MediaFile } from '@/shared/media-schema';
@@ -169,6 +170,10 @@ export default function PlaylistsScreen() {
     // Navigate to playlist viewer when implemented
   };
 
+  const handleAccessSettings = (playlist: Playlist) => {
+    router.push(`/playlist-access/${playlist.id}`);
+  };
+
   const filteredPlaylists = playlists.filter(playlist => {
     const matchesSearch = playlist.name.toLowerCase().includes(searchQuery.toLowerCase());
     if (selectedTab === 'public') {
@@ -282,6 +287,7 @@ export default function PlaylistsScreen() {
               onView={() => handleViewPlaylist(playlist)}
               onEdit={() => handleEditPlaylist(playlist)}
               onDelete={() => handleDeletePlaylist(playlist.id)}
+              onAccessSettings={() => handleAccessSettings(playlist)}
               showActions={selectedTab === 'my-playlists'}
             />
           ))

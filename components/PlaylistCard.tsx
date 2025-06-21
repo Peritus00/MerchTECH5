@@ -14,6 +14,7 @@ interface PlaylistCardProps {
   onView: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onAccessSettings?: () => void;
   showActions?: boolean;
 }
 
@@ -22,6 +23,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   onView,
   onEdit,
   onDelete,
+  onAccessSettings,
   showActions = true,
 }) => {
   const formatDate = (dateString: string) => {
@@ -128,6 +130,17 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             >
               <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />
             </TouchableOpacity>
+            {onAccessSettings && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  onAccessSettings();
+                }}
+              >
+                <MaterialIcons name="security" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+            )}
             {onEdit && (
               <TouchableOpacity
                 style={styles.actionButton}
