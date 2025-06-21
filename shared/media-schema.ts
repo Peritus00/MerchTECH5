@@ -16,6 +16,19 @@ export interface MediaFile {
   path?: string;
 }
 
+export interface ProductLink {
+  id: number;
+  playlistId: string;
+  title: string;
+  url: string;
+  description?: string;
+  imageUrl?: string;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
 export interface Playlist {
   id: string;
   userId?: number;
@@ -32,6 +45,7 @@ export interface Playlist {
   createdAt: string;
   updatedAt?: string;
   mediaFiles: MediaFile[];
+  productLinks?: ProductLink[];
 }
 
 export interface Slideshow {

@@ -7,6 +7,7 @@ import {
   Image,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import { Playlist } from '@/shared/media-schema';
 
 interface PlaylistCardProps {
@@ -141,6 +142,16 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                 <MaterialIcons name="security" size={20} color="#9ca3af" />
               </TouchableOpacity>
             )}
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                // Navigate to product links manager
+                router.push(`/product-links/${playlist.id}`);
+              }}
+            >
+              <MaterialIcons name="shopping-bag" size={20} color="#9ca3af" />
+            </TouchableOpacity>
             {onEdit && (
               <TouchableOpacity
                 style={styles.actionButton}
