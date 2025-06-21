@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -98,24 +97,32 @@ app.post('/api/auth/login', async (req, res) => {
 
     // Check for dev login
     if (email === 'djjetfuel' && password === 'Kerrie321$') {
-      const token = jwt.sign(
-        { userId: 999, email: 'djjetfuel@merchtech.com', isAdmin: true },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      // Generate JWT
+    const token = jwt.sign(
+      { userId: 999, email: 'djjetfuel@merchtech.com', isAdmin: true },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
 
-      return res.json({
-        user: {
-          id: 999,
-          email: 'djjetfuel@merchtech.com',
-          username: 'djjetfuel',
-          subscriptionTier: 'premium',
-          isAdmin: true,
-          isEmailVerified: true,
-          createdAt: new Date().toISOString()
-        },
-        token
-      });
+    const refreshToken = jwt.sign(
+      { userId: 999, email: 'djjetfuel@merchtech.com', isAdmin: true, type: 'refresh' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return res.json({
+      user: {
+        id: 999,
+        email: 'djjetfuel@merchtech.com',
+        username: 'djjetfuel',
+        subscriptionTier: 'premium',
+        isAdmin: true,
+        isEmailVerified: true,
+        createdAt: new Date().toISOString()
+      },
+      token,
+      refreshToken
+    });
     }
 
     // Get user from database
@@ -143,6 +150,12 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    const refreshToken = jwt.sign(
+      { userId: user.id, email: user.email, type: 'refresh' },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
     res.json({
       user: {
         id: user.id,
@@ -152,7 +165,8 @@ app.post('/api/auth/login', async (req, res) => {
         isEmailVerified: user.is_verified,
         createdAt: user.created_at
       },
-      token
+      token,
+      refreshToken
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -190,7 +204,7 @@ app.post('/api/auth/verify-email', async (req, res) => {
 app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
-    
+
     // Implementation would send actual email
     res.json({
       success: true,
