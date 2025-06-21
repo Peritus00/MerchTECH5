@@ -44,7 +44,7 @@ export default function TabLayout() {
         options={{
           title: 'Media',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'library-music' : 'library-music-outline'} color={color} />
+            <TabBarIcon name={focused ? 'musical-notes' : 'musical-notes-outline'} color={color} />
           ),
         }}
       />
