@@ -689,11 +689,13 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 24,
     fontWeight: 'bold',
+    color: '#1f2937',
   },
   statLabel: {
     fontSize: 12,
     opacity: 0.7,
     marginTop: 4,
+    color: '#374151',
   },
   productsList: {
     padding: 16,
@@ -747,16 +749,23 @@ const styles = StyleSheet.create({
   },
   inStock: {
     backgroundColor: '#dcfce7',
+    borderWidth: 1,
+    borderColor: '#16a34a',
   },
   outOfStock: {
     backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#dc2626',
   },
   suspended: {
     backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#d97706',
   },
   statusText: {
     fontSize: 12,
     fontWeight: '500',
+    color: '#1f2937',
   },
   productActions: {
     flexDirection: 'row',
