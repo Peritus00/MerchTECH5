@@ -120,10 +120,14 @@ export default function PreviewPlayer({
     }
   }, [mediaFiles]);
 
-  // Auto-play
+  // Auto-play with instance management
   useEffect(() => {
     if (autoplay && sound && !previewEnded) {
-      handlePlay();
+      // Add a small delay to prevent multiple instances from starting simultaneously
+      const timer = setTimeout(() => {
+        handlePlay();
+      }, 100);
+      return () => clearTimeout(timer);
     }
   }, [sound, autoplay]);
 
