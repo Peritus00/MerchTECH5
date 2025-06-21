@@ -1,6 +1,5 @@
 entrypoint = "README.md"
 modules = ["nodejs-20", "postgresql-16"]
-runButton = "Start App"
 
 [nix]
 channel = "stable-24_05"
