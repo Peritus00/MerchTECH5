@@ -622,27 +622,30 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
 
     const { identifier } = req.params;
     let deletedFrom = [];
+    let deletedUser = null;
 
-    // Try to delete from users table first (by ID or email)
+    // Try to delete from users table first (by ID or email or username)
     const userResult = await pool.query(
-      'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING email, username',
+      'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',
       [isNaN(identifier) ? null : identifier, identifier, identifier]
     );
 
     if (userResult.rowCount > 0) {
       deletedFrom.push('users');
-      console.log(`Deleted user from users table: ${userResult.rows[0].email}`);
+      deletedUser = userResult.rows[0];
+      console.log(`Deleted user from users table: ${deletedUser.email}`);
     }
 
-    // Try to delete from pending_users table (by email or username)
+    // Try to delete from pending_users table (by ID or email or username)
     const pendingResult = await pool.query(
-      'DELETE FROM pending_users WHERE email = $1 OR username = $2 RETURNING email, username',
-      [identifier, identifier]
+      'DELETE FROM pending_users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',
+      [isNaN(identifier) ? null : identifier, identifier, identifier]
     );
 
     if (pendingResult.rowCount > 0) {
       deletedFrom.push('pending_users');
-      console.log(`Deleted user from pending_users table: ${pendingResult.rows[0].email}`);
+      deletedUser = pendingResult.rows[0];
+      console.log(`Deleted user from pending_users table: ${deletedUser.email}`);
     }
 
     if (deletedFrom.length === 0) {
@@ -651,7 +654,8 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
 
     res.json({ 
       message: `User deleted successfully from: ${deletedFrom.join(', ')}`,
-      deletedFrom 
+      deletedFrom,
+      deletedUser
     });
   } catch (error) {
     console.error('Delete user error:', error);
