@@ -576,6 +576,89 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
   }
 });
 
+// Get all users including pending ones (admin only)
+app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    // Get confirmed users
+    const confirmedUsers = await pool.query(`
+      SELECT id, email, username, first_name, last_name, 
+             is_admin, subscription_tier, created_at, updated_at,
+             'confirmed' as status
+      FROM users ORDER BY created_at DESC
+    `);
+
+    // Get pending users
+    const pendingUsers = await pool.query(`
+      SELECT id, email, username, first_name, last_name,
+             false as is_admin, 'free' as subscription_tier, 
+             created_at, created_at as updated_at,
+             'pending' as status, expires_at
+      FROM pending_users ORDER BY created_at DESC
+    `);
+
+    // Combine results
+    const allUsers = [
+      ...confirmedUsers.rows,
+      ...pendingUsers.rows
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    res.json(allUsers);
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete user (admin only) - checks both users and pending_users tables
+app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { identifier } = req.params;
+    let deletedFrom = [];
+
+    // Try to delete from users table first (by ID or email)
+    const userResult = await pool.query(
+      'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING email, username',
+      [isNaN(identifier) ? null : identifier, identifier, identifier]
+    );
+
+    if (userResult.rowCount > 0) {
+      deletedFrom.push('users');
+      console.log(`Deleted user from users table: ${userResult.rows[0].email}`);
+    }
+
+    // Try to delete from pending_users table (by email or username)
+    const pendingResult = await pool.query(
+      'DELETE FROM pending_users WHERE email = $1 OR username = $2 RETURNING email, username',
+      [identifier, identifier]
+    );
+
+    if (pendingResult.rowCount > 0) {
+      deletedFrom.push('pending_users');
+      console.log(`Deleted user from pending_users table: ${pendingResult.rows[0].email}`);
+    }
+
+    if (deletedFrom.length === 0) {
+      return res.status(404).json({ error: 'User not found in any table' });
+    }
+
+    res.json({ 
+      message: `User deleted successfully from: ${deletedFrom.join(', ')}`,
+      deletedFrom 
+    });
+  } catch (error) {
+    console.error('Delete user error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Protected route example
 app.get('/api/profile', authenticateToken, (req, res) => {
   res.json({ user: req.user });
