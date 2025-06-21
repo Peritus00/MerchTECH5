@@ -43,6 +43,8 @@ export default function RegisterScreen() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [passwordStrength, setPasswordStrength] = useState<PasswordStrength>({ score: 0, feedback: [] });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [agreeToPrivacy, setAgreeToPrivacy] = useState(false);
   
   const { register, isLoading } = useAuth();
   const router = useRouter();
@@ -130,6 +132,13 @@ export default function RegisterScreen() {
       newErrors.confirmPassword = 'Please confirm your password';
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match';
+    }
+
+    // Terms and privacy agreement validation
+    if (!agreeToTerms) {
+      newErrors.general = 'You must agree to the Terms of Service to create an account';
+    } else if (!agreeToPrivacy) {
+      newErrors.general = 'You must agree to the Privacy Policy to create an account';
     }
 
     setErrors(newErrors);
@@ -319,10 +328,56 @@ export default function RegisterScreen() {
               {errors.confirmPassword && <Text style={styles.fieldError}>{errors.confirmPassword}</Text>}
             </View>
 
+            <View style={styles.agreementSection}>
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}
+                  onPress={() => setAgreeToTerms(!agreeToTerms)}
+                >
+                  {agreeToTerms && (
+                    <MaterialIcons name="check" size={16} color="#fff" />
+                  )}
+                </TouchableOpacity>
+                <View style={styles.checkboxTextContainer}>
+                  <ThemedText style={styles.checkboxText}>
+                    I agree to the{' '}
+                    <TouchableOpacity
+                      onPress={() => router.push('/legal/terms')}
+                      style={styles.linkButton}
+                    >
+                      <ThemedText style={styles.linkText}>Terms of Service</ThemedText>
+                    </TouchableOpacity>
+                  </ThemedText>
+                </View>
+              </View>
+
+              <View style={styles.checkboxContainer}>
+                <TouchableOpacity
+                  style={[styles.checkbox, agreeToPrivacy && styles.checkboxChecked]}
+                  onPress={() => setAgreeToPrivacy(!agreeToPrivacy)}
+                >
+                  {agreeToPrivacy && (
+                    <MaterialIcons name="check" size={16} color="#fff" />
+                  )}
+                </TouchableOpacity>
+                <View style={styles.checkboxTextContainer}>
+                  <ThemedText style={styles.checkboxText}>
+                    I agree to the{' '}
+                    <TouchableOpacity
+                      onPress={() => router.push('/legal/privacy')}
+                      style={styles.linkButton}
+                    >
+                      <ThemedText style={styles.linkText}>Privacy Policy</ThemedText>
+                    </TouchableOpacity>
+                  </ThemedText>
+                </View>
+              </View>
+            </View>
+
             <TouchableOpacity
-              style={[styles.registerButton, loading && styles.disabled]}
+              style={[styles.registerButton, (loading || !agreeToTerms || !agreeToPrivacy) && styles.disabled]}
               onPress={handleRegister}
-              disabled={loading}
+              disabled={loading || !agreeToTerms || !agreeToPrivacy}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -449,6 +504,45 @@ const styles = StyleSheet.create({
   strengthFeedback: {
     fontSize: 11,
     color: '#6b7280',
+  },
+  agreementSection: {
+    marginBottom: 20,
+    marginTop: 8,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#d1d5db',
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  checkboxTextContainer: {
+    flex: 1,
+  },
+  checkboxText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  linkButton: {
+    display: 'inline',
+  },
+  linkText: {
+    color: '#3b82f6',
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
   registerButton: {
     backgroundColor: '#3b82f6',

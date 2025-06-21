@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -12,13 +11,13 @@ export default function Settings() {
 
   // Check if user is admin (djjetfuel)
   const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
-  
+
   // Debug logging
   console.log('Current user:', user);
   console.log('User email:', user?.email);
   console.log('User username:', user?.username);
   console.log('Is admin check:', isAdmin);
-  
+
   if (isAdmin) {
     console.log('Adding admin options to settings');
   }
@@ -59,6 +58,18 @@ export default function Settings() {
       description: 'App version and information',
       onPress: () => console.log('Navigate to about'),
       icon: 'ℹ️',
+    },
+    {
+      title: 'Privacy Policy',
+      description: 'View our privacy policy',
+      onPress: () => router.push('/legal/privacy'),
+      icon: '📜',
+    },
+    {
+      title: 'Terms of Service',
+      description: 'View our terms of service',
+      onPress: () => router.push('/legal/terms'),
+      icon: '⚖️',
     },
     // Admin-only options
     ...(isAdmin ? [
