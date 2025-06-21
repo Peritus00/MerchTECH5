@@ -154,6 +154,26 @@ export default function MySalesScreen() {
       .sort((a, b) => b.revenue - a.revenue);
   }, [filteredSalesData]);
 
+  // Customer data
+  const customerData = useMemo(() => {
+    const customerMap = filteredSalesData.reduce((acc, item) => {
+      const email = item.customerEmail;
+      if (!acc[email]) {
+        acc[email] = {
+          name: item.customerName,
+          email,
+          orders: 0,
+          totalSpent: 0,
+        };
+      }
+      acc[email].orders++;
+      acc[email].totalSpent += parseFloat(item.totalAmount.replace('$', ''));
+      return acc;
+    }, {} as Record<string, any>);
+
+    return Object.values(customerMap).sort((a: any, b: any) => b.totalSpent - a.totalSpent);
+  }, [filteredSalesData]);
+
   // Export data
   const exportData = async () => {
     try {
@@ -300,25 +320,6 @@ export default function MySalesScreen() {
   );
 
   const renderCustomers = () => {
-    const customerData = useMemo(() => {
-      const customerMap = filteredSalesData.reduce((acc, item) => {
-        const email = item.customerEmail;
-        if (!acc[email]) {
-          acc[email] = {
-            name: item.customerName,
-            email,
-            orders: 0,
-            totalSpent: 0,
-          };
-        }
-        acc[email].orders++;
-        acc[email].totalSpent += parseFloat(item.totalAmount.replace('$', ''));
-        return acc;
-      }, {} as Record<string, any>);
-
-      return Object.values(customerMap).sort((a: any, b: any) => b.totalSpent - a.totalSpent);
-    }, [filteredSalesData]);
-
     return (
       <FlatList
         data={customerData}
