@@ -1,5 +1,6 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
@@ -26,6 +27,7 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [state, setState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
@@ -119,6 +121,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isInitialized: true,
       });
+      
+      // Navigate to login screen after logout
+      router.replace('/auth/login');
     } catch (error) {
       console.error('Logout failed:', error);
       // Even if logout fails, clear the local state
@@ -128,6 +133,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isInitialized: true,
       });
+      
+      // Navigate to login screen even if logout fails
+      router.replace('/auth/login');
     }
   };
 
