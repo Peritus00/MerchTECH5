@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Text
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -117,12 +118,12 @@ const UserPermissionCard = ({
         </View>
 
         <View style={styles.userLimits}>
-          <ThemedText style={styles.limitsTitle}>Current Limits:</ThemedText>
+          <Text style={styles.limitsTitle}>Current Limits:</Text>
           <View style={styles.limitsGrid}>
-            <ThemedText style={styles.limitItem}>QR Codes: {user.maxQrCodes}</ThemedText>
-            <ThemedText style={styles.limitItem}>Playlists: {user.maxPlaylists}</ThemedText>
-            <ThemedText style={styles.limitItem}>Products: {user.maxProducts}</ThemedText>
-            <ThemedText style={styles.limitItem}>Slideshows: {user.maxSlideshows}</ThemedText>
+            <Text style={styles.limitItem}>QR Codes: {user.maxQrCodes}</Text>
+            <Text style={styles.limitItem}>Playlists: {user.maxPlaylists}</Text>
+            <Text style={styles.limitItem}>Products: {user.maxProducts}</Text>
+            <Text style={styles.limitItem}>Slideshows: {user.maxSlideshows}</Text>
           </View>
         </View>
       </View>
@@ -130,7 +131,7 @@ const UserPermissionCard = ({
       <View style={styles.userActions}>
         <TouchableOpacity style={styles.editButton} onPress={onEdit}>
           <MaterialIcons name="edit" size={18} color="#3b82f6" />
-          <ThemedText style={styles.editButtonText}>Edit</ThemedText>
+          <Text style={styles.editButtonText}>Edit</Text>
         </TouchableOpacity>
 
         {user.username !== 'djjetfuel' && (
@@ -144,14 +145,14 @@ const UserPermissionCard = ({
                 size={18} 
                 color={user.isSuspended ? "#10b981" : "#f59e0b"} 
               />
-              <ThemedText style={styles.suspendButtonText}>
+              <Text style={styles.suspendButtonText}>
                 {user.isSuspended ? 'Unsuspend' : 'Suspend'}
-              </ThemedText>
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
               <MaterialIcons name="delete" size={18} color="#ef4444" />
-              <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
+              <Text style={styles.deleteButtonText}>Delete</Text>
             </TouchableOpacity>
           </>
         )}
