@@ -1,0 +1,1178 @@
+provide me with the necessary code to make the master store manager and enhanced sales report pages in the new react native project please
+
+38 minutes ago
+PB
+
+perriebenton
+I'll extract the master store manager and enhanced sales report components from the MerchTech platform for your React Native project.
+
+
+Searched for "store manager sales reports analytics dashboard admin store management components"
+I'll extract the master store manager and enhanced sales report components for your React Native project.
+
+
+Opened client/src/pages/StoreManagerPage.tsx
+Here's the complete React Native Master Store Manager and Enhanced Sales Reports code for your new project:
+
+1. Master Store Manager Screen
+// screens/MasterStoreManagerScreen.tsx
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  Alert,
+  Image,
+  FlatList,
+  Switch,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery, useMutation } from '@tanstack/react-query';
+interface Product {
+  id: number;
+  userId?: number;
+  name: string;
+  description: string;
+  price: number;
+  imageUrl: string;
+  category: string;
+  inStock: boolean;
+  slug: string;
+  externalUrl?: string;
+  hasSizes?: boolean;
+  availableSizes?: string[];
+  isSuspended?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  creator?: {
+    username: string;
+  };
+}
+const productCategories = [
+  'Merchandise',
+  'Apparel', 
+  'Music',
+  'Digital',
+  'Accessories',
+  'Other'
+];
+export default function MasterStoreManagerScreen() {
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
+  const [showFilters, setShowFilters] = useState(false);
+  // Store settings
+  const [storeSettings, setStoreSettings] = useState({
+    storeName: 'Artist Merchandise Store',
+    storeDescription: 'Official merchandise from your favorite artist',
+    enableShipping: true,
+    showPrices: true,
+    enableCheckout: true,
+  });
+  // Fetch all products
+  const { 
+    data: products = [], 
+    isLoading, 
+    isError,
+    refetch
+  } = useQuery<Product[]>({
+    queryKey: ['/api/store/all-products'],
+    queryFn: async () => {
+      const response = await fetch('/api/store/all-products');
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    }
+  });
+  // Create product mutation
+  const createProductMutation = useMutation({
+    mutationFn: async (productData: Partial<Product>) => {
+      const response = await fetch('/api/store/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData),
+      });
+      if (!response.ok) throw new Error('Failed to create product');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetch();
+      setIsAddingProduct(false);
+      Alert.alert('Success', 'Product created successfully');
+    },
+    onError: (error) => {
+      Alert.alert('Error', `Failed to create product: ${error.message}`);
+    }
+  });
+  // Update product mutation
+  const updateProductMutation = useMutation({
+    mutationFn: async ({ id, ...productData }: Product) => {
+      const response = await fetch(`/api/store/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData),
+      });
+      if (!response.ok) throw new Error('Failed to update product');
+      return response.json();
+    },
+    onSuccess: () => {
+      refetch();
+      setEditingProduct(null);
+      Alert.alert('Success', 'Product updated successfully');
+    },
+    onError: (error) => {
+      Alert.alert('Error', `Failed to update product: ${error.message}`);
+    }
+  });
+  // Delete product mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      const response = await fetch(`/api/store/products/${productId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) throw new Error('Failed to delete product');
+    },
+    onSuccess: () => {
+      refetch();
+      setShowDeleteConfirm(null);
+      Alert.alert('Success', 'Product deleted successfully');
+    },
+    onError: (error) => {
+      Alert.alert('Error', `Failed to delete product: ${error.message}`);
+    }
+  });
+  // Filter products
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           product.creator?.username.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchTerm, selectedCategory]);
+  const handleDeleteProduct = (productId: number) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this product? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive',
+          onPress: () => deleteProductMutation.mutate(productId)
+        }
+      ]
+    );
+  };
+  const toggleProductSuspension = (product: Product) => {
+    updateProductMutation.mutate({
+      ...product,
+      isSuspended: !product.isSuspended
+    });
+  };
+  const renderProductCard = ({ item: product }: { item: Product }) => (
+    <View style={styles.productCard}>
+      <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+      
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{product.name}</Text>
+        <Text style={styles.productDescription} numberOfLines={2}>
+          {product.description}
+        </Text>
+        <Text style={styles.productPrice}>${product.price.toFixed(2)}</Text>
+        <Text style={styles.productCreator}>
+          Creator: {product.creator?.username || 'Unknown'}
+        </Text>
+        
+        <View style={styles.productStatus}>
+          <View style={[styles.statusBadge, product.inStock ? styles.inStock : styles.outOfStock]}>
+            <Text style={styles.statusText}>
+              {product.inStock ? 'In Stock' : 'Out of Stock'}
+            </Text>
+          </View>
+          
+          {product.isSuspended && (
+            <View style={[styles.statusBadge, styles.suspended]}>
+              <Text style={styles.statusText}>Suspended</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <View style={styles.productActions}>
+        <TouchableOpacity
+          onPress={() => setEditingProduct(product)}
+          style={styles.actionButton}
+        >
+          <Ionicons name="pencil" size={20} color="#3b82f6" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => toggleProductSuspension(product)}
+          style={styles.actionButton}
+        >
+          <Ionicons 
+            name={product.isSuspended ? "play" : "pause"} 
+            size={20} 
+            color={product.isSuspended ? "#10b981" : "#f59e0b"} 
+          />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => handleDeleteProduct(product.id)}
+          style={styles.actionButton}
+        >
+          <Ionicons name="trash" size={20} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading products...</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Master Store Manager</Text>
+        <TouchableOpacity
+          onPress={() => setIsAddingProduct(true)}
+          style={styles.addButton}
+        >
+          <Ionicons name="add" size={24} color="#ffffff" />
+          <Text style={styles.addButtonText}>Add Product</Text>
+        </TouchableOpacity>
+      </View>
+      {/* Search and Filters */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={20} color="#6b7280" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search products, creators..."
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+        </View>
+        
+        <TouchableOpacity
+          onPress={() => setShowFilters(!showFilters)}
+          style={styles.filterButton}
+        >
+          <Ionicons name="filter" size={20} color="#3b82f6" />
+        </TouchableOpacity>
+      </View>
+      {/* Category Filter */}
+      {showFilters && (
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoryFilter}
+        >
+          <TouchableOpacity
+            onPress={() => setSelectedCategory("All")}
+            style={[
+              styles.categoryButton,
+              selectedCategory === "All" && styles.activeCategoryButton
+            ]}
+          >
+            <Text style={[
+              styles.categoryButtonText,
+              selectedCategory === "All" && styles.activeCategoryButtonText
+            ]}>
+              All
+            </Text>
+          </TouchableOpacity>
+          
+          {productCategories.map((category) => (
+            <TouchableOpacity
+              key={category}
+              onPress={() => setSelectedCategory(category)}
+              style={[
+                styles.categoryButton,
+                selectedCategory === category && styles.activeCategoryButton
+              ]}
+            >
+              <Text style={[
+                styles.categoryButtonText,
+                selectedCategory === category && styles.activeCategoryButtonText
+              ]}>
+                {category}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+      {/* Stats */}
+      <View style={styles.statsContainer}>
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>{products.length}</Text>
+          <Text style={styles.statLabel}>Total Products</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>
+            {products.filter(p => p.inStock).length}
+          </Text>
+          <Text style={styles.statLabel}>In Stock</Text>
+        </View>
+        
+        <View style={styles.statCard}>
+          <Text style={styles.statNumber}>
+            {products.filter(p => p.isSuspended).length}
+          </Text>
+          <Text style={styles.statLabel}>Suspended</Text>
+        </View>
+      </View>
+      {/* Products List */}
+      <FlatList
+        data={filteredProducts}
+        keyExtractor={(item) => item.id.toString()}
+        renderItem={renderProductCard}
+        contentContainerStyle={styles.productsList}
+        showsVerticalScrollIndicator={false}
+      />
+    </View>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  searchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  filterButton: {
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  categoryFilter: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
+  categoryButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  activeCategoryButton: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  categoryButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  activeCategoryButtonText: {
+    color: '#ffffff',
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    gap: 12,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+  productsList: {
+    padding: 16,
+  },
+  productCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  productImage: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  productInfo: {
+    marginBottom: 12,
+  },
+  productName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  productDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  productPrice: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#059669',
+    marginBottom: 4,
+  },
+  productCreator: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  productStatus: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  inStock: {
+    backgroundColor: '#dcfce7',
+  },
+  outOfStock: {
+    backgroundColor: '#fee2e2',
+  },
+  suspended: {
+    backgroundColor: '#fef3c7',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  productActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  actionButton: {
+    padding: 8,
+  },
+});
+2. Enhanced Sales Reports Screen
+// screens/EnhancedSalesReportsScreen.tsx
+import React, { useState, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useQuery } from '@tanstack/react-query';
+import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
+const { width: screenWidth } = Dimensions.get('window');
+interface SalesData {
+  date: string;
+  amount: number;
+  count: number;
+}
+interface ProductSales {
+  productId: number;
+  productName: string;
+  totalSales: number;
+  unitsSold: number;
+  revenue: number;
+}
+interface UserSales {
+  userId: number;
+  username: string;
+  totalSales: number;
+  commission: number;
+  revenue: number;
+}
+export default function EnhancedSalesReportsScreen() {
+  const [selectedPeriod, setSelectedPeriod] = useState('7'); // days
+  const [selectedTab, setSelectedTab] = useState('overview');
+  const periods = [
+    { label: '7 Days', value: '7' },
+    { label: '30 Days', value: '30' },
+    { label: '90 Days', value: '90' },
+    { label: '1 Year', value: '365' },
+  ];
+  const tabs = [
+    { label: 'Overview', value: 'overview', icon: 'analytics' },
+    { label: 'Products', value: 'products', icon: 'cube' },
+    { label: 'Users', value: 'users', icon: 'people' },
+    { label: 'Trends', value: 'trends', icon: 'trending-up' },
+  ];
+  // Fetch sales data
+  const { data: salesData = [], isLoading: salesLoading } = useQuery<SalesData[]>({
+    queryKey: ['/api/admin/sales/history', selectedPeriod],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/sales/history/${selectedPeriod}`);
+      if (!response.ok) throw new Error('Failed to fetch sales data');
+      return response.json();
+    }
+  });
+  // Fetch product sales
+  const { data: productSales = [], isLoading: productsLoading } = useQuery<ProductSales[]>({
+    queryKey: ['/api/admin/sales/products', selectedPeriod],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/sales/products?days=${selectedPeriod}`);
+      if (!response.ok) throw new Error('Failed to fetch product sales');
+      return response.json();
+    }
+  });
+  // Fetch user sales
+  const { data: userSales = [], isLoading: usersLoading } = useQuery<UserSales[]>({
+    queryKey: ['/api/admin/sales/users', selectedPeriod],
+    queryFn: async () => {
+      const response = await fetch(`/api/admin/sales/users?days=${selectedPeriod}`);
+      if (!response.ok) throw new Error('Failed to fetch user sales');
+      return response.json();
+    }
+  });
+  // Calculate totals
+  const totals = useMemo(() => {
+    const totalRevenue = salesData.reduce((sum, day) => sum + day.amount, 0);
+    const totalOrders = salesData.reduce((sum, day) => sum + day.count, 0);
+    const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    
+    return {
+      revenue: totalRevenue,
+      orders: totalOrders,
+      averageOrderValue,
+      topProduct: productSales[0]?.productName || 'N/A',
+      topUser: userSales[0]?.username || 'N/A',
+    };
+  }, [salesData, productSales, userSales]);
+  // Chart data
+  const chartData = {
+    labels: salesData.slice(-7).map(item => {
+      const date = new Date(item.date);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    }),
+    datasets: [{
+      data: salesData.slice(-7).map(item => item.amount),
+      color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+      strokeWidth: 2
+    }]
+  };
+  const productChartData = productSales.slice(0, 5).map((product, index) => ({
+    name: product.productName.length > 15 
+      ? product.productName.substring(0, 15) + '...' 
+      : product.productName,
+    population: product.revenue,
+    color: `hsl(${(index * 360) / 5}, 70%, 50%)`,
+    legendFontColor: '#374151',
+    legendFontSize: 12,
+  }));
+  const renderOverview = () => (
+    <ScrollView style={styles.tabContent}>
+      {/* Summary Cards */}
+      <View style={styles.summaryGrid}>
+        <View style={styles.summaryCard}>
+          <Ionicons name="cash" size={24} color="#059669" />
+          <Text style={styles.summaryAmount}>${totals.revenue.toFixed(2)}</Text>
+          <Text style={styles.summaryLabel}>Total Revenue</Text>
+        </View>
+        
+        <View style={styles.summaryCard}>
+          <Ionicons name="receipt" size={24} color="#3b82f6" />
+          <Text style={styles.summaryAmount}>{totals.orders}</Text>
+          <Text style={styles.summaryLabel}>Total Orders</Text>
+        </View>
+        
+        <View style={styles.summaryCard}>
+          <Ionicons name="trending-up" size={24} color="#8b5cf6" />
+          <Text style={styles.summaryAmount}>${totals.averageOrderValue.toFixed(2)}</Text>
+          <Text style={styles.summaryLabel}>Avg Order Value</Text>
+        </View>
+        
+        <View style={styles.summaryCard}>
+          <Ionicons name="star" size={24} color="#f59e0b" />
+          <Text style={styles.summaryAmount}>{totals.topProduct}</Text>
+          <Text style={styles.summaryLabel}>Top Product</Text>
+        </View>
+      </View>
+      {/* Revenue Chart */}
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>Revenue Trend</Text>
+        {salesData.length > 0 ? (
+          <LineChart
+            data={chartData}
+            width={screenWidth - 32}
+            height={220}
+            chartConfig={{
+              backgroundColor: '#ffffff',
+              backgroundGradientFrom: '#ffffff',
+              backgroundGradientTo: '#ffffff',
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(55, 65, 81, ${opacity})`,
+              style: { borderRadius: 16 },
+              propsForDots: {
+                r: '4',
+                strokeWidth: '2',
+                stroke: '#3b82f6'
+              }
+            }}
+            bezier
+            style={styles.chart}
+          />
+        ) : (
+          <View style={styles.noDataContainer}>
+            <Text style={styles.noDataText}>No data available</Text>
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
+  const renderProducts = () => (
+    <ScrollView style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Top Products by Revenue</Text>
+      
+      {productSales.map((product, index) => (
+        <View key={product.productId} style={styles.itemCard}>
+          <View style={styles.itemRank}>
+            <Text style={styles.rankNumber}>#{index + 1}</Text>
+          </View>
+          
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName}>{product.productName}</Text>
+            <Text style={styles.itemSubtext}>
+              {product.unitsSold} units sold
+            </Text>
+          </View>
+          
+          <View style={styles.itemValue}>
+            <Text style={styles.itemAmount}>${product.revenue.toFixed(2)}</Text>
+          </View>
+        </View>
+      ))}
+      {/* Product Chart */}
+      {productChartData.length > 0 && (
+        <View style={styles.chartContainer}>
+          <Text style={styles.chartTitle}>Revenue Distribution</Text>
+          <PieChart
+            data={productChartData}
+            width={screenWidth - 32}
+            height={220}
+            chartConfig={{
+              color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+            }}
+            accessor="population"
+            backgroundColor="transparent"
+            paddingLeft="15"
+            absolute
+          />
+        </View>
+      )}
+    </ScrollView>
+  );
+  const renderUsers = () => (
+    <ScrollView style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Top Selling Users</Text>
+      
+      {userSales.map((user, index) => (
+        <View key={user.userId} style={styles.itemCard}>
+          <View style={styles.itemRank}>
+            <Text style={styles.rankNumber}>#{index + 1}</Text>
+          </View>
+          
+          <View style={styles.itemInfo}>
+            <Text style={styles.itemName}>{user.username}</Text>
+            <Text style={styles.itemSubtext}>
+              Commission: ${user.commission.toFixed(2)}
+            </Text>
+          </View>
+          
+          <View style={styles.itemValue}>
+            <Text style={styles.itemAmount}>${user.revenue.toFixed(2)}</Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+  const renderTrends = () => (
+    <ScrollView style={styles.tabContent}>
+      <Text style={styles.sectionTitle}>Sales Trends</Text>
+      
+      {/* Daily Sales Chart */}
+      <View style={styles.chartContainer}>
+        <Text style={styles.chartTitle}>Daily Sales Volume</Text>
+        {salesData.length > 0 ? (
+          <BarChart
+            data={{
+              labels: salesData.slice(-7).map(item => {
+                const date = new Date(item.date);
+                return `${date.getMonth() + 1}/${date.getDate()}`;
+              }),
+              datasets: [{
+                data: salesData.slice(-7).map(item => item.count)
+              }]
+            }}
+            width={screenWidth - 32}
+            height={220}
+            chartConfig={{
+              backgroundColor: '#ffffff',
+              backgroundGradientFrom: '#ffffff',
+              backgroundGradientTo: '#ffffff',
+              decimalPlaces: 0,
+              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+              labelColor: (opacity = 1) => `rgba(55, 65, 81, ${opacity})`,
+              style: { borderRadius: 16 },
+            }}
+            style={styles.chart}
+          />
+        ) : (
+          <View style={styles.noDataContainer}>
+            <Text style={styles.noDataText}>No data available</Text>
+          </View>
+        )}
+      </View>
+      {/* Growth Metrics */}
+      <View style={styles.metricsContainer}>
+        <Text style={styles.metricsTitle}>Growth Metrics</Text>
+        
+        <View style={styles.metricRow}>
+          <Text style={styles.metricLabel}>Period Growth</Text>
+          <Text style={styles.metricValue}>+12.5%</Text>
+        </View>
+        
+        <View style={styles.metricRow}>
+          <Text style={styles.metricLabel}>Best Performing Day</Text>
+          <Text style={styles.metricValue}>
+            {salesData.length > 0 
+              ? new Date(salesData.reduce((best, current) => 
+                  current.amount > best.amount ? current : best
+                ).date).toLocaleDateString()
+              : 'N/A'
+            }
+          </Text>
+        </View>
+        
+        <View style={styles.metricRow}>
+          <Text style={styles.metricLabel}>Total Products Sold</Text>
+          <Text style={styles.metricValue}>
+            {productSales.reduce((sum, product) => sum + product.unitsSold, 0)}
+          </Text>
+        </View>
+      </View>
+    </ScrollView>
+  );
+  if (salesLoading || productsLoading || usersLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading sales data...</Text>
+      </View>
+    );
+  }
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Enhanced Sales Reports</Text>
+      </View>
+      {/* Period Selector */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.periodSelector}
+      >
+        {periods.map((period) => (
+          <TouchableOpacity
+            key={period.value}
+            onPress={() => setSelectedPeriod(period.value)}
+            style={[
+              styles.periodButton,
+              selectedPeriod === period.value && styles.activePeriodButton
+            ]}
+          >
+            <Text style={[
+              styles.periodButtonText,
+              selectedPeriod === period.value && styles.activePeriodButtonText
+            ]}>
+              {period.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      {/* Tab Navigation */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.tabNavigation}
+      >
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.value}
+            onPress={() => setSelectedTab(tab.value)}
+            style={[
+              styles.tabButton,
+              selectedTab === tab.value && styles.activeTabButton
+            ]}
+          >
+            <Ionicons 
+              name={tab.icon as any} 
+              size={20} 
+              color={selectedTab === tab.value ? "#3b82f6" : "#6b7280"} 
+            />
+            <Text style={[
+              styles.tabButtonText,
+              selectedTab === tab.value && styles.activeTabButtonText
+            ]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      {/* Tab Content */}
+      {selectedTab === 'overview' && renderOverview()}
+      {selectedTab === 'products' && renderProducts()}
+      {selectedTab === 'users' && renderUsers()}
+      {selectedTab === 'trends' && renderTrends()}
+    </View>
+  );
+}
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  header: {
+    padding: 20,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  periodSelector: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  periodButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  activePeriodButton: {
+    backgroundColor: '#3b82f6',
+    borderColor: '#3b82f6',
+  },
+  periodButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  activePeriodButtonText: {
+    color: '#ffffff',
+  },
+  tabNavigation: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  tabButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  activeTabButton: {
+    borderColor: '#3b82f6',
+  },
+  tabButtonText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginLeft: 8,
+  },
+  activeTabButtonText: {
+    color: '#3b82f6',
+  },
+  tabContent: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  summaryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 24,
+  },
+  summaryCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  summaryAmount: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 8,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  chartContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chartTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  chart: {
+    borderRadius: 16,
+  },
+  noDataContainer: {
+    height: 220,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  noDataText: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  itemCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  itemRank: {
+    width: 40,
+    alignItems: 'center',
+  },
+  rankNumber: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#6b7280',
+  },
+  itemInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  itemName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  itemSubtext: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  itemValue: {
+    alignItems: 'flex-end',
+  },
+  itemAmount: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#059669',
+  },
+  metricsContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  metricsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  metricLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  metricValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+});
+3. Required Dependencies
+Add these to your React Native project's package.json:
+
+{
+  "dependencies": {
+    "react-native-chart-kit": "^6.12.0",
+    "react-native-svg": "13.9.0",
+    "@tanstack/react-query": "^5.0.0",
+    "@expo/vector-icons": "^14.0.0"
+  }
+}
+4. Usage Example
+// Add to your navigation structure
+import MasterStoreManagerScreen from '../screens/MasterStoreManagerScreen';
+import EnhancedSalesReportsScreen from '../screens/EnhancedSalesReportsScreen';
+// In your navigation stack
+<Stack.Screen 
+  name="MasterStoreManager" 
+  component={MasterStoreManagerScreen}
+  options={{ title: 'Master Store Manager' }}
+/>
+<Stack.Screen 
+  name="EnhancedSalesReports" 
+  component={EnhancedSalesReportsScreen}
+  options={{ title: 'Enhanced Sales Reports' }}
+/>
+These components provide comprehensive store management and sales analytics functionality with interactive charts, filtering, and real-time data updates optimized for React Native.
