@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,13 +9,14 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
-  Switch,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import EditUserPermissionsModal from '@/components/EditUserPermissionsModal';
+import { useUserPermissions } from '@/hooks/useUserPermissions';
 
 interface UserPermissions {
   id: number;
@@ -163,113 +164,22 @@ const UserPermissionCard = ({
 export default function UserPermissionsScreen() {
   const { user } = useAuth();
   const router = useRouter();
-  const [users, setUsers] = useState<UserPermissions[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { users, isLoading, refreshUsers, updateUserPermissions, deleteUser } = useUserPermissions();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'admins' | 'suspended' | 'active'>('all');
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserPermissions | null>(null);
 
   // Check if current user is admin
-  useEffect(() => {
+  React.useEffect(() => {
     if (!user?.isAdmin || user.username !== 'djjetfuel') {
       Alert.alert('Access Denied', 'You do not have permission to access this page', [
         { text: 'OK', onPress: () => router.back() }
       ]);
       return;
     }
-    fetchUsers();
   }, [user]);
-
-  const fetchUsers = async () => {
-    try {
-      // Mock user data for development
-      const mockUsers: UserPermissions[] = [
-        {
-          id: 1,
-          username: 'djjetfuel',
-          email: 'djjetfuel@merchtech.com',
-          subscriptionTier: 'premium',
-          isAdmin: true,
-          canViewAnalytics: true,
-          canManagePlaylists: true,
-          canEditPlaylists: true,
-          canUploadMedia: true,
-          canGenerateCodes: true,
-          canAccessStore: true,
-          canViewFanmail: true,
-          canManageQRCodes: true,
-          maxPlaylists: 999,
-          maxVideos: 999,
-          maxAudioFiles: 999,
-          maxActivationCodes: 999,
-          maxProducts: 999,
-          maxQrCodes: 999,
-          maxSlideshows: 999,
-          isSuspended: false,
-          createdAt: '2024-01-01',
-          lastActive: '2024-01-20'
-        },
-        {
-          id: 2,
-          username: 'testuser',
-          email: 'test@example.com',
-          subscriptionTier: 'free',
-          isAdmin: false,
-          canViewAnalytics: false,
-          canManagePlaylists: true,
-          canEditPlaylists: false,
-          canUploadMedia: true,
-          canGenerateCodes: false,
-          canAccessStore: true,
-          canViewFanmail: false,
-          canManageQRCodes: true,
-          maxPlaylists: 5,
-          maxVideos: 10,
-          maxAudioFiles: 10,
-          maxActivationCodes: 10,
-          maxProducts: 5,
-          maxQrCodes: 10,
-          maxSlideshows: 3,
-          isSuspended: false,
-          createdAt: '2024-01-15',
-          lastActive: '2024-01-19'
-        },
-        {
-          id: 3,
-          username: 'premiumuser',
-          email: 'premium@example.com',
-          subscriptionTier: 'premium',
-          isAdmin: false,
-          canViewAnalytics: true,
-          canManagePlaylists: true,
-          canEditPlaylists: true,
-          canUploadMedia: true,
-          canGenerateCodes: true,
-          canAccessStore: true,
-          canViewFanmail: true,
-          canManageQRCodes: true,
-          maxPlaylists: 100,
-          maxVideos: 500,
-          maxAudioFiles: 500,
-          maxActivationCodes: 100,
-          maxProducts: 50,
-          maxQrCodes: 200,
-          maxSlideshows: 50,
-          isSuspended: false,
-          createdAt: '2024-01-10',
-          lastActive: '2024-01-20'
-        }
-      ];
-      
-      setUsers(mockUsers);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      Alert.alert('Error', 'Failed to load users');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
 
   const handleSuspendUser = async (userId: number, suspend: boolean) => {
     const targetUser = users.find(u => u.id === userId);
@@ -283,13 +193,8 @@ export default function UserPermissionsScreen() {
         {
           text: suspend ? 'Suspend' : 'Unsuspend',
           style: suspend ? 'destructive' : 'default',
-          onPress: () => {
-            setUsers(prev => 
-              prev.map(user => 
-                user.id === userId ? { ...user, isSuspended: suspend } : user
-              )
-            );
-            Alert.alert('Success', `User ${suspend ? 'suspended' : 'unsuspended'} successfully`);
+          onPress: async () => {
+            await updateUserPermissions(userId, { isSuspended: suspend });
           },
         },
       ]
@@ -313,9 +218,8 @@ export default function UserPermissionsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            setUsers(prev => prev.filter(u => u.id !== userId));
-            Alert.alert('Success', 'User deleted successfully');
+          onPress: async () => {
+            await deleteUser(userId);
           },
         },
       ]
@@ -323,12 +227,21 @@ export default function UserPermissionsScreen() {
   };
 
   const handleEditUser = (userId: number) => {
-    Alert.alert('Edit User', 'User editing functionality would open here in a full implementation');
+    const targetUser = users.find(u => u.id === userId);
+    if (targetUser) {
+      setSelectedUser(targetUser);
+      setEditModalVisible(true);
+    }
   };
 
-  const onRefresh = () => {
+  const handleUpdatePermissions = async (userId: number, permissions: Partial<UserPermissions>) => {
+    await updateUserPermissions(userId, permissions);
+  };
+
+  const onRefresh = async () => {
     setRefreshing(true);
-    fetchUsers();
+    await refreshUsers();
+    setRefreshing(false);
   };
 
   const getFilteredUsers = () => {
@@ -496,6 +409,16 @@ export default function UserPermissionsScreen() {
           </View>
         )}
       </ScrollView>
+
+      <EditUserPermissionsModal
+        visible={editModalVisible}
+        user={selectedUser}
+        onClose={() => {
+          setEditModalVisible(false);
+          setSelectedUser(null);
+        }}
+        onUpdatePermissions={handleUpdatePermissions}
+      />
     </ThemedView>
   );
 }
