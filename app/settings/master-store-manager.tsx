@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
@@ -52,7 +51,7 @@ export default function MasterStoreManagerScreen() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [showFilters, setShowFilters] = useState(false);
-  
+
   const [productForm, setProductForm] = useState<ProductForm>({
     name: '',
     description: '',
@@ -240,7 +239,7 @@ export default function MasterStoreManagerScreen() {
   const renderProductCard = ({ item: product }: { item: Product }) => (
     <ThemedView style={styles.productCard}>
       <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
-      
+
       <ThemedView style={styles.productInfo}>
         <ThemedText style={styles.productName}>{product.name}</ThemedText>
         <ThemedText style={styles.productDescription} numberOfLines={2}>
@@ -250,14 +249,14 @@ export default function MasterStoreManagerScreen() {
         <ThemedText style={styles.productCreator}>
           Creator: {product.creator?.username || 'Unknown'}
         </ThemedText>
-        
+
         <ThemedView style={styles.productStatus}>
           <ThemedView style={[styles.statusBadge, product.inStock ? styles.inStock : styles.outOfStock]}>
             <ThemedText style={styles.statusText}>
               {product.inStock ? 'In Stock' : 'Out of Stock'}
             </ThemedText>
           </ThemedView>
-          
+
           {product.isSuspended && (
             <ThemedView style={[styles.statusBadge, styles.suspended]}>
               <ThemedText style={styles.statusText}>Suspended</ThemedText>
@@ -479,7 +478,7 @@ export default function MasterStoreManagerScreen() {
             onChangeText={setSearchTerm}
           />
         </ThemedView>
-        
+
         <TouchableOpacity
           onPress={() => setShowFilters(!showFilters)}
           style={styles.filterButton}
@@ -509,7 +508,7 @@ export default function MasterStoreManagerScreen() {
               All
             </ThemedText>
           </TouchableOpacity>
-          
+
           {productCategories.map((category) => (
             <TouchableOpacity
               key={category}
@@ -536,14 +535,14 @@ export default function MasterStoreManagerScreen() {
           <ThemedText style={styles.statNumber}>{products.length}</ThemedText>
           <ThemedText style={styles.statLabel}>Total Products</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.statCard}>
           <ThemedText style={styles.statNumber}>
             {products.filter(p => p.inStock).length}
           </ThemedText>
           <ThemedText style={styles.statLabel}>In Stock</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.statCard}>
           <ThemedText style={styles.statNumber}>
             {products.filter(p => p.isSuspended).length}
@@ -634,6 +633,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 16,
+    color: '#1f2937',
   },
   filterButton: {
     backgroundColor: '#ffffff',
@@ -644,6 +644,7 @@ const styles = StyleSheet.create({
   },
   filterButtonText: {
     fontSize: 16,
+    color: '#1f2937',
   },
   categoryFilter: {
     paddingHorizontal: 16,
