@@ -392,7 +392,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
-    opacity: 0.8,
+    opacity: 0.9,
+    color: '#374151',
   },
   input: {
     borderWidth: 1,
@@ -401,7 +402,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     backgroundColor: '#fff',
-    color: '#000',
+    color: '#1f2937',
   },
   inputError: {
     borderColor: '#ef4444',
@@ -416,15 +417,18 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   securityBadge: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#f9fafb',
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   securityText: {
     fontSize: 12,
-    opacity: 0.7,
+    opacity: 0.8,
+    color: '#6b7280',
   },
   payButton: {
     backgroundColor: '#3b82f6',
@@ -443,8 +447,9 @@ const styles = StyleSheet.create({
   },
   disclaimer: {
     fontSize: 12,
-    opacity: 0.7,
+    opacity: 0.8,
     textAlign: 'center',
     lineHeight: 18,
+    color: '#6b7280',
   },
 });
