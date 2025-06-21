@@ -225,7 +225,10 @@ export default function UserPermissionsScreen() {
 
   const handleDeleteUser = async (userId: number | string) => {
     const targetUser = users.find(u => u.id === userId);
-    if (!targetUser) return;
+    if (!targetUser) {
+      console.log('User not found for deletion:', userId);
+      return;
+    }
 
     if (targetUser.username === 'djjetfuel') {
       Alert.alert('Error', 'Cannot delete the protected master admin account');
@@ -245,7 +248,19 @@ export default function UserPermissionsScreen() {
           style: 'destructive',
           onPress: async () => {
             console.log('Attempting to delete user with ID:', userId);
-            await deleteUser(userId);
+            console.log('Target user:', targetUser);
+            try {
+              const success = await deleteUser(userId);
+              console.log('Delete operation result:', success);
+              if (success) {
+                console.log('User deleted successfully');
+              } else {
+                console.log('Delete operation failed');
+              }
+            } catch (error) {
+              console.error('Error in delete handler:', error);
+              Alert.alert('Error', 'An unexpected error occurred while deleting the user');
+            }
           },
         },
       ]

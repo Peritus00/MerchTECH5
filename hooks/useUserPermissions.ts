@@ -196,6 +196,11 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     try {
       const token = await AsyncStorage.getItem('authToken');
       
+      if (!token) {
+        Alert.alert('Error', 'Authentication required');
+        return false;
+      }
+      
       // Handle pending user IDs (format: "pending_123")
       let actualUserId = userId;
       if (typeof userId === 'string' && userId.startsWith('pending_')) {
@@ -203,6 +208,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       }
       
       console.log('Deleting user with ID:', actualUserId);
+      console.log('Original user ID:', userId);
       
       const apiUrl = `${getApiUrl()}/admin/users/${actualUserId}`;
       console.log('Delete API URL:', apiUrl);
@@ -216,10 +222,15 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       });
       
       console.log('Delete response status:', response.status);
+      console.log('Delete response ok:', response.ok);
       
       if (response.ok) {
         // Remove from local state using the original userId (which might be a string)
-        setUsers(prev => prev.filter(u => u.id !== userId));
+        setUsers(prev => {
+          const filteredUsers = prev.filter(u => u.id !== userId);
+          console.log('Users after deletion:', filteredUsers.length);
+          return filteredUsers;
+        });
         Alert.alert('Success', 'User deleted successfully');
         return true;
       } else {
@@ -228,7 +239,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         let errorMessage = 'Failed to delete user';
         try {
           const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.message || errorMessage;
+          errorMessage = errorJson.error || errorJson.message || errorMessage;
         } catch (e) {
           errorMessage = errorText || errorMessage;
         }
@@ -237,7 +248,11 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       }
     } catch (error) {
       console.error('Error deleting user:', error);
-      Alert.alert('Error', 'Failed to delete user');
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+      Alert.alert('Error', `Failed to delete user: ${error.message}`);
       return false;
     }
   };
