@@ -586,34 +586,75 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    // Get confirmed users
+    // Get confirmed users from users table
     const confirmedUsers = await pool.query(`
       SELECT id, email, username, first_name, last_name, 
              is_admin, subscription_tier, created_at, updated_at,
-             'confirmed' as status
+             'confirmed' as status,
+             false as is_pending,
+             false as is_suspended
       FROM users ORDER BY created_at DESC
     `);
 
     console.log('Confirmed users found:', confirmedUsers.rows.length);
+    console.log('Confirmed users:', confirmedUsers.rows.map(u => ({ id: u.id, email: u.email, username: u.username })));
 
-    // Get pending users
+    // Get pending users from pending_users table
     const pendingUsers = await pool.query(`
       SELECT id, email, username, first_name, last_name,
              false as is_admin, 'free' as subscription_tier, 
              created_at, created_at as updated_at,
-             'pending' as status, expires_at
+             'pending' as status, expires_at,
+             true as is_pending,
+             false as is_suspended
       FROM pending_users ORDER BY created_at DESC
     `);
 
     console.log('Pending users found:', pendingUsers.rows.length);
+    console.log('Pending users:', pendingUsers.rows.map(u => ({ id: u.id, email: u.email, username: u.username })));
 
-    // Combine results
+    // Combine results and transform to match frontend expectations
     const allUsers = [
-      ...confirmedUsers.rows,
-      ...pendingUsers.rows
-    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      ...confirmedUsers.rows.map(user => ({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isAdmin: user.is_admin,
+        subscriptionTier: user.subscription_tier,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+        status: user.status,
+        isPending: false,
+        isSuspended: false
+      })),
+      ...pendingUsers.rows.map(user => ({
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isAdmin: false,
+        subscriptionTier: 'free',
+        createdAt: user.created_at,
+        updatedAt: user.updated_at,
+        status: user.status,
+        isPending: true,
+        isSuspended: false,
+        expiresAt: user.expires_at
+      }))
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
     console.log('Total users being returned:', allUsers.length);
+    console.log('Final user list:', allUsers.map(u => ({ 
+      id: u.id, 
+      email: u.email, 
+      username: u.username, 
+      status: u.status,
+      isPending: u.isPending 
+    })));
+    
     res.json(allUsers);
   } catch (error) {
     console.error('Get all users error:', error);
