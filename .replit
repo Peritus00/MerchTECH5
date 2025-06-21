@@ -5,6 +5,10 @@ modules = ["nodejs-20", "postgresql-16"]
 channel = "stable-24_05"
 
 [[ports]]
+localPort = 5000
+externalPort = 5000
+
+[[ports]]
 localPort = 8081
 externalPort = 80
 
@@ -58,7 +62,7 @@ args = "npx eas build --platform android --profile preview"
 [[workflows.workflow]]
 name = "Backend Server"
 author = 42127692
-mode = "sequential"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
