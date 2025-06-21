@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -302,11 +302,6 @@ export default function UserPermissionsScreen() {
   if (!user?.isAdmin && user?.username !== 'djjetfuel') {
     return null;
   }
-
-  useEffect(() => {
-    console.log('User permissions page loaded');
-    loadUsers();
-  }, []);
 
   return (
     <ThemedView style={styles.container}>
