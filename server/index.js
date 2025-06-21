@@ -41,15 +41,31 @@ if (!process.env.JWT_SECRET) {
 }
 
 // Email service configuration
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: 'your-brevo-email@example.com',
-    pass: process.env.BREVO_API_KEY
-  }
-});
+let transporter = null;
+
+if (process.env.BREVO_API_KEY) {
+  transporter = nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.BREVO_EMAIL || 'noreply@merchtech.com',
+      pass: process.env.BREVO_API_KEY
+    }
+  });
+} else {
+  console.log('WARNING: BREVO_API_KEY not set. Email functionality will be limited.');
+  // Create a test transporter for development
+  transporter = nodemailer.createTransport({
+    host: 'smtp.ethereal.email',
+    port: 587,
+    secure: false,
+    auth: {
+      user: 'test@example.com', 
+      pass: 'test'
+    }
+  });
+}
 
 // Initialize database tables
 async function initializeDatabase() {

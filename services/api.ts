@@ -6,21 +6,18 @@ const getApiBaseUrl = () => {
   if (process.env.API_BASE_URL) {
     return process.env.API_BASE_URL;
   }
-  
-  if (__DEV__) {
-    // Check if we're in a web environment safely
-    if (typeof window !== 'undefined' && Platform.OS === 'web') {
-      // For Replit web environment, use the current domain with port 5000
-      const hostname = window.location.hostname;
-      const protocol = window.location.protocol;
-      return `${protocol}//${hostname}:5000/api`;
-    } else {
-      // For React Native, use localhost for development
-      return 'http://localhost:5000/api';
+
+  // For Replit environment
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname.includes('replit.dev')) {
+      // Use the same domain but port 5000 for API
+      return `https://${hostname.replace(':8081', '')}:5000/api`;
     }
+    return `${window.location.protocol}//${hostname}:5000/api`;
   }
-  
-  return 'https://your-production-url.com/api';
+
+  return 'http://localhost:5000/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -61,7 +58,7 @@ api.interceptors.response.use(
       // Handle unauthorized access - clear all auth data
       await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'currentUser']);
     }
-    
+
     // Log all API errors for debugging
     console.error('API Error Details:', {
       message: error.message,
@@ -70,7 +67,7 @@ api.interceptors.response.use(
       status: error.response?.status,
       url: error.config?.url
     });
-    
+
     return Promise.reject(error);
   }
 );
@@ -101,7 +98,7 @@ export const authAPI = {
           refreshToken: 'dev_refresh_token_djjetfuel_67890'
         };
       }
-      
+
       throw new Error(error.response?.data?.error || 'Invalid credentials');
     }
   },
