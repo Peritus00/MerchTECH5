@@ -47,6 +47,7 @@ export const authService = {
       email,
       username: username || email.split('@')[0],
       subscriptionTier: 'free',
+      isEmailVerified: false,
       createdAt: new Date().toISOString()
     };
 
@@ -54,8 +55,12 @@ export const authService = {
       // Send welcome email via Brevo
       await brevoService.sendWelcomeEmail(email, user.username);
       console.log('Welcome email sent successfully');
+      
+      // Send email verification
+      await this.sendEmailVerification(email);
+      console.log('Email verification sent successfully');
     } catch (error) {
-      console.warn('Failed to send welcome email:', error);
+      console.warn('Failed to send emails:', error);
       // Don't fail registration if email fails
     }
 

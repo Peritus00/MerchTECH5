@@ -43,7 +43,17 @@ export default function RegisterScreen() {
     try {
       const success = await register(email, password, username);
       if (success) {
-        router.replace('/(tabs)');
+        // Show success message about email verification
+        Alert.alert(
+          'Registration Successful!', 
+          'Please check your email for a verification link to complete your account setup.',
+          [
+            {
+              text: 'OK',
+              onPress: () => router.replace('/(tabs)')
+            }
+          ]
+        );
       } else {
         Alert.alert('Error', 'Registration failed');
       }

@@ -4,6 +4,8 @@ export interface User {
   username: string;
   subscriptionTier: 'free' | 'basic' | 'premium';
   isAdmin?: boolean;
+  isEmailVerified?: boolean;
+  emailVerificationToken?: string;
   createdAt: string;
 }
 
