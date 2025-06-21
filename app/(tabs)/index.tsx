@@ -411,7 +411,7 @@ export default function DashboardScreen() {
             <View style={styles.contentCard}>
               <MaterialIcons name="vpn-key" size={24} color="#ef4444" />
               <Text style={styles.contentValue}>{dashboardData.summary.activationCodes}</Text>
-              <Text style={styles.contentLabel">Access Codes</Text>
+              <Text style={styles.contentLabel}>Access Codes</Text>
             </View>
           </View>
         </View>
