@@ -54,7 +54,15 @@ export default function SettingsScreen() {
   ];
 
   // Add user permissions setting for djjetfuel user (check both email and username)
-  if (user?.email === 'djjetfuel@gmail.com' || user?.username === 'djjetfuel') {
+  const isDeveloper = user?.email === 'djjetfuel@gmail.com' || 
+                     user?.username === 'djjetfuel' ||
+                     user?.email?.includes('djjetfuel');
+  
+  console.log('Is developer check:', isDeveloper);
+  console.log('User object full:', JSON.stringify(user, null, 2));
+  
+  if (isDeveloper) {
+    console.log('Adding User Permissions option to settings');
     settingsOptions.push({
       title: 'User Permissions',
       description: 'Manage user roles and permissions',
@@ -64,6 +72,8 @@ export default function SettingsScreen() {
       },
       icon: '🛡️',
     });
+  } else {
+    console.log('User is not a developer, not showing User Permissions');
   }
 
   return (
