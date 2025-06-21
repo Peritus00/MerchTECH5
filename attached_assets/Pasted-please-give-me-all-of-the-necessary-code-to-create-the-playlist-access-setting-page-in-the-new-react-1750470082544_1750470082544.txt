@@ -1,0 +1,1209 @@
+please give me all of the necessary code to create the playlist access setting page in the new react native application
+
+2 minutes ago
+PB
+
+perriebenton
+I'll create the complete playlist access settings page for your React Native application. Let me search for the activation code management implementation to provide the accurate code.
+
+
+Searched for "Activation codes, playlist access control, access settings, activation code manager, playlist security"
+Based on your activation code management implementation, I'll create the complete playlist access settings page for React Native:
+
+1. Playlist Access Settings Screen (screens/PlaylistAccessSettingsScreen.tsx)
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Switch,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { Playlist, ActivationCode } from '../shared/media-schema';
+import ActivationCodeCard from '../components/ActivationCodeCard';
+import CreateCodeModal from '../components/CreateCodeModal';
+import AccessControlCard from '../components/AccessControlCard';
+const PlaylistAccessSettingsScreen = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { playlist: initialPlaylist } = route.params as { playlist: Playlist };
+  
+  const [playlist, setPlaylist] = useState<Playlist>(initialPlaylist);
+  const [activationCodes, setActivationCodes] = useState<ActivationCode[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [updatingAccess, setUpdatingAccess] = useState(false);
+  useEffect(() => {
+    fetchActivationCodes();
+  }, []);
+  const fetchActivationCodes = async () => {
+    try {
+      const response = await fetch(`/api/activation-codes/playlist/${playlist.id}`);
+      const data = await response.json();
+      setActivationCodes(data);
+    } catch (error) {
+      console.error('Error fetching activation codes:', error);
+      Alert.alert('Error', 'Failed to load activation codes');
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+  const handleToggleAccessControl = async (requiresCode: boolean) => {
+    Alert.alert(
+      requiresCode ? 'Enable Access Control' : 'Disable Access Control',
+      requiresCode 
+        ? 'This will require users to enter an activation code to access this playlist.'
+        : 'This will make the playlist publicly accessible without any code.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            setUpdatingAccess(true);
+            try {
+              const response = await fetch(`/api/playlists/${playlist.id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  requiresActivationCode: requiresCode,
+                }),
+              });
+              if (response.ok) {
+                const updatedPlaylist = await response.json();
+                setPlaylist(updatedPlaylist);
+                Alert.alert(
+                  'Success',
+                  requiresCode 
+                    ? 'Access control enabled. Users will now need activation codes.'
+                    : 'Access control disabled. Playlist is now public.'
+                );
+              } else {
+                throw new Error('Failed to update playlist');
+              }
+            } catch (error) {
+              console.error('Error updating access control:', error);
+              Alert.alert('Error', 'Failed to update access settings');
+            } finally {
+              setUpdatingAccess(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+  const handleCreateCode = async (codeData: {
+    maxUses?: number | null;
+    expiresAt?: Date | null;
+  }) => {
+    try {
+      const response = await fetch('/api/activation-codes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playlistId: playlist.id,
+          ...codeData,
+        }),
+      });
+      if (response.ok) {
+        const newCode = await response.json();
+        setActivationCodes(prev => [newCode, ...prev]);
+        setShowCreateModal(false);
+        Alert.alert('Success', 'Activation code created successfully');
+      } else {
+        throw new Error('Failed to create activation code');
+      }
+    } catch (error) {
+      console.error('Error creating activation code:', error);
+      Alert.alert('Error', 'Failed to create activation code');
+    }
+  };
+  const handleDeleteCode = async (codeId: number) => {
+    Alert.alert(
+      'Delete Activation Code',
+      'Are you sure you want to delete this activation code? This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`/api/activation-codes/${codeId}`, {
+                method: 'DELETE',
+              });
+              if (response.ok) {
+                setActivationCodes(prev => prev.filter(code => code.id !== codeId));
+                Alert.alert('Success', 'Activation code deleted');
+              } else {
+                throw new Error('Failed to delete activation code');
+              }
+            } catch (error) {
+              console.error('Error deleting activation code:', error);
+              Alert.alert('Error', 'Failed to delete activation code');
+            }
+          },
+        },
+      ]
+    );
+  };
+  const handleToggleCodeStatus = async (codeId: number, isActive: boolean) => {
+    try {
+      const response = await fetch(`/api/activation-codes/${codeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isActive }),
+      });
+      if (response.ok) {
+        const updatedCode = await response.json();
+        setActivationCodes(prev => 
+          prev.map(code => code.id === codeId ? updatedCode : code)
+        );
+      } else {
+        throw new Error('Failed to update activation code');
+      }
+    } catch (error) {
+      console.error('Error updating activation code:', error);
+      Alert.alert('Error', 'Failed to update activation code');
+    }
+  };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchActivationCodes();
+  };
+  const activeCodes = activationCodes.filter(code => code.isActive);
+  const inactiveCodes = activationCodes.filter(code => !code.isActive);
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Access Settings</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Playlist Info */}
+        <View style={styles.playlistInfo}>
+          <Text style={styles.playlistName} numberOfLines={2}>
+            {playlist.name}
+          </Text>
+          <Text style={styles.playlistSubtitle}>
+            {playlist.mediaFiles?.length || 0} media files
+          </Text>
+        </View>
+        {/* Access Control Settings */}
+        <AccessControlCard
+          playlist={playlist}
+          onToggle={handleToggleAccessControl}
+          isUpdating={updatingAccess}
+        />
+        {/* Generate Code Button */}
+        {playlist.requiresActivationCode && (
+          <TouchableOpacity
+            style={styles.generateButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <MaterialIcons name="add" size={24} color="#fff" />
+            <Text style={styles.generateButtonText}>Generate New Code</Text>
+          </TouchableOpacity>
+        )}
+        {/* Activation Codes List */}
+        {playlist.requiresActivationCode && (
+          <View style={styles.codesSection}>
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#3b82f6" />
+                <Text style={styles.loadingText}>Loading activation codes...</Text>
+              </View>
+            ) : (
+              <>
+                {/* Active Codes */}
+                {activeCodes.length > 0 && (
+                  <View style={styles.codeGroup}>
+                    <Text style={styles.groupTitle}>
+                      Active Codes ({activeCodes.length})
+                    </Text>
+                    {activeCodes.map((code) => (
+                      <ActivationCodeCard
+                        key={code.id}
+                        code={code}
+                        onDelete={() => handleDeleteCode(code.id)}
+                        onToggleStatus={(isActive) => handleToggleCodeStatus(code.id, isActive)}
+                      />
+                    ))}
+                  </View>
+                )}
+                {/* Inactive Codes */}
+                {inactiveCodes.length > 0 && (
+                  <View style={styles.codeGroup}>
+                    <Text style={styles.groupTitle}>
+                      Inactive Codes ({inactiveCodes.length})
+                    </Text>
+                    {inactiveCodes.map((code) => (
+                      <ActivationCodeCard
+                        key={code.id}
+                        code={code}
+                        onDelete={() => handleDeleteCode(code.id)}
+                        onToggleStatus={(isActive) => handleToggleCodeStatus(code.id, isActive)}
+                      />
+                    ))}
+                  </View>
+                )}
+                {/* Empty State */}
+                {activationCodes.length === 0 && (
+                  <View style={styles.emptyContainer}>
+                    <MaterialIcons name="vpn-key" size={48} color="#9ca3af" />
+                    <Text style={styles.emptyText}>No activation codes yet</Text>
+                    <Text style={styles.emptySubtext}>
+                      Generate your first activation code to control access to this playlist
+                    </Text>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        )}
+      </ScrollView>
+      {/* Create Code Modal */}
+      <CreateCodeModal
+        visible={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreateCode={handleCreateCode}
+        playlistName={playlist.name}
+      />
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  playlistInfo: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  playlistName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  playlistSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  generateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginBottom: 24,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  generateButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  codesSection: {
+    gap: 16,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 32,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  codeGroup: {
+    marginBottom: 24,
+  },
+  groupTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+});
+export default PlaylistAccessSettingsScreen;
+2. Access Control Card Component (components/AccessControlCard.tsx)
+import React from 'react';
+import {
+  View,
+  Text,
+  Switch,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Playlist } from '../shared/media-schema';
+interface AccessControlCardProps {
+  playlist: Playlist;
+  onToggle: (requiresCode: boolean) => void;
+  isUpdating: boolean;
+}
+const AccessControlCard: React.FC<AccessControlCardProps> = ({
+  playlist,
+  onToggle,
+  isUpdating,
+}) => {
+  return (
+    <View style={styles.card}>
+      <View style={styles.header}>
+        <View style={styles.iconContainer}>
+          <MaterialIcons
+            name={playlist.requiresActivationCode ? 'lock' : 'lock-open'}
+            size={24}
+            color={playlist.requiresActivationCode ? '#ef4444' : '#10b981'}
+          />
+        </View>
+        <View style={styles.content}>
+          <Text style={styles.title}>Access Control</Text>
+          <Text style={styles.description}>
+            {playlist.requiresActivationCode
+              ? 'Users need an activation code to access this playlist'
+              : 'This playlist is publicly accessible without codes'
+            }
+          </Text>
+        </View>
+        <View style={styles.switchContainer}>
+          {isUpdating ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Switch
+              value={playlist.requiresActivationCode}
+              onValueChange={onToggle}
+              trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+              thumbColor={playlist.requiresActivationCode ? '#3b82f6' : '#9ca3af'}
+            />
+          )}
+        </View>
+      </View>
+      {/* Status Details */}
+      <View style={styles.statusContainer}>
+        <View style={[
+          styles.statusBadge,
+          playlist.requiresActivationCode ? styles.restrictedBadge : styles.publicBadge
+        ]}>
+          <MaterialIcons
+            name={playlist.requiresActivationCode ? 'security' : 'public'}
+            size={16}
+            color={playlist.requiresActivationCode ? '#dc2626' : '#059669'}
+          />
+          <Text style={[
+            styles.statusText,
+            playlist.requiresActivationCode ? styles.restrictedText : styles.publicText
+          ]}>
+            {playlist.requiresActivationCode ? 'Restricted Access' : 'Public Access'}
+          </Text>
+        </View>
+      </View>
+      {/* Information Box */}
+      <View style={styles.infoBox}>
+        <MaterialIcons name="info" size={16} color="#3b82f6" />
+        <Text style={styles.infoText}>
+          {playlist.requiresActivationCode
+            ? 'Generate activation codes below to share with specific users. Each code can have usage limits and expiration dates.'
+            : 'Anyone with the playlist link can access and view the content without any restrictions.'
+          }
+        </Text>
+      </View>
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  content: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  description: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
+  },
+  switchContainer: {
+    marginLeft: 12,
+  },
+  statusContainer: {
+    marginBottom: 16,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
+    gap: 6,
+  },
+  restrictedBadge: {
+    backgroundColor: '#fee2e2',
+  },
+  publicBadge: {
+    backgroundColor: '#d1fae5',
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  restrictedText: {
+    color: '#dc2626',
+  },
+  publicText: {
+    color: '#059669',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1e40af',
+    lineHeight: 20,
+  },
+});
+export default AccessControlCard;
+3. Activation Code Card Component (components/ActivationCodeCard.tsx)
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Clipboard,
+  Switch,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ActivationCode } from '../shared/media-schema';
+interface ActivationCodeCardProps {
+  code: ActivationCode;
+  onDelete: () => void;
+  onToggleStatus: (isActive: boolean) => void;
+}
+const ActivationCodeCard: React.FC<ActivationCodeCardProps> = ({
+  code,
+  onDelete,
+  onToggleStatus,
+}) => {
+  const [copied, setCopied] = useState(false);
+  const handleCopyCode = async () => {
+    try {
+      await Clipboard.setString(code.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to copy code');
+    }
+  };
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+  const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+  const isMaxUsesReached = code.maxUses !== null && code.usesCount >= code.maxUses;
+  const isEffectivelyInactive = !code.isActive || isExpired || isMaxUsesReached;
+  const getStatusColor = () => {
+    if (!code.isActive) return '#6b7280';
+    if (isExpired || isMaxUsesReached) return '#ef4444';
+    return '#10b981';
+  };
+  const getStatusText = () => {
+    if (!code.isActive) return 'Disabled';
+    if (isExpired) return 'Expired';
+    if (isMaxUsesReached) return 'Max uses reached';
+    return 'Active';
+  };
+  return (
+    <View style={[styles.card, isEffectivelyInactive && styles.inactiveCard]}>
+      <View style={styles.header}>
+        <View style={styles.codeSection}>
+          <View style={styles.codeContainer}>
+            <Text style={styles.codeLabel}>Code</Text>
+            <TouchableOpacity
+              style={styles.codeBox}
+              onPress={handleCopyCode}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.codeText}>{code.code}</Text>
+              <MaterialIcons
+                name={copied ? 'check' : 'content-copy'}
+                size={18}
+                color={copied ? '#10b981' : '#6b7280'}
+              />
+            </TouchableOpacity>
+            {copied && (
+              <Text style={styles.copiedText}>Copied!</Text>
+            )}
+          </View>
+        </View>
+        <View style={styles.statusSection}>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
+            <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+            <Text style={[styles.statusText, { color: getStatusColor() }]}>
+              {getStatusText()}
+            </Text>
+          </View>
+        </View>
+      </View>
+      <View style={styles.details}>
+        <View style={styles.detailRow}>
+          <MaterialIcons name="access-time" size={16} color="#6b7280" />
+          <Text style={styles.detailLabel}>Created:</Text>
+          <Text style={styles.detailValue}>{formatDate(code.createdAt)}</Text>
+        </View>
+        <View style={styles.detailRow}>
+          <MaterialIcons name="analytics" size={16} color="#6b7280" />
+          <Text style={styles.detailLabel}>Uses:</Text>
+          <Text style={styles.detailValue}>
+            {code.usesCount}{code.maxUses !== null ? ` / ${code.maxUses}` : ' (unlimited)'}
+          </Text>
+        </View>
+        {code.expiresAt && (
+          <View style={styles.detailRow}>
+            <MaterialIcons name="event" size={16} color="#6b7280" />
+            <Text style={styles.detailLabel}>Expires:</Text>
+            <Text style={[
+              styles.detailValue,
+              isExpired && styles.expiredText
+            ]}>
+              {formatDate(code.expiresAt)}
+            </Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.actions}>
+        <View style={styles.switchSection}>
+          <Text style={styles.switchLabel}>Active</Text>
+          <Switch
+            value={code.isActive}
+            onValueChange={onToggleStatus}
+            trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+            thumbColor={code.isActive ? '#3b82f6' : '#9ca3af'}
+            disabled={isExpired || isMaxUsesReached}
+          />
+        </View>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => {
+            Alert.alert(
+              'Delete Code',
+              'Are you sure you want to delete this activation code?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: onDelete },
+              ]
+            );
+          }}
+        >
+          <MaterialIcons name="delete" size={20} color="#ef4444" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  inactiveCard: {
+    opacity: 0.7,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  codeSection: {
+    flex: 1,
+  },
+  codeContainer: {
+    alignItems: 'flex-start',
+  },
+  codeLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+  },
+  codeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  codeText: {
+    fontFamily: 'Courier',
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  copiedText: {
+    fontSize: 12,
+    color: '#10b981',
+    marginTop: 4,
+    fontWeight: '500',
+  },
+  statusSection: {
+    marginLeft: 16,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  details: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+    minWidth: 60,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  expiredText: {
+    color: '#ef4444',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#f3f4f6',
+  },
+  switchSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  switchLabel: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+  },
+});
+export default ActivationCodeCard;
+4. Create Code Modal Component (components/CreateCodeModal.tsx)
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  Switch,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+interface CreateCodeModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onCreateCode: (codeData: {
+    maxUses?: number | null;
+    expiresAt?: Date | null;
+  }) => void;
+  playlistName: string;
+}
+const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
+  visible,
+  onClose,
+  onCreateCode,
+  playlistName,
+}) => {
+  const [hasUsageLimit, setHasUsageLimit] = useState(false);
+  const [maxUses, setMaxUses] = useState('1');
+  const [hasExpiration, setHasExpiration] = useState(false);
+  const [expirationDate, setExpirationDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const handleCreate = () => {
+    const codeData: {
+      maxUses?: number | null;
+      expiresAt?: Date | null;
+    } = {};
+    if (hasUsageLimit) {
+      const parsedMaxUses = parseInt(maxUses);
+      if (isNaN(parsedMaxUses) || parsedMaxUses <= 0) {
+        Alert.alert('Error', 'Please enter a valid number for max uses');
+        return;
+      }
+      codeData.maxUses = parsedMaxUses;
+    } else {
+      codeData.maxUses = null;
+    }
+    if (hasExpiration) {
+      if (expirationDate <= new Date()) {
+        Alert.alert('Error', 'Expiration date must be in the future');
+        return;
+      }
+      codeData.expiresAt = expirationDate;
+    } else {
+      codeData.expiresAt = null;
+    }
+    onCreateCode(codeData);
+    resetForm();
+  };
+  const resetForm = () => {
+    setHasUsageLimit(false);
+    setMaxUses('1');
+    setHasExpiration(false);
+    setExpirationDate(new Date());
+    setShowDatePicker(false);
+  };
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity onPress={handleClose}>
+            <MaterialIcons name="close" size={24} color="#1f2937" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Create Activation Code</Text>
+          <TouchableOpacity onPress={handleCreate}>
+            <Text style={styles.createButton}>Create</Text>
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {/* Playlist Info */}
+          <View style={styles.playlistInfo}>
+            <MaterialIcons name="queue-music" size={20} color="#3b82f6" />
+            <Text style={styles.playlistName} numberOfLines={1}>
+              {playlistName}
+            </Text>
+          </View>
+          {/* Usage Limit Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Usage Limit</Text>
+              <Switch
+                value={hasUsageLimit}
+                onValueChange={setHasUsageLimit}
+                trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+                thumbColor={hasUsageLimit ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
+            
+            {hasUsageLimit && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Maximum Uses</Text>
+                <TextInput
+                  style={styles.numberInput}
+                  value={maxUses}
+                  onChangeText={setMaxUses}
+                  placeholder="Enter number"
+                  keyboardType="number-pad"
+                  placeholderTextColor="#9ca3af"
+                />
+                <Text style={styles.inputHelp}>
+                  How many times this code can be used before it becomes invalid
+                </Text>
+              </View>
+            )}
+            
+            {!hasUsageLimit && (
+              <Text style={styles.sectionDescription}>
+                This code can be used unlimited times
+              </Text>
+            )}
+          </View>
+          {/* Expiration Section */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Expiration Date</Text>
+              <Switch
+                value={hasExpiration}
+                onValueChange={setHasExpiration}
+                trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+                thumbColor={hasExpiration ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
+            
+            {hasExpiration && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>Expires On</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <MaterialIcons name="event" size={20} color="#6b7280" />
+                  <Text style={styles.dateButtonText}>
+                    {formatDate(expirationDate)}
+                  </Text>
+                  <MaterialIcons name="keyboard-arrow-down" size={20} color="#6b7280" />
+                </TouchableOpacity>
+                <Text style={styles.inputHelp}>
+                  The code will automatically become invalid after this date
+                </Text>
+              </View>
+            )}
+            
+            {!hasExpiration && (
+              <Text style={styles.sectionDescription}>
+                This code will never expire
+              </Text>
+            )}
+          </View>
+          {/* Summary */}
+          <View style={styles.summary}>
+            <Text style={styles.summaryTitle}>Code Summary</Text>
+            <View style={styles.summaryItem}>
+              <MaterialIcons name="analytics" size={16} color="#6b7280" />
+              <Text style={styles.summaryText}>
+                {hasUsageLimit ? `Can be used ${maxUses} times` : 'Unlimited usage'}
+              </Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <MaterialIcons name="schedule" size={16} color="#6b7280" />
+              <Text style={styles.summaryText}>
+                {hasExpiration ? `Expires ${formatDate(expirationDate)}` : 'Never expires'}
+              </Text>
+            </View>
+          </View>
+        </ScrollView>
+        {/* Date Picker */}
+        {showDatePicker && (
+          <DateTimePicker
+            value={expirationDate}
+            mode="datetime"
+            display="default"
+            onChange={(event, selectedDate) => {
+              setShowDatePicker(false);
+              if (selectedDate) {
+                setExpirationDate(selectedDate);
+              }
+            }}
+            minimumDate={new Date()}
+          />
+        )}
+      </View>
+    </Modal>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  createButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  content: {
+    flex: 1,
+    padding: 16,
+  },
+  playlistInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 24,
+    gap: 8,
+  },
+  playlistName: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1e40af',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  sectionDescription: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontStyle: 'italic',
+  },
+  inputContainer: {
+    marginTop: 12,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  numberInput: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1f2937',
+    backgroundColor: '#fff',
+  },
+  dateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  dateButtonText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  inputHelp: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  summary: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  summaryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 12,
+  },
+  summaryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+});
+export default CreateCodeModal;
+5. Activation Code Schema (shared/media-schema.ts - Add this interface)
+export interface ActivationCode {
+  id: number;
+  code: string;
+  playlistId: string;
+  maxUses: number | null;
+  usesCount: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+This complete implementation provides:
+
+✓ Access Control Toggle - Switch between public and restricted access
+✓ Activation Code Management - Create, view, edit, and delete codes
+✓ Usage Tracking - Monitor how many times codes have been used
+✓ Expiration Handling - Set expiration dates for codes
+✓ Status Management - Enable/disable codes individually
+✓ Copy Functionality - Easy code sharing with clipboard integration
+✓ Visual Status Indicators - Clear status badges and colors
+✓ Comprehensive Settings - Full control over playlist access
+
+The system integrates seamlessly with your existing backend API endpoints and provides a professional, user-friendly interface for managing playlist security.
