@@ -9,6 +9,11 @@ export default function SettingsScreen() {
   const { user } = useAuth();
   const router = useRouter();
 
+  // Debug: log user data to see what we're working with
+  console.log('Current user:', user);
+  console.log('User email:', user?.email);
+  console.log('User username:', user?.username);
+
   const settingsOptions = [
     {
       title: 'Profile',
@@ -46,14 +51,20 @@ export default function SettingsScreen() {
       onPress: () => console.log('Navigate to about'),
       icon: 'ℹ️',
     },
-    // Add user permissions setting only for djjetfuel user
-    ...(user?.username === 'djjetfuel' ? [{
+  ];
+
+  // Add user permissions setting for djjetfuel user (check both email and username)
+  if (user?.email === 'djjetfuel@gmail.com' || user?.username === 'djjetfuel') {
+    settingsOptions.push({
       title: 'User Permissions',
       description: 'Manage user roles and permissions',
-      onPress: () => router.push('/settings/user-permissions'),
+      onPress: () => {
+        console.log('Navigating to user permissions');
+        router.push('/settings/user-permissions');
+      },
       icon: '🛡️',
-    }] : []),
-  ];
+    });
+  }
 
   return (
     <ScrollView style={styles.container}>
