@@ -400,7 +400,7 @@ const ActivationCodesScreen = () => {
                 {/* Empty State */}
                 {filteredCodes.length === 0 && activationCodes.length === 0 && (
                   <View style={styles.emptyContainer}>
-                    <MaterialIcons name="vpn-key" size={64} color="#9ca3af" />
+                    <MaterialIcons name="key" size={64} color="#9ca3af" />
                     <Text style={styles.emptyText}>No activation codes yet</Text>
                     <Text style={styles.emptySubtext}>
                       Create activation codes to control access to this {contentType}
