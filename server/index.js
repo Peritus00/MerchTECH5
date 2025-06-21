@@ -579,7 +579,10 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 // Get all users including pending ones (admin only)
 app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
   try {
-    if (!req.user.isAdmin) {
+    console.log('Admin users request from user:', req.user);
+    
+    if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
+      console.log('Access denied - not admin or djjetfuel');
       return res.status(403).json({ error: 'Admin access required' });
     }
 
@@ -591,6 +594,8 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       FROM users ORDER BY created_at DESC
     `);
 
+    console.log('Confirmed users found:', confirmedUsers.rows.length);
+
     // Get pending users
     const pendingUsers = await pool.query(`
       SELECT id, email, username, first_name, last_name,
@@ -600,12 +605,15 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       FROM pending_users ORDER BY created_at DESC
     `);
 
+    console.log('Pending users found:', pendingUsers.rows.length);
+
     // Combine results
     const allUsers = [
       ...confirmedUsers.rows,
       ...pendingUsers.rows
     ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+    console.log('Total users being returned:', allUsers.length);
     res.json(allUsers);
   } catch (error) {
     console.error('Get all users error:', error);

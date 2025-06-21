@@ -44,19 +44,30 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     setIsLoading(true);
     try {
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/admin/all-users`, {
+      console.log('Fetching users with token:', token ? 'Present' : 'Missing');
+      
+      const apiUrl = `${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/admin/all-users`;
+      console.log('API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
+        method: 'GET',
         headers: {
-          'Authorization': `Bearer ${token}`
-        }
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 10000
       });
 
+      console.log('Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Raw user data:', data);
         
         // Transform the API data to match our UserPermissions interface
         const transformedUsers: UserPermissions[] = data.map((user: any) => ({
           id: user.id,
-          username: user.username || 'N/A',
+          username: user.username || user.email?.split('@')[0] || 'Unknown',
           email: user.email,
           subscriptionTier: user.subscription_tier || 'free',
           isAdmin: user.is_admin || false,
@@ -81,13 +92,21 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
           isPending: user.status === 'pending'
         }));
         
+        console.log('Transformed users:', transformedUsers);
         setUsers(transformedUsers);
       } else {
-        throw new Error('Failed to fetch users');
+        const errorText = await response.text();
+        console.error('API Error response:', errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      Alert.alert('Error', 'Failed to load users');
+      // Don't show alert for network errors, just log them
+      if (error.message?.includes('Network Error') || error.message?.includes('fetch')) {
+        console.log('Network connectivity issue - users list will be empty');
+      } else {
+        Alert.alert('Error', `Failed to load users: ${error.message}`);
+      }
     } finally {
       setIsLoading(false);
     }
