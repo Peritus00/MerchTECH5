@@ -45,9 +45,14 @@ export default function ProfileScreen() {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => {
-            logout();
-            router.replace('/auth/login');
+          onPress: async () => {
+            try {
+              await logout();
+              // Navigation is handled by the AuthContext logout function
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
+            }
           },
         },
       ]

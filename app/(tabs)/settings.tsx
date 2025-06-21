@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function Settings() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, handleLogout } = useAuth();
 
   // Check if user is admin (djjetfuel)
   const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
@@ -95,6 +95,14 @@ export default function Settings() {
         adminOnly: true,
       },
     ] : []),
+    // Logout option at the bottom
+    {
+      title: 'Logout',
+      description: 'Sign out of your account',
+      onPress: handleLogout,
+      icon: '🚪',
+      isLogout: true,
+    },
   ];
 
   return (
