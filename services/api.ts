@@ -3,7 +3,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = process.env.API_BASE_URL || (__DEV__ 
-  ? 'https://jsonplaceholder.typicode.com' 
+  ? 'http://localhost:5000/api' 
   : 'https://your-production-url.com/api');
 
 export const api = axios.create({
@@ -46,46 +46,65 @@ api.interceptors.response.use(
 );
 
 export default api;
-// Email verification endpoint
-export const verifyEmail = async (token: string): Promise<{ success: boolean; message: string }> => {
-  try {
-    // In a real app, this would make an API call to your backend
-    // For now, we'll simulate the verification process
-    
-    // Mock verification logic
-    if (token && token.length >= 6) {
-      return {
-        success: true,
-        message: 'Email verified successfully!'
-      };
-    } else {
-      return {
-        success: false,
-        message: 'Invalid verification token'
-      };
-    }
-  } catch (error) {
-    console.error('Email verification error:', error);
-    return {
-      success: false,
-      message: 'Verification failed. Please try again.'
-    };
+
+// Auth endpoints
+export const authAPI = {
+  login: async (email: string, password: string) => {
+    const response = await api.post('/auth/login', { email, password });
+    return response.data;
+  },
+
+  register: async (email: string, password: string, username?: string) => {
+    const response = await api.post('/auth/register', { email, password, username });
+    return response.data;
+  },
+
+  verifyEmail: async (token: string) => {
+    const response = await api.post('/auth/verify-email', { token });
+    return response.data;
+  },
+
+  resendVerification: async (email: string) => {
+    const response = await api.post('/auth/resend-verification', { email });
+    return response.data;
   }
 };
 
-// Resend verification email
-export const resendVerificationEmail = async (email: string): Promise<{ success: boolean; message: string }> => {
-  try {
-    // This would call your backend to resend the verification email
-    return {
-      success: true,
-      message: 'Verification email sent successfully!'
-    };
-  } catch (error) {
-    console.error('Resend verification error:', error);
-    return {
-      success: false,
-      message: 'Failed to resend verification email'
-    };
+// QR Code endpoints
+export const qrCodeAPI = {
+  getAll: async () => {
+    const response = await api.get('/qr-codes');
+    return response.data;
+  },
+
+  create: async (qrData: any) => {
+    const response = await api.post('/qr-codes', qrData);
+    return response.data;
+  },
+
+  update: async (id: number, updates: any) => {
+    const response = await api.put(`/qr-codes/${id}`, updates);
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    const response = await api.delete(`/qr-codes/${id}`);
+    return response.data;
+  }
+};
+
+// Analytics endpoints
+export const analyticsAPI = {
+  getSummary: async () => {
+    const response = await api.get('/analytics/summary');
+    return response.data;
+  }
+};
+
+// Admin endpoints
+export const adminAPI = {
+  getUsers: async () => {
+    const response = await api.get('/admin/users');
+    return response.data;
   }
 };

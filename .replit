@@ -54,3 +54,12 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npx eas build --platform android --profile preview"
+
+[[workflows.workflow]]
+name = "Backend Server"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node index.js"

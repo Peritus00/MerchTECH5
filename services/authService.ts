@@ -1,5 +1,6 @@
 import { User } from '@/types';
-import { brevoService } from './emailService';
+import { authAPI } from './api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthResponse {
   user: User;
@@ -8,130 +9,58 @@ interface AuthResponse {
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthResponse> {
-    // Check for dev login
-    if (email === 'djjetfuel' && password === 'Kerrie321$') {
-      const user = {
-        id: 1,
-        email: 'djjetfuel@merchtech.com',
-        username: 'djjetfuel',
-        subscriptionTier: 'premium',
-        isAdmin: true,
-        createdAt: new Date().toISOString()
-      };
-      
-      return Promise.resolve({
-        user,
-        token: 'dev-admin-token'
-      });
+    try {
+      const response = await authAPI.login(email, password);
+
+      // Store token
+      await AsyncStorage.setItem('authToken', response.token);
+
+      return response;
+    } catch (error) {
+      console.error('Login error:', error);
+      throw new Error('Login failed');
     }
-
-    // Mock authentication for development
-    const user = {
-      id: 1,
-      email,
-      username: email.split('@')[0],
-      subscriptionTier: 'free',
-      createdAt: new Date().toISOString()
-    };
-
-    // In production, this would verify credentials against your database
-    return Promise.resolve({
-      user,
-      token: 'mock-jwt-token'
-    });
   },
 
   async register(email: string, password: string, username?: string): Promise<AuthResponse> {
-    const user = {
-      id: 1,
-      email,
-      username: username || email.split('@')[0],
-      subscriptionTier: 'free',
-      isEmailVerified: false,
-      createdAt: new Date().toISOString()
-    };
-
     try {
-      // Send welcome email via Brevo
-      await brevoService.sendWelcomeEmail(email, user.username);
-      console.log('Welcome email sent successfully');
-      
-      // Send email verification
-      await this.sendEmailVerification(email);
-      console.log('Email verification sent successfully');
-    } catch (error) {
-      console.warn('Failed to send emails:', error);
-      // Don't fail registration if email fails
-    }
+      const response = await authAPI.register(email, password, username);
 
-    return Promise.resolve({
-      user,
-      token: 'mock-jwt-token'
-    });
+      // Store token
+      await AsyncStorage.setItem('authToken', response.token);
+
+      return response;
+    } catch (error) {
+      console.error('Registration error:', error);
+      throw new Error('Registration failed');
+    }
   },
 
   async logout(): Promise<void> {
-    // Clear stored authentication
-    return Promise.resolve();
+    try {
+      await AsyncStorage.removeItem('authToken');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   },
 
   async getCurrentUser(): Promise<User | null> {
-    // Mock current user check
-    return Promise.resolve(null);
-  },
-
-  async refreshToken(): Promise<string> {
-    return Promise.resolve('new-mock-token');
-  },
-
-  async sendEmailVerification(email: string): Promise<void> {
     try {
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await brevoService.sendEmailVerification(email, verificationCode);
-      console.log('Verification email sent successfully');
-    } catch (error) {
-      console.error('Failed to send verification email:', error);
-      throw new Error('Failed to send verification email');
-    }
-  },
+      const token = await AsyncStorage.getItem('authToken');
+      if (!token) return null;
 
-  async sendPasswordReset(email: string): Promise<void> {
-    try {
-      const resetToken = Math.random().toString(36).substring(2, 15);
-      await brevoService.sendPasswordReset(email, resetToken);
-      console.log('Password reset email sent successfully');
+      // You could add a /me endpoint to verify token and get current user
+      return null;
     } catch (error) {
-      console.error('Failed to send password reset email:', error);
-      throw new Error('Failed to send password reset email');
-    }
-  },
-
-  async sendSMSVerification(phoneNumber: string): Promise<void> {
-    try {
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await brevoService.sendSMSVerification(phoneNumber, verificationCode);
-      console.log('SMS verification sent successfully');
-    } catch (error) {
-      console.error('Failed to send SMS verification:', error);
-      throw new Error('Failed to send SMS verification');
+      console.error('Get current user error:', error);
+      return null;
     }
   },
 
   async verifyEmailToken(token: string): Promise<{ success: boolean; message: string }> {
     try {
-      // In production, this would verify the token against your database
-      // For now, simulate verification
-      if (token && token.length >= 6) {
-        return {
-          success: true,
-          message: 'Email verified successfully!'
-        };
-      } else {
-        return {
-          success: false,
-          message: 'Invalid verification token'
-        };
-      }
+      const response = await authAPI.verifyEmail(token);
+      return response;
     } catch (error) {
       console.error('Email verification error:', error);
       return {
@@ -143,9 +72,7 @@ export const authService = {
 
   async resendEmailVerification(email: string): Promise<void> {
     try {
-      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-      await brevoService.sendEmailVerification(email, verificationCode);
-      console.log('Verification email resent successfully');
+      await authAPI.resendVerification(email);
     } catch (error) {
       console.error('Failed to resend verification email:', error);
       throw new Error('Failed to resend verification email');
