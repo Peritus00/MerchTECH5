@@ -1,18 +1,17 @@
+
 import React from 'react';
-import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { ThemedText } from '@/components/ThemedText';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function SettingsScreen() {
-  const { user } = useAuth();
+export default function Settings() {
   const router = useRouter();
+  const { user } = useAuth();
 
-  // Debug: log user data to see what we're working with
-  console.log('Current user:', user);
-  console.log('User email:', user?.email);
-  console.log('User username:', user?.username);
+  // Check if user is admin (djjetfuel)
+  const isAdmin = user && user.email === 'djjetfuel@gmail.com';
 
   const settingsOptions = [
     {
@@ -51,150 +50,170 @@ export default function SettingsScreen() {
       onPress: () => console.log('Navigate to about'),
       icon: 'ℹ️',
     },
+    // Admin-only options
+    ...(isAdmin ? [
+      {
+        title: 'User Permissions',
+        description: 'Manage user access and permissions',
+        onPress: () => router.push('/settings/user-permissions'),
+        icon: '🔐',
+        adminOnly: true,
+      },
+      {
+        title: 'Master Store Manager',
+        description: 'Manage products and store settings',
+        onPress: () => router.push('/settings/master-store-manager'),
+        icon: '🏪',
+        adminOnly: true,
+      },
+      {
+        title: 'Enhanced Sales Reports',
+        description: 'View detailed sales analytics',
+        onPress: () => router.push('/settings/enhanced-sales-reports'),
+        icon: '📈',
+        adminOnly: true,
+      },
+    ] : []),
   ];
 
-  // Add user permissions setting for djjetfuel user (check both email and username)
-  const isDeveloper = user?.email === 'djjetfuel@gmail.com' || 
-                     user?.username === 'djjetfuel' ||
-                     user?.email?.includes('djjetfuel');
-  
-  console.log('Is developer check:', isDeveloper);
-  console.log('User object full:', JSON.stringify(user, null, 2));
-  
-  if (isDeveloper) {
-    console.log('Adding User Permissions option to settings');
-    settingsOptions.push({
-      title: 'User Permissions',
-      description: 'Manage user roles and permissions',
-      onPress: () => {
-        console.log('Navigating to user permissions');
-        router.push('/settings/user-permissions');
-      },
-      icon: '🛡️',
-    });
-  } else {
-    console.log('User is not a developer, not showing User Permissions');
-  }
-
   return (
-    <ScrollView style={styles.container}>
-      <ThemedView style={styles.content}>
-        <View style={styles.header}>
+    <ThemedView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+        <ThemedView style={styles.header}>
           <ThemedText type="title">Settings</ThemedText>
-          {user && (
-            <View style={styles.userInfo}>
-              <ThemedText type="subtitle">{user.username}</ThemedText>
-              <ThemedText style={styles.userEmail}>{user.email}</ThemedText>
-            </View>
+          <ThemedText style={styles.subtitle}>
+            Manage your account and preferences
+          </ThemedText>
+          {isAdmin && (
+            <ThemedText style={styles.adminBadge}>
+              👑 Admin Access
+            </ThemedText>
           )}
-        </View>
+        </ThemedView>
 
-        <View style={styles.optionsList}>
+        <ThemedView style={styles.optionsContainer}>
           {settingsOptions.map((option, index) => (
             <TouchableOpacity
               key={index}
-              style={styles.optionItem}
+              style={[
+                styles.optionCard,
+                option.adminOnly && styles.adminOptionCard
+              ]}
               onPress={option.onPress}
             >
-              <View style={styles.optionIcon}>
-                <ThemedText style={styles.iconText}>{option.icon}</ThemedText>
-              </View>
-              <View style={styles.optionContent}>
-                <ThemedText type="defaultSemiBold" style={styles.optionTitle}>
-                  {option.title}
-                </ThemedText>
-                <ThemedText style={styles.optionDescription}>
-                  {option.description}
-                </ThemedText>
-              </View>
-              <ThemedText style={styles.chevron}>›</ThemedText>
+              <ThemedView style={styles.optionContent}>
+                <ThemedView style={[
+                  styles.optionIcon,
+                  option.adminOnly && styles.adminOptionIcon
+                ]}>
+                  <ThemedText style={styles.optionIconText}>{option.icon}</ThemedText>
+                </ThemedView>
+                <ThemedView style={styles.optionText}>
+                  <ThemedText style={styles.optionTitle}>
+                    {option.title}
+                    {option.adminOnly && <ThemedText style={styles.adminLabel}> (Admin)</ThemedText>}
+                  </ThemedText>
+                  <ThemedText style={styles.optionDescription}>{option.description}</ThemedText>
+                </ThemedView>
+                <ThemedText style={styles.chevron}>›</ThemedText>
+              </ThemedView>
             </TouchableOpacity>
           ))}
-        </View>
-
-        <View style={styles.footer}>
-          <ThemedText style={styles.version}>Version 1.0.0</ThemedText>
-          <ThemedText style={styles.copyright}>© 2024 MerchTech</ThemedText>
-        </View>
-      </ThemedView>
-    </ScrollView>
+        </ThemedView>
+      </ScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
   },
-  content: {
-    padding: 20,
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 32,
   },
   header: {
-    marginBottom: 32,
+    padding: 20,
+    alignItems: 'center',
   },
-  userInfo: {
-    marginTop: 16,
-    padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.05)',
-    borderRadius: 8,
-  },
-  userEmail: {
-    fontSize: 14,
-    opacity: 0.7,
+  subtitle: {
+    fontSize: 16,
+    color: '#6b7280',
     marginTop: 4,
+    textAlign: 'center',
   },
-  optionsList: {
-    marginBottom: 32,
+  adminBadge: {
+    fontSize: 14,
+    color: '#8b5cf6',
+    marginTop: 8,
+    fontWeight: '600',
   },
-  optionItem: {
+  optionsContainer: {
+    padding: 16,
+  },
+  optionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  adminOptionCard: {
+    borderWidth: 2,
+    borderColor: '#8b5cf6',
+    backgroundColor: '#faf5ff',
+  },
+  optionContent: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.1)',
   },
   optionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.1)',
-    justifyContent: 'center',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f3f4f6',
     alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 16,
   },
-  iconText: {
-    fontSize: 20,
+  adminOptionIcon: {
+    backgroundColor: '#ede9fe',
   },
-  optionContent: {
+  optionIconText: {
+    fontSize: 24,
+  },
+  optionText: {
     flex: 1,
   },
   optionTitle: {
     fontSize: 16,
-    marginBottom: 2,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  adminLabel: {
+    color: '#8b5cf6',
+    fontSize: 12,
+    fontWeight: '500',
   },
   optionDescription: {
-    fontSize: 12,
-    opacity: 0.7,
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
   },
   chevron: {
     fontSize: 20,
-    opacity: 0.5,
-  },
-  footer: {
-    alignItems: 'center',
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0,0,0,0.1)',
-  },
-  version: {
-    fontSize: 12,
-    opacity: 0.7,
-  },
-  copyright: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
+    color: '#6b7280',
+    fontWeight: '300',
   },
 });
