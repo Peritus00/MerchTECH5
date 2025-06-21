@@ -1,0 +1,504 @@
+please give me the neccessary code to add the manage user permissions page to my new react native project
+
+10 minutes ago
+PB
+
+perriebenton
+I'll search for user permission management functionality in your current system to understand the structure.
+
+
+Searched for "User permissions, user management, admin users, role management, user roles, user access control"
+I'll create the complete user permissions management page for your React Native project based on your existing admin system.
+
+1. User Permissions Manager Screen
+// UserPermissionsManagerScreen.tsx
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  RefreshControl,
+  TextInput,
+  Switch,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import UserPermissionCard from '../components/UserPermissionCard';
+import EditUserPermissionsModal from '../components/EditUserPermissionsModal';
+import UserStatsCard from '../components/UserStatsCard';
+interface UserPermissions {
+  id: number;
+  username: string;
+  email: string;
+  subscriptionTier: 'free' | 'basic' | 'premium';
+  isAdmin: boolean;
+  canViewAnalytics: boolean;
+  canManagePlaylists: boolean;
+  canEditPlaylists: boolean;
+  canUploadMedia: boolean;
+  canGenerateCodes: boolean;
+  canAccessStore: boolean;
+  canViewFanmail: boolean;
+  canManageQRCodes: boolean;
+  maxPlaylists: number;
+  maxVideos: number;
+  maxAudioFiles: number;
+  maxActivationCodes: number;
+  maxProducts: number;
+  maxQrCodes: number;
+  maxSlideshows: number;
+  isSuspended: boolean;
+  currentCounts?: {
+    qrCodes: number;
+    playlists: number;
+    slideshows: number;
+    products: number;
+    videos: number;
+    audioFiles: number;
+    activationCodes: number;
+  };
+}
+const UserPermissionsManagerScreen = () => {
+  const navigation = useNavigation();
+  const [users, setUsers] = useState<UserPermissions[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState<UserPermissions | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'admins' | 'suspended' | 'active'>('all');
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data);
+      } else {
+        throw new Error('Failed to fetch users');
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      Alert.alert('Error', 'Failed to load users');
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  };
+  const handleUpdatePermissions = async (userId: number, permissions: Partial<UserPermissions>) => {
+    try {
+      const response = await fetch(`/api/admin/users/${userId}/permissions`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(permissions),
+      });
+      if (response.ok) {
+        const updatedUser = await response.json();
+        setUsers(prev => 
+          prev.map(user => user.id === userId ? { ...user, ...updatedUser.user } : user)
+        );
+        setShowEditModal(false);
+        setSelectedUser(null);
+        Alert.alert('Success', 'User permissions updated successfully');
+      } else {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update permissions');
+      }
+    } catch (error) {
+      console.error('Error updating permissions:', error);
+      Alert.alert('Error', error.message || 'Failed to update permissions');
+    }
+  };
+  const handleSuspendUser = async (userId: number, suspend: boolean) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    Alert.alert(
+      suspend ? 'Suspend User' : 'Unsuspend User',
+      `Are you sure you want to ${suspend ? 'suspend' : 'unsuspend'} ${user.username}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: suspend ? 'Suspend' : 'Unsuspend',
+          style: suspend ? 'destructive' : 'default',
+          onPress: async () => {
+            try {
+              await handleUpdatePermissions(userId, { isSuspended: suspend });
+            } catch (error) {
+              console.error('Error updating suspension status:', error);
+            }
+          },
+        },
+      ]
+    );
+  };
+  const handleDeleteUser = async (userId: number) => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return;
+    if (user.username === 'djjetfuel') {
+      Alert.alert('Error', 'Cannot delete the protected master admin account');
+      return;
+    }
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to permanently delete ${user.username}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE',
+              });
+              if (response.ok) {
+                setUsers(prev => prev.filter(u => u.id !== userId));
+                Alert.alert('Success', 'User deleted successfully');
+              } else {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to delete user');
+              }
+            } catch (error) {
+              console.error('Error deleting user:', error);
+              Alert.alert('Error', error.message || 'Failed to delete user');
+            }
+          },
+        },
+      ]
+    );
+  };
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchUsers();
+  };
+  const getFilteredUsers = () => {
+    let filtered = users;
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter(user =>
+        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+    }
+    // Apply type filter
+    switch (filterType) {
+      case 'admins':
+        filtered = filtered.filter(user => user.isAdmin);
+        break;
+      case 'suspended':
+        filtered = filtered.filter(user => user.isSuspended);
+        break;
+      case 'active':
+        filtered = filtered.filter(user => !user.isSuspended);
+        break;
+    }
+    return filtered;
+  };
+  const filteredUsers = getFilteredUsers();
+  const getUserStats = () => {
+    const totalUsers = users.length;
+    const adminUsers = users.filter(u => u.isAdmin).length;
+    const suspendedUsers = users.filter(u => u.isSuspended).length;
+    const premiumUsers = users.filter(u => u.subscriptionTier === 'premium').length;
+    return { totalUsers, adminUsers, suspendedUsers, premiumUsers };
+  };
+  const stats = getUserStats();
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>User Permissions</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Stats Overview */}
+        <View style={styles.statsContainer}>
+          <UserStatsCard
+            title="Total Users"
+            value={stats.totalUsers}
+            icon="people"
+            color="#3b82f6"
+          />
+          <UserStatsCard
+            title="Admins"
+            value={stats.adminUsers}
+            icon="admin-panel-settings"
+            color="#f59e0b"
+          />
+          <UserStatsCard
+            title="Suspended"
+            value={stats.suspendedUsers}
+            icon="block"
+            color="#ef4444"
+          />
+          <UserStatsCard
+            title="Premium"
+            value={stats.premiumUsers}
+            icon="star"
+            color="#8b5cf6"
+          />
+        </View>
+        {/* Search and Filter */}
+        <View style={styles.searchContainer}>
+          <MaterialIcons name="search" size={20} color="#6b7280" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search users by name or email..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholderTextColor="#9ca3af"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <MaterialIcons name="clear" size={20} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+        </View>
+        {/* Filter Tabs */}
+        <View style={styles.filterTabs}>
+          {[
+            { key: 'all', label: 'All Users' },
+            { key: 'admins', label: 'Admins' },
+            { key: 'active', label: 'Active' },
+            { key: 'suspended', label: 'Suspended' },
+          ].map((filter) => (
+            <TouchableOpacity
+              key={filter.key}
+              style={[
+                styles.filterTab,
+                filterType === filter.key && styles.activeFilterTab,
+              ]}
+              onPress={() => setFilterType(filter.key as any)}
+            >
+              <Text
+                style={[
+                  styles.filterTabText,
+                  filterType === filter.key && styles.activeFilterTabText,
+                ]}
+              >
+                {filter.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {/* Users List */}
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={styles.loadingText}>Loading users...</Text>
+          </View>
+        ) : filteredUsers.length > 0 ? (
+          <View style={styles.usersList}>
+            {filteredUsers.map((user) => (
+              <UserPermissionCard
+                key={user.id}
+                user={user}
+                onEdit={() => {
+                  setSelectedUser(user);
+                  setShowEditModal(true);
+                }}
+                onSuspend={(suspend) => handleSuspendUser(user.id, suspend)}
+                onDelete={() => handleDeleteUser(user.id)}
+              />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="people-outline" size={64} color="#9ca3af" />
+            <Text style={styles.emptyText}>
+              {searchQuery || filterType !== 'all' ? 'No users found' : 'No users yet'}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery || filterType !== 'all'
+                ? 'Try adjusting your search or filter criteria'
+                : 'Users will appear here once they register'
+              }
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+      {/* Edit Permissions Modal */}
+      <EditUserPermissionsModal
+        visible={showEditModal}
+        user={selectedUser}
+        onClose={() => {
+          setShowEditModal(false);
+          setSelectedUser(null);
+        }}
+        onUpdatePermissions={handleUpdatePermissions}
+      />
+    </View>
+  );
+};
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 16,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1f2937',
+  },
+  filterTabs: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  filterTab: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  activeFilterTab: {
+    backgroundColor: '#3b82f6',
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeFilterTabText: {
+    color: '#fff',
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 48,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  usersList: {
+    gap: 12,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 64,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    paddingHorizontal: 32,
+    lineHeight: 20,
+  },
+});
+export default UserPermissionsManagerScreen;
+2. User Permission Card Component
+// UserPermissionCard.tsx
+import React from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+interface UserPermissionCardProps {
+  user: UserPermissions;
+  onEdit: () => void;
+  onSuspend: (suspend: boolean) => void;
+  onDelete: () => void;
+}
+const UserPermissionCard: React.FC<UserPermissionCardProps> = ({
+  user,
+  onEdit,
+  onSuspend,
+  onDelete,
+}) => {
+  const getTierColor = (tier: string) => {
+    switch (tier) {
+      case 'premium': return '#8b5cf6';
+      case 'basic': return '#3b82f6';
+      default: return '#6b7280';
+    }
+  };
+  const getTierLabel = (tier: string) => {
+    switch (tier) {
+      case 'premium': return 'Premium';
+      case 'basic': return 'Basic';
+      default: return 'Free';
+    }
+  };
+  const getActivePermissions = () => {
+    const permissions = [];
+    if (user.isAdmin) permissions.push('Admin');
+    if (user.canView
