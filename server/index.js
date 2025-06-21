@@ -15,29 +15,41 @@ if (!process.env.JWT_SECRET) {
   console.warn('WARNING: Using fallback JWT_SECRET. Set JWT_SECRET environment variable for production.');
 }
 
-// Database connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 10, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
-});
+// Database connection with fallback
+let pool = null;
 
-// Test database connection
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('Error acquiring client from pool:', err.stack);
-  } else {
-    console.log('Database connected successfully');
-    release();
+if (process.env.DATABASE_URL) {
+  try {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+      max: 5, // Reduced pool size
+      idleTimeoutMillis: 60000, // Increased idle timeout
+      connectionTimeoutMillis: 5000, // Increased connection timeout
+    });
+
+    // Test database connection
+    pool.connect((err, client, release) => {
+      if (err) {
+        console.warn('Database connection failed, continuing without database:', err.message);
+        pool = null;
+      } else {
+        console.log('Database connected successfully');
+        release();
+      }
+    });
+
+    // Handle pool errors gracefully
+    pool.on('error', (err, client) => {
+      console.warn('Database pool error (non-fatal):', err.message);
+    });
+  } catch (error) {
+    console.warn('Failed to initialize database pool, continuing without database:', error.message);
+    pool = null;
   }
-});
-
-// Handle pool errors
-pool.on('error', (err, client) => {
-  console.error('Unexpected error on idle client', err);
-});
+} else {
+  console.log('No DATABASE_URL provided, running without database');
+}
 
 // Middleware
 app.use(helmet());
@@ -70,6 +82,28 @@ const authenticateToken = (req, res, next) => {
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username } = req.body;
+
+    // If no database, return mock registration
+    if (!pool) {
+      const hashedPassword = await bcrypt.hash(password, 12);
+      const token = jwt.sign(
+        { userId: Math.floor(Math.random() * 1000), email },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      return res.status(201).json({
+        user: {
+          id: Math.floor(Math.random() * 1000),
+          email,
+          username: username || email.split('@')[0],
+          subscriptionTier: 'free',
+          isEmailVerified: false,
+          createdAt: new Date().toISOString()
+        },
+        token
+      });
+    }
 
     // Check if user exists
     const existingUser = await pool.query(
@@ -150,6 +184,11 @@ app.post('/api/auth/login', async (req, res) => {
       token,
       refreshToken
     });
+    }
+
+    // If no database, return error for non-dev logins
+    if (!pool) {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Get user from database
@@ -288,6 +327,11 @@ app.post('/api/auth/refresh', async (req, res) => {
 // QR Code routes
 app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   try {
+    if (!pool) {
+      // Return mock QR codes when database is not available
+      return res.json([]);
+    }
+
     const result = await pool.query(
       `SELECT qr.*, COUNT(qs.id) as scan_count
        FROM qr_codes qr
@@ -497,8 +541,8 @@ server.on('error', (error) => {
 // Monitor server health
 setInterval(() => {
   const memUsage = process.memoryUsage();
-  console.log(`[${new Date().toISOString()}] Server health check - Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB, Uptime: ${Math.round(process.uptime())} seconds`);
-}, 30000); // Log every 30 seconds
+  console.log(`[${new Date().toISOString()}] Server health check - Memory: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB, Uptime: ${Math.round(process.uptime())} seconds, DB: ${pool ? 'Connected' : 'Disconnected'}`);
+}, 60000); // Log every 60 seconds to reduce noise
 
 // Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {

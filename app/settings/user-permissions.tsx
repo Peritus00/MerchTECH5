@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -105,7 +104,7 @@ const UserPermissionCard = ({
             )}
           </View>
         </View>
-        
+
         <View style={styles.permissionsSummary}>
           <ThemedText style={styles.permissionsTitle}>Active Permissions:</ThemedText>
           <View style={styles.permissionsList}>
@@ -133,7 +132,7 @@ const UserPermissionCard = ({
           <MaterialIcons name="edit" size={18} color="#3b82f6" />
           <ThemedText style={styles.editButtonText}>Edit</ThemedText>
         </TouchableOpacity>
-        
+
         {user.username !== 'djjetfuel' && (
           <>
             <TouchableOpacity 
@@ -149,7 +148,7 @@ const UserPermissionCard = ({
                 {user.isSuspended ? 'Unsuspend' : 'Suspend'}
               </ThemedText>
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.deleteButton} onPress={onDelete}>
               <MaterialIcons name="delete" size={18} color="#ef4444" />
               <ThemedText style={styles.deleteButtonText}>Delete</ThemedText>
@@ -178,7 +177,7 @@ export default function UserPermissionsScreen() {
       // Still loading user data
       return;
     }
-    
+
     if (!user?.isAdmin && user?.username !== 'djjetfuel') {
       Alert.alert('Access Denied', 'You do not have permission to access this page', [
         { text: 'OK', onPress: () => router.back() }
@@ -252,14 +251,14 @@ export default function UserPermissionsScreen() {
 
   const getFilteredUsers = () => {
     let filtered = users;
-    
+
     if (searchQuery) {
       filtered = filtered.filter(user =>
         user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
-    
+
     switch (filterType) {
       case 'admins':
         filtered = filtered.filter(user => user.isAdmin);
@@ -271,7 +270,7 @@ export default function UserPermissionsScreen() {
         filtered = filtered.filter(user => !user.isSuspended);
         break;
     }
-    
+
     return filtered;
   };
 
@@ -303,6 +302,11 @@ export default function UserPermissionsScreen() {
   if (!user?.isAdmin && user?.username !== 'djjetfuel') {
     return null;
   }
+
+  useEffect(() => {
+    console.log('User permissions page loaded');
+    loadUsers();
+  }, []);
 
   return (
     <ThemedView style={styles.container}>
