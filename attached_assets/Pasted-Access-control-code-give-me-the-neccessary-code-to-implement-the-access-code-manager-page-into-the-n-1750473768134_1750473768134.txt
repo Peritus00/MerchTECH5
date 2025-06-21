@@ -1,0 +1,2056 @@
+Access control code give me the neccessary code to implement the access code manager page into the new react native project I am building
+6 minutes ago
+PB
+￼
+￼
+I'll create the complete access code manager page for your React Native application based on your current activation code system.
+1. Access Code Manager Screen (screens/AccessCodeManagerScreen.tsx)
+import React, { useState, useEffect } from 'react';
+import {
+View,
+Text,
+ScrollView,
+TouchableOpacity,
+StyleSheet,
+Alert,
+ActivityIndicator,
+RefreshControl,
+TextInput,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { Playlist, Slideshow, ActivationCode } from '../shared/media-schema';
+import AccessCodeCard from '../components/AccessCodeCard';
+import CreateAccessCodeModal from '../components/CreateAccessCodeModal';
+import BulkCreateCodeModal from '../components/BulkCreateCodeModal';
+import ContentSelector from '../components/ContentSelector';
+ 
+type ContentType = 'playlist' | 'slideshow';
+ 
+const AccessCodeManagerScreen = () => {
+const navigation = useNavigation();
+const [contentType, setContentType] = useState<ContentType>('playlist');
+const [playlists, setPlaylists] = useState<Playlist[]>([]);
+const [slideshows, setSlideshows] = useState<Slideshow[]>([]);
+const [selectedContentId, setSelectedContentId] = useState<string | number | null>(null);
+const [activationCodes, setActivationCodes] = useState<ActivationCode[]>([]);
+const [isLoading, setIsLoading] = useState(true);
+const [isLoadingCodes, setIsLoadingCodes] = useState(false);
+const [refreshing, setRefreshing] = useState(false);
+const [showCreateModal, setShowCreateModal] = useState(false);
+const [showBulkModal, setShowBulkModal] = useState(false);
+const [searchQuery, setSearchQuery] = useState('');
+ 
+useEffect(() => {
+fetchContent();
+}, [contentType]);
+ 
+useEffect(() => {
+if (selectedContentId) {
+fetchActivationCodes();
+} else {
+setActivationCodes([]);
+}
+}, [selectedContentId, contentType]);
+ 
+const fetchContent = async () => {
+try {
+setIsLoading(true);
+if (contentType === 'playlist') {
+const response = await fetch('/api/playlists');
+const data = await response.json();
+setPlaylists(data);
+} else {
+const response = await fetch('/api/slideshows');
+const data = await response.json();
+setSlideshows(data);
+}
+} catch (error) {
+console.error('Error fetching content:', error);
+Alert.alert('Error', `Failed to load ${contentType}s`);
+} finally {
+setIsLoading(false);
+setRefreshing(false);
+}
+};
+ 
+const fetchActivationCodes = async () => {
+if (!selectedContentId) return;
+
+try {
+setIsLoadingCodes(true);
+const endpoint = contentType === 'playlist'
+? `/api/activation-codes/playlist/${selectedContentId}`
+: `/api/activation-codes/slideshow/${selectedContentId}`;
+
+const response = await fetch(endpoint);
+const data = await response.json();
+setActivationCodes(Array.isArray(data) ? data : []);
+} catch (error) {
+console.error('Error fetching activation codes:', error);
+Alert.alert('Error', 'Failed to load activation codes');
+setActivationCodes([]);
+} finally {
+setIsLoadingCodes(false);
+}
+};
+ 
+const handleCreateCode = async (codeData: {
+maxUses?: number | null;
+expiresAt?: Date | null;
+}) => {
+if (!selectedContentId) return;
+ 
+try {
+const response = await fetch('/api/activation-codes', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+...(contentType === 'playlist'
+? { playlistId: selectedContentId }
+: { slideshowId: selectedContentId }
+),
+...codeData,
+}),
+});
+ 
+if (response.ok) {
+const newCode = await response.json();
+setActivationCodes(prev => [newCode, ...prev]);
+setShowCreateModal(false);
+Alert.alert('Success', 'Activation code created successfully');
+} else {
+throw new Error('Failed to create activation code');
+}
+} catch (error) {
+console.error('Error creating activation code:', error);
+Alert.alert('Error', 'Failed to create activation code');
+}
+};
+ 
+const handleBulkCreateCodes = async (bulkData: {
+quantity: number;
+maxUses?: number | null;
+expiresAt?: Date | null;
+}) => {
+if (!selectedContentId) return;
+ 
+try {
+const requests = Array.from({ length: bulkData.quantity }, () =>
+fetch('/api/activation-codes', {
+method: 'POST',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({
+...(contentType === 'playlist'
+? { playlistId: selectedContentId }
+: { slideshowId: selectedContentId }
+),
+maxUses: bulkData.maxUses,
+expiresAt: bulkData.expiresAt,
+}),
+})
+);
+ 
+const responses = await Promise.all(requests);
+const newCodes = await Promise.all(
+responses.map(response => response.json())
+);
+ 
+setActivationCodes(prev => [...newCodes, ...prev]);
+setShowBulkModal(false);
+Alert.alert('Success', `${bulkData.quantity} activation codes created successfully`);
+} catch (error) {
+console.error('Error creating bulk codes:', error);
+Alert.alert('Error', 'Failed to create activation codes');
+}
+};
+ 
+const handleDeleteCode = async (codeId: number) => {
+Alert.alert(
+'Delete Activation Code',
+'Are you sure you want to delete this activation code?',
+[
+{ text: 'Cancel', style: 'cancel' },
+{
+text: 'Delete',
+style: 'destructive',
+onPress: async () => {
+try {
+const response = await fetch(`/api/activation-codes/${codeId}`, {
+method: 'DELETE',
+});
+ 
+if (response.ok) {
+setActivationCodes(prev => prev.filter(code => code.id !== codeId));
+Alert.alert('Success', 'Activation code deleted');
+} else {
+throw new Error('Failed to delete activation code');
+}
+} catch (error) {
+console.error('Error deleting activation code:', error);
+Alert.alert('Error', 'Failed to delete activation code');
+}
+},
+},
+]
+);
+};
+ 
+const handleToggleCodeStatus = async (codeId: number, isActive: boolean) => {
+try {
+const response = await fetch(`/api/activation-codes/${codeId}`, {
+method: 'PATCH',
+headers: { 'Content-Type': 'application/json' },
+body: JSON.stringify({ isActive }),
+});
+ 
+if (response.ok) {
+const updatedCode = await response.json();
+setActivationCodes(prev =>
+prev.map(code => code.id === codeId ? updatedCode : code)
+);
+} else {
+throw new Error('Failed to update activation code');
+}
+} catch (error) {
+console.error('Error updating activation code:', error);
+Alert.alert('Error', 'Failed to update activation code');
+}
+};
+ 
+const onRefresh = () => {
+setRefreshing(true);
+fetchContent();
+if (selectedContentId) {
+fetchActivationCodes();
+}
+};
+ 
+const getSelectedContent = () => {
+if (contentType === 'playlist') {
+return playlists.find(p => p.id === selectedContentId);
+} else {
+return slideshows.find(s => s.id === selectedContentId);
+}
+};
+ 
+const filteredCodes = activationCodes.filter(code =>
+code.code.toLowerCase().includes(searchQuery.toLowerCase())
+);
+ 
+const activeCodes = filteredCodes.filter(code => code.isActive);
+const inactiveCodes = filteredCodes.filter(code => !code.isActive);
+ 
+return (
+<View style={styles.container}>
+{/* Header */}
+<View style={styles.header}>
+<TouchableOpacity onPress={() => navigation.goBack()}>
+<MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+</TouchableOpacity>
+<Text style={styles.headerTitle}>Access Codes</Text>
+<View style={{ width: 24 }} />
+</View>
+ 
+<ScrollView
+style={styles.scrollView}
+contentContainerStyle={styles.scrollContent}
+refreshControl={
+<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+}
+showsVerticalScrollIndicator={false}
+>
+{/* Content Type Selector */}
+<View style={styles.tabContainer}>
+{['playlist', 'slideshow'].map((type) => (
+<TouchableOpacity
+key={type}
+style={[
+styles.tab,
+contentType === type && styles.activeTab,
+]}
+onPress={() => {
+setContentType(type as ContentType);
+setSelectedContentId(null);
+setActivationCodes([]);
+}}
+>
+<MaterialIcons
+name={type === 'playlist' ? 'queue-music' : 'slideshow'}
+size={20}
+color={contentType === type ? '#fff' : '#6b7280'}
+/>
+<Text
+style={[
+styles.tabText,
+contentType === type && styles.activeTabText,
+]}
+>
+{type === 'playlist' ? 'Playlists' : 'Slideshows'}
+</Text>
+</TouchableOpacity>
+))}
+</View>
+ 
+{/* Content Selector */}
+<ContentSelector
+contentType={contentType}
+playlists={playlists}
+slideshows={slideshows}
+selectedContentId={selectedContentId}
+onSelectContent={setSelectedContentId}
+isLoading={isLoading}
+/>
+ 
+{/* Selected Content Info & Actions */}
+{selectedContentId && (
+<View style={styles.selectedContentSection}>
+<View style={styles.contentInfo}>
+<Text style={styles.contentName}>
+{getSelectedContent()?.name}
+</Text>
+<Text style={styles.contentStats}>
+{activationCodes.length} activation codes
+</Text>
+</View>
+ 
+<View style={styles.actionButtons}>
+<TouchableOpacity
+style={styles.createButton}
+onPress={() => setShowCreateModal(true)}
+>
+<MaterialIcons name="add" size={20} color="#fff" />
+<Text style={styles.createButtonText}>Create Code</Text>
+</TouchableOpacity>
+ 
+<TouchableOpacity
+style={styles.bulkButton}
+onPress={() => setShowBulkModal(true)}
+>
+<MaterialIcons name="library-add" size={20} color="#3b82f6" />
+<Text style={styles.bulkButtonText}>Bulk Create</Text>
+</TouchableOpacity>
+</View>
+</View>
+)}
+ 
+{/* Search Bar */}
+{selectedContentId && activationCodes.length > 0 && (
+<View style={styles.searchContainer}>
+<MaterialIcons name="search" size={20} color="#6b7280" />
+<TextInput
+style={styles.searchInput}
+placeholder="Search activation codes..."
+value={searchQuery}
+onChangeText={setSearchQuery}
+placeholderTextColor="#9ca3af"
+/>
+{searchQuery.length > 0 && (
+<TouchableOpacity onPress={() => setSearchQuery('')}>
+<MaterialIcons name="clear" size={20} color="#6b7280" />
+</TouchableOpacity>
+)}
+</View>
+)}
+ 
+{/* Activation Codes List */}
+{selectedContentId && (
+<View style={styles.codesSection}>
+{isLoadingCodes ? (
+<View style={styles.loadingContainer}>
+<ActivityIndicator size="large" color="#3b82f6" />
+<Text style={styles.loadingText}>Loading activation codes...</Text>
+</View>
+) : (
+<>
+{/* Active Codes */}
+{activeCodes.length > 0 && (
+<View style={styles.codeGroup}>
+<View style={styles.groupHeader}>
+<Text style={styles.groupTitle}>
+Active Codes ({activeCodes.length})
+</Text>
+<MaterialIcons name="check-circle" size={16} color="#10b981" />
+</View>
+{activeCodes.map((code) => (
+<AccessCodeCard
+key={code.id}
+code={code}
+onDelete={() => handleDeleteCode(code.id)}
+onToggleStatus={(isActive) => handleToggleCodeStatus(code.id, isActive)}
+/>
+))}
+</View>
+)}
+ 
+{/* Inactive Codes */}
+{inactiveCodes.length > 0 && (
+<View style={styles.codeGroup}>
+<View style={styles.groupHeader}>
+<Text style={styles.groupTitle}>
+Inactive Codes ({inactiveCodes.length})
+</Text>
+<MaterialIcons name="cancel" size={16} color="#6b7280" />
+</View>
+{inactiveCodes.map((code) => (
+<AccessCodeCard
+key={code.id}
+code={code}
+onDelete={() => handleDeleteCode(code.id)}
+onToggleStatus={(isActive) => handleToggleCodeStatus(code.id, isActive)}
+/>
+))}
+</View>
+)}
+ 
+{/* Empty State */}
+{filteredCodes.length === 0 && activationCodes.length === 0 && (
+<View style={styles.emptyContainer}>
+<MaterialIcons name="vpn-key" size={64} color="#9ca3af" />
+<Text style={styles.emptyText}>No activation codes yet</Text>
+<Text style={styles.emptySubtext}>
+Create activation codes to control access to this {contentType}
+</Text>
+</View>
+)}
+ 
+{/* No Search Results */}
+{filteredCodes.length === 0 && activationCodes.length > 0 && (
+<View style={styles.emptyContainer}>
+<MaterialIcons name="search-off" size={64} color="#9ca3af" />
+<Text style={styles.emptyText}>No codes found</Text>
+<Text style={styles.emptySubtext}>
+Try adjusting your search terms
+</Text>
+</View>
+)}
+</>
+)}
+</View>
+)}
+ 
+{/* Instructions */}
+{!selectedContentId && !isLoading && (
+<View style={styles.instructionsContainer}>
+<MaterialIcons name="info" size={48} color="#3b82f6" />
+<Text style={styles.instructionsTitle}>Access Code Management</Text>
+<Text style={styles.instructionsText}>
+Select a {contentType} above to view and manage its activation codes.
+You can create individual codes or generate multiple codes at once.
+</Text>
+</View>
+)}
+</ScrollView>
+ 
+{/* Create Code Modal */}
+<CreateAccessCodeModal
+visible={showCreateModal}
+onClose={() => setShowCreateModal(false)}
+onCreateCode={handleCreateCode}
+contentType={contentType}
+contentName={getSelectedContent()?.name || ''}
+/>
+ 
+{/* Bulk Create Modal */}
+<BulkCreateCodeModal
+visible={showBulkModal}
+onClose={() => setShowBulkModal(false)}
+onCreateCodes={handleBulkCreateCodes}
+contentType={contentType}
+contentName={getSelectedContent()?.name || ''}
+/>
+</View>
+);
+};
+ 
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#f8fafc',
+},
+header: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+paddingHorizontal: 16,
+paddingVertical: 12,
+backgroundColor: '#fff',
+borderBottomWidth: 1,
+borderBottomColor: '#e5e7eb',
+},
+headerTitle: {
+fontSize: 18,
+fontWeight: 'bold',
+color: '#1f2937',
+},
+scrollView: {
+flex: 1,
+},
+scrollContent: {
+padding: 16,
+},
+tabContainer: {
+flexDirection: 'row',
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 4,
+marginBottom: 16,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 1 },
+shadowOpacity: 0.1,
+shadowRadius: 2,
+elevation: 2,
+},
+tab: {
+flex: 1,
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+paddingVertical: 12,
+borderRadius: 8,
+gap: 8,
+},
+activeTab: {
+backgroundColor: '#3b82f6',
+},
+tabText: {
+fontSize: 14,
+fontWeight: '600',
+color: '#6b7280',
+},
+activeTabText: {
+color: '#fff',
+},
+selectedContentSection: {
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 16,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
+elevation: 3,
+},
+contentInfo: {
+marginBottom: 16,
+},
+contentName: {
+fontSize: 18,
+fontWeight: 'bold',
+color: '#1f2937',
+marginBottom: 4,
+},
+contentStats: {
+fontSize: 14,
+color: '#6b7280',
+},
+actionButtons: {
+flexDirection: 'row',
+gap: 12,
+},
+createButton: {
+flex: 1,
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+backgroundColor: '#3b82f6',
+borderRadius: 8,
+paddingVertical: 12,
+gap: 8,
+},
+createButtonText: {
+color: '#fff',
+fontSize: 14,
+fontWeight: '600',
+},
+bulkButton: {
+flex: 1,
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+backgroundColor: '#eff6ff',
+borderRadius: 8,
+paddingVertical: 12,
+gap: 8,
+},
+bulkButtonText: {
+color: '#3b82f6',
+fontSize: 14,
+fontWeight: '600',
+},
+searchContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#fff',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 8,
+marginBottom: 16,
+gap: 8,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 1 },
+shadowOpacity: 0.1,
+shadowRadius: 2,
+elevation: 2,
+},
+searchInput: {
+flex: 1,
+fontSize: 16,
+color: '#1f2937',
+},
+codesSection: {
+gap: 16,
+},
+loadingContainer: {
+alignItems: 'center',
+paddingVertical: 32,
+},
+loadingText: {
+marginTop: 12,
+fontSize: 16,
+color: '#6b7280',
+},
+codeGroup: {
+marginBottom: 24,
+},
+groupHeader: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'space-between',
+marginBottom: 12,
+},
+groupTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+},
+emptyContainer: {
+alignItems: 'center',
+paddingVertical: 48,
+},
+emptyText: {
+fontSize: 18,
+fontWeight: '600',
+color: '#6b7280',
+marginTop: 16,
+marginBottom: 8,
+},
+emptySubtext: {
+fontSize: 14,
+color: '#9ca3af',
+textAlign: 'center',
+paddingHorizontal: 32,
+},
+instructionsContainer: {
+alignItems: 'center',
+paddingVertical: 48,
+},
+instructionsTitle: {
+fontSize: 20,
+fontWeight: 'bold',
+color: '#1f2937',
+marginTop: 16,
+marginBottom: 12,
+},
+instructionsText: {
+fontSize: 16,
+color: '#6b7280',
+textAlign: 'center',
+lineHeight: 24,
+paddingHorizontal: 32,
+},
+});
+ 
+export default AccessCodeManagerScreen;
+
+2. Content Selector Component (components/ContentSelector.tsx)
+import React from 'react';
+import {
+View,
+Text,
+TouchableOpacity,
+StyleSheet,
+ActivityIndicator,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Playlist, Slideshow } from '../shared/media-schema';
+ 
+interface ContentSelectorProps {
+contentType: 'playlist' | 'slideshow';
+playlists: Playlist[];
+slideshows: Slideshow[];
+selectedContentId: string | number | null;
+onSelectContent: (id: string | number | null) => void;
+isLoading: boolean;
+}
+ 
+const ContentSelector: React.FC<ContentSelectorProps> = ({
+contentType,
+playlists,
+slideshows,
+selectedContentId,
+onSelectContent,
+isLoading,
+}) => {
+const content = contentType === 'playlist' ? playlists : slideshows;
+ 
+if (isLoading) {
+return (
+<View style={styles.loadingContainer}>
+<ActivityIndicator size="small" color="#3b82f6" />
+<Text style={styles.loadingText}>Loading {contentType}s...</Text>
+</View>
+);
+}
+ 
+if (content.length === 0) {
+return (
+<View style={styles.emptyContainer}>
+<MaterialIcons
+name={contentType === 'playlist' ? 'queue-music' : 'slideshow'}
+size={48}
+color="#9ca3af"
+/>
+<Text style={styles.emptyText}>No {contentType}s found</Text>
+<Text style={styles.emptySubtext}>
+Create a {contentType} first to manage access codes
+</Text>
+</View>
+);
+}
+ 
+return (
+<View style={styles.container}>
+<Text style={styles.sectionTitle}>
+Select {contentType === 'playlist' ? 'Playlist' : 'Slideshow'}
+</Text>
+
+<View style={styles.contentGrid}>
+{content.map((item) => (
+<TouchableOpacity
+key={item.id}
+style={[
+styles.contentCard,
+selectedContentId === item.id && styles.selectedCard,
+]}
+onPress={() => onSelectContent(item.id)}
+activeOpacity={0.7}
+>
+<View style={styles.cardContent}>
+<View style={[
+styles.iconContainer,
+selectedContentId === item.id && styles.selectedIconContainer,
+]}>
+<MaterialIcons
+name={contentType === 'playlist' ? 'queue-music' : 'slideshow'}
+size={24}
+color={selectedContentId === item.id ? '#fff' : '#3b82f6'}
+/>
+</View>
+
+<View style={styles.contentInfo}>
+<Text style={[
+styles.contentName,
+selectedContentId === item.id && styles.selectedContentName,
+]} numberOfLines={2}>
+{item.name}
+</Text>
+
+<Text style={[
+styles.contentDetails,
+selectedContentId === item.id && styles.selectedContentDetails,
+]}>
+{contentType === 'playlist'
+? `${(item as Playlist).mediaFiles?.length || 0} files`
+: `${(item as Slideshow).images?.length || 0} images`
+}
+</Text>
+</View>
+ 
+{selectedContentId === item.id && (
+<MaterialIcons name="check-circle" size={20} color="#3b82f6" />
+)}
+</View>
+</TouchableOpacity>
+))}
+</View>
+</View>
+);
+};
+ 
+const styles = StyleSheet.create({
+container: {
+marginBottom: 16,
+},
+loadingContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+justifyContent: 'center',
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 24,
+gap: 12,
+},
+loadingText: {
+fontSize: 16,
+color: '#6b7280',
+},
+emptyContainer: {
+alignItems: 'center',
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 32,
+},
+emptyText: {
+fontSize: 16,
+fontWeight: '600',
+color: '#6b7280',
+marginTop: 12,
+marginBottom: 4,
+},
+emptySubtext: {
+fontSize: 14,
+color: '#9ca3af',
+textAlign: 'center',
+},
+sectionTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+marginBottom: 12,
+},
+contentGrid: {
+gap: 12,
+},
+contentCard: {
+backgroundColor: '#fff',
+borderRadius: 12,
+borderWidth: 2,
+borderColor: '#e5e7eb',
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 1 },
+shadowOpacity: 0.1,
+shadowRadius: 2,
+elevation: 2,
+},
+selectedCard: {
+borderColor: '#3b82f6',
+backgroundColor: '#eff6ff',
+},
+cardContent: {
+flexDirection: 'row',
+alignItems: 'center',
+padding: 16,
+},
+iconContainer: {
+width: 48,
+height: 48,
+borderRadius: 24,
+backgroundColor: '#eff6ff',
+justifyContent: 'center',
+alignItems: 'center',
+marginRight: 12,
+},
+selectedIconContainer: {
+backgroundColor: '#3b82f6',
+},
+contentInfo: {
+flex: 1,
+},
+contentName: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+marginBottom: 4,
+},
+selectedContentName: {
+color: '#1e40af',
+},
+contentDetails: {
+fontSize: 14,
+color: '#6b7280',
+},
+selectedContentDetails: {
+color: '#3b82f6',
+},
+});
+ 
+export default ContentSelector;
+
+3. Access Code Card Component (components/AccessCodeCard.tsx)
+import React, { useState } from 'react';
+import {
+View,
+Text,
+TouchableOpacity,
+StyleSheet,
+Alert,
+Clipboard,
+Switch,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { ActivationCode } from '../shared/media-schema';
+ 
+interface AccessCodeCardProps {
+code: ActivationCode;
+onDelete: () => void;
+onToggleStatus: (isActive: boolean) => void;
+}
+ 
+const AccessCodeCard: React.FC<AccessCodeCardProps> = ({
+code,
+onDelete,
+onToggleStatus,
+}) => {
+const [copied, setCopied] = useState(false);
+ 
+const handleCopyCode = async () => {
+try {
+await Clipboard.setString(code.code);
+setCopied(true);
+setTimeout(() => setCopied(false), 2000);
+} catch (error) {
+Alert.alert('Error', 'Failed to copy code');
+}
+};
+ 
+const formatDate = (dateString: string) => {
+return new Date(dateString).toLocaleDateString('en-US', {
+month: 'short',
+day: 'numeric',
+year: 'numeric',
+hour: '2-digit',
+minute: '2-digit',
+});
+};
+ 
+const isExpired = code.expiresAt && new Date(code.expiresAt) < new Date();
+const isMaxUsesReached = code.maxUses !== null && code.usesCount >= code.maxUses;
+const isEffectivelyInactive = !code.isActive || isExpired || isMaxUsesReached;
+ 
+const getStatusColor = () => {
+if (!code.isActive) return '#6b7280';
+if (isExpired || isMaxUsesReached) return '#ef4444';
+return '#10b981';
+};
+ 
+const getStatusText = () => {
+if (!code.isActive) return 'Disabled';
+if (isExpired) return 'Expired';
+if (isMaxUsesReached) return 'Max uses reached';
+return 'Active';
+};
+ 
+const getStatusIcon = () => {
+if (!code.isActive) return 'radio-button-off';
+if (isExpired) return 'access-time';
+if (isMaxUsesReached) return 'block';
+return 'check-circle';
+};
+ 
+return (
+<View style={[styles.card, isEffectivelyInactive && styles.inactiveCard]}>
+{/* Header */}
+<View style={styles.header}>
+<View style={styles.codeSection}>
+<Text style={styles.codeLabel}>Activation Code</Text>
+<TouchableOpacity
+style={styles.codeContainer}
+onPress={handleCopyCode}
+activeOpacity={0.7}
+>
+<Text style={styles.codeText}>{code.code}</Text>
+<MaterialIcons
+name={copied ? 'check' : 'content-copy'}
+size={18}
+color={copied ? '#10b981' : '#6b7280'}
+/>
+</TouchableOpacity>
+{copied && (
+<Text style={styles.copiedText}>Copied to clipboard!</Text>
+)}
+</View>
+ 
+<View style={styles.statusSection}>
+<View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
+<MaterialIcons
+name={getStatusIcon()}
+size={14}
+color={getStatusColor()}
+/>
+<Text style={[styles.statusText, { color: getStatusColor() }]}>
+{getStatusText()}
+</Text>
+</View>
+</View>
+</View>
+ 
+{/* Details */}
+<View style={styles.details}>
+<View style={styles.detailRow}>
+<MaterialIcons name="access-time" size={16} color="#6b7280" />
+<Text style={styles.detailLabel}>Created:</Text>
+<Text style={styles.detailValue}>{formatDate(code.createdAt)}</Text>
+</View>
+ 
+<View style={styles.detailRow}>
+<MaterialIcons name="analytics" size={16} color="#6b7280" />
+<Text style={styles.detailLabel}>Uses:</Text>
+<Text style={[
+styles.detailValue,
+isMaxUsesReached && styles.maxUsesText
+]}>
+{code.usesCount}{code.maxUses !== null ? ` / ${code.maxUses}` : ' (unlimited)'}
+</Text>
+</View>
+ 
+{code.expiresAt && (
+<View style={styles.detailRow}>
+<MaterialIcons name="event" size={16} color="#6b7280" />
+<Text style={styles.detailLabel}>Expires:</Text>
+<Text style={[
+styles.detailValue,
+isExpired && styles.expiredText
+]}>
+{formatDate(code.expiresAt)}
+</Text>
+</View>
+)}
+</View>
+ 
+{/* Actions */}
+<View style={styles.actions}>
+<View style={styles.switchSection}>
+<Text style={styles.switchLabel}>Active</Text>
+<Switch
+value={code.isActive}
+onValueChange={onToggleStatus}
+trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+thumbColor={code.isActive ? '#3b82f6' : '#9ca3af'}
+disabled={isExpired || isMaxUsesReached}
+/>
+</View>
+ 
+<TouchableOpacity
+style={styles.deleteButton}
+onPress={() => {
+Alert.alert(
+'Delete Code',
+'Are you sure you want to delete this activation code?',
+[
+{ text: 'Cancel', style: 'cancel' },
+{ text: 'Delete', style: 'destructive', onPress: onDelete },
+]
+);
+}}
+>
+<MaterialIcons name="delete" size={20} color="#ef4444" />
+</TouchableOpacity>
+</View>
+</View>
+);
+};
+ 
+const styles = StyleSheet.create({
+card: {
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 12,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
+elevation: 3,
+},
+inactiveCard: {
+opacity: 0.7,
+},
+header: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'flex-start',
+marginBottom: 16,
+},
+codeSection: {
+flex: 1,
+},
+codeLabel: {
+fontSize: 12,
+color: '#6b7280',
+marginBottom: 6,
+textTransform: 'uppercase',
+fontWeight: '600',
+},
+codeContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#f8fafc',
+borderWidth: 1,
+borderColor: '#e5e7eb',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 10,
+gap: 8,
+},
+codeText: {
+fontFamily: 'Courier',
+fontSize: 16,
+fontWeight: 'bold',
+color: '#1f2937',
+flex: 1,
+},
+copiedText: {
+fontSize: 12,
+color: '#10b981',
+marginTop: 4,
+fontWeight: '500',
+},
+statusSection: {
+marginLeft: 16,
+},
+statusBadge: {
+flexDirection: 'row',
+alignItems: 'center',
+paddingHorizontal: 8,
+paddingVertical: 4,
+borderRadius: 12,
+gap: 4,
+},
+statusText: {
+fontSize: 12,
+fontWeight: '600',
+},
+details: {
+gap: 8,
+marginBottom: 16,
+},
+detailRow: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+},
+detailLabel: {
+fontSize: 14,
+color: '#6b7280',
+minWidth: 60,
+},
+detailValue: {
+fontSize: 14,
+color: '#1f2937',
+fontWeight: '500',
+},
+maxUsesText: {
+color: '#ef4444',
+},
+expiredText: {
+color: '#ef4444',
+},
+actions: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+paddingTop: 16,
+borderTopWidth: 1,
+borderTopColor: '#f3f4f6',
+},
+switchSection: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+},
+switchLabel: {
+fontSize: 14,
+color: '#1f2937',
+fontWeight: '500',
+},
+deleteButton: {
+padding: 8,
+borderRadius: 8,
+backgroundColor: '#fef2f2',
+},
+});
+ 
+export default AccessCodeCard;
+
+4. Create Access Code Modal (components/CreateAccessCodeModal.tsx)
+import React, { useState } from 'react';
+import {
+View,
+Text,
+Modal,
+TextInput,
+TouchableOpacity,
+StyleSheet,
+ScrollView,
+Alert,
+Switch,
+KeyboardAvoidingView,
+Platform,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+ 
+interface CreateAccessCodeModalProps {
+visible: boolean;
+onClose: () => void;
+onCreateCode: (codeData: {
+maxUses?: number | null;
+expiresAt?: Date | null;
+}) => void;
+contentType: 'playlist' | 'slideshow';
+contentName: string;
+}
+ 
+const CreateAccessCodeModal: React.FC<CreateAccessCodeModalProps> = ({
+visible,
+onClose,
+onCreateCode,
+contentType,
+contentName,
+}) => {
+const [hasUsageLimit, setHasUsageLimit] = useState(false);
+const [maxUses, setMaxUses] = useState('1');
+const [hasExpiration, setHasExpiration] = useState(false);
+const [expirationDate, setExpirationDate] = useState(new Date());
+const [showDatePicker, setShowDatePicker] = useState(false);
+ 
+const handleCreate = () => {
+const codeData: {
+maxUses?: number | null;
+expiresAt?: Date | null;
+} = {};
+ 
+if (hasUsageLimit) {
+const parsedMaxUses = parseInt(maxUses);
+if (isNaN(parsedMaxUses) || parsedMaxUses <= 0) {
+Alert.alert('Error', 'Please enter a valid number for max uses');
+return;
+}
+codeData.maxUses = parsedMaxUses;
+} else {
+codeData.maxUses = null;
+}
+ 
+if (hasExpiration) {
+if (expirationDate <= new Date()) {
+Alert.alert('Error', 'Expiration date must be in the future');
+return;
+}
+codeData.expiresAt = expirationDate;
+} else {
+codeData.expiresAt = null;
+}
+ 
+onCreateCode(codeData);
+resetForm();
+};
+ 
+const resetForm = () => {
+setHasUsageLimit(false);
+setMaxUses('1');
+setHasExpiration(false);
+setExpirationDate(new Date());
+setShowDatePicker(false);
+};
+ 
+const handleClose = () => {
+resetForm();
+onClose();
+};
+ 
+const formatDate = (date: Date) => {
+return date.toLocaleDateString('en-US', {
+month: 'short',
+day: 'numeric',
+year: 'numeric',
+hour: '2-digit',
+minute: '2-digit',
+});
+};
+ 
+const onDateChange = (event: any, selectedDate?: Date) => {
+setShowDatePicker(Platform.OS === 'ios');
+if (selectedDate) {
+setExpirationDate(selectedDate);
+}
+};
+ 
+return (
+<Modal
+visible={visible}
+animationType="slide"
+presentationStyle="pageSheet"
+onRequestClose={handleClose}
+>
+<KeyboardAvoidingView
+style={styles.container}
+behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+>
+{/* Header */}
+<View style={styles.header}>
+<TouchableOpacity onPress={handleClose}>
+<MaterialIcons name="close" size={24} color="#1f2937" />
+</TouchableOpacity>
+<Text style={styles.headerTitle}>Create Access Code</Text>
+<TouchableOpacity onPress={handleCreate}>
+<Text style={styles.createButton}>Create</Text>
+</TouchableOpacity>
+</View>
+ 
+<ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+{/* Content Info */}
+<View style={styles.contentInfo}>
+<MaterialIcons
+name={contentType === 'playlist' ? 'queue-music' : 'slideshow'}
+size={20}
+color="#3b82f6"
+/>
+<Text style={styles.contentName} numberOfLines={1}>
+{contentName}
+</Text>
+<Text style={styles.contentType}>
+{contentType === 'playlist' ? 'Playlist' : 'Slideshow'}
+</Text>
+</View>
+ 
+{/* Usage Limit Section */}
+<View style={styles.section}>
+<View style={styles.sectionHeader}>
+<View style={styles.sectionTitleContainer}>
+<MaterialIcons name="analytics" size={20} color="#1f2937" />
+<Text style={styles.sectionTitle}>Usage Limit</Text>
+</View>
+<Switch
+value={hasUsageLimit}
+onValueChange={setHasUsageLimit}
+trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+thumbColor={hasUsageLimit ? '#3b82f6' : '#9ca3af'}
+/>
+</View>
+
+<Text style={styles.sectionDescription}>
+{hasUsageLimit
+? 'Set a maximum number of times this code can be used'
+: 'This code can be used unlimited times'
+}
+</Text>
+ 
+{hasUsageLimit && (
+<View style={styles.inputContainer}>
+<Text style={styles.inputLabel}>Maximum Uses</Text>
+<TextInput
+style={styles.input}
+value={maxUses}
+onChangeText={setMaxUses}
+placeholder="Enter max uses"
+placeholderTextColor="#9ca3af"
+keyboardType="numeric"
+/>
+</View>
+)}
+</View>
+ 
+{/* Expiration Section */}
+<View style={styles.section}>
+<View style={styles.sectionHeader}>
+<View style={styles.sectionTitleContainer}>
+<MaterialIcons name="access-time" size={20} color="#1f2937" />
+<Text style={styles.sectionTitle}>Expiration</Text>
+</View>
+<Switch
+value={hasExpiration}
+onValueChange={setHasExpiration}
+trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+thumbColor={hasExpiration ? '#3b82f6' : '#9ca3af'}
+/>
+</View>
+
+<Text style={styles.sectionDescription}>
+{hasExpiration
+? 'Set when this code will stop working'
+: 'This code will never expire'
+}
+</Text>
+ 
+{hasExpiration && (
+<View style={styles.inputContainer}>
+<Text style={styles.inputLabel}>Expiration Date</Text>
+<TouchableOpacity
+style={styles.dateButton}
+onPress={() => setShowDatePicker(true)}
+>
+<Text style={styles.dateButtonText}>
+{formatDate(expirationDate)}
+</Text>
+<MaterialIcons name="event" size={20} color="#6b7280" />
+</TouchableOpacity>
+</View>
+)}
+</View>
+ 
+{/* Summary */}
+<View style={styles.summarySection}>
+<Text style={styles.summaryTitle}>Code Summary</Text>
+<View style={styles.summaryItem}>
+<MaterialIcons name="vpn-key" size={16} color="#3b82f6" />
+<Text style={styles.summaryText}>
+Single-use activation code
+</Text>
+</View>
+<View style={styles.summaryItem}>
+<MaterialIcons name="analytics" size={16} color="#3b82f6" />
+<Text style={styles.summaryText}>
+{hasUsageLimit ? `Limited to ${maxUses} uses` : 'Unlimited uses'}
+</Text>
+</View>
+<View style={styles.summaryItem}>
+<MaterialIcons name="access-time" size={16} color="#3b82f6" />
+<Text style={styles.summaryText}>
+{hasExpiration ? `Expires ${formatDate(expirationDate)}` : 'Never expires'}
+</Text>
+</View>
+</View>
+</ScrollView>
+ 
+{/* Date Picker */}
+{showDatePicker && (
+<DateTimePicker
+value={expirationDate}
+mode="datetime"
+display="default"
+onChange={onDateChange}
+minimumDate={new Date()}
+/>
+)}
+</KeyboardAvoidingView>
+</Modal>
+);
+};
+ 
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#f8fafc',
+},
+header: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+paddingHorizontal: 16,
+paddingVertical: 12,
+backgroundColor: '#fff',
+borderBottomWidth: 1,
+borderBottomColor: '#e5e7eb',
+},
+headerTitle: {
+fontSize: 18,
+fontWeight: 'bold',
+color: '#1f2937',
+},
+createButton: {
+fontSize: 16,
+fontWeight: '600',
+color: '#3b82f6',
+},
+content: {
+flex: 1,
+padding: 16,
+},
+contentInfo: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 24,
+gap: 12,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
+elevation: 3,
+},
+contentName: {
+flex: 1,
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+},
+contentType: {
+fontSize: 12,
+color: '#6b7280',
+textTransform: 'uppercase',
+fontWeight: '500',
+},
+section: {
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 16,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 1 },
+shadowOpacity: 0.1,
+shadowRadius: 2,
+elevation: 2,
+},
+sectionHeader: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+marginBottom: 8,
+},
+sectionTitleContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+},
+sectionTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+},
+sectionDescription: {
+fontSize: 14,
+color: '#6b7280',
+marginBottom: 16,
+},
+inputContainer: {
+gap: 8,
+},
+inputLabel: {
+fontSize: 14,
+fontWeight: '500',
+color: '#1f2937',
+},
+input: {
+borderWidth: 1,
+borderColor: '#e5e7eb',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 12,
+fontSize: 16,
+color: '#1f2937',
+backgroundColor: '#fff',
+},
+dateButton: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+borderWidth: 1,
+borderColor: '#e5e7eb',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 12,
+backgroundColor: '#fff',
+},
+dateButtonText: {
+fontSize: 16,
+color: '#1f2937',
+},
+summarySection: {
+backgroundColor: '#eff6ff',
+borderRadius: 12,
+padding: 16,
+marginTop: 8,
+},
+summaryTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1e40af',
+marginBottom: 12,
+},
+summaryItem: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+marginBottom: 8,
+},
+summaryText: {
+fontSize: 14,
+color: '#1e40af',
+},
+});
+ 
+export default CreateAccessCodeModal;
+
+5. Bulk Create Code Modal (components/BulkCreateCodeModal.tsx)
+import React, { useState } from 'react';
+import {
+View,
+Text,
+Modal,
+TextInput,
+TouchableOpacity,
+StyleSheet,
+ScrollView,
+Alert,
+Switch,
+KeyboardAvoidingView,
+Platform,
+} from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+ 
+interface BulkCreateCodeModalProps {
+visible: boolean;
+onClose: () => void;
+onCreateCodes: (bulkData: {
+quantity: number;
+maxUses?: number | null;
+expiresAt?: Date | null;
+}) => void;
+contentType: 'playlist' | 'slideshow';
+contentName: string;
+}
+ 
+const BulkCreateCodeModal: React.FC<BulkCreateCodeModalProps> = ({
+visible,
+onClose,
+onCreateCodes,
+contentType,
+contentName,
+}) => {
+const [quantity, setQuantity] = useState('5');
+const [hasUsageLimit, setHasUsageLimit] = useState(false);
+const [maxUses, setMaxUses] = useState('1');
+const [hasExpiration, setHasExpiration] = useState(false);
+const [expirationDate, setExpirationDate] = useState(new Date());
+const [showDatePicker, setShowDatePicker] = useState(false);
+ 
+const handleCreate = () => {
+const parsedQuantity = parseInt(quantity);
+if (isNaN(parsedQuantity) || parsedQuantity <= 0 || parsedQuantity > 100) {
+Alert.alert('Error', 'Please enter a valid quantity between 1 and 100');
+return;
+}
+ 
+const bulkData: {
+quantity: number;
+maxUses?: number | null;
+expiresAt?: Date | null;
+} = { quantity: parsedQuantity };
+ 
+if (hasUsageLimit) {
+const parsedMaxUses = parseInt(maxUses);
+if (isNaN(parsedMaxUses) || parsedMaxUses <= 0) {
+Alert.alert('Error', 'Please enter a valid number for max uses');
+return;
+}
+bulkData.maxUses = parsedMaxUses;
+} else {
+bulkData.maxUses = null;
+}
+ 
+if (hasExpiration) {
+if (expirationDate <= new Date()) {
+Alert.alert('Error', 'Expiration date must be in the future');
+return;
+}
+bulkData.expiresAt = expirationDate;
+} else {
+bulkData.expiresAt = null;
+}
+ 
+Alert.alert(
+'Confirm Bulk Creation',
+`Create ${parsedQuantity} activation codes?`,
+[
+{ text: 'Cancel', style: 'cancel' },
+{
+text: 'Create',
+onPress: () => {
+onCreateCodes(bulkData);
+resetForm();
+},
+},
+]
+);
+};
+ 
+const resetForm = () => {
+setQuantity('5');
+setHasUsageLimit(false);
+setMaxUses('1');
+setHasExpiration(false);
+setExpirationDate(new Date());
+setShowDatePicker(false);
+};
+ 
+const handleClose = () => {
+resetForm();
+onClose();
+};
+ 
+const formatDate = (date: Date) => {
+return date.toLocaleDateString('en-US', {
+month: 'short',
+day: 'numeric',
+year: 'numeric',
+hour: '2-digit',
+minute: '2-digit',
+});
+};
+ 
+const onDateChange = (event: any, selectedDate?: Date) => {
+setShowDatePicker(Platform.OS === 'ios');
+if (selectedDate) {
+setExpirationDate(selectedDate);
+}
+};
+ 
+return (
+<Modal
+visible={visible}
+animationType="slide"
+presentationStyle="pageSheet"
+onRequestClose={handleClose}
+>
+<KeyboardAvoidingView
+style={styles.container}
+behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+>
+{/* Header */}
+<View style={styles.header}>
+<TouchableOpacity onPress={handleClose}>
+<MaterialIcons name="close" size={24} color="#1f2937" />
+</TouchableOpacity>
+<Text style={styles.headerTitle}>Bulk Create Codes</Text>
+<TouchableOpacity onPress={handleCreate}>
+<Text style={styles.createButton}>Create</Text>
+</TouchableOpacity>
+</View>
+ 
+<ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+{/* Content Info */}
+<View style={styles.contentInfo}>
+<MaterialIcons
+name={contentType === 'playlist' ? 'queue-music' : 'slideshow'}
+size={20}
+color="#3b82f6"
+/>
+<Text style={styles.contentName} numberOfLines={1}>
+{contentName}
+</Text>
+<Text style={styles.contentType}>
+{contentType === 'playlist' ? 'Playlist' : 'Slideshow'}
+</Text>
+</View>
+ 
+{/* Quantity Section */}
+<View style={styles.section}>
+<View style={styles.sectionTitleContainer}>
+<MaterialIcons name="library-add" size={20} color="#1f2937" />
+<Text style={styles.sectionTitle}>Quantity</Text>
+</View>
+
+<Text style={styles.sectionDescription}>
+How many activation codes do you want to create?
+</Text>
+ 
+<View style={styles.inputContainer}>
+<Text style={styles.inputLabel}>Number of Codes</Text>
+<TextInput
+style={styles.input}
+value={quantity}
+onChangeText={setQuantity}
+placeholder="Enter quantity (1-100)"
+placeholderTextColor="#9ca3af"
+keyboardType="numeric"
+/>
+</View>
+</View>
+ 
+{/* Usage Limit Section */}
+<View style={styles.section}>
+<View style={styles.sectionHeader}>
+<View style={styles.sectionTitleContainer}>
+<MaterialIcons name="analytics" size={20} color="#1f2937" />
+<Text style={styles.sectionTitle}>Usage Limit</Text>
+</View>
+<Switch
+value={hasUsageLimit}
+onValueChange={setHasUsageLimit}
+trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+thumbColor={hasUsageLimit ? '#3b82f6' : '#9ca3af'}
+/>
+</View>
+
+<Text style={styles.sectionDescription}>
+{hasUsageLimit
+? 'Set a maximum number of times each code can be used'
+: 'Each code can be used unlimited times'
+}
+</Text>
+ 
+{hasUsageLimit && (
+<View style={styles.inputContainer}>
+<Text style={styles.inputLabel}>Maximum Uses per Code</Text>
+<TextInput
+style={styles.input}
+value={maxUses}
+onChangeText={setMaxUses}
+placeholder="Enter max uses"
+placeholderTextColor="#9ca3af"
+keyboardType="numeric"
+/>
+</View>
+)}
+</View>
+ 
+{/* Expiration Section */}
+<View style={styles.section}>
+<View style={styles.sectionHeader}>
+<View style={styles.sectionTitleContainer}>
+<MaterialIcons name="access-time" size={20} color="#1f2937" />
+<Text style={styles.sectionTitle}>Expiration</Text>
+</View>
+<Switch
+value={hasExpiration}
+onValueChange={setHasExpiration}
+trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+thumbColor={hasExpiration ? '#3b82f6' : '#9ca3af'}
+/>
+</View>
+
+<Text style={styles.sectionDescription}>
+{hasExpiration
+? 'Set when all codes will stop working'
+: 'Codes will never expire'
+}
+</Text>
+ 
+{hasExpiration && (
+<View style={styles.inputContainer}>
+<Text style={styles.inputLabel}>Expiration Date</Text>
+<TouchableOpacity
+style={styles.dateButton}
+onPress={() => setShowDatePicker(true)}
+>
+<Text style={styles.dateButtonText}>
+{formatDate(expirationDate)}
+</Text>
+<MaterialIcons name="event" size={20} color="#6b7280" />
+</TouchableOpacity>
+</View>
+)}
+</View>
+ 
+{/* Summary */}
+<View style={styles.summarySection}>
+<Text style={styles.summaryTitle}>Bulk Creation Summary</Text>
+<View style={styles.summaryItem}>
+<MaterialIcons name="library-add" size={16} color="#8b5cf6" />
+<Text style={styles.summaryText}>
+{quantity} activation codes
+</Text>
+</View>
+<View style={styles.summaryItem}>
+<MaterialIcons name="analytics" size={16} color="#8b5cf6" />
+<Text style={styles.summaryText}>
+{hasUsageLimit ? `${maxUses} uses each` : 'Unlimited uses each'}
+</Text>
+</View>
+<View style={styles.summaryItem}>
+<MaterialIcons name="access-time" size={16} color="#8b5cf6" />
+<Text style={styles.summaryText}>
+{hasExpiration ? `All expire ${formatDate(expirationDate)}` : 'Never expire'}
+</Text>
+</View>
+</View>
+ 
+{/* Warning */}
+<View style={styles.warningSection}>
+<MaterialIcons name="warning" size={16} color="#f59e0b" />
+<Text style={styles.warningText}>
+Large quantities may take a moment to create. All codes will have identical settings.
+</Text>
+</View>
+</ScrollView>
+ 
+{/* Date Picker */}
+{showDatePicker && (
+<DateTimePicker
+value={expirationDate}
+mode="datetime"
+display="default"
+onChange={onDateChange}
+minimumDate={new Date()}
+/>
+)}
+</KeyboardAvoidingView>
+</Modal>
+);
+};
+ 
+const styles = StyleSheet.create({
+container: {
+flex: 1,
+backgroundColor: '#f8fafc',
+},
+header: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+paddingHorizontal: 16,
+paddingVertical: 12,
+backgroundColor: '#fff',
+borderBottomWidth: 1,
+borderBottomColor: '#e5e7eb',
+},
+headerTitle: {
+fontSize: 18,
+fontWeight: 'bold',
+color: '#1f2937',
+},
+createButton: {
+fontSize: 16,
+fontWeight: '600',
+color: '#3b82f6',
+},
+content: {
+flex: 1,
+padding: 16,
+},
+contentInfo: {
+flexDirection: 'row',
+alignItems: 'center',
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 24,
+gap: 12,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 2 },
+shadowOpacity: 0.1,
+shadowRadius: 4,
+elevation: 3,
+},
+contentName: {
+flex: 1,
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+},
+contentType: {
+fontSize: 12,
+color: '#6b7280',
+textTransform: 'uppercase',
+fontWeight: '500',
+},
+section: {
+backgroundColor: '#fff',
+borderRadius: 12,
+padding: 16,
+marginBottom: 16,
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 1 },
+shadowOpacity: 0.1,
+shadowRadius: 2,
+elevation: 2,
+},
+sectionHeader: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+marginBottom: 8,
+},
+sectionTitleContainer: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+},
+sectionTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#1f2937',
+},
+sectionDescription: {
+fontSize: 14,
+color: '#6b7280',
+marginBottom: 16,
+},
+inputContainer: {
+gap: 8,
+},
+inputLabel: {
+fontSize: 14,
+fontWeight: '500',
+color: '#1f2937',
+},
+input: {
+borderWidth: 1,
+borderColor: '#e5e7eb',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 12,
+fontSize: 16,
+color: '#1f2937',
+backgroundColor: '#fff',
+},
+dateButton: {
+flexDirection: 'row',
+justifyContent: 'space-between',
+alignItems: 'center',
+borderWidth: 1,
+borderColor: '#e5e7eb',
+borderRadius: 8,
+paddingHorizontal: 12,
+paddingVertical: 12,
+backgroundColor: '#fff',
+},
+dateButtonText: {
+fontSize: 16,
+color: '#1f2937',
+},
+summarySection: {
+backgroundColor: '#f3f4f6',
+borderRadius: 12,
+padding: 16,
+marginTop: 8,
+marginBottom: 16,
+},
+summaryTitle: {
+fontSize: 16,
+fontWeight: '600',
+color: '#7c3aed',
+marginBottom: 12,
+},
+summaryItem: {
+flexDirection: 'row',
+alignItems: 'center',
+gap: 8,
+marginBottom: 8,
+},
+summaryText: {
+fontSize: 14,
+color: '#7c3aed',
+},
+warningSection: {
+flexDirection: 'row',
+alignItems: 'flex-start',
+backgroundColor: '#fffbeb',
+borderRadius: 8,
+padding: 12,
+gap: 8,
+},
+warningText: {
+flex: 1,
+fontSize: 12,
+color: '#92400e',
+lineHeight: 16,
+},
+});
+ 
+export default BulkCreateCodeModal;
+
+This complete access code manager system provides:
+* Unified Interface: Manage codes for both playlists and slideshows
+* Content Selection: Easy switching between playlists and slideshows
+* Individual & Bulk Creation: Create single codes or multiple codes at once
+* Advanced Settings: Usage limits, expiration dates, and status management
+* Search & Filter: Find specific codes quickly
+* Code Management: Copy, enable/disable, and delete codes
+* Visual Feedback: Clear status indicators and progress tracking
+The system integrates seamlessly with your existing activation code API endpoints and provides a comprehensive solution for access control in your React Native application.
