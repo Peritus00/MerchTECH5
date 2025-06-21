@@ -42,6 +42,7 @@ interface UserPermissions {
   isSuspended: boolean;
   createdAt: string;
   lastActive: string;
+  isPending?: boolean;
 }
 
 const UserStatsCard = ({ title, value, icon, color }: { title: string; value: number; icon: string; color: string }) => (
@@ -96,6 +97,11 @@ const UserPermissionCard = ({
             {user.isAdmin && (
               <View style={styles.adminBadge}>
                 <ThemedText style={styles.adminText}>Admin</ThemedText>
+              </View>
+            )}
+             {user.isPending && (
+              <View style={[styles.suspendedBadge, { backgroundColor: '#f59e0b' }]}>
+                <ThemedText style={styles.suspendedText}>PENDING</ThemedText>
               </View>
             )}
             {user.isSuspended && (
@@ -161,13 +167,15 @@ const UserPermissionCard = ({
   );
 };
 
+type FilterType = 'all' | 'active' | 'admins' | 'pending' | 'suspended';
+
 export default function UserPermissionsScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const { users, isLoading, refreshUsers, updateUserPermissions, deleteUser } = useUserPermissions();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'admins' | 'suspended' | 'active'>('all');
+  const [filterType, setFilterType] = useState<FilterType>('all');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserPermissions | null>(null);
 
@@ -270,6 +278,9 @@ export default function UserPermissionsScreen() {
       case 'active':
         filtered = filtered.filter(user => !user.isSuspended);
         break;
+      case 'pending':
+          filtered = filtered.filter(user => user.isPending);
+          break;
     }
 
     return filtered;
@@ -368,11 +379,13 @@ export default function UserPermissionsScreen() {
         </View>
 
         {/* Filter Tabs */}
+        
         <View style={styles.filterTabs}>
           {[
             { key: 'all', label: 'All Users' },
             { key: 'admins', label: 'Admins' },
             { key: 'active', label: 'Active' },
+            { key: 'pending', label: 'Pending'},
             { key: 'suspended', label: 'Suspended' },
           ].map((filter) => (
             <TouchableOpacity

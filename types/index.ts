@@ -2,11 +2,18 @@ export interface User {
   id: number;
   email: string;
   username: string;
-  subscriptionTier: 'free' | 'basic' | 'premium';
+  firstName?: string;
+  lastName?: string;
   isAdmin?: boolean;
+  subscriptionTier?: 'free' | 'premium' | 'enterprise';
+  permissions?: string[];
   isEmailVerified?: boolean;
-  emailVerificationToken?: string;
-  createdAt: string;
+  isSuspended?: boolean;
+  isPending?: boolean;
+  pendingExpiry?: Date;
+  lastActive?: Date;
+  createdAt?: Date;
+  isNewUser?: boolean;
 }
 
 export interface QRCode {

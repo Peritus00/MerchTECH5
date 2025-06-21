@@ -1,6 +1,6 @@
-
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface UserPermissions {
   id: number;
@@ -42,10 +42,10 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
 
   const fetchUsers = async () => {
     setIsLoading(true);
-    
+
     // Simulate a small delay for loading state
     await new Promise(resolve => setTimeout(resolve, 500));
-    
+
     // Mock data for development - replace with actual API call
     const mockUsers: UserPermissions[] = [
       {
@@ -174,10 +174,10 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         lastActive: '2024-01-10'
       }
     ];
-    
+
     setUsers(mockUsers);
     setIsLoading(false);
-    
+
     // Uncomment for real API integration:
     // try {
     //   const response = await fetch('http://0.0.0.0:5000/api/admin/users');
@@ -208,7 +208,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       );
       Alert.alert('Success', 'User permissions updated successfully');
       return true;
-      
+
       // Uncomment for real API integration:
       // const response = await fetch(`http://0.0.0.0:5000/api/admin/users/${userId}/permissions`, {
       //   method: 'PATCH',
@@ -243,7 +243,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       setUsers(prev => prev.filter(u => u.id !== userId));
       Alert.alert('Success', 'User deleted successfully');
       return true;
-      
+
       // Uncomment for real API integration:
       // const response = await fetch(`http://0.0.0.0:5000/api/admin/users/${userId}`, {
       //   method: 'DELETE',
