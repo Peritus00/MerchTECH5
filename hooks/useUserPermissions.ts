@@ -111,6 +111,8 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         
         console.log('Transformed users:', transformedUsers);
         setUsers(transformedUsers);
+      console.log('Transformed users:', transformedUsers);
+        setUsers(transformedUsers);
       } else {
         const errorText = await response.text();
         console.error('API Error response:', errorText);
