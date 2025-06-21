@@ -325,13 +325,23 @@ app.post('/api/auth/register', async (req, res) => {
       [email, username]
     );
 
+    console.log('Existing users check:', { 
+      rowCount: existingUser.rows.length, 
+      rows: existingUser.rows 
+    });
+
     if (existingUser.rows.length > 0) {
       const existing = existingUser.rows[0];
+      console.log('User conflict found:', existing);
       if (existing.email === email) {
-        return res.status(400).json({ error: 'An account with this email address already exists. Please try logging in instead.' });
+        const errorMsg = 'An account with this email address already exists. Please try logging in instead.';
+        console.log('Email conflict:', errorMsg);
+        return res.status(400).json({ error: errorMsg });
       }
       if (existing.username === username) {
-        return res.status(400).json({ error: 'This username is already taken. Please choose a different username.' });
+        const errorMsg = 'This username is already taken. Please choose a different username.';
+        console.log('Username conflict:', errorMsg);
+        return res.status(400).json({ error: errorMsg });
       }
     }
 
@@ -341,13 +351,23 @@ app.post('/api/auth/register', async (req, res) => {
       [email, username]
     );
 
+    console.log('Existing pending check:', { 
+      rowCount: existingPending.rows.length, 
+      rows: existingPending.rows 
+    });
+
     if (existingPending.rows.length > 0) {
       const pending = existingPending.rows[0];
+      console.log('Pending conflict found:', pending);
       if (pending.email === email) {
-        return res.status(400).json({ error: 'Registration already pending for this email. Please check your email for verification or try resending the verification email.' });
+        const errorMsg = 'Registration already pending for this email. Please check your email for verification or try resending the verification email.';
+        console.log('Pending email conflict:', errorMsg);
+        return res.status(400).json({ error: errorMsg });
       }
       if (pending.username === username) {
-        return res.status(400).json({ error: 'This username is already reserved by a pending registration. Please choose a different username.' });
+        const errorMsg = 'This username is already reserved by a pending registration. Please choose a different username.';
+        console.log('Pending username conflict:', errorMsg);
+        return res.status(400).json({ error: errorMsg });
       }
     }
 
