@@ -85,6 +85,13 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       console.log('Response status:', response.status);
       console.log('Response headers:', response.headers);
 
+      // Handle authentication errors
+      if (response.status === 401) {
+        console.log('Authentication failed - clearing tokens and redirecting');
+        await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'currentUser']);
+        throw new Error('Authentication expired. Please log in again.');
+      }
+
       if (response.ok) {
         const data = await response.json();
         console.log('Raw user data received:', data);

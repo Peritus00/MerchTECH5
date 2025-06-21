@@ -81,8 +81,11 @@ export const authAPI = {
       const response = await api.post('/auth/login', { email, password });
       return response.data;
     } catch (error: any) {
+      console.log('API login failed, checking for developer fallback');
+      
       // If backend fails, fall back to developer login
       if (email === 'djjetfuel@gmail.com' && password === 'dev123') {
+        console.log('Using developer fallback login');
         return {
           user: {
             id: 1,
@@ -91,6 +94,7 @@ export const authAPI = {
             firstName: 'DJ',
             lastName: 'JetFuel',
             isEmailVerified: true,
+            isAdmin: true,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
