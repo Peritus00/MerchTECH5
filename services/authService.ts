@@ -115,5 +115,40 @@ export const authService = {
       console.error('Failed to send SMS verification:', error);
       throw new Error('Failed to send SMS verification');
     }
+  },
+
+  async verifyEmailToken(token: string): Promise<{ success: boolean; message: string }> {
+    try {
+      // In production, this would verify the token against your database
+      // For now, simulate verification
+      if (token && token.length >= 6) {
+        return {
+          success: true,
+          message: 'Email verified successfully!'
+        };
+      } else {
+        return {
+          success: false,
+          message: 'Invalid verification token'
+        };
+      }
+    } catch (error) {
+      console.error('Email verification error:', error);
+      return {
+        success: false,
+        message: 'Verification failed. Please try again.'
+      };
+    }
+  },
+
+  async resendEmailVerification(email: string): Promise<void> {
+    try {
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      await brevoService.sendEmailVerification(email, verificationCode);
+      console.log('Verification email resent successfully');
+    } catch (error) {
+      console.error('Failed to resend verification email:', error);
+      throw new Error('Failed to resend verification email');
+    }
   }
 };

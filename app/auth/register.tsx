@@ -43,14 +43,17 @@ export default function RegisterScreen() {
     try {
       const success = await register(email, password, username);
       if (success) {
-        // Show success message about email verification
+        // Navigate to email verification screen
         Alert.alert(
           'Registration Successful!', 
-          'Please check your email for a verification link to complete your account setup.',
+          'Please verify your email to complete your account setup.',
           [
             {
               text: 'OK',
-              onPress: () => router.replace('/(tabs)')
+              onPress: () => router.push({
+                pathname: '/auth/verify-email',
+                params: { email }
+              })
             }
           ]
         );

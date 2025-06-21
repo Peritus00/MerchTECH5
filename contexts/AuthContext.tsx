@@ -9,6 +9,8 @@ interface AuthContextType {
   register: (email: string, password: string, username?: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
+  verifyEmail: (token: string) => Promise<{ success: boolean; message: string }>;
+  resendVerification: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -64,6 +66,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const verifyEmail = async (token: string) => {
+    try {
+      const result = await authService.verifyEmailToken(token);
+      if (result.success && user) {
+        // Update user to mark email as verified
+        setUser({ ...user, isEmailVerified: true });
+      }
+      return result;
+    } catch (error) {
+      console.error('Email verification failed:', error);
+      return { success: false, message: 'Verification failed' };
+    }
+  };
+
+  const resendVerification = async (email: string) => {
+    try {
+      await authService.resendEmailVerification(email);
+    } catch (error) {
+      console.error('Resend verification failed:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     loading,
@@ -71,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     register,
     logout,
     isAuthenticated: !!user,
+    verifyEmail,
+    resendVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

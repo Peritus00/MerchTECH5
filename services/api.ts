@@ -46,3 +46,46 @@ api.interceptors.response.use(
 );
 
 export default api;
+// Email verification endpoint
+export const verifyEmail = async (token: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    // In a real app, this would make an API call to your backend
+    // For now, we'll simulate the verification process
+    
+    // Mock verification logic
+    if (token && token.length >= 6) {
+      return {
+        success: true,
+        message: 'Email verified successfully!'
+      };
+    } else {
+      return {
+        success: false,
+        message: 'Invalid verification token'
+      };
+    }
+  } catch (error) {
+    console.error('Email verification error:', error);
+    return {
+      success: false,
+      message: 'Verification failed. Please try again.'
+    };
+  }
+};
+
+// Resend verification email
+export const resendVerificationEmail = async (email: string): Promise<{ success: boolean; message: string }> => {
+  try {
+    // This would call your backend to resend the verification email
+    return {
+      success: true,
+      message: 'Verification email sent successfully!'
+    };
+  } catch (error) {
+    console.error('Resend verification error:', error);
+    return {
+      success: false,
+      message: 'Failed to resend verification email'
+    };
+  }
+};
