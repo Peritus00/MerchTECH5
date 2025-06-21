@@ -23,7 +23,9 @@ app.use(cors({
     /^https:\/\/.*\.replit\.dev$/,
     /^http:\/\/.*\.replit\.dev$/
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
@@ -176,6 +178,12 @@ app.get('/', (req, res) => {
       stripe: '/api/stripe/*'
     }
   });
+});
+
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
 });
 
 // Health check with database status
@@ -606,6 +614,7 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
 // Get all users including pending ones (admin only)
 app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
   try {
+    console.log('=== ADMIN ALL-USERS ENDPOINT HIT ===');
     console.log('Admin users request from user:', req.user);
     console.log('User isAdmin:', req.user.isAdmin);
     console.log('User username:', req.user.username);
@@ -821,6 +830,11 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
+  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
+  console.log('Available routes:');
+  console.log('  GET /api/health');
+  console.log('  GET /api/admin/all-users');
+  console.log('  DELETE /api/admin/users/:identifier');
   await initializeDatabase();
   
   // Start periodic cleanup of expired pending users (every hour)
