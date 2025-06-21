@@ -340,10 +340,10 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Create user directly in users table with free tier by default
     const newUser = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name, subscription_tier, is_new_user, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW()) 
-       RETURNING id, email, username, first_name, last_name, subscription_tier, is_new_user, is_admin, created_at`,
-      [email, username, passwordHash, firstName, lastName, 'free', true]
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, subscription_tier, created_at, updated_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) 
+       RETURNING id, email, username, first_name, last_name, subscription_tier, is_admin, created_at`,
+      [email, username, passwordHash, firstName, lastName, 'free']
     );
 
     console.log('User created successfully:', newUser.rows[0]);
@@ -368,7 +368,6 @@ app.post('/api/auth/register', async (req, res) => {
         firstName: newUser.rows[0].first_name,
         lastName: newUser.rows[0].last_name,
         subscriptionTier: newUser.rows[0].subscription_tier,
-        isNewUser: newUser.rows[0].is_new_user,
         isAdmin: newUser.rows[0].is_admin,
         createdAt: newUser.rows[0].created_at
       },
