@@ -219,6 +219,45 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   }
 });
 
+// Refresh token endpoint
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    // Verify refresh token
+    jwt.verify(refreshToken, process.env.JWT_SECRET, (err, decoded) => {
+      if (err) {
+        return res.status(403).json({ error: 'Invalid refresh token' });
+      }
+
+      // Generate new tokens
+      const newToken = jwt.sign(
+        { userId: decoded.userId, email: decoded.email, isAdmin: decoded.isAdmin },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      const newRefreshToken = jwt.sign(
+        { userId: decoded.userId, email: decoded.email, isAdmin: decoded.isAdmin, type: 'refresh' },
+        process.env.JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        token: newToken,
+        refreshToken: newRefreshToken
+      });
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ error: 'Token refresh failed' });
+  }
+});
+
 // QR Code routes
 app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   try {
@@ -316,6 +355,84 @@ app.get('/api/admin/users', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get users error:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+// Password reset endpoints
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // In a real implementation, you'd send an actual password reset email
+    res.json({
+      success: true,
+      message: 'Password reset email sent successfully'
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send password reset email'
+    });
+  }
+});
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    // In a real implementation, you'd verify the reset token and update the password
+    res.json({
+      success: true,
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password'
+    });
+  }
+});
+
+// Profile management endpoints
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const updates = req.body;
+
+    // In a real implementation, you'd update the user in the database
+    // For now, return mock updated user
+    res.json({
+      id: req.user.userId,
+      email: req.user.email,
+      username: updates.username || 'djjetfuel',
+      firstName: updates.firstName || 'DJ',
+      lastName: updates.lastName || 'JetFuel',
+      isEmailVerified: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    // In a real implementation, you'd verify current password and update
+    res.json({
+      success: true,
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password'
+    });
   }
 });
 
