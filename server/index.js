@@ -41,7 +41,7 @@ if (!process.env.JWT_SECRET) {
 }
 
 // Email service configuration
-const transporter = nodemailer.createTransporter({
+const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
   port: 587,
   secure: false,
