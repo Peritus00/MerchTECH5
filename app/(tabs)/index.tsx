@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -65,7 +64,7 @@ export default function DashboardScreen() {
   const fetchDashboardData = async () => {
     try {
       const data = await analyticsService.getAnalyticsSummary();
-      
+
       // Mock recent activity - replace with actual API call
       const recentActivity = [
         {
@@ -178,7 +177,7 @@ export default function DashboardScreen() {
     trend?: string;
   }) => {
     const cardWidth = (width - 48) / 2;
-    
+
     const formatValue = (num: number) => {
       if (num >= 1000000) {
         return (num / 1000000).toFixed(1) + 'M';
@@ -664,5 +663,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     textAlign: 'center',
+  },
+  loginButton: {
+    backgroundColor: '#3b82f6',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  loginButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
   },
 });
