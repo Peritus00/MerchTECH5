@@ -42,11 +42,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initializeAuth = async () => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      const currentUser = await authService.getCurrentUser();
-
+      // Clear any stale authentication data on app start
+      await authService.logout();
+      
       setState({
-        user: currentUser,
-        isAuthenticated: !!currentUser,
+        user: null,
+        isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
       });

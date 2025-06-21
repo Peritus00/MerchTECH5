@@ -25,7 +25,9 @@ function RootLayoutNav() {
 
     if (!isAuthenticated) {
       // User is not authenticated, always redirect to login
-      router.replace('/auth/login');
+      if (!inAuthGroup) {
+        router.replace('/auth/login');
+      }
     } else if (isAuthenticated && inAuthGroup) {
       // User is authenticated but still in auth screens, redirect to main app
       router.replace('/(tabs)');
