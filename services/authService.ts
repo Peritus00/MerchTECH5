@@ -138,7 +138,9 @@ class AuthService {
       }
       return false;
     } catch (error) {
-      console.error('Token refresh error:', error);
+      // Don't log token refresh errors as they're expected when tokens expire
+      // Just clear the invalid tokens
+      await this.logout();
       return false;
     }
   }
