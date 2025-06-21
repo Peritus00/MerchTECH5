@@ -581,10 +581,12 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 14,
     fontWeight: '500',
-    color: '#374151',
+    color: '#ffffff',
   },
   metricValue: {
     fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
     fontWeight: '600',
     color: '#1f2937',
   },
