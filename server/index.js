@@ -10,7 +10,14 @@ const PORT = process.env.PORT || 5000;
 
 // CORS configuration
 app.use(cors({
-  origin: ['http://localhost:8081', 'https://*.repl.co', 'https://*.replit.dev'],
+  origin: [
+    'http://localhost:8081', 
+    'http://localhost:8080',
+    'https://*.repl.co', 
+    'https://*.replit.dev',
+    /^https:\/\/.*\.replit\.dev$/,
+    /^http:\/\/.*\.replit\.dev$/
+  ],
   credentials: true
 }));
 

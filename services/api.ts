@@ -10,10 +10,13 @@ const getApiBaseUrl = () => {
   if (__DEV__) {
     // Check if we're in a web environment safely
     if (typeof window !== 'undefined' && Platform.OS === 'web') {
-      return `${window.location.protocol}//${window.location.hostname}:5000/api`;
+      // For Replit web environment, use the current domain with port 5000
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol;
+      return `${protocol}//${hostname}:5000/api`;
     } else {
-      // For React Native, use the current Replit dev domain
-      return `https://${process.env.REPLIT_DEV_DOMAIN}:5000/api`;
+      // For React Native, use localhost for development
+      return 'http://localhost:5000/api';
     }
   }
   
@@ -22,9 +25,11 @@ const getApiBaseUrl = () => {
 
 const API_BASE_URL = getApiBaseUrl();
 
+console.log('API Base URL:', API_BASE_URL);
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -57,10 +62,14 @@ api.interceptors.response.use(
       await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'currentUser']);
     }
     
-    // Don't log network errors to reduce console noise
-    if (error.code !== 'NETWORK_ERROR' && !error.message?.includes('refresh')) {
-      console.error('API Error:', error.message);
-    }
+    // Log all API errors for debugging
+    console.error('API Error Details:', {
+      message: error.message,
+      code: error.code,
+      baseURL: API_BASE_URL,
+      status: error.response?.status,
+      url: error.config?.url
+    });
     
     return Promise.reject(error);
   }
