@@ -81,9 +81,24 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Basic health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+// Health check with database status
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test database connection
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    console.error('Health check database error:', error);
+    res.status(503).json({ 
+      status: 'error', 
+      database: 'disconnected',
+      timestamp: new Date().toISOString() 
+    });
+  }
 });
 
 // Auth routes

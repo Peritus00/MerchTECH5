@@ -38,7 +38,7 @@ function healthCheck() {
     port: 5000,
     path: '/api/health',
     method: 'GET',
-    timeout: 5000
+    timeout: 10000
   };
 
   const req = http.request(options, (res) => {
@@ -47,11 +47,16 @@ function healthCheck() {
       restartCount = 0; // Reset restart count on successful health check
     } else {
       console.warn(`[${new Date().toISOString()}] Health check failed with status ${res.statusCode}`);
+      // Don't restart on 404 or other HTTP errors, only on connection failures
     }
   });
 
   req.on('error', (err) => {
     console.error(`[${new Date().toISOString()}] Health check error:`, err.message);
+    // Only restart on connection errors, not HTTP errors
+    if (err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND') {
+      console.log(`[${new Date().toISOString()}] Server appears to be down, will monitor for restart`);
+    }
   });
 
   req.on('timeout', () => {
