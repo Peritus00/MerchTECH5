@@ -49,8 +49,43 @@ export default api;
 // Auth endpoints
 export const authAPI = {
   login: async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    return response.data;
+    // Developer login for djjetfuel@gmail.com
+    if (email === 'djjetfuel@gmail.com' && password === 'dev123') {
+      return {
+        user: {
+          id: 1,
+          email: 'djjetfuel@gmail.com',
+          username: 'djjetfuel',
+          firstName: 'DJ',
+          lastName: 'JetFuel',
+          isEmailVerified: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        token: 'dev_jwt_token_djjetfuel_12345',
+        refreshToken: 'dev_refresh_token_djjetfuel_67890'
+      };
+    }
+
+    // Mock authentication for development
+    if (email === 'demo@example.com' && password === 'demo123') {
+      return {
+        user: {
+          id: 2,
+          email: 'demo@example.com',
+          username: 'demo_user',
+          firstName: 'Demo',
+          lastName: 'User',
+          isEmailVerified: true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        token: 'mock_jwt_token_12345',
+        refreshToken: 'mock_refresh_token_67890'
+      };
+    }
+
+    throw new Error('Invalid credentials');
   },
 
   register: async (email: string, password: string, username?: string) => {
