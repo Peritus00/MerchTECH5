@@ -317,24 +317,38 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username, firstName, lastName } = req.body;
 
+    console.log('Registration attempt for:', { email, username });
+
     // Check if user already exists in users table
     const existingUser = await pool.query(
-      'SELECT * FROM users WHERE email = $1 OR username = $2',
+      'SELECT email, username FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User already exists' });
+      const existing = existingUser.rows[0];
+      if (existing.email === email) {
+        return res.status(400).json({ error: 'An account with this email address already exists. Please try logging in instead.' });
+      }
+      if (existing.username === username) {
+        return res.status(400).json({ error: 'This username is already taken. Please choose a different username.' });
+      }
     }
 
     // Check if pending registration exists
     const existingPending = await pool.query(
-      'SELECT * FROM pending_users WHERE email = $1 OR username = $2',
+      'SELECT email, username FROM pending_users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
     if (existingPending.rows.length > 0) {
-      return res.status(400).json({ error: 'Registration pending. Please check your email for verification.' });
+      const pending = existingPending.rows[0];
+      if (pending.email === email) {
+        return res.status(400).json({ error: 'Registration already pending for this email. Please check your email for verification or try resending the verification email.' });
+      }
+      if (pending.username === username) {
+        return res.status(400).json({ error: 'This username is already reserved by a pending registration. Please choose a different username.' });
+      }
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
