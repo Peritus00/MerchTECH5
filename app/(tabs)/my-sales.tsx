@@ -187,9 +187,9 @@ export default function MySalesScreen() {
         item.paypalOrderId,
         new Date(item.orderDate).toLocaleDateString(),
         item.status,
-        item.customerName,
+        `"${item.customerName}"`, // Wrap in quotes to handle commas
         item.customerEmail,
-        item.productName,
+        `"${item.productName}"`, // Wrap in quotes to handle commas
         item.productPrice,
         item.quantity,
         item.itemSubtotal
@@ -199,12 +199,29 @@ export default function MySalesScreen() {
         .map(row => row.join(','))
         .join('\n');
 
-      await Share.share({
-        message: csvContent,
-        title: 'My Sales Data Export',
-      });
+      // Create and download file for web
+      if (typeof window !== 'undefined') {
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        if (link.download !== undefined) {
+          const url = URL.createObjectURL(blob);
+          link.setAttribute('href', url);
+          link.setAttribute('download', `sales-data-${new Date().toISOString().split('T')[0]}.csv`);
+          link.style.visibility = 'hidden';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }
+      } else {
+        // Fallback for React Native
+        await Share.share({
+          message: csvContent,
+          title: 'My Sales Data Export',
+        });
+      }
     } catch (error) {
       Alert.alert('Export Error', 'Failed to export sales data');
+      console.error('Export error:', error);
     }
   };
 
