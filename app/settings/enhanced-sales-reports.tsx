@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
@@ -101,7 +100,7 @@ export default function EnhancedSalesReportsScreen() {
     const totalRevenue = salesData.reduce((sum, day) => sum + day.amount, 0);
     const totalOrders = salesData.reduce((sum, day) => sum + day.count, 0);
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    
+
     return {
       revenue: totalRevenue,
       orders: totalOrders,
@@ -120,19 +119,19 @@ export default function EnhancedSalesReportsScreen() {
           <ThemedText style={styles.summaryAmount}>${totals.revenue.toFixed(2)}</ThemedText>
           <ThemedText style={styles.summaryLabel}>Total Revenue</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.summaryCard}>
           <ThemedText style={styles.summaryIcon}>🧾</ThemedText>
           <ThemedText style={styles.summaryAmount}>{totals.orders}</ThemedText>
           <ThemedText style={styles.summaryLabel}>Total Orders</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.summaryCard}>
           <ThemedText style={styles.summaryIcon}>📊</ThemedText>
           <ThemedText style={styles.summaryAmount}>${totals.averageOrderValue.toFixed(2)}</ThemedText>
           <ThemedText style={styles.summaryLabel}>Avg Order Value</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.summaryCard}>
           <ThemedText style={styles.summaryIcon}>⭐</ThemedText>
           <ThemedText style={styles.summaryAmount} numberOfLines={1}>{totals.topProduct}</ThemedText>
@@ -159,12 +158,12 @@ export default function EnhancedSalesReportsScreen() {
       {/* Growth Metrics */}
       <ThemedView style={styles.metricsContainer}>
         <ThemedText style={styles.metricsTitle}>Growth Metrics</ThemedText>
-        
+
         <ThemedView style={styles.metricRow}>
           <ThemedText style={styles.metricLabel}>Period Growth</ThemedText>
           <ThemedText style={styles.metricValue}>+12.5%</ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.metricRow}>
           <ThemedText style={styles.metricLabel}>Best Performing Day</ThemedText>
           <ThemedText style={styles.metricValue}>
@@ -173,7 +172,7 @@ export default function EnhancedSalesReportsScreen() {
             ).date).toLocaleDateString()}
           </ThemedText>
         </ThemedView>
-        
+
         <ThemedView style={styles.metricRow}>
           <ThemedText style={styles.metricLabel}>Total Products Sold</ThemedText>
           <ThemedText style={styles.metricValue}>
@@ -187,20 +186,20 @@ export default function EnhancedSalesReportsScreen() {
   const renderProducts = () => (
     <ScrollView style={styles.tabContent}>
       <ThemedText style={styles.sectionTitle}>Top Products by Revenue</ThemedText>
-      
+
       {productSales.map((product, index) => (
         <ThemedView key={product.productId} style={styles.itemCard}>
           <ThemedView style={styles.itemRank}>
             <ThemedText style={styles.rankNumber}>#{index + 1}</ThemedText>
           </ThemedView>
-          
+
           <ThemedView style={styles.itemInfo}>
             <ThemedText style={styles.itemName}>{product.productName}</ThemedText>
             <ThemedText style={styles.itemSubtext}>
               {product.unitsSold} units sold
             </ThemedText>
           </ThemedView>
-          
+
           <ThemedView style={styles.itemValue}>
             <ThemedText style={styles.itemAmount}>${product.revenue.toFixed(2)}</ThemedText>
           </ThemedView>
@@ -212,20 +211,20 @@ export default function EnhancedSalesReportsScreen() {
   const renderUsers = () => (
     <ScrollView style={styles.tabContent}>
       <ThemedText style={styles.sectionTitle}>Top Selling Users</ThemedText>
-      
+
       {userSales.map((user, index) => (
         <ThemedView key={user.userId} style={styles.itemCard}>
           <ThemedView style={styles.itemRank}>
             <ThemedText style={styles.rankNumber}>#{index + 1}</ThemedText>
           </ThemedView>
-          
+
           <ThemedView style={styles.itemInfo}>
             <ThemedText style={styles.itemName}>{user.username}</ThemedText>
             <ThemedText style={styles.itemSubtext}>
               Commission: ${user.commission.toFixed(2)}
             </ThemedText>
           </ThemedView>
-          
+
           <ThemedView style={styles.itemValue}>
             <ThemedText style={styles.itemAmount}>${user.revenue.toFixed(2)}</ThemedText>
           </ThemedView>
@@ -237,7 +236,7 @@ export default function EnhancedSalesReportsScreen() {
   const renderTrends = () => (
     <ScrollView style={styles.tabContent}>
       <ThemedText style={styles.sectionTitle}>Sales Trends</ThemedText>
-      
+
       {/* Daily Sales Visualization */}
       <ThemedView style={styles.chartContainer}>
         <ThemedText style={styles.chartTitle}>Daily Sales Volume</ThemedText>
@@ -260,7 +259,7 @@ export default function EnhancedSalesReportsScreen() {
       {/* Trend Analysis */}
       <ThemedView style={styles.analysisContainer}>
         <ThemedText style={styles.analysisTitle}>Trend Analysis</ThemedText>
-        
+
         <ThemedView style={styles.trendItem}>
           <ThemedText style={styles.trendIcon}>📈</ThemedText>
           <ThemedView style={styles.trendContent}>
@@ -626,6 +625,7 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 16,
     fontWeight: '600',
+    marginBottom: 4,
     color: '#1f2937',
   },
   itemSubtext: {
