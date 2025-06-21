@@ -31,14 +31,78 @@ class DatabaseService {
     await this.pool.end();
   }
 
-  // User queries
-  async createUser(email: string, passwordHash: string, username?: string) {
+  // Pending user registration queries
+  async createPendingUser(email: string, passwordHash: string, username: string, firstName: string, lastName: string, verificationToken: string) {
     const query = `
-      INSERT INTO users (email, password_hash, username)
-      VALUES ($1, $2, $3)
+      INSERT INTO pending_users (email, password_hash, username, first_name, last_name, verification_token, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '24 hours')
+      RETURNING id, email, username, verification_token, expires_at
+    `;
+    const result = await this.query(query, [email, passwordHash, username, firstName, lastName, verificationToken]);
+    return result.rows[0];
+  }
+
+  async getPendingUserByToken(token: string) {
+    const query = 'SELECT * FROM pending_users WHERE verification_token = $1 AND expires_at > NOW()';
+    const result = await this.query(query, [token]);
+    return result.rows[0];
+  }
+
+  async verifyUserEmail(token: string) {
+    const client = await this.getClient();
+    try {
+      await client.query('BEGIN');
+      
+      // Get pending user
+      const pendingQuery = 'SELECT * FROM pending_users WHERE verification_token = $1 AND expires_at > NOW()';
+      const pendingResult = await client.query(pendingQuery, [token]);
+      
+      if (pendingResult.rows.length === 0) {
+        throw new Error('Invalid or expired verification token');
+      }
+      
+      const pendingUser = pendingResult.rows[0];
+      
+      // Create verified user
+      const userQuery = `
+        INSERT INTO users (email, password_hash, username, first_name, last_name, is_email_verified)
+        VALUES ($1, $2, $3, $4, $5, true)
+        RETURNING id, email, username, subscription_tier, created_at
+      `;
+      const userResult = await client.query(userQuery, [
+        pendingUser.email,
+        pendingUser.password_hash,
+        pendingUser.username,
+        pendingUser.first_name,
+        pendingUser.last_name
+      ]);
+      
+      // Delete pending user
+      await client.query('DELETE FROM pending_users WHERE id = $1', [pendingUser.id]);
+      
+      await client.query('COMMIT');
+      return userResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deletePendingUser(email: string) {
+    const query = 'DELETE FROM pending_users WHERE email = $1';
+    await this.query(query, [email]);
+  }
+
+  // User queries
+  async createUser(email: string, passwordHash: string, username?: string, firstName?: string, lastName?: string) {
+    const query = `
+      INSERT INTO users (email, password_hash, username, first_name, last_name, is_email_verified)
+      VALUES ($1, $2, $3, $4, $5, true)
       RETURNING id, email, username, subscription_tier, created_at
     `;
-    const result = await this.query(query, [email, passwordHash, username]);
+    const result = await this.query(query, [email, passwordHash, username, firstName, lastName]);
     return result.rows[0];
   }
 
