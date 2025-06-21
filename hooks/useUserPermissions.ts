@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,7 @@ interface UserPermissions {
   isSuspended: boolean;
   createdAt: string;
   lastActive: string;
+  isPending?: boolean;
 }
 
 interface UseUserPermissionsResult {
@@ -65,15 +67,10 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       console.log('Response status:', response.status);
       console.log('Response headers:', response.headers);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('API Error response:', errorText);
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log('Raw user data received:', data);
-      console.log('Number of users:', Array.isArray(data) ? data.length : 'Not an array');
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Raw user data received:', data);
+        console.log('Number of users:', Array.isArray(data) ? data.length : 'Not an array');
         
         // Transform the API data to match our UserPermissions interface
         const transformedUsers: UserPermissions[] = data.map((user: any) => {
@@ -110,8 +107,6 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         });
         
         console.log('Transformed users:', transformedUsers);
-        setUsers(transformedUsers);
-      console.log('Transformed users:', transformedUsers);
         setUsers(transformedUsers);
       } else {
         const errorText = await response.text();
