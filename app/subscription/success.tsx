@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,14 +8,23 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
 export default function SubscriptionSuccessScreen() {
   const { tier, newUser } = useLocalSearchParams();
+  const { user, updateProfile } = useAuth();
   const router = useRouter();
   const isNewUser = newUser === 'true';
   
   const selectedTier = SUBSCRIPTION_TIERS[tier as string];
+
+  useEffect(() => {
+    // Clear the new user flag once they complete subscription selection
+    if (isNewUser && user?.isNewUser) {
+      updateProfile({ isNewUser: false });
+    }
+  }, [isNewUser, user, updateProfile]);
 
   if (!selectedTier) {
     return (

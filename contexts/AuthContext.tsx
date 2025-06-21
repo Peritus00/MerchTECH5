@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const response = await authService.register({ email, password, username });
 
       setState({
-        user: response.user,
+        user: { ...response.user, isNewUser: true },
         isAuthenticated: true,
         isLoading: false,
         isInitialized: true,

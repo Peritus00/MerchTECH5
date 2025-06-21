@@ -158,7 +158,7 @@ export default function RegisterScreen() {
           [
             {
               text: 'Choose Plan',
-              onPress: () => router.push('/subscription?newUser=true')
+              onPress: () => router.push('/subscription/?newUser=true')
             }
           ]
         );
