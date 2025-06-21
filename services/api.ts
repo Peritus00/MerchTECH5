@@ -12,8 +12,8 @@ const getApiBaseUrl = () => {
     if (typeof window !== 'undefined' && Platform.OS === 'web') {
       return `${window.location.protocol}//${window.location.hostname}:5000/api`;
     } else {
-      // For React Native or when window is not available, use the Replit domain
-      return 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
+      // For React Native, use the current Replit dev domain
+      return `https://${process.env.REPLIT_DEV_DOMAIN}:5000/api`;
     }
   }
   
