@@ -89,7 +89,7 @@ export default function TabLayout() {
         options={{
           title: 'Resources',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'library-books' : 'library-books-outline'} color={color} />
+            <TabBarIcon name={focused ? 'library' : 'library-outline'} color={color} />
           ),
         }}
       />
