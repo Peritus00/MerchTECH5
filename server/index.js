@@ -9,6 +9,12 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Ensure JWT_SECRET is available
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-jwt-secret-for-development-only-12345';
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: Using fallback JWT_SECRET. Set JWT_SECRET environment variable for production.');
+}
+
 // Database connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -51,7 +57,7 @@ const authenticateToken = (req, res, next) => {
     return res.status(401).json({ error: 'Access token required' });
   }
 
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid token' });
     }
@@ -91,7 +97,7 @@ app.post('/api/auth/register', async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -121,13 +127,13 @@ app.post('/api/auth/login', async (req, res) => {
       // Generate JWT
     const token = jwt.sign(
       { userId: 999, email: 'djjetfuel@merchtech.com', isAdmin: true },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
       { userId: 999, email: 'djjetfuel@merchtech.com', isAdmin: true, type: 'refresh' },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -167,13 +173,13 @@ app.post('/api/auth/login', async (req, res) => {
     // Generate JWT
     const token = jwt.sign(
       { userId: user.id, email: user.email },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
       { userId: user.id, email: user.email, type: 'refresh' },
-      process.env.JWT_SECRET,
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -250,7 +256,7 @@ app.post('/api/auth/refresh', async (req, res) => {
     }
 
     // Verify refresh token
-    jwt.verify(refreshToken, process.env.JWT_SECRET, (err, decoded) => {
+    jwt.verify(refreshToken, JWT_SECRET, (err, decoded) => {
       if (err) {
         return res.status(403).json({ error: 'Invalid refresh token' });
       }
@@ -258,13 +264,13 @@ app.post('/api/auth/refresh', async (req, res) => {
       // Generate new tokens
       const newToken = jwt.sign(
         { userId: decoded.userId, email: decoded.email, isAdmin: decoded.isAdmin },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: '24h' }
       );
 
       const newRefreshToken = jwt.sign(
         { userId: decoded.userId, email: decoded.email, isAdmin: decoded.isAdmin, type: 'refresh' },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         { expiresIn: '7d' }
       );
 
