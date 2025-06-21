@@ -1,0 +1,141 @@
+Uncaught Error
+Screen names must be unique: index,store,explore,store,media,analytics,settings
+Source
+ 
+ 80 |
+    
+const
+ names 
+=
+ screens
+?
+.
+map((screen) 
+=>
+ screen 
+&&
+ 
+typeof
+ screen 
+===
+ 
+'object'
+ 
+&&
+ 
+'name'
+ 
+in
+ screen 
+&&
+ screen
+.
+name)
+;
+ 
+ 81 |
+    
+if
+ (names 
+&&
+ 
+new
+ 
+Set
+(names)
+.
+size 
+!==
+ names
+.
+length) {
+>
+ 82 |
+        
+throw
+ 
+new
+ 
+Error
+(
+'Screen names must be unique: '
+ 
++
+ names)
+;
+ 
+    |
+              
+^
+ 
+ 83 |
+    }
+ 
+ 84 |
+}
+ 
+ 85 |
+return
+ {
+Call Stack
+<anonymous>
+node_modules/expo-router/build/layouts/withLayoutContext.js:82:23
+mountMemo
+node_modules/react-dom/cjs/react-dom-client.development.js:6816:23
+HooksDispatcherOnMountInDEV.useMemo
+node_modules/react-dom/cjs/react-dom-client.development.js:22757:18
+exports.useMemo
+node_modules/react/cjs/react.development.js:1488:34
+useFilterScreenChildren
+node_modules/expo-router/build/layouts/withLayoutContext.js:44:31
+<anonymous>
+node_modules/expo-router/build/layouts/withLayoutContext.js:125:47
+callComponent.reactStackBottomFrame
+node_modules/react-dom/cjs/react-dom-client.development.js:22428:20
+renderWithHooks
+node_modules/react-dom/cjs/react-dom-client.development.js:5757:22
+updateForwardRef
+node_modules/react-dom/cjs/react-dom-client.development.js:7762:19
+beginWork
+node_modules/react-dom/cjs/react-dom-client.development.js:10014:18
+runWithFiberInDEV
+node_modules/react-dom/cjs/react-dom-client.development.js:543:16
+performUnitOfWork
+node_modules/react-dom/cjs/react-dom-client.development.js:15044:22
+workLoopSync
+node_modules/react-dom/cjs/react-dom-client.development.js:14870:41
+renderRootSync
+node_modules/react-dom/cjs/react-dom-client.development.js:14850:11
+performWorkOnRoot
+node_modules/react-dom/cjs/react-dom-client.development.js:14384:44
+performWorkOnRootViaSchedulerTask
+node_modules/react-dom/cjs/react-dom-client.development.js:15931:7
+performWorkUntilDeadline
+node_modules/scheduler/cjs/scheduler.development.js:44:48
+Collapse all 17 frames
+Component Stack
+TabLayout
+app/(tabs)/_layout.tsx:7:37
+div
+<anonymous>:-1:0
+div
+<anonymous>:-1:0
+div
+<anonymous>:-1:0
+div
+<anonymous>:-1:0
+CartProvider
+contexts/CartContext.tsx:18:73
+AuthProvider
+contexts/AuthContext.tsx:16:32
+RootLayout
+app/_layout.tsx:17:37
+div
+<anonymous>:-1:0
+App
+<anonymous>:-1:0
+ErrorOverlay
+<anonymous>:-1:0
+withDevTools(ErrorOverlay)
+<anonymous>:-1:0
+See 46 more frames
