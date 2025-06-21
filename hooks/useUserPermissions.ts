@@ -42,13 +42,31 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   const [users, setUsers] = useState<UserPermissions[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Get the current domain and construct the API URL properly
+  const getApiUrl = () => {
+    if (process.env.EXPO_PUBLIC_API_URL) {
+      return process.env.EXPO_PUBLIC_API_URL;
+    }
+    
+    // For Replit environment
+    if (typeof window !== 'undefined' && window.location) {
+      const hostname = window.location.hostname;
+      if (hostname.includes('replit.dev')) {
+        return `https://${hostname}:5000/api`;
+      }
+      return `${window.location.protocol}//${hostname}:5000/api`;
+    }
+    
+    return 'http://localhost:5000/api';
+  };
+
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
       const token = await AsyncStorage.getItem('authToken');
       console.log('Fetching users with token:', token ? 'Present' : 'Missing');
       
-      const apiUrl = `${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/admin/all-users`;
+      const apiUrl = `${getApiUrl()}/admin/all-users`;
       console.log('API URL:', apiUrl);
       
       if (!token) {
@@ -115,8 +133,14 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        apiUrl: `${getApiUrl()}/admin/all-users`
+      });
+      
       // Don't show alert for network errors, just log them
-      if (error.message?.includes('Network Error') || error.message?.includes('fetch')) {
+      if (error.message?.includes('Network Error') || error.message?.includes('fetch') || error.message?.includes('TypeError')) {
         console.log('Network connectivity issue - users list will be empty');
       } else {
         Alert.alert('Error', `Failed to load users: ${error.message}`);
