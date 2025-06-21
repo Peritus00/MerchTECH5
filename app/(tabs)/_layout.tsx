@@ -31,20 +31,38 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="analytics"
-        options={{
-          title: 'Analytics',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'analytics' : 'analytics-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="explore"
         options={{
           title: 'QR CODES',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'qr-code' : 'qr-code-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="store"
+        options={{
+          title: 'Store',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'storefront' : 'storefront-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="media"
+        options={{
+          title: 'Media',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'library-music' : 'library-music-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'bar-chart' : 'bar-chart-outline'} color={color} />
           ),
         }}
       />
