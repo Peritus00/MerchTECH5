@@ -56,3 +56,15 @@ export interface SlideshowImage {
   position: number;
   createdAt: string;
 }
+
+export interface ActivationCode {
+  id: number;
+  code: string;
+  playlistId: string;
+  maxUses: number | null;
+  usesCount: number;
+  expiresAt: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
