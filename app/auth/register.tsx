@@ -162,7 +162,7 @@ export default function RegisterScreen() {
       
       if (result.success) {
         // User is automatically logged in, redirect to subscription selection
-        router.push('/subscription?newUser=true');
+        router.push('/subscription/index?newUser=true');
       } else {
         setErrors({ general: result.error || 'Registration failed' });
       }
@@ -331,15 +331,15 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <ThemedText style={styles.checkboxText}>
-                    I agree to the{' '}
+                  <View style={styles.checkboxTextContainer}>
+                    <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
                     <TouchableOpacity
                       onPress={() => router.push('/legal/terms')}
                       style={styles.linkButton}
                     >
                       <ThemedText style={styles.linkText}>Terms of Service</ThemedText>
                     </TouchableOpacity>
-                  </ThemedText>
+                  </View>
                 </View>
               </View>
 
@@ -353,15 +353,15 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <ThemedText style={styles.checkboxText}>
-                    I agree to the{' '}
+                  <View style={styles.checkboxTextContainer}>
+                    <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
                     <TouchableOpacity
                       onPress={() => router.push('/legal/privacy')}
                       style={styles.linkButton}
                     >
                       <ThemedText style={styles.linkText}>Privacy Policy</ThemedText>
                     </TouchableOpacity>
-                  </ThemedText>
+                  </View>
                 </View>
               </View>
             </View>
@@ -385,12 +385,13 @@ export default function RegisterScreen() {
             </View>
 
             <TouchableOpacity
-              style={styles.linkButton}
+              style={styles.loginLinkButton}
               onPress={() => router.push('/auth/login')}
             >
-              <ThemedText style={styles.linkText}>
-                Already have an account? <Text style={styles.linkBold}>Sign in</Text>
-              </ThemedText>
+              <View style={styles.loginLinkContainer}>
+                <ThemedText style={styles.linkText}>Already have an account? </ThemedText>
+                <ThemedText style={styles.linkBold}>Sign in</ThemedText>
+              </View>
             </TouchableOpacity>
           </View>
         </ThemedView>
@@ -523,6 +524,9 @@ const styles = StyleSheet.create({
   },
   checkboxTextContainer: {
     flex: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
   },
   checkboxText: {
     fontSize: 14,
@@ -568,6 +572,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   linkButton: {
+    display: 'inline',
+  },
+  loginLinkButton: {
+    alignItems: 'center',
+  },
+  loginLinkContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
   linkText: {
