@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { analyticsService } from '@/services/analyticsService';
 import { AnalyticsSummary } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DashboardData {
   summary: {
@@ -52,6 +53,7 @@ const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -326,6 +328,56 @@ export default function DashboardScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Upgrade Section for Free/Basic Users */}
+        {(user?.subscriptionTier === 'free' || user?.subscriptionTier === 'basic' || !user?.subscriptionTier) && (
+          <View style={styles.upgradeContainer}>
+            <View style={styles.upgradeCard}>
+              <View style={styles.upgradeHeader}>
+                <View style={styles.upgradeIconContainer}>
+                  <MaterialIcons name="rocket-launch" size={32} color="#8b5cf6" />
+                </View>
+                <View style={styles.upgradeTextContainer}>
+                  <Text style={styles.upgradeTitle}>
+                    {user?.subscriptionTier === 'basic' ? 'Upgrade to Premium' : 'Unlock Premium Features'}
+                  </Text>
+                  <Text style={styles.upgradeSubtitle}>
+                    {user?.subscriptionTier === 'basic' 
+                      ? 'Get unlimited QR codes and advanced analytics'
+                      : 'Create unlimited QR codes, access premium features & more'
+                    }
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.upgradeFeatures}>
+                <View style={styles.featureRow}>
+                  <MaterialIcons name="check-circle" size={16} color="#10b981" />
+                  <Text style={styles.featureText}>Unlimited QR codes</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <MaterialIcons name="check-circle" size={16} color="#10b981" />
+                  <Text style={styles.featureText}>Advanced analytics & insights</Text>
+                </View>
+                <View style={styles.featureRow}>
+                  <MaterialIcons name="check-circle" size={16} color="#10b981" />
+                  <Text style={styles.featureText}>Premium templates & designs</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.upgradeButton}
+                onPress={() => router.push('/subscription')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.upgradeButtonText}>
+                  {user?.subscriptionTier === 'basic' ? 'Upgrade Now' : 'Start Free Trial'}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Summary Stats */}
         <View style={styles.statsContainer}>
           <Text style={styles.sectionTitle}>Overview</Text>
@@ -663,6 +715,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     textAlign: 'center',
+  },
+  upgradeContainer: {
+    marginBottom: 24,
+  },
+  upgradeCard: {
+    backgroundColor: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+    backgroundColor: '#8b5cf6',
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#8b5cf6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  upgradeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  upgradeIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  upgradeTextContainer: {
+    flex: 1,
+  },
+  upgradeTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 4,
+  },
+  upgradeSubtitle: {
+    fontSize: 14,
+    color: 'rgba(255, 255, 255, 0.8)',
+    lineHeight: 20,
+  },
+  upgradeFeatures: {
+    marginBottom: 20,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  featureText: {
+    fontSize: 14,
+    color: '#fff',
+    marginLeft: 8,
+    fontWeight: '500',
+  },
+  upgradeButton: {
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  upgradeButtonText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#8b5cf6',
+    marginRight: 8,
   },
   loginButton: {
     backgroundColor: '#3b82f6',
