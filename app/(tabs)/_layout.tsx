@@ -26,7 +26,7 @@ export default function TabLayout() {
         options={{
           title: 'Slideshows',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'slideshow' : 'slideshow'} color={color} />
+            <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
           ),
         }}
       />
@@ -35,7 +35,7 @@ export default function TabLayout() {
         options={{
           title: 'Access Codes',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'vpn-key' : 'vpn-key'} color={color} />
+            <TabBarIcon name={focused ? 'key' : 'key'} color={color} />
           ),
         }}
       />
