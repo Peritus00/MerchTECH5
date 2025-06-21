@@ -182,7 +182,7 @@ app.get('/', (req, res) => {
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Query:`, req.query, '- Body:', req.body);
   next();
 });
 
@@ -191,9 +191,16 @@ app.get('/api/health', async (req, res) => {
   try {
     // Test database connection
     await pool.query('SELECT 1');
+    
+    // Also check users count
+    const userCount = await pool.query('SELECT COUNT(*) FROM users');
+    const pendingCount = await pool.query('SELECT COUNT(*) FROM pending_users');
+    
     res.json({ 
       status: 'ok', 
       database: 'connected',
+      users: parseInt(userCount.rows[0].count),
+      pendingUsers: parseInt(pendingCount.rows[0].count),
       timestamp: new Date().toISOString() 
     });
   } catch (error) {
