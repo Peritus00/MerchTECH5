@@ -26,7 +26,7 @@ export default function SettingsScreen() {
     {
       title: 'Subscription',
       description: 'Manage your subscription plan',
-      onPress: () => console.log('Navigate to subscription'),
+      onPress: () => router.push('/subscription'),
       icon: '💳',
     },
     {

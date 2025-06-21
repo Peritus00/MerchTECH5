@@ -2,7 +2,7 @@ export interface User {
   id: number;
   email: string;
   username?: string;
-  subscriptionTier: string;
+  subscriptionTier: 'free' | 'basic' | 'premium';
   createdAt: string;
 }
 
