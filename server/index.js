@@ -86,6 +86,24 @@ async function initializeDatabase() {
     `);
 
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        username VARCHAR(100),
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        is_email_verified BOOLEAN DEFAULT FALSE,
+        is_admin BOOLEAN DEFAULT FALSE,
+        subscription_tier VARCHAR(50) DEFAULT 'free',
+        stripe_customer_id VARCHAR(255),
+        stripe_subscription_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS refresh_tokens (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
@@ -189,6 +207,10 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
     // Get the payment intent
     const paymentIntentId = clientSecret.split('_secret_')[0];
     const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+
+    if (!paymentIntent || !paymentIntent.customer) {
+        return res.status(400).json({ success: false, error: 'Invalid Payment Intent' });
+    }
 
     // Create payment method
     const stripePaymentMethod = await stripe.paymentMethods.create({
@@ -321,10 +343,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Check if user already exists
     const existingUser = await pool.query(
-      'SELECT email, username FROM users WHERE email = $1 OR username = $2',
+      'SELECT email, username FROM pending_users WHERE email = $1 OR username = $2',
       [email, username]
     );
-    console.log('Existing users check:', { rowCount: existingUser.rowCount, rows: existingUser.rows });
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
@@ -336,44 +357,59 @@ app.post('/api/auth/register', async (req, res) => {
       }
     }
 
+    const existingUserInUsers = await pool.query(
+        'SELECT email, username FROM users WHERE email = $1 OR username = $2',
+        [email, username]
+    );
+
+    if (existingUserInUsers.rows.length > 0) {
+        const user = existingUserInUsers.rows[0];
+        if (user.email === email) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+        if (user.username === username) {
+            return res.status(400).json({ error: 'Username already taken' });
+        }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
+    const verificationToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Create user directly in users table with free tier by default
-    const newUser = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name, subscription_tier, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) 
-       RETURNING id, email, username, first_name, last_name, subscription_tier, is_admin, created_at`,
-      [email, username, passwordHash, firstName, lastName, 'free']
+    // Store in pending_users
+    const newPendingUser = await pool.query(
+      `INSERT INTO pending_users (email, username, password_hash, first_name, last_name, verification_token, expires_at) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) 
+       RETURNING id, email, username, first_name, last_name`,
+      [email, username, passwordHash, firstName, lastName, verificationToken, expiresAt]
     );
 
-    console.log('User created successfully:', newUser.rows[0]);
+    console.log('Pending user created:', newPendingUser.rows[0]);
 
-    // Generate JWT token for immediate login
-    const token = jwt.sign(
-      { 
-        userId: newUser.rows[0].id, 
-        email: newUser.rows[0].email,
-        subscriptionTier: newUser.rows[0].subscription_tier
-      }, 
-      JWT_SECRET, 
-      { expiresIn: '7d' }
-    );
+    // Send verification email
+    try {
+      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
-    res.status(201).json({
-      message: 'Registration successful!',
-      user: {
-        id: newUser.rows[0].id,
-        email: newUser.rows[0].email,
-        username: newUser.rows[0].username,
-        firstName: newUser.rows[0].first_name,
-        lastName: newUser.rows[0].last_name,
-        subscriptionTier: newUser.rows[0].subscription_tier,
-        isAdmin: newUser.rows[0].is_admin,
-        createdAt: newUser.rows[0].created_at
-      },
-      token,
-      requiresVerification: false
-    });
+      await transporter.sendMail({
+        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
+        to: email,
+        subject: 'Verify Your MerchTech Account',
+        html: `
+          <h2>Welcome to MerchTech!</h2>
+          <p>Please click the link below to verify your email address:</p>
+          <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
+          <p>This link will expire in 24 hours.</p>
+        `
+      });
+
+      res.status(201).json({
+        message: 'Registration successful! Please verify your email.',
+        requiresVerification: true
+      });
+    } catch (emailError) {
+      console.error('Email sending error:', emailError);
+      res.status(500).json({ error: 'Failed to send verification email' });
+    }
   } catch (error) {
     console.error('Registration error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -534,7 +570,7 @@ app.get('/api/profile', authenticateToken, (req, res) => {
 // Protected route to get user profile
 app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.userId;
+    const userId = req.user.id;
     const result = await pool.query(
       'SELECT id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at FROM users WHERE id = $1',
       [userId]

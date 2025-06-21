@@ -7,6 +7,9 @@ import {
   Alert,
   TouchableOpacity,
   TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -209,6 +212,17 @@ export default function SubscriptionCheckoutScreen() {
           <ThemedText style={styles.backButton}>← Back</ThemedText>
         </TouchableOpacity>
       </View>
+      
+      <KeyboardAvoidingView 
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={true}
+          keyboardShouldPersistTaps="handled"
+        >
 
       <ThemedView style={styles.planHeader}>
         <View style={styles.iconContainer}>
@@ -310,8 +324,10 @@ export default function SubscriptionCheckoutScreen() {
       </TouchableOpacity>
 
       <ThemedText style={styles.disclaimer}>
-        You can cancel anytime. No hidden fees or long-term commitments.
-      </ThemedText>
+            You can cancel anytime. No hidden fees or long-term commitments.
+          </ThemedText>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ThemedView>
   );
 }
@@ -319,7 +335,16 @@ export default function SubscriptionCheckoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     padding: 24,
+    paddingBottom: 100,
   },
   header: {
     marginBottom: 24,
@@ -392,8 +417,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
-    opacity: 0.9,
-    color: '#374151',
+    color: '#ef4444',
   },
   input: {
     borderWidth: 1,
