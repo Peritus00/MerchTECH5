@@ -151,6 +151,21 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Root route handler
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'MerchTech QR API Server', 
+    status: 'running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth/*',
+      admin: '/api/admin/*',
+      stripe: '/api/stripe/*'
+    }
+  });
+});
+
 // Health check with database status
 app.get('/api/health', async (req, res) => {
   try {
