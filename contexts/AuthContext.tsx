@@ -120,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       console.log('Starting logout process...');
       setState(prev => ({ ...prev, isLoading: true }));
-      
+
       // Clear authentication data
       await authService.logout();
       console.log('Auth service logout completed');
@@ -134,15 +134,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       console.log('State updated, navigating to login...');
-      
+
       // Force navigation to login screen
       setTimeout(() => {
         router.replace('/auth/login');
       }, 100);
-      
+
     } catch (error) {
       console.error('Logout failed:', error);
-      
+
       // Even if logout fails, clear the local state
       setState({
         user: null,
