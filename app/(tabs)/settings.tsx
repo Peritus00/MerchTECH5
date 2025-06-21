@@ -11,7 +11,17 @@ export default function Settings() {
   const { user } = useAuth();
 
   // Check if user is admin (djjetfuel)
-  const isAdmin = user && user.email === 'djjetfuel@gmail.com';
+  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  
+  // Debug logging
+  console.log('Current user:', user);
+  console.log('User email:', user?.email);
+  console.log('User username:', user?.username);
+  console.log('Is admin check:', isAdmin);
+  
+  if (isAdmin) {
+    console.log('Adding admin options to settings');
+  }
 
   const settingsOptions = [
     {
@@ -54,7 +64,7 @@ export default function Settings() {
     ...(isAdmin ? [
       {
         title: 'User Permissions',
-        description: 'Manage user access and permissions',
+        description: 'Manage user roles and permissions',
         onPress: () => router.push('/settings/user-permissions'),
         icon: '🔐',
         adminOnly: true,
