@@ -1,0 +1,821 @@
+_app-a8cfc5f2c83e0a85.js:38 
+      /////////////////////
+   ///////////////////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////        Curious and driven?
+  ///////////////@@@@@@@///////        Work with us!
+  ///////////////@@@@@@@///////
+  ///////////////@@@@@@@///////        https://join.replit.com/hack.with.us
+  ////////@@@@@@@//////////////
+  ////////@@@@@@@//////////////
+  ////////@@@@@@#//////////////
+   ///////////////////////////
+      /////////////////////
+      
+_app-a8cfc5f2c83e0a85.js:38 [LaunchDarkly] LaunchDarkly client initialized
+merchtechapp:1 Banner not shown: beforeinstallpromptevent.preventDefault() called. The page must call beforeinstallpromptevent.prompt() to show the banner.
+framework-2eae365f021889c6.js:1 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'ambient-light-sensor'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'battery'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'execution-while-not-rendered'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'execution-while-out-of-viewport'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'layout-animations'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'legacy-image-formats'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'navigation-override'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'oversized-images'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'publickey-credentials'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'speaker-selection'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'unoptimized-images'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'unsized-media'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Unrecognized feature: 'pointer-lock'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Allow attribute will take precedence over 'allowfullscreen'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+framework-2eae365f021889c6.js:1 Allow attribute will take precedence over 'allowpaymentrequest'.
+_ @ framework-2eae365f021889c6.js:1
+(anonymous) @ framework-2eae365f021889c6.js:1
+uD @ framework-2eae365f021889c6.js:1
+uI @ framework-2eae365f021889c6.js:1
+uM @ framework-2eae365f021889c6.js:1
+uS @ framework-2eae365f021889c6.js:1
+C @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+z @ framework-2eae365f021889c6.js:1
+(anonymous) @ setImmediate.js:40
+y @ setImmediate.js:69
+c @ setImmediate.js:109
+postMessage
+n @ setImmediate.js:120
+push.YBdB.f.setImmediate @ setImmediate.js:27
+r @ framework-2eae365f021889c6.js:1
+I @ framework-2eae365f021889c6.js:1
+t.unstable_scheduleCallback @ framework-2eae365f021889c6.js:1
+uw @ framework-2eae365f021889c6.js:1
+uk @ framework-2eae365f021889c6.js:1
+lH @ framework-2eae365f021889c6.js:1
+(anonymous) @ 1878-05dab30b00f915c8.js:1
+(anonymous) @ 8830-73ce25bc847d1933.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+(anonymous) @ 2656-4775d1c68ff09d05.js:1
+handleCommand @ 2656-4775d1c68ff09d05.js:1
+onSocketMessage @ 2656-4775d1c68ff09d05.js:1
+workspace_iframe.html:32 Error while parsing the 'sandbox' attribute: 'allow-downloads-without-user-activation' is an invalid sandbox flag.
+workspace_iframe.html:32 Unrecognized feature: 'ambient-light-sensor'.
+workspace_iframe.html:32 Unrecognized feature: 'battery'.
+workspace_iframe.html:32 Unrecognized feature: 'execution-while-not-rendered'.
+workspace_iframe.html:32 Unrecognized feature: 'execution-while-out-of-viewport'.
+workspace_iframe.html:32 Unrecognized feature: 'layout-animations'.
+workspace_iframe.html:32 Unrecognized feature: 'legacy-image-formats'.
+workspace_iframe.html:32 Unrecognized feature: 'navigation-override'.
+workspace_iframe.html:32 Unrecognized feature: 'oversized-images'.
+workspace_iframe.html:32 Unrecognized feature: 'publickey-credentials'.
+workspace_iframe.html:32 Unrecognized feature: 'speaker-selection'.
+workspace_iframe.html:32 Unrecognized feature: 'unoptimized-images'.
+workspace_iframe.html:32 Unrecognized feature: 'unsized-media'.
+workspace_iframe.html:32 Allow attribute will take precedence over 'allowfullscreen'.
+workspace_iframe.html:32 Allow attribute will take precedence over 'allowpaymentrequest'.
+Console.js:61 Running application "main" with appParams:
+ {rootTag: '#root', hydrate: undefined} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Console.js:61 "shadow*" style props are deprecated. Use "boxShadow".
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+preprocess @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25523
+compileAndInsertAtomic @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22519
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22562
+create @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22550
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:74128
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75486
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43828
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43639
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43519
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43620
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73126
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73186
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:72994
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:72874
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69712
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75694
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802
+Console.js:61 BREVO_API_KEY not found in environment variables
+Mt.forEach.n.<computed> @ Console.js:61
+BrevoService @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:114378
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:114467
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:114284
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:114193
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:113925
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43549
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43620
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73126
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73186
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:72994
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:72874
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69712
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75694
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802
+Console.js:61 props.pointerEvents is deprecated. Use style.pointerEvents
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+createDOMProps @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:27449
+createElement @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26481
+View @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26422
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateForwardRef @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10445
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11213
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802
