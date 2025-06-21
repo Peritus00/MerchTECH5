@@ -46,17 +46,14 @@ export default function SettingsScreen() {
       onPress: () => console.log('Navigate to about'),
       icon: 'ℹ️',
     },
-  ];
-
-  // Add user permissions setting only for djjetfuel user
-  if (user?.username === 'djjetfuel') {
-    settingsOptions.push({
+    // Add user permissions setting only for djjetfuel user
+    ...(user?.username === 'djjetfuel' ? [{
       title: 'User Permissions',
       description: 'Manage user roles and permissions',
       onPress: () => router.push('/settings/user-permissions'),
       icon: '🛡️',
-    });
-  }
+    }] : []),
+  ];
 
   return (
     <ScrollView style={styles.container}>
