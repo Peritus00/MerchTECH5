@@ -11,8 +11,8 @@ const getApiBaseUrl = () => {
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     if (hostname.includes('replit.dev')) {
-      // Use the same domain but port 5000 for API
-      return `https://${hostname.replace(':8081', '')}:5000/api`;
+      // Use the same hostname without port for API calls in Replit
+      return `${window.location.protocol}//${hostname}/api`;
     }
     return `${window.location.protocol}//${hostname}:5000/api`;
   }
