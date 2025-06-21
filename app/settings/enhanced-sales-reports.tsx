@@ -409,6 +409,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#1f2937',
   },
   periodSelector: {
     paddingHorizontal: 16,
@@ -430,6 +431,7 @@ const styles = StyleSheet.create({
   periodButtonText: {
     fontSize: 14,
     opacity: 0.7,
+    color: '#374151',
   },
   activePeriodButtonText: {
     color: '#ffffff',
@@ -461,6 +463,7 @@ const styles = StyleSheet.create({
   tabButtonText: {
     fontSize: 14,
     opacity: 0.7,
+    color: '#374151',
   },
   activeTabButtonText: {
     color: '#3b82f6',
@@ -497,11 +500,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     marginBottom: 4,
+    color: '#1f2937',
   },
   summaryLabel: {
     fontSize: 12,
     opacity: 0.7,
     textAlign: 'center',
+    color: '#374151',
   },
   chartContainer: {
     backgroundColor: '#ffffff',
@@ -518,6 +523,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: '#1f2937',
   },
   saleRow: {
     flexDirection: 'row',
@@ -531,6 +537,7 @@ const styles = StyleSheet.create({
   saleDateText: {
     fontSize: 14,
     opacity: 0.7,
+    color: '#6b7280',
   },
   saleInfo: {
     flex: 1,
@@ -545,6 +552,7 @@ const styles = StyleSheet.create({
   saleCount: {
     fontSize: 14,
     opacity: 0.7,
+    color: '#6b7280',
   },
   metricsContainer: {
     backgroundColor: '#ffffff',
@@ -561,6 +569,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: '#1f2937',
   },
   metricRow: {
     flexDirection: 'row',
@@ -572,15 +581,18 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 14,
     opacity: 0.7,
+    color: '#6b7280',
   },
   metricValue: {
     fontSize: 14,
     fontWeight: '600',
+    color: '#1f2937',
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: '#1f2937',
   },
   itemCard: {
     flexDirection: 'row',
@@ -603,6 +615,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     opacity: 0.7,
+    color: '#6b7280',
   },
   itemInfo: {
     flex: 1,
@@ -611,11 +624,13 @@ const styles = StyleSheet.create({
   itemName: {
     fontSize: 16,
     fontWeight: '600',
+    color: '#1f2937',
   },
   itemSubtext: {
     fontSize: 14,
     opacity: 0.7,
     marginTop: 2,
+    color: '#6b7280',
   },
   itemValue: {
     alignItems: 'flex-end',
@@ -647,6 +662,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.7,
     marginTop: 4,
+    color: '#6b7280',
   },
   analysisContainer: {
     backgroundColor: '#ffffff',
@@ -663,6 +679,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 16,
+    color: '#1f2937',
   },
   trendItem: {
     flexDirection: 'row',
@@ -681,10 +698,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 4,
+    color: '#1f2937',
   },
   trendDescription: {
     fontSize: 14,
     opacity: 0.7,
     lineHeight: 20,
+    color: '#6b7280',
   },
 });
