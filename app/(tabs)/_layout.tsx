@@ -26,7 +26,16 @@ export default function TabLayout() {
         options={{
           title: 'Slideshows',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
+            <TabBarIcon name={focused ? 'slideshow' : 'slideshow'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="activation-codes"
+        options={{
+          title: 'Access Codes',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'vpn-key' : 'vpn-key'} color={color} />
           ),
         }}
       />
