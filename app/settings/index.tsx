@@ -1,7 +1,8 @@
 import React from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ThemedView, ThemedText } from '../components/Themed';
+import { ThemedView } from '@/components/ThemedView';
+import { ThemedText } from '@/components/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 
 function SettingsPage({ user }) {
