@@ -49,48 +49,65 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       const apiUrl = `${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/admin/all-users`;
       console.log('API URL:', apiUrl);
       
+      if (!token) {
+        console.error('No auth token found');
+        throw new Error('Authentication required');
+      }
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        },
-        timeout: 10000
+        }
       });
 
       console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Raw user data:', data);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error response:', errorText);
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Raw user data received:', data);
+      console.log('Number of users:', Array.isArray(data) ? data.length : 'Not an array');
         
         // Transform the API data to match our UserPermissions interface
-        const transformedUsers: UserPermissions[] = data.map((user: any) => ({
-          id: user.id,
-          username: user.username || user.email?.split('@')[0] || 'Unknown',
-          email: user.email,
-          subscriptionTier: user.subscription_tier || 'free',
-          isAdmin: user.is_admin || false,
-          canViewAnalytics: user.subscription_tier === 'premium',
-          canManagePlaylists: true,
-          canEditPlaylists: user.subscription_tier !== 'free',
-          canUploadMedia: true,
-          canGenerateCodes: user.subscription_tier !== 'free',
-          canAccessStore: true,
-          canViewFanmail: user.subscription_tier === 'premium',
-          canManageQRCodes: true,
-          maxPlaylists: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 25 : 5,
-          maxVideos: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 100 : 10,
-          maxAudioFiles: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 100 : 10,
-          maxActivationCodes: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 25 : 10,
-          maxProducts: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 15 : 5,
-          maxQrCodes: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 50 : 10,
-          maxSlideshows: user.subscription_tier === 'premium' ? 999 : user.subscription_tier === 'basic' ? 10 : 3,
-          isSuspended: false,
-          createdAt: user.created_at,
-          lastActive: user.updated_at || user.created_at,
-          isPending: user.status === 'pending'
-        }));
+        const transformedUsers: UserPermissions[] = data.map((user: any) => {
+          // Use the correct field names from the API response
+          const subscriptionTier = user.subscriptionTier || user.subscription_tier || 'free';
+          const isPending = user.isPending || user.status === 'pending' || false;
+          
+          return {
+            id: user.id,
+            username: user.username || user.email?.split('@')[0] || 'Unknown',
+            email: user.email,
+            subscriptionTier: subscriptionTier as 'free' | 'basic' | 'premium',
+            isAdmin: user.isAdmin || user.is_admin || false,
+            canViewAnalytics: subscriptionTier === 'premium',
+            canManagePlaylists: true,
+            canEditPlaylists: subscriptionTier !== 'free',
+            canUploadMedia: true,
+            canGenerateCodes: subscriptionTier !== 'free',
+            canAccessStore: true,
+            canViewFanmail: subscriptionTier === 'premium',
+            canManageQRCodes: true,
+            maxPlaylists: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 25 : 5,
+            maxVideos: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 100 : 10,
+            maxAudioFiles: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 100 : 10,
+            maxActivationCodes: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 25 : 10,
+            maxProducts: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 15 : 5,
+            maxQrCodes: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 50 : 10,
+            maxSlideshows: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 10 : 3,
+            isSuspended: user.isSuspended || false,
+            createdAt: user.createdAt || user.created_at,
+            lastActive: user.updatedAt || user.updated_at || user.createdAt || user.created_at,
+            isPending: isPending
+          };
+        });
         
         console.log('Transformed users:', transformedUsers);
         setUsers(transformedUsers);
