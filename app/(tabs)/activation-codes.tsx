@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '@/contexts/AuthContext';
 import { Playlist, Slideshow, ActivationCode } from '@/shared/media-schema';
 import ActivationCodeCard from '@/components/ActivationCodeCard';
 import CreateCodeModal from '@/components/CreateCodeModal';
@@ -20,32 +21,48 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 
 type ContentType = 'playlist' | 'slideshow';
+type TabType = 'generate' | 'myMyCodes' | 'allGenerated';
+
+interface UserActivationCode {
+  id: number;
+  code: string;
+  playlistId: string;
+  playlistName: string;
+  contentType: 'playlist' | 'slideshow';
+  addedAt: string;
+  expiresAt: string | null;
+  isActive: boolean;
+}
 
 const ActivationCodesScreen = () => {
   const navigation = useNavigation();
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState<TabType>('generate');
   const [contentType, setContentType] = useState<ContentType>('playlist');
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [slideshows, setSlideshows] = useState<Slideshow[]>([]);
   const [selectedContentId, setSelectedContentId] = useState<string | number | null>(null);
   const [activationCodes, setActivationCodes] = useState<ActivationCode[]>([]);
+  const [userActivationCodes, setUserActivationCodes] = useState<UserActivationCode[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCodes, setIsLoadingCodes] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [newCodeInput, setNewCodeInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchContent();
+    fetchUserActivationCodes();
   }, [contentType]);
 
   useEffect(() => {
-    if (selectedContentId) {
+    if (selectedContentId && activeTab === 'allGenerated') {
       fetchActivationCodes();
     } else {
       setActivationCodes([]);
     }
-  }, [selectedContentId, contentType]);
+  }, [selectedContentId, contentType, activeTab]);
 
   const fetchContent = async () => {
     try {
@@ -94,6 +111,47 @@ const ActivationCodesScreen = () => {
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+    }
+  };
+
+  const fetchUserActivationCodes = async () => {
+    try {
+      // Mock user's activation codes - codes they've entered for access
+      const mockUserCodes: UserActivationCode[] = [
+        {
+          id: 1,
+          code: 'SUMMER2024',
+          playlistId: '1',
+          playlistName: 'Premium Beats Collection',
+          contentType: 'playlist',
+          addedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          isActive: true,
+        },
+        {
+          id: 2,
+          code: 'WORKSHOP2024',
+          playlistId: '2',
+          playlistName: 'Marketing Materials',
+          contentType: 'slideshow',
+          addedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: null,
+          isActive: true,
+        },
+        {
+          id: 3,
+          code: 'OLDCODE123',
+          playlistId: '3',
+          playlistName: 'Expired Content',
+          contentType: 'playlist',
+          addedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
+          expiresAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+          isActive: false,
+        },
+      ];
+      setUserActivationCodes(mockUserCodes);
+    } catch (error) {
+      console.error('Error fetching user activation codes:', error);
     }
   };
 
@@ -191,10 +249,67 @@ const ActivationCodesScreen = () => {
     }
   };
 
+  const handleAddActivationCode = async () => {
+    if (!newCodeInput.trim()) {
+      Alert.alert('Error', 'Please enter an activation code');
+      return;
+    }
+
+    try {
+      // Mock validation and adding code
+      const code = newCodeInput.trim().toUpperCase();
+      
+      // Check if code already exists
+      const existingCode = userActivationCodes.find(c => c.code === code);
+      if (existingCode) {
+        Alert.alert('Error', 'This activation code is already in your collection');
+        return;
+      }
+
+      // Mock new code creation
+      const newUserCode: UserActivationCode = {
+        id: Date.now(),
+        code: code,
+        playlistId: 'new-playlist',
+        playlistName: 'New Content Access',
+        contentType: 'playlist',
+        addedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        isActive: true,
+      };
+
+      setUserActivationCodes(prev => [newUserCode, ...prev]);
+      setNewCodeInput('');
+      Alert.alert('Success', 'Activation code added to your collection');
+    } catch (error) {
+      console.error('Error adding activation code:', error);
+      Alert.alert('Error', 'Failed to add activation code');
+    }
+  };
+
+  const handleRemoveUserCode = async (codeId: number) => {
+    Alert.alert(
+      'Remove Access Code',
+      'Are you sure you want to remove this activation code? You will lose access to the associated content.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            setUserActivationCodes(prev => prev.filter(code => code.id !== codeId));
+            Alert.alert('Success', 'Activation code removed from your collection');
+          },
+        },
+      ]
+    );
+  };
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchContent();
-    if (selectedContentId) {
+    fetchUserActivationCodes();
+    if (selectedContentId && activeTab === 'allGenerated') {
       fetchActivationCodes();
     }
   };
@@ -219,9 +334,12 @@ const ActivationCodesScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Access Codes</Text>
-        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-          <MaterialIcons name="add" size={24} color="#3b82f6" />
-        </TouchableOpacity>
+        {activeTab === 'generate' && selectedContentId && (
+          <TouchableOpacity onPress={() => setShowCreateModal(true)}>
+            <MaterialIcons name="add" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+        )}
+        {activeTab !== 'generate' && <View style={{ width: 24 }} />}
       </View>
 
       <ScrollView
@@ -232,43 +350,171 @@ const ActivationCodesScreen = () => {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Content Type Selector */}
-        <View style={styles.tabContainer}>
-          {['playlist', 'slideshow'].map((type) => (
+        {/* Main Tab Selector */}
+        <View style={styles.mainTabContainer}>
+          {[
+            { key: 'generate', label: 'Generate Codes', icon: 'add-circle' },
+            { key: 'myCodes', label: 'My Access Codes', icon: 'vpn-key' },
+            { key: 'allGenerated', label: 'All Generated', icon: 'list' },
+          ].map((tab) => (
             <TouchableOpacity
-              key={type}
+              key={tab.key}
               style={[
-                styles.tab,
-                contentType === type && styles.activeTab,
+                styles.mainTab,
+                activeTab === tab.key && styles.activeMainTab,
               ]}
               onPress={() => {
-                setContentType(type as ContentType);
+                setActiveTab(tab.key as TabType);
                 setSelectedContentId(null);
                 setActivationCodes([]);
               }}
             >
               <MaterialIcons
-                name={type === 'playlist' ? 'queue-music' : 'slideshow'}
-                size={20}
-                color={contentType === type ? '#fff' : '#6b7280'}
+                name={tab.icon as any}
+                size={18}
+                color={activeTab === tab.key ? '#fff' : '#6b7280'}
               />
               <Text
                 style={[
-                  styles.tabText,
-                  contentType === type && styles.activeTabText,
+                  styles.mainTabText,
+                  activeTab === tab.key && styles.activeMainTabText,
                 ]}
               >
-                {type === 'playlist' ? 'Playlists' : 'Slideshows'}
+                {tab.label}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Content Selector */}
-        <View style={styles.contentSection}>
-          <Text style={styles.sectionTitle}>
-            Select {contentType === 'playlist' ? 'Playlist' : 'Slideshow'}
-          </Text>
+        {/* Content Type Selector - Only for generate and allGenerated tabs */}
+        {(activeTab === 'generate' || activeTab === 'allGenerated') && (
+          <View style={styles.tabContainer}>
+            {['playlist', 'slideshow'].map((type) => (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.tab,
+                  contentType === type && styles.activeTab,
+                ]}
+                onPress={() => {
+                  setContentType(type as ContentType);
+                  setSelectedContentId(null);
+                  setActivationCodes([]);
+                }}
+              >
+                <MaterialIcons
+                  name={type === 'playlist' ? 'queue-music' : 'slideshow'}
+                  size={20}
+                  color={contentType === type ? '#fff' : '#6b7280'}
+                />
+                <Text
+                  style={[
+                    styles.tabText,
+                    contentType === type && styles.activeTabText,
+                  ]}
+                >
+                  {type === 'playlist' ? 'Playlists' : 'Slideshows'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* My Access Codes Tab Content */}
+        {activeTab === 'myCodes' && (
+          <>
+            {/* Add New Code Section */}
+            <View style={styles.addCodeSection}>
+              <Text style={styles.sectionTitle}>Add New Activation Code</Text>
+              <View style={styles.addCodeContainer}>
+                <TextInput
+                  style={styles.codeInput}
+                  placeholder="Enter activation code..."
+                  value={newCodeInput}
+                  onChangeText={setNewCodeInput}
+                  placeholderTextColor="#9ca3af"
+                  autoCapitalize="characters"
+                />
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={handleAddActivationCode}
+                >
+                  <MaterialIcons name="add" size={24} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* User's Activation Codes List */}
+            <View style={styles.myCodesSection}>
+              <Text style={styles.sectionTitle}>
+                Your Access Codes ({userActivationCodes.length})
+              </Text>
+              
+              {userActivationCodes.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="vpn-key" size={64} color="#9ca3af" />
+                  <Text style={styles.emptyText}>No activation codes yet</Text>
+                  <Text style={styles.emptySubtext}>
+                    Add activation codes to access exclusive content
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.userCodesGrid}>
+                  {userActivationCodes.map((code) => (
+                    <View key={code.id} style={styles.userCodeCard}>
+                      <View style={styles.userCodeHeader}>
+                        <View style={styles.userCodeInfo}>
+                          <Text style={styles.userCodeText}>{code.code}</Text>
+                          <Text style={styles.userCodePlaylist}>{code.playlistName}</Text>
+                        </View>
+                        <View style={styles.userCodeStatus}>
+                          <MaterialIcons
+                            name={code.isActive ? 'check-circle' : 'cancel'}
+                            size={20}
+                            color={code.isActive ? '#10b981' : '#ef4444'}
+                          />
+                        </View>
+                      </View>
+                      
+                      <View style={styles.userCodeDetails}>
+                        <View style={styles.userCodeMeta}>
+                          <MaterialIcons name="access-time" size={14} color="#6b7280" />
+                          <Text style={styles.userCodeMetaText}>
+                            Added {new Date(code.addedAt).toLocaleDateString()}
+                          </Text>
+                        </View>
+                        
+                        {code.expiresAt && (
+                          <View style={styles.userCodeMeta}>
+                            <MaterialIcons name="event" size={14} color="#6b7280" />
+                            <Text style={styles.userCodeMetaText}>
+                              Expires {new Date(code.expiresAt).toLocaleDateString()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.removeCodeButton}
+                        onPress={() => handleRemoveUserCode(code.id)}
+                      >
+                        <MaterialIcons name="remove-circle" size={16} color="#ef4444" />
+                        <Text style={styles.removeCodeText}>Remove Access</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </>
+        )}
+
+        {/* Content Selector - For generate and allGenerated tabs */}
+        {(activeTab === 'generate' || activeTab === 'allGenerated') && (
+          <View style={styles.contentSection}>
+            <Text style={styles.sectionTitle}>
+              Select {contentType === 'playlist' ? 'Playlist' : 'Slideshow'}
+            </Text>
 
           {isLoading ? (
             <View style={styles.loadingContainer}>
@@ -328,8 +574,8 @@ const ActivationCodesScreen = () => {
           )}
         </View>
 
-        {/* Search Bar */}
-        {selectedContentId && activationCodes.length > 0 && (
+        {/* Search Bar - Only for allGenerated tab */}
+        {activeTab === 'allGenerated' && selectedContentId && activationCodes.length > 0 && (
           <View style={styles.searchContainer}>
             <MaterialIcons name="search" size={20} color="#6b7280" />
             <TextInput
@@ -347,8 +593,8 @@ const ActivationCodesScreen = () => {
           </View>
         )}
 
-        {/* Activation Codes List */}
-        {selectedContentId && (
+        {/* Activation Codes List - Only for allGenerated tab */}
+        {activeTab === 'allGenerated' && selectedContentId && (
           <View style={styles.codesSection}>
             {isLoadingCodes ? (
               <View style={styles.loadingContainer}>
@@ -424,25 +670,28 @@ const ActivationCodesScreen = () => {
         )}
 
         {/* Instructions */}
-        {!selectedContentId && !isLoading && (
+        {((activeTab === 'generate' || activeTab === 'allGenerated') && !selectedContentId && !isLoading) && (
           <View style={styles.instructionsContainer}>
             <MaterialIcons name="info" size={48} color="#3b82f6" />
-            <Text style={styles.instructionsTitle}>Access Code Management</Text>
+            <Text style={styles.instructionsTitle}>
+              {activeTab === 'generate' ? 'Generate Access Codes' : 'View Generated Codes'}
+            </Text>
             <Text style={styles.instructionsText}>
-              Select a {contentType} above to view and manage its activation codes.
-              You can create individual codes or generate multiple codes at once.
+              Select a {contentType} above to {activeTab === 'generate' ? 'create new' : 'view and manage'} activation codes.
             </Text>
           </View>
         )}
       </ScrollView>
 
-      {/* Create Code Modal */}
-      <CreateCodeModal
-        visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreateCode={handleCreateCode}
-        playlistName={getSelectedContent()?.name || ''}
-      />
+      {/* Create Code Modal - Only for generate tab */}
+      {activeTab === 'generate' && (
+        <CreateCodeModal
+          visible={showCreateModal}
+          onClose={() => setShowCreateModal(false)}
+          onCreateCode={handleCreateCode}
+          playlistName={getSelectedContent()?.name || ''}
+        />
+      )}
     </ThemedView>
   );
 };
@@ -652,6 +901,146 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     paddingHorizontal: 32,
+  },
+  mainTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  mainTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  activeMainTab: {
+    backgroundColor: '#3b82f6',
+  },
+  mainTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeMainTabText: {
+    color: '#fff',
+  },
+  addCodeSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  addCodeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  codeInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: '#1f2937',
+    backgroundColor: '#fff',
+  },
+  addButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  myCodesSection: {
+    marginBottom: 16,
+  },
+  userCodesGrid: {
+    gap: 12,
+  },
+  userCodeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  userCodeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  userCodeInfo: {
+    flex: 1,
+  },
+  userCodeText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    fontFamily: 'monospace',
+    marginBottom: 4,
+  },
+  userCodePlaylist: {
+    fontSize: 14,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  userCodeStatus: {
+    marginLeft: 12,
+  },
+  userCodeDetails: {
+    gap: 8,
+    marginBottom: 12,
+  },
+  userCodeMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  userCodeMetaText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  removeCodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#fef2f2',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  removeCodeText: {
+    fontSize: 12,
+    color: '#ef4444',
+    fontWeight: '500',
   },
 });
 
