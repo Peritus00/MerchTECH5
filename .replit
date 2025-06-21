@@ -17,11 +17,15 @@ localPort = 8082
 externalPort = 3000
 
 [workflows]
-runButton = "Full Stack Development"
+runButton = "Dev Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
 mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node monitor.js"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
