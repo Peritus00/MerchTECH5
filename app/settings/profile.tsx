@@ -40,8 +40,8 @@ export default function ProfileScreen() {
     console.log('🔴 Profile: Current authentication state:', { user, isAuthenticated: !!user });
 
     Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
+      'Confirm Logout',
+      'Are you sure you want to logout? You will need to login again.',
       [
         { 
           text: 'Cancel', 
@@ -180,8 +180,9 @@ export default function ProfileScreen() {
           <TouchableOpacity
             style={styles.logoutButton}
             onPress={handleLogout}
+            activeOpacity={0.8}
           >
-            <ThemedText style={styles.logoutButtonText}>Logout</ThemedText>
+            <ThemedText style={styles.logoutButtonText}>🚪 Logout</ThemedText>
           </TouchableOpacity>
         </View>
 
