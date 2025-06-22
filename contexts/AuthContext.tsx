@@ -85,37 +85,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const inAuthGroup = segments[0] === 'auth';
-    const inSubscriptionGroup = segments[0] === 'subscription';
-    const isAuthenticated = !!user;
-    const userIsNew = user?.isNewUser === true;
+    // Add a small delay to prevent rapid navigation changes
+    const navigationTimeout = setTimeout(() => {
+      const inAuthGroup = segments[0] === 'auth';
+      const inSubscriptionGroup = segments[0] === 'subscription';
+      const isAuthenticated = !!user;
+      const userIsNew = user?.isNewUser === true;
 
-    console.log('🔴 Auth navigation check:', { 
-      isAuthenticated, 
-      inAuthGroup, 
-      inSubscriptionGroup, 
-      segments: segments.slice(0, 2), // Only log first 2 segments
-      userIsNew,
-      user: user?.username
-    });
+      console.log('🔴 Route navigation check:', { 
+        isAuthenticated, 
+        inAuthGroup, 
+        inSubscriptionGroup, 
+        currentSegments: segments.slice(0, 2),
+        userIsNew,
+        user: user?.username
+      });
 
-    if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
-      console.log('🔴 Redirecting to login');
-      router.replace('/auth/login');
-    } else if (isAuthenticated && inAuthGroup) {
-      // Check if user is new and should go to subscription selection
-      if (userIsNew) {
-        console.log('🔴 Redirecting new user to subscription selection');
+      if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
+        console.log('🔴 Redirecting to login');
+        router.replace('/auth/login');
+      } else if (isAuthenticated && inAuthGroup) {
+        // Check if user is new and should go to subscription selection
+        if (userIsNew) {
+          console.log('🔴 Redirecting new user to subscription selection');
+          router.replace('/subscription/index?newUser=true');
+        } else {
+          console.log('🔴 Redirecting existing user to home');
+          router.replace('/(tabs)');
+        }
+      } else if (isAuthenticated && userIsNew && !inSubscriptionGroup) {
+        // Handle case where new user is already logged in but not in subscription flow
+        console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
         router.replace('/subscription/index?newUser=true');
-      } else {
-        console.log('🔴 Redirecting existing user to home');
-        router.replace('/(tabs)');
       }
-    } else if (isAuthenticated && userIsNew && !inSubscriptionGroup) {
-      // Handle case where new user is already logged in but not in subscription flow
-      console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
-      router.replace('/subscription/index?newUser=true');
-    }
+    }, 100); // Small delay to prevent rapid navigation
+
+    return () => clearTimeout(navigationTimeout);
   }, [user, isInitialized, isLoading, segments[0]]);
 
   const login = async (email: string, password: string) => {

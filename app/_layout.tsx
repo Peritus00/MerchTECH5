@@ -16,11 +16,8 @@ function RootLayoutNav() {
 
   // Show nothing while initializing - prevent multiple renders
   if (!isInitialized || isLoading) {
-    console.log('🔴 RootLayout: Still loading...', { isInitialized, isLoading });
     return null;
   }
-
-  console.log('🔴 RootLayout: Ready to render navigation');
 
   return (
     <Stack>
