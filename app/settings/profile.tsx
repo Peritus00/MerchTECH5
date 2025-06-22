@@ -57,16 +57,13 @@ export default function ProfileScreen() {
                 console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
                 console.log('🔴 Profile: isAuthenticated before logout:', !!user);
 
-                // Call logout function - AuthContext will handle navigation
+                // Call logout function - AuthContext will handle everything
                 console.log('🔴 Profile: Calling logout function...');
                 await logout();
                 console.log('🔴 Profile: Logout function completed successfully');
                 
-                // Log state after logout attempt
-                console.log('🔴 Profile: Authentication state after logout call:', {
-                  user: user?.username || null,
-                  isAuthenticated: !!user
-                });
+                // Note: Don't check authentication state here since logout immediately 
+                // clears the state and navigates away from this component
 
               } catch (error) {
                 console.error('🔴 Profile logout error:', error);
