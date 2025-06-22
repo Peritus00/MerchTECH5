@@ -1,0 +1,57 @@
+Response: {"success":true,"user":{"id":6,"email":"perrie.benton@gmail.com","username":"peritus00","subscriptionTier":"free","isNewUser":false,"stripeCustomerId":null,"stripeSubscriptionId":null}}
+Console.js:61 User status updated to not new user
+Network.js:219 
+            
+            
+           PUT https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api/auth/profile 404 (Not Found)
+window.fetch @ Network.js:219
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103495
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103183
+await in updateProfile
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102912
+handleConfirmFreeAccount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:206317
+await in handleConfirmFreeAccount
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:31691
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14292
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14589
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:7960
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14372
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16454
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16436Understand this error
+Console.js:61 Profile update error: SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3594
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3532
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103189
+await in updateProfile
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102912
+handleConfirmFreeAccount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:206317
+await in handleConfirmFreeAccount
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:31691
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14292
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14589
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:7960
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14372
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16454
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16436Understand this error
+Console.js:61 Profile update failed: Error: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+    at AuthService.updateProfile (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103190:15)
+    at async updateProfile (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102912:29)
+    at async handleConfirmFreeAccount (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:206317:34)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3594
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3532
+updateProfile @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102921
+await in updateProfile
+handleConfirmFreeAccount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:206317
+await in handleConfirmFreeAccount
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:31691
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14292
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14589
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:7960
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14372
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16454
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16436Understand this error
+Console.js:61 Failed to update AuthContext: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+Console.js:61 Sending verification email to: perrie.benton@gmail.com
+Console.js:61 Verification email sent successfully
