@@ -222,14 +222,6 @@ export default function UserPermissionsScreen() {
           style: suspend ? 'destructive' : 'default',
           onPress: () => {
             console.log(`${suspend ? 'Suspending' : 'Unsuspending'} user:`, userId);
-            
-            // Update local state immediately for now (since API isn't fully implemented)
-            setUsers(prev =>
-              prev.map(user =>
-                user.id === userId ? { ...user, isSuspended: suspend } : user
-              )
-            );
-            
             Alert.alert('Success', `User ${suspend ? 'suspended' : 'unsuspended'} successfully`);
             
             // TODO: Implement actual API call when backend is ready
@@ -292,7 +284,9 @@ export default function UserPermissionsScreen() {
         { 
           text: 'Cancel', 
           style: 'cancel',
-          onPress: () => console.log('Delete cancelled')
+          onPress: () => {
+            console.log('=== DELETE CANCELLED ===');
+          }
         },
         {
           text: isPending ? 'Remove' : 'Delete',
@@ -301,6 +295,7 @@ export default function UserPermissionsScreen() {
             console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
             console.log('Delete confirmed - attempting to delete user with ID:', userId);
             console.log('Target user:', targetUser);
+            console.log('executeDelete function available:', typeof executeDelete);
 
             // Execute the delete operation
             executeDelete();
