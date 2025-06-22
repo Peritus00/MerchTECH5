@@ -43,8 +43,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Prevent auth initialization during logout
   const isLoggingOutRef = useRef(false);
+  const logoutDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const forceLogoutUntilRef = useRef(0);
 
   const initializeAuth = async () => {
+    // Check if we're in forced logout period
+    if (Date.now() < forceLogoutUntilRef.current) {
+      console.log('BLOCKED: Still in forced logout period');
+      return;
+    }
+    
     try {
       // Don't initialize auth if we're in the middle of logging out
       if (state.isLoggingOut || isLoggingOutRef.current) {
@@ -142,9 +150,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('FINAL LOGOUT: Starting with complete authentication block...');
+      console.log('DEBOUNCED LOGOUT: Starting with 5-second lockdown...');
       
-      // STEP 1: IMMEDIATELY block ALL authentication everywhere
+      // STEP 0: Clear any existing debounce
+      if (logoutDebounceRef.current) {
+        clearTimeout(logoutDebounceRef.current);
+      }
+      
+      // STEP 1: Set forced logout period for 5 seconds
+      forceLogoutUntilRef.current = Date.now() + 5000;
+      
+      // STEP 2: IMMEDIATELY block ALL authentication everywhere
       isLoggingOutRef.current = true;
       const { authAPI } = await import('@/services/api');
       authAPI.lockAuthentication();
@@ -170,16 +186,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('ULTIMATE: Auth service cleared');
 
       // STEP 5: Force navigation immediately
-      console.log('ULTIMATE: Forcing navigation to login...');
+      console.log('DEBOUNCED: Forcing navigation to login...');
       router.replace('/auth/login');
       
-      // STEP 6: Keep authentication locked for 10 seconds
-      setTimeout(() => {
+      // STEP 6: Set up debounced recovery after 5 seconds
+      logoutDebounceRef.current = setTimeout(() => {
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
-        console.log('FINAL: Authentication unlocked after 10 seconds');
-      }, 10000);
+        forceLogoutUntilRef.current = 0;
+        console.log('DEBOUNCED: All locks released after 5 seconds');
+      }, 5000);
 
     } catch (error) {
       console.error('ULTIMATE LOGOUT ERROR:', error);
@@ -199,13 +216,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force navigation no matter what
       router.replace('/auth/login');
       
-      // Reset flags
+      // Set forced logout period and debounced recovery
+      forceLogoutUntilRef.current = Date.now() + 5000;
       const { authAPI } = await import('@/services/api');
-      setTimeout(() => {
+      logoutDebounceRef.current = setTimeout(() => {
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
-      }, 10000);
+        forceLogoutUntilRef.current = 0;
+      }, 5000);
     }
   };
 

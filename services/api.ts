@@ -115,15 +115,15 @@ export const authAPI = {
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
       
-      // SECOND CHECK: Block ALL developer fallbacks during logout
+      // SECOND CHECK: Block ALL developer fallbacks during logout (extended to 10 seconds)
       const timeSinceLogout = Date.now() - logoutStartTime;
-      if (authenticationLocked || isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 15000)) {
+      if (authenticationLocked || isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 10000)) {
         console.log('BLOCKED: Authentication locked or logout in progress');
         throw new Error('Authentication disabled during logout');
       }
       
-      // THIRD CHECK: Special block for developer account during logout
-      if (email === 'djjetfuel@gmail.com' && (authenticationLocked || isLoggingOut || timeSinceLogout < 15000)) {
+      // THIRD CHECK: Special block for developer account during logout (extended to 10 seconds)
+      if (email === 'djjetfuel@gmail.com' && (authenticationLocked || isLoggingOut || timeSinceLogout < 10000)) {
         console.log('BLOCKED: Developer account blocked during logout');
         throw new Error('Developer login blocked during logout');
       }
