@@ -74,9 +74,10 @@ api.interceptors.response.use(
 
 export default api;
 
-// Flag to prevent developer fallback during logout
+// Global authentication lock during logout
 let isLoggingOut = false;
 let logoutStartTime = 0;
+let authenticationLocked = false;
 
 // Auth endpoints
 export const authAPI = {
@@ -84,33 +85,51 @@ export const authAPI = {
     isLoggingOut = status;
     if (status) {
       logoutStartTime = Date.now();
+      authenticationLocked = true;
     } else {
       logoutStartTime = 0;
+      authenticationLocked = false;
     }
   },
 
+  lockAuthentication: () => {
+    authenticationLocked = true;
+    console.log('AUTHENTICATION LOCKED');
+  },
+
+  unlockAuthentication: () => {
+    authenticationLocked = false;
+    console.log('AUTHENTICATION UNLOCKED');
+  },
+
   login: async (email: string, password: string) => {
+    // FIRST CHECK: Block ALL authentication attempts if locked
+    if (authenticationLocked) {
+      console.log('AUTHENTICATION BLOCKED: Global authentication lock is active');
+      throw new Error('Authentication temporarily disabled');
+    }
+
     try {
       const response = await api.post('/auth/login', { email, password });
       return response.data;
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
       
-      // NUCLEAR OPTION: Block ALL developer fallbacks during logout
+      // SECOND CHECK: Block ALL developer fallbacks during logout
       const timeSinceLogout = Date.now() - logoutStartTime;
-      if (isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 10000)) {
-        console.log('BLOCKED: Developer fallback during logout - throwing error');
+      if (authenticationLocked || isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 15000)) {
+        console.log('BLOCKED: Authentication locked or logout in progress');
         throw new Error('Authentication disabled during logout');
       }
       
-      // Additional check: if we see any logout-related activity, block completely
-      if (email === 'djjetfuel@gmail.com' && (isLoggingOut || timeSinceLogout < 10000)) {
-        console.log('BLOCKED: Detected logout activity - preventing developer login');
-        throw new Error('Logout in progress - authentication blocked');
+      // THIRD CHECK: Special block for developer account during logout
+      if (email === 'djjetfuel@gmail.com' && (authenticationLocked || isLoggingOut || timeSinceLogout < 15000)) {
+        console.log('BLOCKED: Developer account blocked during logout');
+        throw new Error('Developer login blocked during logout');
       }
       
-      // If backend fails, fall back to developer login
-      if (email === 'djjetfuel@gmail.com' && password === 'dev123') {
+      // If backend fails, fall back to developer login (only if not locked)
+      if (email === 'djjetfuel@gmail.com' && password === 'dev123' && !authenticationLocked) {
         console.log('Using developer fallback login');
         return {
           user: {

@@ -139,16 +139,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('NUCLEAR LOGOUT: Starting complete logout process...');
+      console.log('ULTIMATE LOGOUT: Starting with global authentication lock...');
       
-      // STEP 1: Immediately block all authentication
+      // STEP 1: IMMEDIATELY lock ALL authentication globally
       const { authAPI } = await import('@/services/api');
+      authAPI.lockAuthentication();
       authAPI.setLoggingOut(true);
       
       // STEP 2: Force clear AsyncStorage FIRST
       const AsyncStorage = require('@react-native-async-storage/async-storage');
       await AsyncStorage.clear();
-      console.log('NUCLEAR: AsyncStorage completely cleared');
+      console.log('ULTIMATE: AsyncStorage completely cleared');
 
       // STEP 3: Update state to logged out immediately
       setState({
@@ -158,24 +159,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized: true,
         isLoggingOut: false,
       });
-      console.log('NUCLEAR: State reset to logged out');
+      console.log('ULTIMATE: State reset to logged out');
 
       // STEP 4: Clear auth service data
       await authService.logout();
-      console.log('NUCLEAR: Auth service cleared');
+      console.log('ULTIMATE: Auth service cleared');
 
       // STEP 5: Force navigation immediately
-      console.log('NUCLEAR: Forcing navigation to login...');
+      console.log('ULTIMATE: Forcing navigation to login...');
       router.replace('/auth/login');
       
-      // STEP 6: Keep logout block active for 10 seconds
+      // STEP 6: Keep authentication locked for 15 seconds
       setTimeout(() => {
         authAPI.setLoggingOut(false);
-        console.log('NUCLEAR: Logout block removed');
-      }, 10000);
+        authAPI.unlockAuthentication();
+        console.log('ULTIMATE: Authentication unlocked after 15 seconds');
+      }, 15000);
 
     } catch (error) {
-      console.error('NUCLEAR LOGOUT ERROR:', error);
+      console.error('ULTIMATE LOGOUT ERROR:', error);
 
       // Even if everything fails, force the state reset
       const AsyncStorage = require('@react-native-async-storage/async-storage');
@@ -196,7 +198,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { authAPI } = await import('@/services/api');
       setTimeout(() => {
         authAPI.setLoggingOut(false);
-      }, 10000);
+        authAPI.unlockAuthentication();
+      }, 15000);
     }
   };
 
