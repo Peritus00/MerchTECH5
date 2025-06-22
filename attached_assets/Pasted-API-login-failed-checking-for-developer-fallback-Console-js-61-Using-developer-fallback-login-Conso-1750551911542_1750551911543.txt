@@ -1,0 +1,44 @@
+API login failed, checking for developer fallback
+Console.js:61 Using developer fallback login
+Console.js:61 Route navigation check: Object
+Console.js:61 Redirecting to main app - user authenticated
+Console.js:61 Route navigation check: Object
+Console.js:61 Current user: Object
+Console.js:61 User email: djjetfuel@gmail.com
+Console.js:61 User username: djjetfuel
+Console.js:61 Is admin check: true
+Console.js:61 Adding admin options to settings
+Console.js:61 Route navigation check: Object
+Console.js:61 Current user: Object
+Console.js:61 User email: djjetfuel@gmail.com
+Console.js:61 User username: djjetfuel
+Console.js:61 Is admin check: true
+Console.js:61 Adding admin options to settings
+Console.js:61 Route navigation check: Object
+Console.js:61 Fetching users with token: Present
+Console.js:61 API URL: https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api/admin/all-users
+Console.js:61 Response status: 200
+Console.js:61 Response headers: Headers
+Console.js:61 Raw user data received: Array(1)
+Console.js:61 Number of users: 1
+Console.js:61 Transformed users: Array(1)
+Console.js:61 Delete button pressed for user: peritus00
+Console.js:61 Delete button clicked for user ID: 4
+Console.js:61 Target user found: Object
+Console.js:61 Showing delete confirmation dialog
+Console.js:61 Delete button pressed for user: peritus00
+Console.js:61 Delete button clicked for user ID: 4
+Console.js:61 Target user found: Object
+Console.js:61 Showing delete confirmation dialog
+Console.js:61 Delete button pressed for user: peritus00
+Console.js:61 Delete button clicked for user ID: 4
+Console.js:61 Target user found: {id: 4, username: 'peritus00', email: 'perrie.benton@gmail.com', subscriptionTier: 'free', isAdmin: false, …}
+Console.js:61 Showing delete confirmation dialog
+Console.js:61 Delete button pressed for user: peritus00
+Console.js:61 Delete button clicked for user ID: 4
+Console.js:61 Target user found: {id: 4, username: 'peritus00', email: 'perrie.benton@gmail.com', subscriptionTier: 'free', isAdmin: false, …}
+Console.js:61 Showing delete confirmation dialog
+Console.js:61 Delete button pressed for user: peritus00
+Console.js:61 Delete button clicked for user ID: 4
+Console.js:61 Target user found: {id: 4, username: 'peritus00', email: 'perrie.benton@gmail.com', subscriptionTier: 'free', isAdmin: false, …}
+Console.js:61 Showing delete confirmation dialog
