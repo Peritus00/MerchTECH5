@@ -265,4 +265,3 @@ export const adminAPI = {
     return response.data;
   }
 };
-```
