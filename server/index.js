@@ -460,7 +460,6 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Registration successful! Please select your subscription.',
       user: {
         id: newUser.rows[0].id,
         email: newUser.rows[0].email,
@@ -468,12 +467,14 @@ app.post('/api/auth/register', async (req, res) => {
         firstName: newUser.rows[0].first_name,
         lastName: newUser.rows[0].last_name,
         isEmailVerified: newUser.rows[0].is_email_verified,
+        isAdmin: false,
         subscriptionTier: newUser.rows[0].subscription_tier,
         isNewUser: newUser.rows[0].is_new_user,
-        createdAt: newUser.rows[0].created_at
+        createdAt: newUser.rows[0].created_at,
+        updatedAt: newUser.rows[0].created_at
       },
       token,
-      requiresVerification: false
+      success: true
     });
   } catch (error) {
     console.error('Registration error:', error);

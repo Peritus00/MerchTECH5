@@ -58,11 +58,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
       const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
       const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
-      
+
       if (nuclearFlag === 'true') {
         const timestamp = parseInt(logoutTimestamp || '0');
         const timeSinceLogout = Date.now() - timestamp;
-        
+
         if (timeSinceLogout < 12000) { // Block for 12 seconds
           console.log('NUCLEAR BLOCKED: Nuclear logout flag is active', {
             timeSinceLogout,
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error checking nuclear logout flags:', error);
     }
-    
+
     try {
       // Don't initialize auth if we're in the middle of logging out
       if (state.isLoggingOut || isLoggingOutRef.current) {
@@ -88,10 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setState(prev => ({ ...prev, isLoading: true }));
-      
+
       // Check if there's existing auth data instead of clearing it
       const currentUser = await authService.getCurrentUser();
-      
+
       if (currentUser) {
         setState({
           user: currentUser,
@@ -149,22 +149,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
-      const response = await authService.register({ email, password, username });
-
-      // If registration requires verification, don't authenticate yet
-      if (response.message && !response.user) {
-        setState(prev => ({ ...prev, isLoading: false }));
-        return { success: true };
-      }
-
-      setState({
-        user: { ...response.user, isNewUser: true },
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
+      const response = await authService.register({
+        email,
+        password,
+        username
       });
 
-      return { success: true };
+      if (response.success && response.user && response.token) {
+        setState({
+          user: response.user,
+          isAuthenticated: true,
+          isLoading: false,
+          isInitialized: true,
+        });
+        return { success: true };
+      } else {
+        return { success: false, error: 'Registration failed - invalid server response' };
+      }
     } catch (error: any) {
       console.error('Registration failed:', error);
       setState(prev => ({ ...prev, isLoading: false }));
@@ -172,34 +173,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         success: false, 
         error: error.message || 'Registration failed. Please try again.' 
       };
+    } finally {
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   };
 
   const logout = async () => {
     try {
       console.log('NUCLEAR LOGOUT: Starting complete system shutdown...');
-      
+
       // STEP 0: Clear any existing debounce
       if (logoutDebounceRef.current) {
         clearTimeout(logoutDebounceRef.current);
       }
-      
+
       // STEP 1: Set PERSISTENT logout flag in storage FIRST
       const AsyncStorage = require('@react-native-async-storage/async-storage');
       await AsyncStorage.setItem('NUCLEAR_LOGOUT_FLAG', 'true');
       await AsyncStorage.setItem('LOGOUT_TIMESTAMP', Date.now().toString());
       console.log('NUCLEAR: Persistent flags set');
-      
+
       // STEP 2: Set forced logout period for 12 seconds
       forceLogoutUntilRef.current = Date.now() + 12000;
-      
+
       // STEP 3: IMMEDIATELY block ALL authentication everywhere
       isLoggingOutRef.current = true;
       const { authAPI } = await import('@/services/api');
       authAPI.lockAuthentication();
       authAPI.setLoggingOut(true);
       console.log('NUCLEAR: All authentication blocked');
-      
+
       // STEP 4: Complete AsyncStorage wipe (except our nuclear flags)
       const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
       const timestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
@@ -230,7 +233,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.replace('/auth/login');
         console.log('NUCLEAR: Router completely reset to login');
       }, 100);
-      
+
       // STEP 8: Extended recovery after 12 seconds
       logoutDebounceRef.current = setTimeout(async () => {
         console.log('NUCLEAR RECOVERY: Starting system recovery...');
@@ -241,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
         forceLogoutUntilRef.current = 0;
-        
+
         // Final state cleanup
         setState({
           user: null,
@@ -250,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isInitialized: true,
           isLoggingOut: false,
         });
-        
+
         console.log('NUCLEAR RECOVERY: Complete system recovery finished');
       }, 12000);
 
@@ -264,7 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await AsyncStorage.clear();
       await AsyncStorage.setItem('NUCLEAR_LOGOUT_FLAG', 'true');
       await AsyncStorage.setItem('LOGOUT_TIMESTAMP', timestamp);
-      
+
       setState({
         user: null,
         isAuthenticated: false,
@@ -276,7 +279,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Nuclear navigation reset
       router.dismissAll();
       setTimeout(() => router.replace('/auth/login'), 100);
-      
+
       // Nuclear recovery timer
       forceLogoutUntilRef.current = Date.now() + 12000;
       const { authAPI } = await import('@/services/api');

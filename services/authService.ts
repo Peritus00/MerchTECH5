@@ -45,7 +45,7 @@ class AuthService {
     }
   }
 
-  async register(credentials: RegisterCredentials): Promise<AuthResponse> {
+  async register(credentials: RegisterCredentials): Promise<AuthResponse & { success: boolean }> {
     try {
       // Validate input
       this.validateRegistrationData(credentials);
@@ -63,7 +63,11 @@ class AuthService {
       // Store auth data immediately since user is created and logged in
       await this.storeAuthData(response);
 
-      return response;
+      return {
+        user: response.user,
+        token: response.token,
+        success: true
+      };
     } catch (error: any) {
       console.error('Registration error:', error);
       throw new Error(error.message || 'Registration failed. Please try again.');
