@@ -162,7 +162,14 @@ export default function Settings() {
                 styles.optionCard,
                 option.adminOnly && styles.adminOptionCard
               ]}
-              onPress={option.onPress}
+              onPress={() => {
+                console.log('🔴 TouchableOpacity pressed for:', option.title);
+                if (option.onPress) {
+                  option.onPress();
+                } else {
+                  console.log('❌ No onPress function found for:', option.title);
+                }
+              }}
               disabled={option.isLogout && isLoggingOut}
             >
               <ThemedView style={styles.optionContent}>
