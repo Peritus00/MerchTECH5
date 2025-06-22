@@ -129,20 +129,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    console.log('AuthContext: Starting logout process...');
-    
-    // Step 1: Clear auth service data first
-    await authService.logout();
-    
-    // Step 2: Update state to logged out
-    setState({
-      user: null,
-      isAuthenticated: false,
-      isLoading: false,
-      isInitialized: true,
+    console.log('🔴 AuthContext: Starting logout process...');
+    console.log('🔴 AuthContext: Current state before logout:', {
+      user: state.user?.username,
+      isAuthenticated: state.isAuthenticated,
+      isLoading: state.isLoading
     });
     
-    console.log('AuthContext: Logout completed, state updated');
+    try {
+      // Step 1: Clear auth service data first
+      console.log('🔴 AuthContext: Calling authService.logout()...');
+      await authService.logout();
+      console.log('🔴 AuthContext: authService.logout() completed');
+      
+      // Step 2: Update state to logged out
+      console.log('🔴 AuthContext: Updating state to logged out...');
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: true,
+      });
+      console.log('🔴 AuthContext: State updated to logged out');
+      
+      // Step 3: Verify state was updated
+      setTimeout(() => {
+        console.log('🔴 AuthContext: Post-logout state verification:', {
+          user: null,
+          isAuthenticated: false
+        });
+      }, 50);
+      
+    } catch (error) {
+      console.error('🔴 AuthContext: Error during logout:', error);
+      // Still update state even if service logout fails
+      setState({
+        user: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isInitialized: true,
+      });
+      throw error; // Re-throw to let calling code handle it
+    }
   };
 
   const verifyEmail = async (token: string) => {

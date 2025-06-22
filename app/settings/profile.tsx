@@ -38,6 +38,8 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
+    console.log('🔴 Profile: Current authentication state:', { user, isAuthenticated: !!user });
+    
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -45,21 +47,36 @@ export default function ProfileScreen() {
         { 
           text: 'Cancel', 
           style: 'cancel',
-          onPress: () => console.log('Profile: Logout cancelled by user')
+          onPress: () => console.log('🔴 Profile: Logout cancelled by user')
         },
         {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🔴 Profile: Logout confirmed, starting logout process...');
-              console.log('Profile: Current user before logout:', user);
+              console.log('🔴 Profile: User confirmed logout - starting process...');
+              console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
+              
+              // Call logout and wait for completion
+              console.log('🔴 Profile: Calling logout function...');
               await logout();
-              console.log('🔴 Profile: Logout completed successfully, navigating to login...');
+              console.log('🔴 Profile: Logout function completed');
+              
+              // Add a small delay to ensure state updates have propagated
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
+              console.log('🔴 Profile: About to navigate to login...');
               router.replace('/auth/login');
-              console.log('🔴 Profile: Navigation to login completed');
+              console.log('🔴 Profile: Navigation command sent');
+              
+              // Log final state after navigation
+              setTimeout(() => {
+                console.log('🔴 Profile: Final check - current path should be /auth/login');
+              }, 500);
+              
             } catch (error) {
               console.error('🔴 Profile logout error:', error);
+              console.error('🔴 Profile logout error stack:', error.stack);
               Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
