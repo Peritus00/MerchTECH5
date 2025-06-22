@@ -141,9 +141,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         firstName,
         lastName
       });
-      globalAuthState.user = response.user;
-      setUser(response.user);
-      return { success: true, user: response.user };
+      return { success: response.success, message: response.message };
     } catch (error: any) {
       return { success: false, error: error.message };
     } finally {
