@@ -38,6 +38,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Initialize authentication state on app start
   useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        console.log('AuthContext: Initializing...');
+
+        // For fresh app starts, don't auto-login
+        // Users should manually log in each time
+        console.log('AuthContext: Requiring fresh login');
+
+        // Clear any existing auth state to ensure clean start
+        await authService.logout();
+      } catch (error) {
+        console.error('AuthContext: Initialization error:', error);
+      } finally {
+        setIsInitialized(true);
+        console.log('AuthContext: Initialization complete - starting at login');
+      }
+    };
+
     initializeAuth();
   }, []);
 
@@ -45,81 +63,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isLoggingOutRef = useRef(false);
   const logoutDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const forceLogoutUntilRef = useRef(0);
-
-  const initializeAuth = async () => {
-    // Check if we're in forced logout period
-    if (Date.now() < forceLogoutUntilRef.current) {
-      console.log('BLOCKED: Still in forced logout period');
-      return;
-    }
-
-    // Check for nuclear logout flags
-    try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage');
-      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
-      const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
-
-      if (nuclearFlag === 'true') {
-        const timestamp = parseInt(logoutTimestamp || '0');
-        const timeSinceLogout = Date.now() - timestamp;
-
-        if (timeSinceLogout < 12000) { // Block for 12 seconds
-          console.log('NUCLEAR BLOCKED: Nuclear logout flag is active', {
-            timeSinceLogout,
-            remainingTime: 12000 - timeSinceLogout
-          });
-          return;
-        } else {
-          // Auto-cleanup expired nuclear flags
-          await AsyncStorage.removeItem('NUCLEAR_LOGOUT_FLAG');
-          await AsyncStorage.removeItem('LOGOUT_TIMESTAMP');
-          console.log('NUCLEAR CLEANUP: Expired nuclear flags removed');
-        }
-      }
-    } catch (error) {
-      console.error('Error checking nuclear logout flags:', error);
-    }
-
-    try {
-      // Don't initialize auth if we're in the middle of logging out
-      if (state.isLoggingOut || isLoggingOutRef.current) {
-        console.log('Skipping auth initialization - logout in progress');
-        return;
-      }
-
-      setState(prev => ({ ...prev, isLoading: true }));
-
-      // Check if there's existing auth data instead of clearing it
-      const currentUser = await authService.getCurrentUser();
-
-      if (currentUser) {
-        setState({
-          user: currentUser,
-          isAuthenticated: true,
-          isLoading: false,
-          isInitialized: true,
-          isLoggingOut: false,
-        });
-      } else {
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          isInitialized: true,
-          isLoggingOut: false,
-        });
-      }
-    } catch (error) {
-      console.error('Auth initialization error:', error);
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-        isLoggingOut: false,
-      });
-    }
-  };
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
