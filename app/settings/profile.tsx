@@ -38,6 +38,7 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
     console.log('🔴 Profile: Current authentication state:', { user, isAuthenticated: !!user });
+    console.log('🔴 Profile: Showing logout confirmation dialog...');
 
     Alert.alert(
       'Confirm Logout',
@@ -47,8 +48,9 @@ export default function ProfileScreen() {
           text: 'Cancel', 
           style: 'cancel',
           onPress: () => {
-            console.log('🔴 Profile: Logout cancelled by user');
+            console.log('🔴 Profile: ❌ USER CLICKED CANCEL - LOGOUT CANCELLED');
             console.log('🔴 Profile: User chose to cancel logout operation');
+            console.log('🔴 Profile: Remaining logged in...');
           }
         },
         {
@@ -56,6 +58,7 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
               try {
+                console.log('🔴 Profile: ✅ USER CLICKED LOGOUT - PROCEEDING WITH LOGOUT');
                 console.log('🔴 Profile: User confirmed logout - starting process...');
                 console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
                 console.log('🔴 Profile: isAuthenticated before logout:', !!user);
@@ -68,6 +71,7 @@ export default function ProfileScreen() {
                 
                 console.log('🔴 Profile: Logout function completed successfully');
                 console.log('🔴 Profile: AuthContext logout call finished');
+                console.log('🔴 Profile: 🎉 LOGOUT PROCESS COMPLETE!');
                 
                 // Note: Don't check authentication state here since logout immediately 
                 // clears the state and navigates away from this component
@@ -83,8 +87,17 @@ export default function ProfileScreen() {
               }
             },
         },
-      ]
+      ],
+      { 
+        cancelable: true,
+        onDismiss: () => {
+          console.log('🔴 Profile: ❌ DIALOG DISMISSED - LOGOUT CANCELLED');
+          console.log('🔴 Profile: User dismissed the dialog without choosing');
+        }
+      }
     );
+    
+    console.log('🔴 Profile: Logout confirmation dialog displayed');
   };
 
   return (
