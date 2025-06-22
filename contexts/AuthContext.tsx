@@ -52,6 +52,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('BLOCKED: Still in forced logout period');
       return;
     }
+
+    // Check for persistent logout flag
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      const persistentLogoutFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
+      if (persistentLogoutFlag === 'true') {
+        console.log('BLOCKED: Persistent logout flag is active');
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking persistent logout flag:', error);
+    }
     
     try {
       // Don't initialize auth if we're in the middle of logging out
@@ -150,28 +162,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('DEBOUNCED LOGOUT: Starting with 5-second lockdown...');
+      console.log('PERSISTENT LOGOUT: Starting with storage flag...');
       
       // STEP 0: Clear any existing debounce
       if (logoutDebounceRef.current) {
         clearTimeout(logoutDebounceRef.current);
       }
       
-      // STEP 1: Set forced logout period for 5 seconds
-      forceLogoutUntilRef.current = Date.now() + 5000;
+      // STEP 1: Set PERSISTENT logout flag in storage FIRST
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
       
-      // STEP 2: IMMEDIATELY block ALL authentication everywhere
+      // STEP 2: Set forced logout period for 8 seconds
+      forceLogoutUntilRef.current = Date.now() + 8000;
+      
+      // STEP 3: IMMEDIATELY block ALL authentication everywhere
       isLoggingOutRef.current = true;
       const { authAPI } = await import('@/services/api');
       authAPI.lockAuthentication();
       authAPI.setLoggingOut(true);
       
-      // STEP 2: Force clear AsyncStorage FIRST
-      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      // STEP 4: Force clear AsyncStorage (except our persistent flag)
+      const persistentFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
       await AsyncStorage.clear();
-      console.log('ULTIMATE: AsyncStorage completely cleared');
+      if (persistentFlag) {
+        await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
+      }
+      console.log('PERSISTENT: AsyncStorage cleared except logout flag');
 
-      // STEP 3: Update state to logged out immediately
+      // STEP 5: Update state to logged out immediately
       setState({
         user: null,
         isAuthenticated: false,
@@ -179,31 +198,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized: true,
         isLoggingOut: false,
       });
-      console.log('ULTIMATE: State reset to logged out');
+      console.log('PERSISTENT: State reset to logged out');
 
-      // STEP 4: Clear auth service data
+      // STEP 6: Clear auth service data
       await authService.logout();
-      console.log('ULTIMATE: Auth service cleared');
+      console.log('PERSISTENT: Auth service cleared');
 
-      // STEP 5: Force navigation immediately
-      console.log('DEBOUNCED: Forcing navigation to login...');
+      // STEP 7: Force navigation immediately
+      console.log('PERSISTENT: Forcing navigation to login...');
       router.replace('/auth/login');
       
-      // STEP 6: Set up debounced recovery after 5 seconds
-      logoutDebounceRef.current = setTimeout(() => {
+      // STEP 8: Set up persistent flag clearance after 8 seconds
+      logoutDebounceRef.current = setTimeout(async () => {
+        const AsyncStorage = require('@react-native-async-storage/async-storage');
+        await AsyncStorage.removeItem('PERSISTENT_LOGOUT_FLAG');
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
         forceLogoutUntilRef.current = 0;
-        console.log('DEBOUNCED: All locks released after 5 seconds');
-      }, 5000);
+        console.log('PERSISTENT LOGOUT: All locks and flags cleared after 8 seconds');
+      }, 8000);
 
     } catch (error) {
       console.error('ULTIMATE LOGOUT ERROR:', error);
 
       // Even if everything fails, force the state reset
       const AsyncStorage = require('@react-native-async-storage/async-storage');
+      const persistentFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
       await AsyncStorage.clear();
+      if (persistentFlag) {
+        await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
+      }
       
       setState({
         user: null,
@@ -216,15 +241,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Force navigation no matter what
       router.replace('/auth/login');
       
-      // Set forced logout period and debounced recovery
-      forceLogoutUntilRef.current = Date.now() + 5000;
+      // Set forced logout period and recovery with persistent flag clearance
+      forceLogoutUntilRef.current = Date.now() + 8000;
       const { authAPI } = await import('@/services/api');
-      logoutDebounceRef.current = setTimeout(() => {
+      logoutDebounceRef.current = setTimeout(async () => {
+        await AsyncStorage.removeItem('PERSISTENT_LOGOUT_FLAG');
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
         forceLogoutUntilRef.current = 0;
-      }, 5000);
+        console.log('PERSISTENT RECOVERY: All locks and flags cleared after 8 seconds');
+      }, 8000);
     }
   };
 

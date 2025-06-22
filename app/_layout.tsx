@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -17,9 +17,16 @@ function RootLayoutNav() {
   const { isAuthenticated, isInitialized, user, isLoggingOut } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const navigationLockRef = useRef(false);
 
   useEffect(() => {
-    if (!isInitialized || isLoggingOut) return;
+    // NAVIGATION LOCK: Block ALL navigation during logout
+    if (isLoggingOut || navigationLockRef.current) {
+      console.log('NAVIGATION BLOCKED: Logout in progress');
+      return;
+    }
+    
+    if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
@@ -50,7 +57,7 @@ function RootLayoutNav() {
         router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, isInitialized, segments, user]);
+  }, [isAuthenticated, isInitialized, segments, user, isLoggingOut]);
 
   return (
     <Stack>
