@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const router = useRouter();
   const segments = useSegments();
 
@@ -30,36 +31,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
-  // Separate effect for route navigation to reduce re-renders
+  // Separate effect for route navigation with more stable dependencies
   useEffect(() => {
     if (!isInitialized || isLoading) {
       return;
     }
 
     const inAuthGroup = segments[0] === 'auth';
-    const currentRoute = segments.join('/');
+    const inSubscriptionGroup = segments[0] === 'subscription';
 
-    console.log('🔴 Route navigation check:', {
-      isAuthenticated,
-      inAuthGroup,
-      inSubscriptionGroup: segments[0] === 'subscription',
-      currentSegments: segments,
-      userIsNew: user?.isNewUser,
-      user: user?.username
-    });
-
-    // Only log and redirect if authentication state is stable
-    if (!isAuthenticated && !inAuthGroup) {
+    // Only redirect on authentication state changes, not on every segment change
+    if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
       console.log('🔴 Route navigation: Redirecting unauthenticated user to login');
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
       console.log('🔴 Route navigation: Redirecting authenticated user to home');
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isInitialized, segments[0]]);
+  }, [isAuthenticated, isInitialized, isLoading]); // Removed segments dependency to prevent constant re-renders
 
   const initializeAuth = async () => {
+    if (isInitializing || isInitialized) {
+      console.log('🔴 AuthContext: Skipping initialization - already in progress or completed');
+      return;
+    }
+
     try {
+      setIsInitializing(true);
       setIsLoading(true);
       console.log('🔴 AuthContext: Starting authentication initialization...');
 
@@ -78,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoading(false);
       setIsInitialized(true);
+      setIsInitializing(false);
       console.log('🔴 AuthContext: Authentication initialization completed');
     }
   };

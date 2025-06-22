@@ -16,45 +16,14 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
 
+  // Remove duplicate navigation logic since AuthContext handles this
   useEffect(() => {
     if (!isInitialized || isLoading) {
       console.log('🔴 RootLayout: Waiting for initialization/loading to complete');
       return;
     }
-
-    const inAuthGroup = segments[0] === 'auth';
-    const inSubscriptionGroup = segments[0] === 'subscription';
-    const currentSegments = segments;
-
-    // Get user to check if they're new (for subscription flow)
-    const userIsNew = user?.isNewUser || false;
-
-    console.log('🔴 Route navigation check:', {
-      isAuthenticated,
-      inAuthGroup,
-      inSubscriptionGroup,
-      currentSegments,
-      userIsNew,
-      user: user?.username || null
-    });
-
-    if (!isAuthenticated) {
-      // User is not authenticated, redirect to login
-      console.log('🔴 RootLayout: User not authenticated, checking if redirect needed');
-      if (!inAuthGroup) {
-        console.log('🔴 RootLayout: Redirecting to login from:', segments);
-        router.replace('/auth/login');
-      }
-    } else {
-      // User is authenticated
-      console.log('🔴 RootLayout: User authenticated, checking current location');
-      if (inAuthGroup) {
-        // If user is authenticated but in auth group, redirect to home
-        console.log('🔴 RootLayout: User authenticated in auth group, redirecting to home');
-        router.replace('/(tabs)');
-      }
-    }
-  }, [isAuthenticated, isLoading, isInitialized, segments, router, user]);
+    console.log('🔴 RootLayout: Auth state stable, user:', user?.username || 'none');
+  }, [isInitialized, isLoading, user?.username]);
 
   if (!isInitialized || isLoading) {
     console.log('🔴 RootLayout: Still loading...');
