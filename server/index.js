@@ -107,7 +107,7 @@ async function cleanupExpiredPendingUsers() {
 async function handleAccountVerification() {
   try {
     console.log('Checking for accounts needing verification reminders or suspension...');
-    
+
     // Find unverified accounts that are 24 hours old (send reminder)
     const reminderUsers = await pool.query(`
       SELECT id, email, username, created_at 
@@ -123,7 +123,7 @@ async function handleAccountVerification() {
     for (const user of reminderUsers.rows) {
       try {
         console.log(`Sending 24-hour reminder to user: ${user.email}`);
-        
+
         await transporter.sendMail({
           from: '8e773a002@smtp-brevo.com',
           to: user.email,
@@ -140,7 +140,7 @@ async function handleAccountVerification() {
             <p><small>This is an automated message from MerchTech. Please do not reply to this email.</small></p>
           `
         });
-        
+
         console.log(`24-hour reminder sent successfully to: ${user.email}`);
       } catch (emailError) {
         console.error(`Failed to send 24-hour reminder to ${user.email}:`, emailError);
@@ -161,13 +161,13 @@ async function handleAccountVerification() {
     for (const user of suspensionUsers.rows) {
       try {
         console.log(`Suspending account for user: ${user.email}`);
-        
+
         // Update user to suspended status
         await pool.query(
           'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           ['suspended', user.id]
         );
-        
+
         console.log(`Account suspended for: ${user.email}`);
       } catch (error) {
         console.error(`Failed to suspend account for ${user.email}:`, error);
@@ -500,6 +500,90 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// User subscription update endpoint
+app.put('/api/user/subscription', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const userId = req.user.id;
+
+    console.log('Updating user subscription:', {
+      userId,
+      subscriptionTier,
+      isNewUser,
+      stripeCustomerId,
+      stripeSubscriptionId
+    });
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (subscriptionTier !== undefined) {
+      updates.push(`subscription_tier = $${++paramCount}`);
+      values.push(subscriptionTier);
+    }
+
+    if (isNewUser !== undefined) {
+      updates.push(`is_new_user = $${++paramCount}`);
+      values.push(isNewUser);
+    }
+
+    if (stripeCustomerId !== undefined) {
+      updates.push(`stripe_customer_id = $${++paramCount}`);
+      values.push(stripeCustomerId);
+    }
+
+    if (stripeSubscriptionId !== undefined) {
+      updates.push(`stripe_subscription_id = $${++paramCount}`);
+      values.push(stripeSubscriptionId);
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(userId);
+
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = $${++paramCount}
+      RETURNING *
+    `;
+
+    console.log('Executing query:', query);
+    console.log('With values:', values);
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const updatedUser = result.rows[0];
+    console.log('User subscription updated successfully:', updatedUser);
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        subscriptionTier: updatedUser.subscription_tier,
+        isNewUser: updatedUser.is_new_user,
+        stripeCustomerId: updatedUser.stripe_customer_id,
+        stripeSubscriptionId: updatedUser.stripe_subscription_id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating user subscription:', error);
+    res.status(500).json({ 
+      error: 'Failed to update subscription',
+      details: error.message 
+    });
+  }
+});
+
+// User management endpoints
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username, firstName, lastName } = req.body;
@@ -514,7 +598,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
-      
+
       // If user exists but email is not verified, allow re-registration by deleting the old unverified user
       if ((user.email === email || user.username === username) && !user.is_email_verified) {
         console.log('Deleting existing unverified user to allow re-registration:', { email, username });
@@ -958,48 +1042,6 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ error: 'Failed to get user profile' });
-  }
-});
-
-// Update user subscription
-app.put('/api/user/subscription', authenticateToken, async (req, res) => {
-  try {
-    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId, isNewUser } = req.body;
-    const userId = req.user.id;
-
-    // Build the update query dynamically based on provided fields
-    let updateFields = ['subscription_tier = $1', 'updated_at = CURRENT_TIMESTAMP'];
-    let values = [subscriptionTier];
-    let paramIndex = 2;
-
-    if (stripeCustomerId !== undefined) {
-      updateFields.push(`stripe_customer_id = $${paramIndex}`);
-      values.push(stripeCustomerId);
-      paramIndex++;
-    }
-
-    if (stripeSubscriptionId !== undefined) {
-      updateFields.push(`stripe_subscription_id = $${paramIndex}`);
-      values.push(stripeSubscriptionId);
-      paramIndex++;
-    }
-
-    if (isNewUser !== undefined) {
-      updateFields.push(`is_new_user = $${paramIndex}`);
-      values.push(isNewUser);
-      paramIndex++;
-    }
-
-    values.push(userId); // Add userId as the last parameter
-
-    const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
-    
-    await pool.query(query, values);
-
-    res.json({ message: 'Subscription updated successfully' });
-  } catch (error) {
-    console.error('Subscription update error:', error);
-    res.status(500).json({ message: 'Failed to update subscription' });
   }
 });
 

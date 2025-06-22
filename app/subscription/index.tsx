@@ -70,7 +70,11 @@ export default function SubscriptionScreen() {
                   const token = await AsyncStorage.getItem('authToken');
                   if (token && user?.email) {
                     // Update user status to not new user and trigger email verification
-                    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
+                    console.log('Starting free account setup...');
+                    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
+                    console.log('API URL:', apiUrl);
+                    
+                    const response = await fetch(`${apiUrl}/user/subscription`, {
                       method: 'PUT',
                       headers: {
                         'Content-Type': 'application/json',
@@ -81,11 +85,16 @@ export default function SubscriptionScreen() {
                         isNewUser: false
                       })
                     });
+                    
+                    console.log('Response status:', response.status);
+                    const responseText = await response.text();
+                    console.log('Response:', responseText);
 
                     if (response.ok) {
                       console.log('User status updated to not new user');
                       
                       // Send verification email
+                      console.log('Sending verification email to:', user.email);
                       const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
                       if (verificationResult.success) {
                         console.log('Verification email sent successfully');
@@ -103,16 +112,23 @@ export default function SubscriptionScreen() {
                         );
                       }
                     } else {
-                      throw new Error('Failed to update user status');
+                      console.error('Failed to update user status. Response:', responseText);
+                      throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
                     }
                   } else {
                     throw new Error('Missing authentication or email');
                   }
                 } catch (error) {
                   console.error('Failed to process free account selection:', error);
+                  console.error('Error details:', {
+                    message: error.message,
+                    stack: error.stack,
+                    token: token ? 'Present' : 'Missing',
+                    userEmail: user?.email || 'Missing'
+                  });
                   Alert.alert(
                     'Error',
-                    'There was an issue setting up your account. Please try again.',
+                    `There was an issue setting up your account: ${error.message}. Please try again.`,
                     [{ text: 'OK' }]
                   );
                 }
