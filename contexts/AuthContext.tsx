@@ -130,30 +130,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async (): Promise<void> => {
     try {
-      console.log('🔴 AuthContext: Starting logout...');
+      console.log('🔴 AuthContext: Starting logout process...');
       setState(prev => ({ ...prev, isLoading: true }));
 
-      console.log('🔴 AuthContext: Calling authService.logout()...');
+      // Clear auth service data first
       await authService.logout();
 
-      console.log('🔴 AuthContext: Setting logged out state...');
+      // Force clear the authentication state
+      console.log('🔴 AuthContext: Clearing authentication state...');
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
       });
-      console.log('🔴 AuthContext: Logout completed successfully');
+
+      console.log('🔴 AuthContext: Auth state cleared, redirecting to login...');
+
+      // Use replace with a slight delay to ensure state is updated
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 100);
+
     } catch (error) {
       console.error('🔴 AuthContext: Logout error:', error);
-      // Force clear state even if logout fails
-      console.log('🔴 AuthContext: Force clearing auth state due to error');
+      // Even if logout fails, force clear the local state
+      console.log('🔴 AuthContext: Forcing auth state clear due to error...');
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
       });
+
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 100);
     }
   };
 

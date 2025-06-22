@@ -85,8 +85,10 @@ class AuthService {
       // Log current storage state before clearing
       const currentToken = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
       const currentUser = await AsyncStorage.getItem(AuthService.USER_KEY);
+      const currentRefresh = await AsyncStorage.getItem(AuthService.REFRESH_TOKEN_KEY);
       console.log('🔴 AuthService: Current token exists:', !!currentToken);
       console.log('🔴 AuthService: Current user exists:', !!currentUser);
+      console.log('🔴 AuthService: Current refresh token exists:', !!currentRefresh);
       
       // Clear all stored authentication data
       console.log('🔴 AuthService: Clearing all authentication data...');
@@ -99,8 +101,24 @@ class AuthService {
       // Verify clearing was successful
       const tokenAfter = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
       const userAfter = await AsyncStorage.getItem(AuthService.USER_KEY);
+      const refreshAfter = await AsyncStorage.getItem(AuthService.REFRESH_TOKEN_KEY);
       console.log('🔴 AuthService: Token cleared successfully:', tokenAfter === null);
       console.log('🔴 AuthService: User cleared successfully:', userAfter === null);
+      console.log('🔴 AuthService: Refresh token cleared successfully:', refreshAfter === null);
+      
+      // Also try to clear all AsyncStorage to be absolutely sure
+      console.log('🔴 AuthService: Performing complete AsyncStorage clear for auth data...');
+      const allKeys = await AsyncStorage.getAllKeys();
+      const authKeys = allKeys.filter(key => 
+        key === AuthService.TOKEN_KEY || 
+        key === AuthService.REFRESH_TOKEN_KEY || 
+        key === AuthService.USER_KEY
+      );
+      
+      if (authKeys.length > 0) {
+        await AsyncStorage.multiRemove(authKeys);
+        console.log('🔴 AuthService: Removed additional auth keys:', authKeys);
+      }
       
       console.log('🔴 AuthService: All tokens cleared successfully');
     } catch (error) {
@@ -112,9 +130,26 @@ class AuthService {
         await AsyncStorage.removeItem(AuthService.TOKEN_KEY);
         await AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY);
         await AsyncStorage.removeItem(AuthService.USER_KEY);
+        
+        // Also try clearing with multiRemove as fallback
+        await AsyncStorage.multiRemove([
+          AuthService.TOKEN_KEY,
+          AuthService.REFRESH_TOKEN_KEY,
+          AuthService.USER_KEY
+        ]);
+        
         console.log('🔴 AuthService: Individual token cleanup completed');
       } catch (individualError) {
         console.error('🔴 AuthService: Individual cleanup also failed:', individualError);
+        
+        // Last resort - clear all AsyncStorage
+        try {
+          console.log('🔴 AuthService: Attempting complete AsyncStorage clear...');
+          await AsyncStorage.clear();
+          console.log('🔴 AuthService: Complete AsyncStorage clear successful');
+        } catch (clearAllError) {
+          console.error('🔴 AuthService: Complete clear also failed:', clearAllError);
+        }
       }
     }
   }
