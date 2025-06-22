@@ -53,9 +53,20 @@ if (process.env.BREVO_API_KEY) {
     auth: {
       user: 'help@merchtech.net',
       pass: process.env.BREVO_API_KEY
+    },
+    tls: {
+      ciphers: 'SSLv3'
     }
   });
-  console.log('Brevo email service configured with help@merchtech.net');
+
+  // Test the connection
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('Brevo SMTP connection failed:', error);
+    } else {
+      console.log('Brevo email service configured and verified with help@merchtech.net');
+    }
+  });
 } else {
   console.log('WARNING: BREVO_API_KEY not set. Email functionality will be limited.');
   // Create a test transporter for development
