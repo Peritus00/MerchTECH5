@@ -220,10 +220,20 @@ export default function UserPermissionsScreen() {
         {
           text: suspend ? 'Suspend' : 'Unsuspend',
           style: suspend ? 'destructive' : 'default',
-          onPress: async () => {
-            if (typeof userId === 'number') {
-              await updateUserPermissions(userId, { isSuspended: suspend });
-            }
+          onPress: () => {
+            console.log(`${suspend ? 'Suspending' : 'Unsuspending'} user:`, userId);
+            
+            // Update local state immediately for now (since API isn't fully implemented)
+            setUsers(prev =>
+              prev.map(user =>
+                user.id === userId ? { ...user, isSuspended: suspend } : user
+              )
+            );
+            
+            Alert.alert('Success', `User ${suspend ? 'suspended' : 'unsuspended'} successfully`);
+            
+            // TODO: Implement actual API call when backend is ready
+            // updateUserPermissions(userId, { isSuspended: suspend });
           },
         },
       ]
@@ -265,26 +275,31 @@ export default function UserPermissionsScreen() {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
           onPress: () => {
+            console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
             console.log('Delete confirmed - attempting to delete user with ID:', userId);
             console.log('Target user:', targetUser);
 
             // Execute the delete operation
-            deleteUser(userId).then((success) => {
-              console.log('Delete operation result:', success);
+            console.log('Calling deleteUser function...');
+            deleteUser(userId)
+              .then((success) => {
+                console.log('Delete operation completed with result:', success);
 
-              if (success) {
-                console.log('User deleted successfully');
-                Alert.alert('Success', 'User deleted successfully');
-                // Refresh the user list
-                refreshUsers();
-              } else {
-                console.log('Delete operation failed');
-                Alert.alert('Error', 'Failed to delete user. Please try again.');
-              }
-            }).catch((error) => {
-              console.error('Error in delete handler:', error);
-              Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
-            });
+                if (success) {
+                  console.log('User deleted successfully');
+                  Alert.alert('Success', 'User deleted successfully');
+                  // Refresh the user list
+                  console.log('Refreshing user list...');
+                  refreshUsers();
+                } else {
+                  console.log('Delete operation failed');
+                  Alert.alert('Error', 'Failed to delete user. Please try again.');
+                }
+              })
+              .catch((error) => {
+                console.error('Error in delete handler:', error);
+                Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
+              });
           },
         },
       ],

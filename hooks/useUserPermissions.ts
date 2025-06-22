@@ -252,6 +252,11 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       console.log('Delete API URL:', apiUrl);
 
       console.log('Making DELETE request...');
+      console.log('Request headers:', {
+        'Authorization': `Bearer ${token ? token.substring(0, 20) + '...' : 'None'}`,
+        'Content-Type': 'application/json'
+      });
+
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
@@ -262,9 +267,17 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
 
       console.log('Delete response status:', response.status);
       console.log('Delete response ok:', response.ok);
+      console.log('Delete response headers:', Object.fromEntries(response.headers.entries()));
 
       if (response.ok) {
         console.log('Delete successful - updating local state');
+        try {
+          const responseData = await response.text();
+          console.log('Delete response data:', responseData);
+        } catch (e) {
+          console.log('Could not read response data, but delete was successful');
+        }
+
         // Remove from local state using the original userId (which might be a string)
         setUsers(prev => {
           const before = prev.length;
@@ -279,8 +292,10 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         return true;
       } else {
         const errorText = await response.text();
+        console.error('=== DELETE FAILED ===');
         console.error('Delete error response:', errorText);
         console.error('Response status:', response.status);
+        console.error('Response status text:', response.statusText);
 
         let errorMessage = 'Failed to delete user';
         try {
@@ -292,7 +307,6 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         }
 
         console.error('Final error message:', errorMessage);
-        Alert.alert('Error', errorMessage);
         return false;
       }
     } catch (error) {
