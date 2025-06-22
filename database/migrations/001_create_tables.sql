@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS pending_users (
 );
 
 -- Create users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   username VARCHAR(100),
@@ -20,11 +20,12 @@ CREATE TABLE users (
   first_name VARCHAR(100),
   last_name VARCHAR(100),
   subscription_tier VARCHAR(50) DEFAULT 'free',
-  is_email_verified BOOLEAN DEFAULT true,
+  is_email_verified BOOLEAN DEFAULT FALSE,
   is_admin BOOLEAN DEFAULT false,
   stripe_customer_id VARCHAR(255),
   stripe_subscription_id VARCHAR(255),
   verification_token VARCHAR(500),
+  is_new_user BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
