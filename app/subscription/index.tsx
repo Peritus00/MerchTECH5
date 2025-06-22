@@ -55,104 +55,126 @@ export default function SubscriptionScreen() {
   };
 
   const handleSelectPlan = async (tierKey: string) => {
-    if (tierKey === 'free') {
-      if (isNewUser) {
-        // Show confirmation for new users choosing free tier
-        Alert.alert(
-          'Confirm Free Plan',
-          'Are you sure you want to continue with the free plan? You can upgrade anytime.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { 
-              text: 'Continue with Free', 
-              onPress: async () => {
-                try {
-                  const token = await AsyncStorage.getItem('authToken');
-                  if (token && user?.email) {
-                    // Update user status to not new user and trigger email verification
-                    console.log('Starting free account setup...');
-                    const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
-                    console.log('API URL:', apiUrl);
+    console.log('🔥 GREEN BUTTON CLICKED!');
+    console.log('Selected tier:', tierKey);
+    console.log('Is new user:', isNewUser);
+    console.log('User data:', user);
+    
+    try {
+      if (tierKey === 'free') {
+        if (isNewUser) {
+          console.log('Showing confirmation for new user choosing free tier');
+          // Show confirmation for new users choosing free tier
+          Alert.alert(
+            'Confirm Free Plan',
+            'Are you sure you want to continue with the free plan? You can upgrade anytime.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Continue with Free', 
+                onPress: async () => {
+                  console.log('User confirmed free plan selection');
+                  try {
+                    setIsLoading('free');
+                    const token = await AsyncStorage.getItem('authToken');
+                    console.log('Retrieved token:', token ? 'Present' : 'Missing');
                     
-                    const response = await fetch(`${apiUrl}/user/subscription`, {
-                      method: 'PUT',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                      },
-                      body: JSON.stringify({
-                        subscriptionTier: 'free',
-                        isNewUser: false
-                      })
-                    });
-                    
-                    console.log('Response status:', response.status);
-                    const responseText = await response.text();
-                    console.log('Response:', responseText);
-
-                    if (response.ok) {
-                      console.log('User status updated to not new user');
+                    if (token && user?.email) {
+                      // Update user status to not new user and trigger email verification
+                      console.log('Starting free account setup...');
+                      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
+                      console.log('API URL:', apiUrl);
                       
-                      // Send verification email
-                      console.log('Sending verification email to:', user.email);
-                      const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
-                      if (verificationResult.success) {
-                        console.log('Verification email sent successfully');
-                        Alert.alert(
-                          'Welcome to MerchTech!',
-                          'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
-                          [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
-                        );
+                      const response = await fetch(`${apiUrl}/user/subscription`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          subscriptionTier: 'free',
+                          isNewUser: false
+                        })
+                      });
+                      
+                      console.log('Response status:', response.status);
+                      const responseText = await response.text();
+                      console.log('Response:', responseText);
+
+                      if (response.ok) {
+                        console.log('User status updated to not new user');
+                        
+                        // Send verification email
+                        console.log('Sending verification email to:', user.email);
+                        const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
+                        if (verificationResult.success) {
+                          console.log('Verification email sent successfully');
+                          Alert.alert(
+                            'Welcome to MerchTech!',
+                            'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
+                            [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+                          );
+                        } else {
+                          console.error('Failed to send verification email:', verificationResult.message);
+                          Alert.alert(
+                            'Account Created',
+                            'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
+                            [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+                          );
+                        }
                       } else {
-                        console.error('Failed to send verification email:', verificationResult.message);
-                        Alert.alert(
-                          'Account Created',
-                          'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
-                          [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
-                        );
+                        console.error('Failed to update user status. Response:', responseText);
+                        throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
                       }
                     } else {
-                      console.error('Failed to update user status. Response:', responseText);
-                      throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
+                      console.error('Missing token or user email:', { 
+                        hasToken: !!token, 
+                        hasEmail: !!user?.email 
+                      });
+                      throw new Error('Missing authentication or email');
                     }
-                  } else {
-                    throw new Error('Missing authentication or email');
+                  } catch (error) {
+                    console.error('Failed to process free account selection:', error);
+                    console.error('Error details:', {
+                      message: error.message,
+                      stack: error.stack,
+                      userEmail: user?.email || 'Missing'
+                    });
+                    Alert.alert(
+                      'Error',
+                      `There was an issue setting up your account: ${error.message}. Please try again.`,
+                      [{ text: 'OK' }]
+                    );
+                  } finally {
+                    setIsLoading(null);
                   }
-                } catch (error) {
-                  console.error('Failed to process free account selection:', error);
-                  console.error('Error details:', {
-                    message: error.message,
-                    stack: error.stack,
-                    token: token ? 'Present' : 'Missing',
-                    userEmail: user?.email || 'Missing'
-                  });
-                  Alert.alert(
-                    'Error',
-                    `There was an issue setting up your account: ${error.message}. Please try again.`,
-                    [{ text: 'OK' }]
-                  );
                 }
               }
-            }
-          ]
-        );
+            ]
+          );
+          return;
+        }
+        
+        console.log('Free tier selected for existing user');
+        if (user) {
+          router.push('/(tabs)/');
+        } else {
+          router.push('/auth/login');
+        }
         return;
       }
-      
-      if (user) {
-        router.push('/(tabs)/');
-      } else {
-        router.push('/auth/login');
+
+      console.log('Paid tier selected:', tierKey);
+      if (!user) {
+        router.push(`/auth/login?plan=${tierKey}`);
+        return;
       }
-      return;
-    }
 
-    if (!user) {
-      router.push(`/auth/login?plan=${tierKey}`);
-      return;
+      router.push(`/subscription/checkout?tier=${tierKey}&newUser=${isNewUser}`);
+    } catch (error) {
+      console.error('Error in handleSelectPlan:', error);
+      Alert.alert('Error', 'Something went wrong. Please try again.');
     }
-
-    router.push(`/subscription/checkout?tier=${tierKey}&newUser=${isNewUser}`);
   };
 
   const renderTierCard = (tierKey: string, tier: any) => {
@@ -206,8 +228,13 @@ export default function SubscriptionScreen() {
             isCurrent ? styles.currentButton : styles.upgradeButton,
             loading && styles.loadingButton,
           ]}
-          onPress={() => handleSelectPlan(tierKey)}
+          onPress={() => {
+            console.log(`🚀 Button pressed for tier: ${tierKey}`);
+            console.log('Button disabled state:', loading || (isCurrent && tierKey !== 'free'));
+            handleSelectPlan(tierKey);
+          }}
           disabled={loading || (isCurrent && tierKey !== 'free')}
+          activeOpacity={0.8}
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
