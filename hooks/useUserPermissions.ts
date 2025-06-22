@@ -63,8 +63,21 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      let token = await AsyncStorage.getItem('authToken');
       console.log('Fetching users with token:', token ? 'Present' : 'Missing');
+
+      // Check if we need to use the developer fallback token
+      if (!token) {
+        console.log('No token found, checking for developer fallback');
+        const currentUser = await AsyncStorage.getItem('currentUser');
+        if (currentUser) {
+          const user = JSON.parse(currentUser);
+          if (user.email === 'djjetfuel@gmail.com') {
+            token = 'dev_jwt_token_djjetfuel_12345';
+            console.log('Using developer fallback token');
+          }
+        }
+      }
 
       const apiUrl = `${getApiUrl()}/admin/all-users`;
       console.log('API URL:', apiUrl);
@@ -204,8 +217,21 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     console.log('User ID to delete:', userId, 'Type:', typeof userId);
 
     try {
-      const token = await AsyncStorage.getItem('authToken');
+      let token = await AsyncStorage.getItem('authToken');
       console.log('Auth token available:', !!token);
+
+      // Check if we need to use the developer fallback token
+      if (!token) {
+        console.log('No token found, checking for developer fallback');
+        const currentUser = await AsyncStorage.getItem('currentUser');
+        if (currentUser) {
+          const user = JSON.parse(currentUser);
+          if (user.email === 'djjetfuel@gmail.com') {
+            token = 'dev_jwt_token_djjetfuel_12345';
+            console.log('Using developer fallback token');
+          }
+        }
+      }
 
       if (!token) {
         console.error('No auth token found');
