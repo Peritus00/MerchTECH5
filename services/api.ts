@@ -74,14 +74,27 @@ api.interceptors.response.use(
 
 export default api;
 
+// Flag to prevent developer fallback during logout
+let isLoggingOut = false;
+
 // Auth endpoints
 export const authAPI = {
+  setLoggingOut: (status: boolean) => {
+    isLoggingOut = status;
+  },
+
   login: async (email: string, password: string) => {
     try {
       const response = await api.post('/auth/login', { email, password });
       return response.data;
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
+      
+      // Don't use developer fallback during logout process
+      if (isLoggingOut) {
+        console.log('Skipping developer fallback - logout in progress');
+        throw new Error('Logout in progress');
+      }
       
       // If backend fails, fall back to developer login
       if (email === 'djjetfuel@gmail.com' && password === 'dev123') {

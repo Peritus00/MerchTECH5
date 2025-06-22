@@ -136,6 +136,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('Starting logout process...');
       setState(prev => ({ ...prev, isLoading: true, isLoggingOut: true }));
 
+      // Prevent developer fallback during logout
+      const { authAPI } = await import('@/services/api');
+      authAPI.setLoggingOut(true);
+
       // Clear authentication data
       await authService.logout();
       console.log('Auth service logout completed');
@@ -156,6 +160,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('State updated, navigating to login...');
 
+      // Reset the logging out flag
+      authAPI.setLoggingOut(false);
+
       // Use longer delay to ensure everything is cleared
       setTimeout(() => {
         router.replace('/auth/login');
@@ -168,11 +175,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
       await AsyncStorage.clear(); // Nuclear option - clear everything
       
+      // Reset the logging out flag even on error
+      const { authAPI } = await import('@/services/api');
+      authAPI.setLoggingOut(false);
+      
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
+        isLoggingOut: false,
       });
 
       setTimeout(() => {
