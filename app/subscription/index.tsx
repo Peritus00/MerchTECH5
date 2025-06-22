@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -63,7 +64,34 @@ export default function SubscriptionScreen() {
             { text: 'Cancel', style: 'cancel' },
             { 
               text: 'Continue with Free', 
-              onPress: () => router.push('/(tabs)/') 
+              onPress: async () => {
+                // Update user to no longer be new user since they've selected a plan
+                if (user?.isNewUser) {
+                  try {
+                    const token = await AsyncStorage.getItem('authToken');
+                    if (token) {
+                      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
+                        method: 'PUT',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          subscriptionTier: 'free',
+                          isNewUser: false
+                        })
+                      });
+
+                      if (response.ok) {
+                        console.log('User status updated to not new user');
+                      }
+                    }
+                  } catch (error) {
+                    console.error('Failed to update user status:', error);
+                  }
+                }
+                router.push('/(tabs)/');
+              }
             }
           ]
         );
