@@ -294,9 +294,12 @@ export default function UserPermissionsScreen() {
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
-          onPress: async () => {
+          onPress: () => {
             console.log('Delete confirmation button pressed - calling executeDelete');
-            await executeDelete(userId, targetUser);
+            executeDelete(userId, targetUser).catch(error => {
+              console.error('Delete operation failed:', error);
+              Alert.alert('Error', `Failed to delete user: ${error.message || 'Unknown error'}`);
+            });
           },
         },
       ]
