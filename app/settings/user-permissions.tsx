@@ -275,39 +275,14 @@ export default function UserPermissionsScreen() {
       return;
     }
 
-    const isPending = typeof userId === 'string' && userId.startsWith('pending_');
-    const actionText = isPending ? 'remove this pending registration' : 'permanently delete this user';
-
-    console.log('Showing delete confirmation dialog');
-
-    Alert.alert(
-      isPending ? 'Remove Pending User' : 'Delete User',
-      `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => {
-            console.log('=== DELETE CANCELLED ===');
-          }
-        },
-        {
-          text: isPending ? 'Remove' : 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            console.log('Delete confirmation button pressed - scheduling executeDelete');
-            // Use setTimeout to prevent race condition with dialog dismissal
-            setTimeout(() => {
-              console.log('Executing delayed delete operation');
-              executeDelete(userId, targetUser).catch(error => {
-                console.error('Delete operation failed:', error);
-                Alert.alert('Error', `Failed to delete user: ${error.message || 'Unknown error'}`);
-              });
-            }, 100);
-          },
-        },
-      ]
-    );
+    console.log('Directly calling executeDelete without Alert confirmation');
+    
+    try {
+      await executeDelete(userId, targetUser);
+    } catch (error) {
+      console.error('Delete operation failed:', error);
+      Alert.alert('Error', `Failed to delete user: ${error.message || 'Unknown error'}`);
+    }
   };
 
   const handleEditUser = (userId: number | string) => {
