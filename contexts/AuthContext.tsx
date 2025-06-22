@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { useSegments } from 'expo-router';
@@ -18,159 +17,100 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Global singleton state - only one instance allowed
-let globalAuthInstance: {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  isInitialized: boolean;
-  hasInitialized: boolean;
-  isInitializing: boolean;
-  initPromise: Promise<void> | null;
-  subscribers: Set<() => void>;
-} = {
-  user: null,
-  isAuthenticated: false,
-  isLoading: false,
-  isInitialized: false,
-  hasInitialized: false,
-  isInitializing: false,
-  initPromise: null,
-  subscribers: new Set(),
-};
-
-// Prevent multiple providers
-let providerCount = 0;
-const MAX_PROVIDERS = 1;
+// Simple singleton to prevent multiple initializations
+let isAuthInitialized = false;
+let authPromise: Promise<void> | null = null;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  providerCount++;
-  
-  // Block additional providers
-  if (providerCount > MAX_PROVIDERS) {
-    console.log(`🔴 AuthProvider: Blocking extra provider instance #${providerCount}`);
-    return <>{children}</>;
-  }
-
-  console.log(`🔴 AuthProvider: Creating provider instance #${providerCount}`);
-
-  const [localState, setLocalState] = useState({
-    user: globalAuthInstance.user,
-    isAuthenticated: globalAuthInstance.isAuthenticated,
-    isLoading: globalAuthInstance.isLoading,
-    isInitialized: globalAuthInstance.isInitialized,
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const router = useRouter();
   const segments = useSegments();
 
-  // Subscribe to global state changes
+  // Initialize auth only once across the entire app
   useEffect(() => {
-    const updateLocalState = () => {
-      setLocalState({
-        user: globalAuthInstance.user,
-        isAuthenticated: globalAuthInstance.isAuthenticated,
-        isLoading: globalAuthInstance.isLoading,
-        isInitialized: globalAuthInstance.isInitialized,
+    if (isAuthInitialized && authPromise) {
+      // If already initializing, wait for it
+      authPromise.then(() => {
+        setIsLoading(false);
+        setIsInitialized(true);
       });
-    };
-
-    globalAuthInstance.subscribers.add(updateLocalState);
-    
-    return () => {
-      globalAuthInstance.subscribers.delete(updateLocalState);
-    };
-  }, []);
-
-  // Notify all subscribers of state changes
-  const notifySubscribers = () => {
-    globalAuthInstance.subscribers.forEach(callback => callback());
-  };
-
-  // Update global state
-  const updateGlobalState = (updates: Partial<typeof globalAuthInstance>) => {
-    Object.assign(globalAuthInstance, updates);
-    notifySubscribers();
-  };
-
-  // Initialize auth only once
-  useEffect(() => {
-    if (globalAuthInstance.hasInitialized || globalAuthInstance.isInitializing) {
-      console.log('🔴 Auth: Skipping initialization - already done or in progress');
       return;
     }
 
-    console.log('🔴 Auth: Starting single initialization...');
-    globalAuthInstance.isInitializing = true;
-    globalAuthInstance.initPromise = initializeAuth();
+    if (isAuthInitialized) {
+      // Already initialized, just update local state
+      setIsLoading(false);
+      setIsInitialized(true);
+      return;
+    }
+
+    // Mark as initializing and start the process
+    isAuthInitialized = true;
+    authPromise = initializeAuth();
+
+    authPromise.finally(() => {
+      authPromise = null;
+    });
   }, []);
 
-  // Handle route navigation only from the primary provider
+  // Handle navigation only when auth is ready
   useEffect(() => {
-    if (providerCount !== 1 || !localState.isInitialized || localState.isLoading) {
+    if (!isInitialized || isLoading) {
       return;
     }
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
+    const isAuthenticated = !!user;
 
-    if (!localState.isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
-      console.log('🔴 Route: Redirecting to login');
+    console.log('🔴 Auth navigation check:', { isAuthenticated, inAuthGroup, inSubscriptionGroup, segments });
+
+    if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
+      console.log('🔴 Redirecting to login');
       router.replace('/auth/login');
-    } else if (localState.isAuthenticated && inAuthGroup) {
-      console.log('🔴 Route: Redirecting to home');
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('🔴 Redirecting to home');
       router.replace('/(tabs)');
     }
-  }, [localState.isAuthenticated, localState.isInitialized, localState.isLoading, segments[0]]);
+  }, [user, isInitialized, isLoading, segments[0]]);
 
   const initializeAuth = async () => {
     try {
-      updateGlobalState({ isLoading: true });
-      console.log('🔴 Auth: Getting current user...');
+      console.log('🔴 AuthContext: Starting initialization...');
+      setIsLoading(true);
 
       const currentUser = await authService.getCurrentUser();
-      console.log('🔴 Auth: User result:', currentUser?.username || 'none');
+      console.log('🔴 AuthContext: Current user:', currentUser?.username || 'none');
 
-      updateGlobalState({
-        user: currentUser,
-        isAuthenticated: !!currentUser,
-      });
+      setUser(currentUser);
     } catch (error) {
-      console.error('🔴 Auth: Init error:', error);
-      updateGlobalState({
-        user: null,
-        isAuthenticated: false,
-      });
+      console.error('🔴 AuthContext: Init error:', error);
+      setUser(null);
     } finally {
-      updateGlobalState({
-        isLoading: false,
-        isInitialized: true,
-        hasInitialized: true,
-        isInitializing: false,
-      });
-      globalAuthInstance.initPromise = null;
-      console.log('🔴 Auth: Initialization complete');
+      setIsLoading(false);
+      setIsInitialized(true);
+      console.log('🔴 AuthContext: Initialization complete');
     }
   };
 
   const login = async (email: string, password: string) => {
     try {
-      updateGlobalState({ isLoading: true });
+      setIsLoading(true);
       const response = await authService.login({ email, password });
-      updateGlobalState({
-        user: response.user,
-        isAuthenticated: true,
-      });
+      setUser(response.user);
     } catch (error: any) {
       throw error;
     } finally {
-      updateGlobalState({ isLoading: false });
+      setIsLoading(false);
     }
   };
 
   const register = async (email: string, password: string, username: string, firstName?: string, lastName?: string) => {
     try {
-      updateGlobalState({ isLoading: true });
+      setIsLoading(true);
       const response = await authService.register({
         email,
         password,
@@ -178,60 +118,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         firstName,
         lastName
       });
-      updateGlobalState({
-        user: response.user,
-        isAuthenticated: true,
-      });
+      setUser(response.user);
     } catch (error: any) {
       throw error;
     } finally {
-      updateGlobalState({ isLoading: false });
+      setIsLoading(false);
     }
   };
 
   const logout = async () => {
     try {
-      updateGlobalState({ isLoading: true });
+      setIsLoading(true);
       await authService.logout();
-      updateGlobalState({
-        user: null,
-        isAuthenticated: false,
-      });
+      setUser(null);
       router.replace('/auth/login');
     } catch (error) {
       console.error('🔴 Auth: Logout error:', error);
-      updateGlobalState({
-        user: null,
-        isAuthenticated: false,
-      });
+      setUser(null);
       router.replace('/auth/login');
     } finally {
-      updateGlobalState({ isLoading: false });
+      setIsLoading(false);
     }
   };
 
   const refreshUser = async () => {
     try {
       const currentUser = await authService.getCurrentUser();
-      updateGlobalState({
-        user: currentUser,
-        isAuthenticated: !!currentUser,
-      });
+      setUser(currentUser);
     } catch (error) {
       console.error('🔴 Auth: Refresh error:', error);
-      updateGlobalState({
-        user: null,
-        isAuthenticated: false,
-      });
+      setUser(null);
     }
   };
 
   return (
     <AuthContext.Provider value={{
-      user: localState.user,
-      isAuthenticated: localState.isAuthenticated,
-      isLoading: localState.isLoading,
-      isInitialized: localState.isInitialized,
+      user,
+      isAuthenticated: !!user,
+      isLoading,
+      isInitialized,
       login,
       register,
       logout,

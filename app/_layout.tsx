@@ -14,14 +14,9 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   const { isInitialized, isLoading } = useAuth();
 
-  // Minimal effect to prevent cascading
-  useEffect(() => {
-    if (isInitialized && !isLoading) {
-      console.log('🔴 RootLayout: Auth ready');
-    }
-  }, [isInitialized, isLoading]);
+  console.log('🔴 RootLayout: Auth state -', { isInitialized, isLoading });
 
-  // Don't render anything while loading
+  // Show nothing while initializing
   if (!isInitialized || isLoading) {
     return null;
   }
