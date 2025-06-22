@@ -20,9 +20,9 @@ function RootLayoutNav() {
   const navigationLockRef = useRef(false);
 
   useEffect(() => {
-    // NAVIGATION LOCK: Block ALL navigation during logout
+    // NUCLEAR NAVIGATION LOCK: Block ALL navigation during nuclear logout
     if (isLoggingOut || navigationLockRef.current) {
-      console.log('NAVIGATION BLOCKED: Logout in progress');
+      console.log('NUCLEAR NAVIGATION BLOCKED: Logout in progress');
       return;
     }
     

@@ -103,6 +103,28 @@ export const authAPI = {
   },
 
   login: async (email: string, password: string) => {
+    // NUCLEAR CHECK: Block ALL authentication attempts if nuclear flag exists
+    try {
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
+      const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
+      
+      if (nuclearFlag === 'true') {
+        const timestamp = parseInt(logoutTimestamp || '0');
+        const timeSinceLogout = Date.now() - timestamp;
+        
+        if (timeSinceLogout < 12000) {
+          console.log('NUCLEAR LOGIN BLOCKED: Nuclear logout in progress', {
+            timeSinceLogout,
+            remainingTime: 12000 - timeSinceLogout
+          });
+          throw new Error('Authentication disabled during nuclear logout');
+        }
+      }
+    } catch (storageError) {
+      console.error('Error checking nuclear flags:', storageError);
+    }
+
     // FIRST CHECK: Block ALL authentication attempts if locked
     if (authenticationLocked) {
       console.log('AUTHENTICATION BLOCKED: Global authentication lock is active');

@@ -53,16 +53,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Check for persistent logout flag
+    // Check for nuclear logout flags
     try {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
-      const persistentLogoutFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
-      if (persistentLogoutFlag === 'true') {
-        console.log('BLOCKED: Persistent logout flag is active');
-        return;
+      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
+      const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
+      
+      if (nuclearFlag === 'true') {
+        const timestamp = parseInt(logoutTimestamp || '0');
+        const timeSinceLogout = Date.now() - timestamp;
+        
+        if (timeSinceLogout < 12000) { // Block for 12 seconds
+          console.log('NUCLEAR BLOCKED: Nuclear logout flag is active', {
+            timeSinceLogout,
+            remainingTime: 12000 - timeSinceLogout
+          });
+          return;
+        } else {
+          // Auto-cleanup expired nuclear flags
+          await AsyncStorage.removeItem('NUCLEAR_LOGOUT_FLAG');
+          await AsyncStorage.removeItem('LOGOUT_TIMESTAMP');
+          console.log('NUCLEAR CLEANUP: Expired nuclear flags removed');
+        }
       }
     } catch (error) {
-      console.error('Error checking persistent logout flag:', error);
+      console.error('Error checking nuclear logout flags:', error);
     }
     
     try {
@@ -162,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('PERSISTENT LOGOUT: Starting with storage flag...');
+      console.log('NUCLEAR LOGOUT: Starting complete system shutdown...');
       
       // STEP 0: Clear any existing debounce
       if (logoutDebounceRef.current) {
@@ -171,87 +186,110 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // STEP 1: Set PERSISTENT logout flag in storage FIRST
       const AsyncStorage = require('@react-native-async-storage/async-storage');
-      await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
+      await AsyncStorage.setItem('NUCLEAR_LOGOUT_FLAG', 'true');
+      await AsyncStorage.setItem('LOGOUT_TIMESTAMP', Date.now().toString());
+      console.log('NUCLEAR: Persistent flags set');
       
-      // STEP 2: Set forced logout period for 8 seconds
-      forceLogoutUntilRef.current = Date.now() + 8000;
+      // STEP 2: Set forced logout period for 12 seconds
+      forceLogoutUntilRef.current = Date.now() + 12000;
       
       // STEP 3: IMMEDIATELY block ALL authentication everywhere
       isLoggingOutRef.current = true;
       const { authAPI } = await import('@/services/api');
       authAPI.lockAuthentication();
       authAPI.setLoggingOut(true);
+      console.log('NUCLEAR: All authentication blocked');
       
-      // STEP 4: Force clear AsyncStorage (except our persistent flag)
-      const persistentFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
+      // STEP 4: Complete AsyncStorage wipe (except our nuclear flags)
+      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
+      const timestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
       await AsyncStorage.clear();
-      if (persistentFlag) {
-        await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
+      if (nuclearFlag) {
+        await AsyncStorage.setItem('NUCLEAR_LOGOUT_FLAG', 'true');
+        await AsyncStorage.setItem('LOGOUT_TIMESTAMP', timestamp || Date.now().toString());
       }
-      console.log('PERSISTENT: AsyncStorage cleared except logout flag');
+      console.log('NUCLEAR: Complete storage wipe completed');
 
-      // STEP 5: Update state to logged out immediately
+      // STEP 5: Nuclear state reset with forced logout flag
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-        isLoggingOut: false,
+        isLoggingOut: true, // Keep this true to prevent any auth attempts
       });
-      console.log('PERSISTENT: State reset to logged out');
+      console.log('NUCLEAR: State reset with logout flag active');
 
       // STEP 6: Clear auth service data
       await authService.logout();
-      console.log('PERSISTENT: Auth service cleared');
+      console.log('NUCLEAR: Auth service cleared');
 
-      // STEP 7: Force navigation immediately
-      console.log('PERSISTENT: Forcing navigation to login...');
-      router.replace('/auth/login');
+      // STEP 7: Complete router reset and navigation
+      router.dismissAll(); // Clear entire navigation stack
+      setTimeout(() => {
+        router.replace('/auth/login');
+        console.log('NUCLEAR: Router completely reset to login');
+      }, 100);
       
-      // STEP 8: Set up persistent flag clearance after 8 seconds
+      // STEP 8: Extended recovery after 12 seconds
       logoutDebounceRef.current = setTimeout(async () => {
+        console.log('NUCLEAR RECOVERY: Starting system recovery...');
         const AsyncStorage = require('@react-native-async-storage/async-storage');
-        await AsyncStorage.removeItem('PERSISTENT_LOGOUT_FLAG');
+        await AsyncStorage.removeItem('NUCLEAR_LOGOUT_FLAG');
+        await AsyncStorage.removeItem('LOGOUT_TIMESTAMP');
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
         forceLogoutUntilRef.current = 0;
-        console.log('PERSISTENT LOGOUT: All locks and flags cleared after 8 seconds');
-      }, 8000);
+        
+        // Final state cleanup
+        setState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          isInitialized: true,
+          isLoggingOut: false,
+        });
+        
+        console.log('NUCLEAR RECOVERY: Complete system recovery finished');
+      }, 12000);
 
     } catch (error) {
-      console.error('ULTIMATE LOGOUT ERROR:', error);
+      console.error('NUCLEAR LOGOUT ERROR:', error);
 
-      // Even if everything fails, force the state reset
+      // Even if everything fails, force nuclear reset
       const AsyncStorage = require('@react-native-async-storage/async-storage');
-      const persistentFlag = await AsyncStorage.getItem('PERSISTENT_LOGOUT_FLAG');
+      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
+      const timestamp = Date.now().toString();
       await AsyncStorage.clear();
-      if (persistentFlag) {
-        await AsyncStorage.setItem('PERSISTENT_LOGOUT_FLAG', 'true');
-      }
+      await AsyncStorage.setItem('NUCLEAR_LOGOUT_FLAG', 'true');
+      await AsyncStorage.setItem('LOGOUT_TIMESTAMP', timestamp);
       
       setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-        isLoggingOut: false,
+        isLoggingOut: true,
       });
 
-      // Force navigation no matter what
-      router.replace('/auth/login');
+      // Nuclear navigation reset
+      router.dismissAll();
+      setTimeout(() => router.replace('/auth/login'), 100);
       
-      // Set forced logout period and recovery with persistent flag clearance
-      forceLogoutUntilRef.current = Date.now() + 8000;
+      // Nuclear recovery timer
+      forceLogoutUntilRef.current = Date.now() + 12000;
       const { authAPI } = await import('@/services/api');
       logoutDebounceRef.current = setTimeout(async () => {
-        await AsyncStorage.removeItem('PERSISTENT_LOGOUT_FLAG');
+        await AsyncStorage.removeItem('NUCLEAR_LOGOUT_FLAG');
+        await AsyncStorage.removeItem('LOGOUT_TIMESTAMP');
         isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
         forceLogoutUntilRef.current = 0;
-        console.log('PERSISTENT RECOVERY: All locks and flags cleared after 8 seconds');
-      }, 8000);
+        setState(prev => ({ ...prev, isLoggingOut: false }));
+        console.log('NUCLEAR ERROR RECOVERY: All systems restored');
+      }, 12000);
     }
   };
 
