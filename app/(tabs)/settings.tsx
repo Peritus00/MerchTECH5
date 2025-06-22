@@ -25,6 +25,7 @@ export default function Settings() {
   }
 
   const handleLogout = async () => {
+    console.log('🔴 LOGOUT BUTTON PRESSED! Starting logout process...');
     try {
       console.log('Settings: Logout button pressed - starting logout process');
       console.log('Settings: Current user before logout:', user);
@@ -129,7 +130,10 @@ export default function Settings() {
     {
       title: 'Logout',
       description: 'Sign out of your account',
-      onPress: handleLogout,
+      onPress: () => {
+        console.log('🔴 Logout option pressed from settingsOptions!');
+        handleLogout();
+      },
       icon: '🚪',
       isLogout: true,
     },
