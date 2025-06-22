@@ -122,7 +122,8 @@ class AuthService {
       }
     } catch (error) {
       console.error('Get current user error:', error);
-      await this.logout(); // Clear invalid data
+      // Don't call logout here as it can create circular dependencies
+      // Just return null and let the auth context handle the state
       return null;
     }
   }
@@ -153,9 +154,17 @@ class AuthService {
       }
       return false;
     } catch (error) {
-      // Don't log token refresh errors as they're expected when tokens expire
-      // Just clear the invalid tokens
-      await this.logout();
+      // Don't call logout here to prevent circular dependencies
+      // Just clear the tokens silently
+      try {
+        await Promise.all([
+          AsyncStorage.removeItem(AuthService.TOKEN_KEY),
+          AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
+          AsyncStorage.removeItem(AuthService.USER_KEY),
+        ]);
+      } catch (clearError) {
+        console.error('Failed to clear tokens during refresh failure:', clearError);
+      }
       return false;
     }
   }
