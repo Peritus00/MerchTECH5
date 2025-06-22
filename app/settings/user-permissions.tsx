@@ -223,7 +223,7 @@ export default function UserPermissionsScreen() {
           onPress: () => {
             console.log(`${suspend ? 'Suspending' : 'Unsuspending'} user:`, userId);
             Alert.alert('Success', `User ${suspend ? 'suspended' : 'unsuspended'} successfully`);
-            
+
             // TODO: Implement actual API call when backend is ready
             // updateUserPermissions(userId, { isSuspended: suspend });
           },
@@ -296,7 +296,10 @@ export default function UserPermissionsScreen() {
           style: 'destructive',
           onPress: () => {
             console.log('Delete confirmation button pressed - calling executeDelete');
-            executeDelete(userId, targetUser);
+            // Use setTimeout to ensure the alert dismisses before executing async operation
+            setTimeout(() => {
+              executeDelete(userId, targetUser);
+            }, 100);
           },
         },
       ]
