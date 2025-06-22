@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -29,7 +28,7 @@ export default function LoginScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const { login, isLoading } = useAuth();
   const router = useRouter();
 
@@ -62,14 +61,27 @@ export default function LoginScreen() {
 
     try {
       const result = await login(email.trim(), password);
-      
+
       if (result.success) {
         router.replace('/(tabs)');
       } else {
         setErrors({ general: result.error || 'Login failed' });
       }
     } catch (error: any) {
-      setErrors({ general: error.message || 'An unexpected error occurred' });
+      console.error('Login error:', error);
+
+      if (error.message.includes('Account suspended')) {
+        Alert.alert(
+          'Account Suspended',
+          'Your account has been temporarily suspended due to unverified email. Please contact help@merchtech.net for assistance.',
+          [
+            { text: 'Contact Support', onPress: () => {} },
+            { text: 'OK', style: 'cancel' }
+          ]
+        );
+      } else {
+        setErrors({ general: error.message || 'Login failed' });
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -65,32 +65,56 @@ export default function SubscriptionScreen() {
             { 
               text: 'Continue with Free', 
               onPress: async () => {
-                // Update user to no longer be new user since they've selected a plan
-                if (user?.isNewUser) {
-                  try {
-                    const token = await AsyncStorage.getItem('authToken');
-                    if (token) {
-                      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                          subscriptionTier: 'free',
-                          isNewUser: false
-                        })
-                      });
+                try {
+                  const token = await AsyncStorage.getItem('authToken');
+                  if (token && user?.email) {
+                    // Update user status to not new user and trigger email verification
+                    const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
+                      body: JSON.stringify({
+                        subscriptionTier: 'free',
+                        isNewUser: false
+                      })
+                    });
 
-                      if (response.ok) {
-                        console.log('User status updated to not new user');
+                    if (response.ok) {
+                      console.log('User status updated to not new user');
+                      
+                      // Send verification email
+                      const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
+                      if (verificationResult.success) {
+                        console.log('Verification email sent successfully');
+                        Alert.alert(
+                          'Welcome to MerchTech!',
+                          'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
+                          [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+                        );
+                      } else {
+                        console.error('Failed to send verification email:', verificationResult.message);
+                        Alert.alert(
+                          'Account Created',
+                          'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
+                          [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+                        );
                       }
+                    } else {
+                      throw new Error('Failed to update user status');
                     }
-                  } catch (error) {
-                    console.error('Failed to update user status:', error);
+                  } else {
+                    throw new Error('Missing authentication or email');
                   }
+                } catch (error) {
+                  console.error('Failed to process free account selection:', error);
+                  Alert.alert(
+                    'Error',
+                    'There was an issue setting up your account. Please try again.',
+                    [{ text: 'OK' }]
+                  );
                 }
-                router.push('/(tabs)/');
               }
             }
           ]

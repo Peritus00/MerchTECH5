@@ -103,6 +103,108 @@ async function cleanupExpiredPendingUsers() {
   }
 }
 
+// Handle account verification reminders and suspensions
+async function handleAccountVerification() {
+  try {
+    console.log('Checking for accounts needing verification reminders or suspension...');
+    
+    // Find unverified accounts that are 24 hours old (send reminder)
+    const reminderUsers = await pool.query(`
+      SELECT id, email, username, created_at 
+      FROM users 
+      WHERE is_email_verified = FALSE 
+      AND is_new_user = FALSE 
+      AND created_at <= NOW() - INTERVAL '24 hours'
+      AND created_at > NOW() - INTERVAL '25 hours'
+      AND subscription_tier != 'suspended'
+    `);
+
+    // Send 24-hour reminder emails
+    for (const user of reminderUsers.rows) {
+      try {
+        console.log(`Sending 24-hour reminder to user: ${user.email}`);
+        
+        await transporter.sendMail({
+          from: '8e773a002@smtp-brevo.com',
+          to: user.email,
+          subject: 'Reminder: Verify Your MerchTech Account (24 Hours Remaining)',
+          html: `
+            <h2>Account Verification Reminder</h2>
+            <p>Hello ${user.username || 'User'},</p>
+            <p>This is a friendly reminder that you have <strong>24 hours remaining</strong> to verify your MerchTech account.</p>
+            <p>If you don't verify your email within the next 24 hours, your account will be temporarily suspended for security purposes.</p>
+            <p>To verify your account, please check your email for our verification message or log into your account to resend the verification email.</p>
+            <p>If you need assistance, please contact us at <a href="mailto:help@merchtech.net">help@merchtech.net</a></p>
+            <p>Thank you for choosing MerchTech!</p>
+            <hr>
+            <p><small>This is an automated message from MerchTech. Please do not reply to this email.</small></p>
+          `
+        });
+        
+        console.log(`24-hour reminder sent successfully to: ${user.email}`);
+      } catch (emailError) {
+        console.error(`Failed to send 24-hour reminder to ${user.email}:`, emailError);
+      }
+    }
+
+    // Find unverified accounts that are 48 hours old (suspend)
+    const suspensionUsers = await pool.query(`
+      SELECT id, email, username, created_at 
+      FROM users 
+      WHERE is_email_verified = FALSE 
+      AND is_new_user = FALSE 
+      AND created_at <= NOW() - INTERVAL '48 hours'
+      AND subscription_tier != 'suspended'
+    `);
+
+    // Suspend accounts and send notification emails
+    for (const user of suspensionUsers.rows) {
+      try {
+        console.log(`Suspending account for user: ${user.email}`);
+        
+        // Update user to suspended status
+        await pool.query(
+          'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          ['suspended', user.id]
+        );
+
+        // Send suspension notification email
+        await transporter.sendMail({
+          from: '8e773a002@smtp-brevo.com',
+          to: user.email,
+          subject: 'MerchTech Account Temporarily Suspended - Action Required',
+          html: `
+            <h2>Account Temporarily Suspended</h2>
+            <p>Hello ${user.username || 'User'},</p>
+            <p>Your MerchTech account has been temporarily suspended because you did not verify your email address within the required 48-hour period.</p>
+            <p><strong>Why was my account suspended?</strong><br>
+            For security purposes, we require all users to verify their email addresses within 48 hours of account creation.</p>
+            <p><strong>How can I reactivate my account?</strong><br>
+            Please contact our support team at <a href="mailto:help@merchtech.net">help@merchtech.net</a> with your account details, and we'll help you verify your email and reactivate your account.</p>
+            <p><strong>What information should I include?</strong><br>
+            - Your username: ${user.username || 'Not provided'}<br>
+            - Your email address: ${user.email}<br>
+            - Account creation date: ${user.created_at}</p>
+            <p>We apologize for any inconvenience and look forward to helping you get back to using MerchTech!</p>
+            <hr>
+            <p><small>This is an automated message from MerchTech. Please contact help@merchtech.net for assistance.</small></p>
+          `
+        });
+        
+        console.log(`Account suspended and notification sent to: ${user.email}`);
+      } catch (error) {
+        console.error(`Failed to suspend account for ${user.email}:`, error);
+      }
+    }
+
+    if (reminderUsers.rowCount > 0 || suspensionUsers.rowCount > 0) {
+      console.log(`Processed ${reminderUsers.rowCount} reminder emails and ${suspensionUsers.rowCount} account suspensions`);
+    }
+  } catch (error) {
+    console.error('Error in account verification handling:', error);
+  }
+}
+
 // Initialize database tables
 async function initializeDatabase() {
   try {
@@ -366,6 +468,14 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Check if account is suspended
+    if (user.subscription_tier === 'suspended') {
+      return res.status(403).json({ 
+        error: 'Account suspended',
+        message: 'Your account has been temporarily suspended. Please contact help@merchtech.net for assistance.'
+      });
     }
 
     const token = jwt.sign(
@@ -877,13 +987,37 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
 // Update user subscription
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
-    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId, isNewUser } = req.body;
     const userId = req.user.id;
 
-    await pool.query(
-      'UPDATE users SET subscription_tier = $1, stripe_customer_id = $2, stripe_subscription_id = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
-      [subscriptionTier, stripeCustomerId, stripeSubscriptionId, userId]
-    );
+    // Build the update query dynamically based on provided fields
+    let updateFields = ['subscription_tier = $1', 'updated_at = CURRENT_TIMESTAMP'];
+    let values = [subscriptionTier];
+    let paramIndex = 2;
+
+    if (stripeCustomerId !== undefined) {
+      updateFields.push(`stripe_customer_id = $${paramIndex}`);
+      values.push(stripeCustomerId);
+      paramIndex++;
+    }
+
+    if (stripeSubscriptionId !== undefined) {
+      updateFields.push(`stripe_subscription_id = $${paramIndex}`);
+      values.push(stripeSubscriptionId);
+      paramIndex++;
+    }
+
+    if (isNewUser !== undefined) {
+      updateFields.push(`is_new_user = $${paramIndex}`);
+      values.push(isNewUser);
+      paramIndex++;
+    }
+
+    values.push(userId); // Add userId as the last parameter
+
+    const query = `UPDATE users SET ${updateFields.join(', ')} WHERE id = $${paramIndex}`;
+    
+    await pool.query(query, values);
 
     res.json({ message: 'Subscription updated successfully' });
   } catch (error) {
@@ -903,11 +1037,15 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log('  DELETE /api/admin/users/:identifier');
   await initializeDatabase();
 
-  // Start periodic cleanup of expired pending users (everyhour)
+  // Start periodic cleanup of expired pending users (every hour)
   setInterval(cleanupExpiredPendingUsers, 60 * 60 * 1000);
 
-  // Run initial cleanup
+  // Start periodic account verification monitoring (every hour)
+  setInterval(handleAccountVerification, 60 * 60 * 1000);
+
+  // Run initial cleanup and verification check
   await cleanupExpiredPendingUsers();
+  await handleAccountVerification();
 });
 
 // Graceful shutdown
