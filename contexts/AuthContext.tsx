@@ -137,37 +137,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
     
     try {
-      // Step 1: Clear auth service data first
+      // Step 1: Set loading state
+      console.log('🔴 AuthContext: Setting loading state...');
+      setState(prev => ({ ...prev, isLoading: true }));
+      
+      // Step 2: Clear auth service data
       console.log('🔴 AuthContext: Calling authService.logout()...');
       await authService.logout();
       console.log('🔴 AuthContext: authService.logout() completed');
       
-      // Step 2: Update state to logged out
+      // Step 3: Update state to logged out with a slight delay to ensure state change
       console.log('🔴 AuthContext: Updating state to logged out...');
-      setState({
+      const newState = {
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-      });
-      console.log('🔴 AuthContext: State updated to logged out');
+      };
+      setState(newState);
+      console.log('🔴 AuthContext: State updated to:', newState);
       
-      // Step 3: Force navigation to login
-      console.log('🔴 AuthContext: Forcing navigation to login...');
-      router.replace('/auth/login');
-      console.log('🔴 AuthContext: Navigation to login completed');
+      // Step 4: Wait a moment for state to propagate, then navigate
+      setTimeout(() => {
+        console.log('🔴 AuthContext: Navigating to login after state update...');
+        router.replace('/auth/login');
+        console.log('🔴 AuthContext: Navigation to login completed');
+      }, 100);
       
     } catch (error) {
       console.error('🔴 AuthContext: Error during logout:', error);
+      console.error('🔴 AuthContext: Error stack:', error.stack);
+      
       // Still update state even if service logout fails
-      setState({
+      const fallbackState = {
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-      });
+      };
+      setState(fallbackState);
+      console.log('🔴 AuthContext: Fallback state set to:', fallbackState);
+      
       // Force navigation even on error
-      router.replace('/auth/login');
+      setTimeout(() => {
+        console.log('🔴 AuthContext: Force navigating to login due to error...');
+        router.replace('/auth/login');
+      }, 100);
+      
       throw error; // Re-throw to let calling code handle it
     }
   };

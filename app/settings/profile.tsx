@@ -55,14 +55,25 @@ export default function ProfileScreen() {
               try {
                 console.log('🔴 Profile: User confirmed logout - starting process...');
                 console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
+                console.log('🔴 Profile: isAuthenticated before logout:', !!user);
 
                 // Call logout function - AuthContext will handle navigation
                 console.log('🔴 Profile: Calling logout function...');
                 await logout();
-                console.log('🔴 Profile: Logout function completed');
+                console.log('🔴 Profile: Logout function completed successfully');
+                
+                // Log state after logout attempt
+                console.log('🔴 Profile: Authentication state after logout call:', {
+                  user: user?.username || null,
+                  isAuthenticated: !!user
+                });
 
               } catch (error) {
                 console.error('🔴 Profile logout error:', error);
+                console.error('🔴 Profile logout error details:', {
+                  message: error.message,
+                  stack: error.stack
+                });
                 Alert.alert('Error', 'Failed to logout. Please try again.');
               }
             },
