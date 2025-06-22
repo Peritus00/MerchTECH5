@@ -69,11 +69,16 @@ export default function SubscriptionScreen() {
             'Confirm Free Plan',
             'Are you sure you want to continue with the free plan? You can upgrade anytime.',
             [
-              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Cancel', 
+                style: 'cancel',
+                onPress: () => console.log('User canceled free plan selection')
+              },
               { 
                 text: 'Continue with Free', 
+                style: 'default',
                 onPress: async () => {
-                  console.log('User confirmed free plan selection');
+                  console.log('🎯 User confirmed free plan selection - starting setup process');
                   try {
                     setIsLoading('free');
                     const token = await AsyncStorage.getItem('authToken');
@@ -134,15 +139,17 @@ export default function SubscriptionScreen() {
                       throw new Error('Missing authentication or email');
                     }
                   } catch (error) {
-                    console.error('Failed to process free account selection:', error);
+                    console.error('❌ Failed to process free account selection:', error);
                     console.error('Error details:', {
-                      message: error.message,
-                      stack: error.stack,
-                      userEmail: user?.email || 'Missing'
+                      message: error?.message || 'Unknown error',
+                      stack: error?.stack || 'No stack trace',
+                      userEmail: user?.email || 'Missing',
+                      hasToken: !!await AsyncStorage.getItem('authToken'),
+                      apiUrl: process.env.EXPO_PUBLIC_API_URL || 'Default URL'
                     });
                     Alert.alert(
-                      'Error',
-                      `There was an issue setting up your account: ${error.message}. Please try again.`,
+                      'Setup Error',
+                      `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${error?.message || 'Unknown error'}`,
                       [{ text: 'OK' }]
                     );
                   } finally {
