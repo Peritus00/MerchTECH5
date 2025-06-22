@@ -1,0 +1,119 @@
+Uncaught Error
+useAuth must be used within an AuthProvider
+Source
+ 
+ 246 |
+  
+const
+ context 
+=
+ useContext(
+AuthContext
+)
+;
+ 
+ 247 |
+  
+if
+ (context 
+===
+ undefined) {
+>
+ 248 |
+    
+throw
+ 
+new
+ 
+Error
+(
+'useAuth must be used within an AuthProvider'
+)
+;
+ 
+     |
+          
+^
+ 
+ 249 |
+  }
+ 
+ 250 |
+  
+return
+ context
+;
+ 
+ 251 |
+}
+Call Stack
+useAuth
+contexts/AuthContext.tsx:248:11
+RootLayoutNav
+app/_layout.tsx:15:47
+See 11 more frames
+Component Stack
+RootLayoutNav
+app/_layout.tsx:15:47
+CartProvider
+contexts/CartContext.tsx:18:73
+AuthProvider
+contexts/AuthContext.tsx:46:32
+ThemeProvider
+node_modules/@react-navigation/core/lib/module/theming/ThemeProvider.js:7:3
+RootLayout
+app/_layout.tsx:40:37
+Suspense
+<anonymous>:-1:0
+Route
+node_modules/expo-router/build/Route.js:30:18
+BaseRoute
+node_modules/expo-router/build/useScreens.js:154:5
+StaticContainer
+node_modules/@react-navigation/core/lib/module/StaticContainer.js:9:16
+EnsureSingleNavigator
+node_modules/@react-navigation/core/lib/module/EnsureSingleNavigator.js:12:3
+SceneView
+node_modules/@react-navigation/core/lib/module/SceneView.js:15:3
+PreventRemoveProvider
+node_modules/@react-navigation/core/lib/module/PreventRemoveProvider.js:31:3
+NavigationContent
+node_modules/@react-navigation/core/lib/module/useComponent.js:6:3
+React.useRef$argument_0
+node_modules/@react-navigation/core/lib/module/useComponent.js:22:5
+Content
+node_modules/expo-router/build/ExpoRoot.js:148:88
+div
+<anonymous>:-1:0
+React.forwardRef$argument_0
+node_modules/react-native-web/dist/exports/View/index.js:35:25
+NativeSafeAreaProvider
+node_modules/react-native-safe-area-context/lib/module/NativeSafeAreaProvider.web.js:21:3
+SafeAreaProvider
+node_modules/react-native-safe-area-context/lib/module/SafeAreaContext.js:15:3
+wrapper
+node_modules/expo-router/build/ExpoRoot.js:70:24
+ThemeProvider
+node_modules/@react-navigation/core/lib/module/theming/ThemeProvider.js:7:3
+EnsureSingleNavigator
+node_modules/@react-navigation/core/lib/module/EnsureSingleNavigator.js:12:3
+BaseNavigationContainer
+node_modules/@react-navigation/core/lib/module/BaseNavigationContainer.js:72:3
+NavigationContainerInner
+node_modules/expo-router/build/fork/NavigationContainer.js:32:37
+ContextNavigator
+node_modules/expo-router/build/ExpoRoot.js:89:29
+ExpoRoot
+node_modules/expo-router/build/ExpoRoot.js:64:30
+_HelmetProvider#constructor
+node_modules/expo-router/vendor/react-helmet-async/lib/index.js:483:5
+App
+<anonymous>:-1:0
+LogBoxStateSubscription#constructor
+node_modules/@expo/metro-runtime/src/error-overlay/Data/LogBoxData.tsx:365:7
+ErrorOverlay
+<anonymous>:-1:0
+withDevTools(ErrorOverlay)
+<anonymous>:-1:0
+AppContainer
+shim:react-native-web/dist/exports/AppRegistry/AppContainer.js
