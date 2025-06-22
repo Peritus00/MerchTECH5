@@ -1,3 +1,6 @@
+The code modifies the useEffect hook in the AuthProvider component to prevent constant re-initialization and improve authentication state management.
+```
+```replit_final_file
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { User } from '@/types';
@@ -38,6 +41,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     initializeAuth();
   }, []);
+
+  // Separate effect for route navigation to reduce re-renders
+  useEffect(() => {
+    if (!isInitialized || isLoading) {
+      return;
+    }
+
+    const inAuthGroup = segments[0] === 'auth';
+    const currentRoute = segments.join('/');
+
+    // Only log and redirect if authentication state is stable
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('🔴 Route navigation: Redirecting unauthenticated user to login');
+      router.replace('/auth/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('🔴 Route navigation: Redirecting authenticated user to home');
+      router.replace('/(tabs)');
+    }
+  }, [isAuthenticated, isInitialized, segments[0]]);
 
   const initializeAuth = async () => {
     try {

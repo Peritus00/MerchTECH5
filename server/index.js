@@ -979,16 +979,24 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
 
     console.log('Found in users table:', checkUserResult.rowCount);
 
-    // Try to delete from users table first (by ID or email or username)
-    const userResult = await pool.query(
-      'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',
-      [isNaN(identifier) ? null : parseInt(identifier), identifier, identifier]
-    );
+    if (checkUserResult.rowCount > 0) {
+      const userId = checkUserResult.rows[0].id;
+      
+      // First delete related refresh tokens
+      await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
+      console.log('Deleted refresh tokens for user:', userId);
+      
+      // Then delete the user
+      const userResult = await pool.query(
+        'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',
+        [isNaN(identifier) ? null : parseInt(identifier), identifier, identifier]
+      );
 
-    if (userResult.rowCount > 0) {
-      deletedFrom.push('users');
-      deletedUser = userResult.rows[0];
-      console.log(`Deleted user from users table: ${deletedUser.email} (ID: ${deletedUser.id})`);
+      if (userResult.rowCount > 0) {
+        deletedFrom.push('users');
+        deletedUser = userResult.rows[0];
+        console.log(`Deleted user from users table: ${deletedUser.email} (ID: ${deletedUser.id})`);
+      }
     }
 
     if (deletedFrom.length === 0) {
