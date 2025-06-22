@@ -298,6 +298,43 @@ app.use((err, req, res, next) => {
   });
 });
 
+// Test email endpoint
+app.post('/api/test-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    console.log('Testing email service to:', email);
+    
+    if (!transporter) {
+      return res.status(500).json({ error: 'Email service not configured' });
+    }
+
+    const testResult = await transporter.sendMail({
+      from: 'help@merchtech.net',
+      to: email || 'perrie.benton@gmail.com',
+      subject: 'MerchTech Email Test',
+      html: `
+        <h2>Email Test Successful!</h2>
+        <p>This is a test email from MerchTech to verify email service is working.</p>
+        <p>Sent at: ${new Date().toISOString()}</p>
+      `
+    });
+
+    console.log('Test email sent successfully:', testResult);
+    res.json({ 
+      success: true, 
+      message: 'Test email sent successfully',
+      messageId: testResult.messageId,
+      response: testResult.response
+    });
+  } catch (error) {
+    console.error('Test email failed:', error);
+    res.status(500).json({ 
+      error: 'Failed to send test email',
+      details: error.message 
+    });
+  }
+});
+
 // Health check with database status
 app.get('/api/health', async (req, res) => {
   try {
@@ -702,10 +739,14 @@ app.post('/api/auth/send-verification', async (req, res) => {
 
     // Send verification email
     try {
+      console.log('Attempting to send verification email to:', email);
+      console.log('Using transporter config:', transporter.options);
+      
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+      console.log('Verification URL:', verificationUrl);
 
-      await transporter.sendMail({
-        from: '8e773a002@smtp-brevo.com',
+      const emailResult = await transporter.sendMail({
+        from: 'help@merchtech.net',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
@@ -713,14 +754,24 @@ app.post('/api/auth/send-verification', async (req, res) => {
           <p>Please click the link below to verify your email address:</p>
           <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
           <p>This link will expire in 24 hours.</p>
+          <p>If you can't click the link, copy and paste this URL into your browser: ${verificationUrl}</p>
         `
       });
 
-      console.log('Verification email sent successfully');
+      console.log('Email sent successfully! Message ID:', emailResult.messageId);
+      console.log('Email response:', emailResult);
       res.json({ message: 'Verification email sent successfully' });
     } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      res.status(500).json({ error: 'Failed to send verification email' });
+      console.error('Email sending error details:', {
+        error: emailError.message,
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response
+      });
+      res.status(500).json({ 
+        error: 'Failed to send verification email',
+        details: emailError.message 
+      });
     }
   } catch (error) {
     console.error('Send verification error:', error);
@@ -830,10 +881,12 @@ app.post('/api/auth/resend-verification', async (req, res) => {
 
     // Send verification email
     try {
+      console.log('Attempting to resend verification email to:', email);
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
+      console.log('Verification URL:', verificationUrl);
 
-      await transporter.sendMail({
-        from: '8e773a002@smtp-brevo.com',
+      const emailResult = await transporter.sendMail({
+        from: 'help@merchtech.net',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
@@ -841,14 +894,24 @@ app.post('/api/auth/resend-verification', async (req, res) => {
           <p>Please click the link below to verify your email address:</p>
           <a href="${verificationUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px;">Verify Email</a>
           <p>This link will expire in 24 hours.</p>
+          <p>If you can't click the link, copy and paste this URL into your browser: ${verificationUrl}</p>
         `
       });
 
-      console.log('Verification email resent successfully');
+      console.log('Verification email resent successfully! Message ID:', emailResult.messageId);
+      console.log('Email response:', emailResult);
       res.json({ message: 'Verification email sent successfully' });
     } catch (emailError) {
-      console.error('Email sending error:', emailError);
-      res.status(500).json({ error: 'Failed to send verification email' });
+      console.error('Email resend error details:', {
+        error: emailError.message,
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response
+      });
+      res.status(500).json({ 
+        error: 'Failed to send verification email',
+        details: emailError.message 
+      });
     }
   } catch (error) {
     console.error('Resend verification error:', error);
