@@ -264,30 +264,31 @@ export default function UserPermissionsScreen() {
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
-          onPress: async () => {
+          onPress: () => {
             console.log('Delete confirmed - attempting to delete user with ID:', userId);
             console.log('Target user:', targetUser);
 
-            try {
-              const success = await deleteUser(userId);
+            // Execute the delete operation
+            deleteUser(userId).then((success) => {
               console.log('Delete operation result:', success);
 
               if (success) {
                 console.log('User deleted successfully');
                 Alert.alert('Success', 'User deleted successfully');
                 // Refresh the user list
-                await refreshUsers();
+                refreshUsers();
               } else {
                 console.log('Delete operation failed');
                 Alert.alert('Error', 'Failed to delete user. Please try again.');
               }
-            } catch (error) {
+            }).catch((error) => {
               console.error('Error in delete handler:', error);
-              Alert.alert('Error', `An unexpected error occurred: ${error.message}`);
-            }
+              Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
+            });
           },
         },
-      ]
+      ],
+      { cancelable: false }
     );
   };
 
