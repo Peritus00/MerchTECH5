@@ -307,15 +307,18 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         }
 
         console.error('Final error message:', errorMessage);
+        Alert.alert('Delete Failed', errorMessage);
         return false;
       }
     } catch (error) {
       console.error('=== DELETE USER ERROR ===');
       console.error('Error deleting user:', error);
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      console.error('Error message:', error?.message || 'Unknown error');
+      console.error('Error stack:', error?.stack || 'No stack trace');
 
-      Alert.alert('Error', `Failed to delete user: ${error.message}`);
+      // Show specific error message to user
+      const errorMessage = error?.message || 'Network error occurred';
+      Alert.alert('Delete Error', `Failed to delete user: ${errorMessage}`);
       return false;
     }
   };
