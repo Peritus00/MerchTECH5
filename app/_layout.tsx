@@ -30,13 +30,11 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
-    const inMainApp = segments[0] === '(tabs)';
 
     console.log('Route navigation check:', { 
       isAuthenticated, 
       inAuthGroup, 
       inSubscriptionGroup, 
-      inMainApp,
       currentSegments: segments,
       userIsNew: user?.isNewUser 
     });
@@ -48,19 +46,15 @@ function RootLayoutNav() {
         router.replace('/auth/login');
       }
     } else if (isAuthenticated && user) {
-      // User is authenticated - check their status and current location
-      if (user.isNewUser) {
-        // New user should go to subscription page (unless already there)
-        if (!inSubscriptionGroup) {
-          console.log('Redirecting to subscription - new user');
-          router.replace('/subscription/?newUser=true');
-        }
-      } else {
-        // Existing user should go to main app (unless already there)
-        if (inAuthGroup || inSubscriptionGroup) {
-          console.log('Redirecting to main app - existing user');
-          router.replace('/(tabs)');
-        }
+      // Only redirect if we have a valid user object
+      // Check if user is new and needs to select subscription
+      if (user.isNewUser && !inSubscriptionGroup) {
+        console.log('Redirecting to subscription - new user');
+        router.replace('/subscription/?newUser=true');
+      } else if (inAuthGroup && !user.isNewUser) {
+        // User is authenticated but still in auth screens, redirect to main app
+        console.log('Redirecting to main app - user authenticated');
+        router.replace('/(tabs)');
       }
     }
   }, [isAuthenticated, isInitialized, segments, user, isLoggingOut]);
