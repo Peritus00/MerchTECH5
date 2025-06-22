@@ -147,7 +147,7 @@ async function handleAccountVerification() {
       }
     }
 
-    // Find unverified accounts that are 48 hours old (suspend)
+    // Find unverified accounts that are 48 hours old (suspend without additional email)
     const suspensionUsers = await pool.query(`
       SELECT id, email, username, created_at 
       FROM users 
@@ -157,7 +157,7 @@ async function handleAccountVerification() {
       AND subscription_tier != 'suspended'
     `);
 
-    // Suspend accounts and send notification emails
+    // Suspend accounts silently (no additional email)
     for (const user of suspensionUsers.rows) {
       try {
         console.log(`Suspending account for user: ${user.email}`);
@@ -167,31 +167,8 @@ async function handleAccountVerification() {
           'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
           ['suspended', user.id]
         );
-
-        // Send suspension notification email
-        await transporter.sendMail({
-          from: '8e773a002@smtp-brevo.com',
-          to: user.email,
-          subject: 'MerchTech Account Temporarily Suspended - Action Required',
-          html: `
-            <h2>Account Temporarily Suspended</h2>
-            <p>Hello ${user.username || 'User'},</p>
-            <p>Your MerchTech account has been temporarily suspended because you did not verify your email address within the required 48-hour period.</p>
-            <p><strong>Why was my account suspended?</strong><br>
-            For security purposes, we require all users to verify their email addresses within 48 hours of account creation.</p>
-            <p><strong>How can I reactivate my account?</strong><br>
-            Please contact our support team at <a href="mailto:help@merchtech.net">help@merchtech.net</a> with your account details, and we'll help you verify your email and reactivate your account.</p>
-            <p><strong>What information should I include?</strong><br>
-            - Your username: ${user.username || 'Not provided'}<br>
-            - Your email address: ${user.email}<br>
-            - Account creation date: ${user.created_at}</p>
-            <p>We apologize for any inconvenience and look forward to helping you get back to using MerchTech!</p>
-            <hr>
-            <p><small>This is an automated message from MerchTech. Please contact help@merchtech.net for assistance.</small></p>
-          `
-        });
         
-        console.log(`Account suspended and notification sent to: ${user.email}`);
+        console.log(`Account suspended for: ${user.email}`);
       } catch (error) {
         console.error(`Failed to suspend account for ${user.email}:`, error);
       }
