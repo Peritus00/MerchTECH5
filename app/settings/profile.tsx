@@ -46,7 +46,10 @@ export default function ProfileScreen() {
         { 
           text: 'Cancel', 
           style: 'cancel',
-          onPress: () => console.log('🔴 Profile: Logout cancelled by user')
+          onPress: () => {
+            console.log('🔴 Profile: Logout cancelled by user');
+            console.log('🔴 Profile: User chose to cancel logout operation');
+          }
         },
         {
           text: 'Logout',
@@ -59,8 +62,12 @@ export default function ProfileScreen() {
 
                 // Call logout function - AuthContext will handle everything
                 console.log('🔴 Profile: Calling logout function...');
+                console.log('🔴 Profile: About to call AuthContext.logout()...');
+                
                 await logout();
+                
                 console.log('🔴 Profile: Logout function completed successfully');
+                console.log('🔴 Profile: AuthContext logout call finished');
                 
                 // Note: Don't check authentication state here since logout immediately 
                 // clears the state and navigates away from this component
@@ -68,8 +75,9 @@ export default function ProfileScreen() {
               } catch (error) {
                 console.error('🔴 Profile logout error:', error);
                 console.error('🔴 Profile logout error details:', {
-                  message: error.message,
-                  stack: error.stack
+                  message: error?.message || 'Unknown error',
+                  stack: error?.stack || 'No stack trace',
+                  name: error?.name || 'Unknown error type'
                 });
                 Alert.alert('Error', 'Failed to logout. Please try again.');
               }
