@@ -1,4 +1,3 @@
-
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -12,43 +11,55 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isAuthenticated, isInitialized, user } = useAuth();
+  const colorScheme = useColorScheme();
+  const { isAuthenticated, isLoading, isInitialized, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoading) {
+      console.log('🔴 RootLayout: Waiting for initialization/loading to complete');
+      return;
+    }
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
+    const currentSegments = segments;
 
-    console.log('Route navigation check:', { 
-      isAuthenticated, 
-      inAuthGroup, 
-      inSubscriptionGroup, 
-      currentSegments: segments,
-      userIsNew: user?.isNewUser 
+    // Get user to check if they're new (for subscription flow)
+    const userIsNew = user?.isNewUser || false;
+
+    console.log('🔴 Route navigation check:', {
+      isAuthenticated,
+      inAuthGroup,
+      inSubscriptionGroup,
+      currentSegments,
+      userIsNew,
+      user: user?.username || null
     });
 
     if (!isAuthenticated) {
       // User is not authenticated, redirect to login
+      console.log('🔴 RootLayout: User not authenticated, checking if redirect needed');
       if (!inAuthGroup) {
-        console.log('Redirecting to login - user not authenticated');
+        console.log('🔴 RootLayout: Redirecting to login from:', segments);
         router.replace('/auth/login');
       }
-    } else if (isAuthenticated && user) {
-      // Only redirect if we have a valid user object
-      // Check if user is new and needs to select subscription
-      if (user.isNewUser && !inSubscriptionGroup) {
-        console.log('Redirecting to subscription - new user');
-        router.replace('/subscription/?newUser=true');
-      } else if (inAuthGroup && !user.isNewUser) {
-        // User is authenticated but still in auth screens, redirect to main app
-        console.log('Redirecting to main app - user authenticated');
+    } else {
+      // User is authenticated
+      console.log('🔴 RootLayout: User authenticated, checking current location');
+      if (inAuthGroup) {
+        // If user is authenticated but in auth group, redirect to home
+        console.log('🔴 RootLayout: User authenticated in auth group, redirecting to home');
         router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, isInitialized, segments, user]);
+  }, [isAuthenticated, isLoading, isInitialized, segments, router, user]);
+
+  if (!isInitialized || isLoading) {
+    console.log('🔴 RootLayout: Still loading...');
+    return null; // or a loading screen
+  }
 
   return (
     <Stack>

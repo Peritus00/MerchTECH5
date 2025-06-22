@@ -57,22 +57,10 @@ export default function ProfileScreen() {
               console.log('🔴 Profile: User confirmed logout - starting process...');
               console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
               
-              // Call logout and wait for completion
+              // Call logout function - let AuthContext handle everything
               console.log('🔴 Profile: Calling logout function...');
               await logout();
-              console.log('🔴 Profile: Logout function completed');
-              
-              // Add a small delay to ensure state updates have propagated
-              await new Promise(resolve => setTimeout(resolve, 100));
-              
-              console.log('🔴 Profile: About to navigate to login...');
-              router.replace('/auth/login');
-              console.log('🔴 Profile: Navigation command sent');
-              
-              // Log final state after navigation
-              setTimeout(() => {
-                console.log('🔴 Profile: Final check - current path should be /auth/login');
-              }, 500);
+              console.log('🔴 Profile: Logout function completed - AuthContext should handle navigation');
               
             } catch (error) {
               console.error('🔴 Profile logout error:', error);

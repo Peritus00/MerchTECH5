@@ -76,27 +76,41 @@ class AuthService {
 
   async logout(): Promise<void> {
     try {
-      console.log('AuthService: Starting logout...');
+      console.log('🔴 AuthService: Starting logout...');
+      
+      // Log current storage state before clearing
+      const currentToken = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
+      const currentUser = await AsyncStorage.getItem(AuthService.USER_KEY);
+      console.log('🔴 AuthService: Current token exists:', !!currentToken);
+      console.log('🔴 AuthService: Current user exists:', !!currentUser);
       
       // Clear all stored authentication data
+      console.log('🔴 AuthService: Clearing all authentication data...');
       await Promise.all([
         AsyncStorage.removeItem(AuthService.TOKEN_KEY),
         AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
         AsyncStorage.removeItem(AuthService.USER_KEY),
       ]);
       
-      console.log('AuthService: All tokens cleared successfully');
+      // Verify clearing was successful
+      const tokenAfter = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
+      const userAfter = await AsyncStorage.getItem(AuthService.USER_KEY);
+      console.log('🔴 AuthService: Token cleared successfully:', tokenAfter === null);
+      console.log('🔴 AuthService: User cleared successfully:', userAfter === null);
+      
+      console.log('🔴 AuthService: All tokens cleared successfully');
     } catch (error) {
-      console.error('AuthService logout error:', error);
+      console.error('🔴 AuthService logout error:', error);
       
       // Try to clear items individually if batch clear fails
       try {
+        console.log('🔴 AuthService: Attempting individual cleanup...');
         await AsyncStorage.removeItem(AuthService.TOKEN_KEY);
         await AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY);
         await AsyncStorage.removeItem(AuthService.USER_KEY);
-        console.log('AuthService: Individual token cleanup completed');
+        console.log('🔴 AuthService: Individual token cleanup completed');
       } catch (individualError) {
-        console.error('AuthService: Individual cleanup also failed:', individualError);
+        console.error('🔴 AuthService: Individual cleanup also failed:', individualError);
       }
     }
   }
