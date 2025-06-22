@@ -58,7 +58,7 @@ if (brevoKey) {
     port: 587,
     secure: false,
     auth: {
-      user: 'help@merchtech.net',
+      user: '8e773a002@smtp-brevo.com',
       pass: brevoKey
     },
     tls: {
@@ -467,7 +467,7 @@ app.post('/api/auth/register', async (req, res) => {
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
       await transporter.sendMail({
-        from: 'help@merchtech.net',
+        from: '8e773a002@smtp-brevo.com',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
@@ -596,7 +596,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
 
       await transporter.sendMail({
-        from: 'help@merchtech.net',
+        from: '8e773a002@smtp-brevo.com',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
