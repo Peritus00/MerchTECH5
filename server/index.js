@@ -45,17 +45,14 @@ if (!process.env.JWT_SECRET) {
 // Email service configuration
 let transporter = null;
 
-// Use the SMTP key directly for now, but recommend storing in environment
-const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY || 'tcQ3InM6vsw8dbW4';
-
-if (BREVO_SMTP_KEY) {
+if (process.env.BREVO_SMTP_KEY) {
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: 587,
     secure: false,
     auth: {
       user: 'help@merchtech.net',
-      pass: BREVO_SMTP_KEY
+      pass: process.env.BREVO_SMTP_KEY
     },
     tls: {
       rejectUnauthorized: false
@@ -71,7 +68,7 @@ if (BREVO_SMTP_KEY) {
     }
   });
 } else {
-  console.log('WARNING: BREVO_SMTP_KEY not set. Email functionality will be limited.');
+  console.log('WARNING: BREVO_SMTP_KEY not set in environment variables. Email functionality will be limited.');
   // Create a test transporter for development
   transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
