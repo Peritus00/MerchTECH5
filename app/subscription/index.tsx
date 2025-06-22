@@ -81,14 +81,26 @@ export default function SubscriptionScreen() {
             Alert.alert(
               'Welcome to MerchTech!',
               'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
-              [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+              [{ 
+                text: 'Go to Dashboard', 
+                onPress: () => {
+                  console.log('Navigating to dashboard after successful setup');
+                  router.replace('/(tabs)/');
+                }
+              }]
             );
           } else {
             console.error('Failed to send verification email:', verificationResult.message);
             Alert.alert(
               'Account Created',
               'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
-              [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+              [{ 
+                text: 'Go to Dashboard', 
+                onPress: () => {
+                  console.log('Navigating to dashboard after setup with email issue');
+                  router.replace('/(tabs)/');
+                }
+              }]
             );
           }
         } else {
