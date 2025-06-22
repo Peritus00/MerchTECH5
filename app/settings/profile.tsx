@@ -7,6 +7,7 @@ import {
   Alert,
   ScrollView,
   Switch,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -21,6 +22,7 @@ export default function ProfileScreen() {
   const [notifications, setNotifications] = useState(true);
   const [analytics, setAnalytics] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const handleSave = async () => {
     setLoading(true);
@@ -39,65 +41,49 @@ export default function ProfileScreen() {
     console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
     console.log('🔴 Profile: Current authentication state:', { user, isAuthenticated: !!user });
     console.log('🔴 Profile: Showing logout confirmation dialog...');
-
-    Alert.alert(
-      'Confirm Logout',
-      'Are you sure you want to logout? You will need to login again.',
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => {
-            console.log('🔴 Profile: ❌ USER CLICKED CANCEL - LOGOUT CANCELLED');
-            console.log('🔴 Profile: User chose to cancel logout operation');
-            console.log('🔴 Profile: Remaining logged in...');
-          }
-        },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-              try {
-                console.log('🔴 Profile: ✅ USER CLICKED LOGOUT - PROCEEDING WITH LOGOUT');
-                console.log('🔴 Profile: User confirmed logout - starting process...');
-                console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
-                console.log('🔴 Profile: isAuthenticated before logout:', !!user);
-
-                // Call logout function - AuthContext will handle everything
-                console.log('🔴 Profile: Calling logout function...');
-                console.log('🔴 Profile: About to call AuthContext.logout()...');
-                
-                await logout();
-                
-                console.log('🔴 Profile: Logout function completed successfully');
-                console.log('🔴 Profile: AuthContext logout call finished');
-                console.log('🔴 Profile: 🎉 LOGOUT PROCESS COMPLETE!');
-                
-                // Note: Don't check authentication state here since logout immediately 
-                // clears the state and navigates away from this component
-
-              } catch (error) {
-                console.error('🔴 Profile logout error:', error);
-                console.error('🔴 Profile logout error details:', {
-                  message: error?.message || 'Unknown error',
-                  stack: error?.stack || 'No stack trace',
-                  name: error?.name || 'Unknown error type'
-                });
-                Alert.alert('Error', 'Failed to logout. Please try again.');
-              }
-            },
-        },
-      ],
-      { 
-        cancelable: true,
-        onDismiss: () => {
-          console.log('🔴 Profile: ❌ DIALOG DISMISSED - LOGOUT CANCELLED');
-          console.log('🔴 Profile: User dismissed the dialog without choosing');
-        }
-      }
-    );
     
+    setShowLogoutModal(true);
     console.log('🔴 Profile: Logout confirmation dialog displayed');
+  };
+
+  const handleLogoutCancel = () => {
+    console.log('🔴 Profile: ❌ USER CLICKED CANCEL - LOGOUT CANCELLED');
+    console.log('🔴 Profile: User chose to cancel logout operation');
+    console.log('🔴 Profile: Remaining logged in...');
+    setShowLogoutModal(false);
+  };
+
+  const handleLogoutConfirm = async () => {
+    try {
+      console.log('🔴 Profile: ✅ USER CLICKED LOGOUT - PROCEEDING WITH LOGOUT');
+      console.log('🔴 Profile: User confirmed logout - starting process...');
+      console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
+      console.log('🔴 Profile: isAuthenticated before logout:', !!user);
+
+      setShowLogoutModal(false);
+
+      // Call logout function - AuthContext will handle everything
+      console.log('🔴 Profile: Calling logout function...');
+      console.log('🔴 Profile: About to call AuthContext.logout()...');
+      
+      await logout();
+      
+      console.log('🔴 Profile: Logout function completed successfully');
+      console.log('🔴 Profile: AuthContext logout call finished');
+      console.log('🔴 Profile: 🎉 LOGOUT PROCESS COMPLETE!');
+      
+      // Note: Don't check authentication state here since logout immediately 
+      // clears the state and navigates away from this component
+
+    } catch (error) {
+      console.error('🔴 Profile logout error:', error);
+      console.error('🔴 Profile logout error details:', {
+        message: error?.message || 'Unknown error',
+        stack: error?.stack || 'No stack trace',
+        name: error?.name || 'Unknown error type'
+      });
+      Alert.alert('Error', 'Failed to logout. Please try again.');
+    }
   };
 
   return (
@@ -205,6 +191,39 @@ export default function ProfileScreen() {
           </ThemedText>
         </View>
       </ThemedView>
+
+      {/* Custom Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleLogoutCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <ThemedText style={styles.modalTitle}>Confirm Logout</ThemedText>
+            <ThemedText style={styles.modalMessage}>
+              Are you sure you want to logout? You will need to login again.
+            </ThemedText>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={handleLogoutCancel}
+              >
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleLogoutConfirm}
+              >
+                <ThemedText style={styles.confirmButtonText}>Logout</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -313,5 +332,57 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     opacity: 0.7,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    margin: 20,
+    minWidth: 300,
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  confirmButton: {
+    backgroundColor: '#DC3545',
+  },
+  cancelButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
