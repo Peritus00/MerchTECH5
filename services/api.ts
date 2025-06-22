@@ -96,11 +96,17 @@ export const authAPI = {
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
       
-      // Don't use developer fallback during logout process or within 5 seconds of logout
+      // NUCLEAR OPTION: Block ALL developer fallbacks during logout
       const timeSinceLogout = Date.now() - logoutStartTime;
-      if (isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 5000)) {
-        console.log('Skipping developer fallback - logout in progress or recent');
-        throw new Error('Logout in progress');
+      if (isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 10000)) {
+        console.log('BLOCKED: Developer fallback during logout - throwing error');
+        throw new Error('Authentication disabled during logout');
+      }
+      
+      // Additional check: if we see any logout-related activity, block completely
+      if (email === 'djjetfuel@gmail.com' && (isLoggingOut || timeSinceLogout < 10000)) {
+        console.log('BLOCKED: Detected logout activity - preventing developer login');
+        throw new Error('Logout in progress - authentication blocked');
       }
       
       // If backend fails, fall back to developer login
