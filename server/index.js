@@ -45,16 +45,21 @@ if (!process.env.JWT_SECRET) {
 // Email service configuration
 let transporter = null;
 
-console.log('BREVO_SMTP_KEY check:', process.env.BREVO_SMTP_KEY ? 'Found' : 'Not found');
+// Check for Brevo SMTP key in multiple ways
+const brevoKey = process.env.BREVO_SMTP_KEY || process.env.BREVO_API_KEY;
+console.log('Environment variables check:');
+console.log('- BREVO_SMTP_KEY:', process.env.BREVO_SMTP_KEY ? 'Found (length: ' + process.env.BREVO_SMTP_KEY.length + ')' : 'Not found');
+console.log('- BREVO_API_KEY:', process.env.BREVO_API_KEY ? 'Found (length: ' + process.env.BREVO_API_KEY.length + ')' : 'Not found');
 
-if (process.env.BREVO_SMTP_KEY) {
+if (brevoKey) {
+  console.log('Using Brevo key for SMTP authentication');
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: 587,
     secure: false,
     auth: {
       user: 'help@merchtech.net',
-      pass: process.env.BREVO_SMTP_KEY
+      pass: brevoKey
     },
     tls: {
       rejectUnauthorized: false
@@ -65,21 +70,22 @@ if (process.env.BREVO_SMTP_KEY) {
   transporter.verify((error, success) => {
     if (error) {
       console.error('Brevo SMTP connection failed:', error);
+      console.error('Error details:', {
+        code: error.code,
+        command: error.command,
+        response: error.response
+      });
     } else {
       console.log('Brevo email service configured and verified with help@merchtech.net');
     }
   });
 } else {
   console.log('WARNING: BREVO_SMTP_KEY not set in environment variables. Email functionality will be limited.');
-  // Create a test transporter for development
+  // Create a test transporter for development that will fail gracefully
   transporter = nodemailer.createTransport({
-    host: 'smtp.ethereal.email',
-    port: 587,
-    secure: false,
-    auth: {
-      user: 'test@example.com', 
-      pass: 'test'
-    }
+    streamTransport: true,
+    newline: 'unix',
+    buffer: true
   });
 }
 
@@ -858,7 +864,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log('  DELETE /api/admin/users/:identifier');
   await initializeDatabase();
 
-  // Start periodic cleanup of expired pending users (every hour)
+  // Start periodic cleanup of expired pending users (everyhour)
   setInterval(cleanupExpiredPendingUsers, 60 * 60 * 1000);
 
   // Run initial cleanup
