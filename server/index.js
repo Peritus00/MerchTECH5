@@ -283,8 +283,18 @@ app.get('/', (req, res) => {
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Query:`, req.query, '- Body:', req.body);
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Query:`, req.query, '- Body:', Object.keys(req.body || {}).length > 0 ? '[BODY_PRESENT]' : 'undefined');
   next();
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Health check with database status

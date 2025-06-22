@@ -1,43 +1,31 @@
-The code modifies the useEffect hook in the AuthProvider component to prevent constant re-initialization and improve authentication state management.
-```
-```replit_final_file
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
+import { useSegments } from 'expo-router';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
-interface AuthState {
+interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
-}
-
-interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (email: string, password: string, username: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => Promise<void>;
-  verifyEmail: (token: string) => Promise<{ success: boolean; message: string }>;
-  resendVerification: (email: string) => Promise<{ success: boolean; message: string }>;
-  forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
-  resetPassword: (token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
-  updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; user?: User; error?: string }>;
-  changePassword: (currentPassword: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
-  refreshAuth: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    isAuthenticated: false,
-    isLoading: true,
-    isInitialized: false,
-  });
+  const segments = useSegments();
 
-  // Initialize authentication state on app start
+  const isAuthenticated = !!user;
+
   useEffect(() => {
     initializeAuth();
   }, []);
@@ -51,6 +39,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === 'auth';
     const currentRoute = segments.join('/');
 
+    console.log('🔴 Route navigation check:', {
+      isAuthenticated,
+      inAuthGroup,
+      inSubscriptionGroup: segments[0] === 'subscription',
+      currentSegments: segments,
+      userIsNew: user?.isNewUser,
+      user: user?.username
+    });
+
     // Only log and redirect if authentication state is stable
     if (!isAuthenticated && !inAuthGroup) {
       console.log('🔴 Route navigation: Redirecting unauthenticated user to login');
@@ -63,236 +60,122 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initializeAuth = async () => {
     try {
-      setState(prev => ({ ...prev, isLoading: true }));
+      setIsLoading(true);
+      console.log('🔴 AuthContext: Starting authentication initialization...');
 
       const currentUser = await authService.getCurrentUser();
+      console.log('🔴 AuthContext: Current user from storage:', currentUser);
 
       if (currentUser) {
-        setState({
-          user: currentUser,
-          isAuthenticated: true,
-          isLoading: false,
-          isInitialized: true,
-        });
+        setUser(currentUser);
+        console.log('🔴 AuthContext: User authenticated successfully:', currentUser.username);
       } else {
-        setState({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          isInitialized: true,
-        });
+        console.log('🔴 AuthContext: No authenticated user found');
       }
     } catch (error) {
-      console.error('Auth initialization error:', error);
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
+      console.error('🔴 AuthContext: Initialize auth error:', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+      console.log('🔴 AuthContext: Authentication initialization completed');
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string) => {
     try {
-      setState(prev => ({ ...prev, isLoading: true }));
+      setIsLoading(true);
+      console.log('🔴 AuthContext: Starting login for:', email);
 
       const response = await authService.login({ email, password });
+      console.log('🔴 AuthContext: Login successful:', response.user);
 
-      setState({
-        user: response.user,
-        isAuthenticated: true,
-        isLoading: false,
-        isInitialized: true,
-      });
-
-      return { success: true };
+      setUser(response.user);
     } catch (error: any) {
-      console.error('Login failed:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
-      return { 
-        success: false, 
-        error: error.message || 'Login failed. Please try again.' 
-      };
+      console.error('🔴 AuthContext: Login error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const register = async (email: string, password: string, username: string): Promise<{ success: boolean; error?: string }> => {
+  const register = async (email: string, password: string, username: string, firstName?: string, lastName?: string) => {
     try {
-      setState(prev => ({ ...prev, isLoading: true }));
+      setIsLoading(true);
+      console.log('🔴 AuthContext: Starting registration for:', email);
 
       const response = await authService.register({
         email,
         password,
-        username
+        username,
+        firstName,
+        lastName
       });
 
-      if (response.success && response.user && response.token) {
-        setState({
-          user: response.user,
-          isAuthenticated: true,
-          isLoading: false,
-          isInitialized: true,
-        });
-        return { success: true };
-      } else {
-        return { success: false, error: 'Registration failed - invalid server response' };
-      }
+      console.log('🔴 AuthContext: Registration successful:', response.user);
+      setUser(response.user);
     } catch (error: any) {
-      console.error('Registration failed:', error);
-      setState(prev => ({ ...prev, isLoading: false }));
-      return { 
-        success: false, 
-        error: error.message || 'Registration failed. Please try again.' 
-      };
+      console.error('🔴 AuthContext: Registration error:', error);
+      throw error;
     } finally {
-      setState(prev => ({ ...prev, isLoading: false }));
+      setIsLoading(false);
     }
   };
 
-  const logout = async (): Promise<void> => {
+  const logout = async () => {
     try {
-      console.log('🔴 AuthContext: Starting logout process...');
-      setState(prev => ({ ...prev, isLoading: true }));
+      setIsLoading(true);
+      console.log('🔴 AuthContext: Starting logout...');
 
-      // Clear auth service data first
       await authService.logout();
+      setUser(null);
 
-      // Force clear the authentication state
-      console.log('🔴 AuthContext: Clearing authentication state...');
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
-
-      console.log('🔴 AuthContext: Auth state cleared, redirecting to login...');
-
-      // Use replace with a slight delay to ensure state is updated
-      setTimeout(() => {
-        router.replace('/auth/login');
-      }, 100);
-
+      console.log('🔴 AuthContext: Logout completed successfully');
+      router.replace('/auth/login');
     } catch (error) {
       console.error('🔴 AuthContext: Logout error:', error);
-      // Even if logout fails, force clear the local state
-      console.log('🔴 AuthContext: Forcing auth state clear due to error...');
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
-
-      setTimeout(() => {
-        router.replace('/auth/login');
-      }, 100);
+      // Even if logout fails, clear local state
+      setUser(null);
+      router.replace('/auth/login');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const verifyEmail = async (token: string) => {
+  const refreshUser = async () => {
     try {
-      const result = await authService.verifyEmailToken(token);
+      console.log('🔴 AuthContext: Refreshing user data...');
+      const currentUser = await authService.getCurrentUser();
 
-      if (result.success && state.user) {
-        const updatedUser = { ...state.user, isEmailVerified: true };
-        setState(prev => ({ ...prev, user: updatedUser }));
+      if (currentUser) {
+        setUser(currentUser);
+        console.log('🔴 AuthContext: User data refreshed:', currentUser.username);
+      } else {
+        console.log('🔴 AuthContext: No user found during refresh');
+        setUser(null);
       }
-
-      return result;
-    } catch (error: any) {
-      console.error('Email verification failed:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Verification failed' 
-      };
+    } catch (error) {
+      console.error('🔴 AuthContext: Refresh user error:', error);
+      setUser(null);
     }
   };
 
-  const resendVerification = async (email: string) => {
-    try {
-      return await authService.resendEmailVerification(email);
-    } catch (error: any) {
-      console.error('Resend verification failed:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Failed to resend verification email' 
-      };
-    }
-  };
-
-  const forgotPassword = async (email: string) => {
-    try {
-      return await authService.forgotPassword(email);
-    } catch (error: any) {
-      console.error('Forgot password failed:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Failed to send password reset email' 
-      };
-    }
-  };
-
-  const resetPassword = async (token: string, newPassword: string) => {
-    try {
-      return await authService.resetPassword(token, newPassword);
-    } catch (error: any) {
-      console.error('Password reset failed:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Failed to reset password' 
-      };
-    }
-  };
-
-  const updateProfile = async (updates: Partial<User>): Promise<{ success: boolean; user?: User; error?: string }> => {
-    try {
-      const updatedUser = await authService.updateProfile(updates);
-
-      setState(prev => ({ ...prev, user: updatedUser }));
-
-      return { success: true, user: updatedUser };
-    } catch (error: any) {
-      console.error('Profile update failed:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Failed to update profile' 
-      };
-    }
-  };
-
-  const changePassword = async (currentPassword: string, newPassword: string) => {
-    try {
-      return await authService.changePassword(currentPassword, newPassword);
-    } catch (error: any) {
-      console.error('Change password failed:', error);
-      return { 
-        success: false, 
-        message: error.message || 'Failed to change password' 
-      };
-    }
-  };
-
-  const refreshAuth = useCallback(async () => {
-    await initializeAuth();
-  }, []);
-
-  const value: AuthContextType = {
-    ...state,
+  const contextValue: AuthContextType = {
+    user,
+    isAuthenticated,
+    isLoading,
+    isInitialized,
     login,
     register,
     logout,
-    verifyEmail,
-    resendVerification,
-    forgotPassword,
-    resetPassword,
-    updateProfile,
-    changePassword,
-    refreshAuth,
+    refreshUser,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={contextValue}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {
