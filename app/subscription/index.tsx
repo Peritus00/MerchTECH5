@@ -84,32 +84,15 @@ export default function SubscriptionScreen() {
           // Send verification email
           console.log('Sending verification email to:', user.email);
           const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
+          
           if (verificationResult.success) {
             console.log('Verification email sent successfully');
-            Alert.alert(
-              'Welcome to MerchTech!',
-              'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
-              [{ 
-                text: 'Go to Dashboard', 
-                onPress: () => {
-                  console.log('Navigating to dashboard after successful setup');
-                  router.replace('/(tabs)/');
-                }
-              }]
-            );
+            console.log('Navigating to dashboard after successful setup');
+            router.replace('/(tabs)/');
           } else {
             console.error('Failed to send verification email:', verificationResult.message);
-            Alert.alert(
-              'Account Created',
-              'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
-              [{ 
-                text: 'Go to Dashboard', 
-                onPress: () => {
-                  console.log('Navigating to dashboard after setup with email issue');
-                  router.replace('/(tabs)/');
-                }
-              }]
-            );
+            console.log('Navigating to dashboard after setup with email issue');
+            router.replace('/(tabs)/');
           }
         } else {
           console.error('Failed to update user status. Response:', responseText);
