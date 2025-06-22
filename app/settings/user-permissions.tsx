@@ -295,11 +295,15 @@ export default function UserPermissionsScreen() {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
           onPress: () => {
-            console.log('Delete confirmation button pressed - calling executeDelete');
-            executeDelete(userId, targetUser).catch(error => {
-              console.error('Delete operation failed:', error);
-              Alert.alert('Error', `Failed to delete user: ${error.message || 'Unknown error'}`);
-            });
+            console.log('Delete confirmation button pressed - scheduling executeDelete');
+            // Use setTimeout to prevent race condition with dialog dismissal
+            setTimeout(() => {
+              console.log('Executing delayed delete operation');
+              executeDelete(userId, targetUser).catch(error => {
+                console.error('Delete operation failed:', error);
+                Alert.alert('Error', `Failed to delete user: ${error.message || 'Unknown error'}`);
+              });
+            }, 100);
           },
         },
       ]
