@@ -294,12 +294,9 @@ export default function UserPermissionsScreen() {
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             console.log('Delete confirmation button pressed - calling executeDelete');
-            // Use setTimeout to ensure the alert dismisses before executing async operation
-            setTimeout(() => {
-              executeDelete(userId, targetUser);
-            }, 100);
+            await executeDelete(userId, targetUser);
           },
         },
       ]
