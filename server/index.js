@@ -45,17 +45,20 @@ if (!process.env.JWT_SECRET) {
 // Email service configuration
 let transporter = null;
 
-if (process.env.BREVO_API_KEY) {
+// Use the SMTP key directly for now, but recommend storing in environment
+const BREVO_SMTP_KEY = process.env.BREVO_SMTP_KEY || 'tcQ3InM6vsw8dbW4';
+
+if (BREVO_SMTP_KEY) {
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
     port: 587,
     secure: false,
     auth: {
       user: 'help@merchtech.net',
-      pass: process.env.BREVO_API_KEY
+      pass: BREVO_SMTP_KEY
     },
     tls: {
-      ciphers: 'SSLv3'
+      rejectUnauthorized: false
     }
   });
 
@@ -68,7 +71,7 @@ if (process.env.BREVO_API_KEY) {
     }
   });
 } else {
-  console.log('WARNING: BREVO_API_KEY not set. Email functionality will be limited.');
+  console.log('WARNING: BREVO_SMTP_KEY not set. Email functionality will be limited.');
   // Create a test transporter for development
   transporter = nodemailer.createTransport({
     host: 'smtp.ethereal.email',
@@ -459,7 +462,7 @@ app.post('/api/auth/register', async (req, res) => {
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
       await transporter.sendMail({
-        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
+        from: 'help@merchtech.net',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
@@ -588,7 +591,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
 
       await transporter.sendMail({
-        from: process.env.FROM_EMAIL || 'noreply@merchtech.com',
+        from: 'help@merchtech.net',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `
