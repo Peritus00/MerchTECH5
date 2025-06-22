@@ -125,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await authService.logout();
       console.log('Auth service logout completed');
 
-      // Update state
+      // Update state immediately
       setState({
         user: null,
         isAuthenticated: false,
@@ -135,10 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('State updated, navigating to login...');
 
-      // Force navigation to login screen
-      setTimeout(() => {
-        router.replace('/auth/login');
-      }, 100);
+      // Navigate immediately without setTimeout
+      router.replace('/auth/login');
 
     } catch (error) {
       console.error('Logout failed:', error);
@@ -152,9 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Navigate to login screen even if logout fails
-      setTimeout(() => {
-        router.replace('/auth/login');
-      }, 100);
+      router.replace('/auth/login');
     }
   };
 

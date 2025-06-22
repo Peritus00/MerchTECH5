@@ -43,8 +43,9 @@ function RootLayoutNav() {
       if (user?.isNewUser && !inSubscriptionGroup) {
         console.log('Redirecting to subscription - new user');
         router.replace('/subscription/?newUser=true');
-      } else if (inAuthGroup && !user?.isNewUser) {
-        // User is authenticated but still in auth screens, redirect to main app
+      } else if (inAuthGroup && !user?.isNewUser && segments[1] !== 'login') {
+        // User is authenticated but still in auth screens (except login), redirect to main app
+        // Allow staying on login screen briefly during logout transition
         console.log('Redirecting to main app - user authenticated');
         router.replace('/(tabs)');
       }
