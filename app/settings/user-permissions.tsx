@@ -294,7 +294,10 @@ export default function UserPermissionsScreen() {
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
-          onPress: () => executeDelete(userId, targetUser),
+          onPress: () => {
+            console.log('Delete confirmation button pressed - calling executeDelete');
+            executeDelete(userId, targetUser);
+          },
         },
       ]
     );
