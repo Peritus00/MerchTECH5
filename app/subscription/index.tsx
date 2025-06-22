@@ -19,7 +19,7 @@ import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 import { authService } from '@/services/authService';
 
 export default function SubscriptionScreen() {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const router = useRouter();
   const { newUser } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
@@ -72,6 +72,14 @@ export default function SubscriptionScreen() {
 
         if (response.ok) {
           console.log('User status updated to not new user');
+          
+          // Update the auth context state immediately
+          const updateResult = await updateProfile({ isNewUser: false });
+          if (updateResult.success) {
+            console.log('AuthContext updated with isNewUser: false');
+          } else {
+            console.log('Failed to update AuthContext:', updateResult.error);
+          }
           
           // Send verification email
           console.log('Sending verification email to:', user.email);
