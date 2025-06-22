@@ -152,13 +152,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       console.log('🔴 AuthContext: State updated to logged out');
       
-      // Step 3: Verify state was updated
-      setTimeout(() => {
-        console.log('🔴 AuthContext: Post-logout state verification:', {
-          user: null,
-          isAuthenticated: false
-        });
-      }, 50);
+      // Step 3: Force navigation to login
+      console.log('🔴 AuthContext: Forcing navigation to login...');
+      router.replace('/auth/login');
+      console.log('🔴 AuthContext: Navigation to login completed');
       
     } catch (error) {
       console.error('🔴 AuthContext: Error during logout:', error);
@@ -169,6 +166,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isInitialized: true,
       });
+      // Force navigation even on error
+      router.replace('/auth/login');
       throw error; // Re-throw to let calling code handle it
     }
   };

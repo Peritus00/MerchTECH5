@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -39,7 +38,7 @@ export default function ProfileScreen() {
   const handleLogout = () => {
     console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
     console.log('🔴 Profile: Current authentication state:', { user, isAuthenticated: !!user });
-    
+
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
@@ -53,21 +52,20 @@ export default function ProfileScreen() {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
-            try {
-              console.log('🔴 Profile: User confirmed logout - starting process...');
-              console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
-              
-              // Call logout function - let AuthContext handle everything
-              console.log('🔴 Profile: Calling logout function...');
-              await logout();
-              console.log('🔴 Profile: Logout function completed - AuthContext should handle navigation');
-              
-            } catch (error) {
-              console.error('🔴 Profile logout error:', error);
-              console.error('🔴 Profile logout error stack:', error.stack);
-              Alert.alert('Error', 'Failed to logout. Please try again.');
-            }
-          },
+              try {
+                console.log('🔴 Profile: User confirmed logout - starting process...');
+                console.log('🔴 Profile: Current user before logout:', JSON.stringify(user, null, 2));
+
+                // Call logout function - AuthContext will handle navigation
+                console.log('🔴 Profile: Calling logout function...');
+                await logout();
+                console.log('🔴 Profile: Logout function completed');
+
+              } catch (error) {
+                console.error('🔴 Profile logout error:', error);
+                Alert.alert('Error', 'Failed to logout. Please try again.');
+              }
+            },
         },
       ]
     );
@@ -87,7 +85,7 @@ export default function ProfileScreen() {
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Account Information
           </ThemedText>
-          
+
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>Username</ThemedText>
             <TextInput
@@ -124,7 +122,7 @@ export default function ProfileScreen() {
           <ThemedText type="subtitle" style={styles.sectionTitle}>
             Preferences
           </ThemedText>
-          
+
           <View style={styles.switchRow}>
             <View style={styles.switchInfo}>
               <ThemedText style={styles.switchLabel}>Push Notifications</ThemedText>
