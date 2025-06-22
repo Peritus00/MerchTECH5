@@ -14,12 +14,13 @@ SplashScreen.preventAutoHideAsync();
 function RootLayoutNav() {
   const { isInitialized, isLoading } = useAuth();
 
-  console.log('🔴 RootLayout: Auth state -', { isInitialized, isLoading });
-
-  // Show nothing while initializing
+  // Show nothing while initializing - prevent multiple renders
   if (!isInitialized || isLoading) {
+    console.log('🔴 RootLayout: Still loading...', { isInitialized, isLoading });
     return null;
   }
+
+  console.log('🔴 RootLayout: Ready to render navigation');
 
   return (
     <Stack>
