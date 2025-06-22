@@ -8,7 +8,7 @@ import { useState } from 'react';
 
 export default function Settings() {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Check if user is admin (djjetfuel)
