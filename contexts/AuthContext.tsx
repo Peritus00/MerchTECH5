@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
@@ -41,10 +41,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
+  // Prevent auth initialization during logout
+  const isLoggingOutRef = useRef(false);
+
   const initializeAuth = async () => {
     try {
       // Don't initialize auth if we're in the middle of logging out
-      if (state.isLoggingOut) {
+      if (state.isLoggingOut || isLoggingOutRef.current) {
         console.log('Skipping auth initialization - logout in progress');
         return;
       }
@@ -139,9 +142,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      console.log('ULTIMATE LOGOUT: Starting with global authentication lock...');
+      console.log('FINAL LOGOUT: Starting with complete authentication block...');
       
-      // STEP 1: IMMEDIATELY lock ALL authentication globally
+      // STEP 1: IMMEDIATELY block ALL authentication everywhere
+      isLoggingOutRef.current = true;
       const { authAPI } = await import('@/services/api');
       authAPI.lockAuthentication();
       authAPI.setLoggingOut(true);
@@ -169,12 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.log('ULTIMATE: Forcing navigation to login...');
       router.replace('/auth/login');
       
-      // STEP 6: Keep authentication locked for 15 seconds
+      // STEP 6: Keep authentication locked for 10 seconds
       setTimeout(() => {
+        isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
-        console.log('ULTIMATE: Authentication unlocked after 15 seconds');
-      }, 15000);
+        console.log('FINAL: Authentication unlocked after 10 seconds');
+      }, 10000);
 
     } catch (error) {
       console.error('ULTIMATE LOGOUT ERROR:', error);
@@ -197,9 +202,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Reset flags
       const { authAPI } = await import('@/services/api');
       setTimeout(() => {
+        isLoggingOutRef.current = false;
         authAPI.setLoggingOut(false);
         authAPI.unlockAuthentication();
-      }, 15000);
+      }, 10000);
     }
   };
 
