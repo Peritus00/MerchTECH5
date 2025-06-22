@@ -45,6 +45,8 @@ if (!process.env.JWT_SECRET) {
 // Email service configuration
 let transporter = null;
 
+console.log('BREVO_SMTP_KEY check:', process.env.BREVO_SMTP_KEY ? 'Found' : 'Not found');
+
 if (process.env.BREVO_SMTP_KEY) {
   transporter = nodemailer.createTransport({
     host: 'smtp-relay.brevo.com',
