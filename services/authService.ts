@@ -182,6 +182,22 @@ class AuthService {
     }
   }
 
+  async sendEmailVerificationAfterSubscription(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      await authAPI.sendVerification(email);
+      return {
+        success: true,
+        message: 'Verification email sent successfully'
+      };
+    } catch (error: any) {
+      console.error('Failed to send verification email:', error);
+      return {
+        success: false,
+        message: error.message || 'Failed to send verification email'
+      };
+    }
+  }
+
   async resendEmailVerification(email: string): Promise<{ success: boolean; message: string }> {
     try {
       await authAPI.resendVerification(email);

@@ -108,11 +108,11 @@ export const authAPI = {
       const AsyncStorage = require('@react-native-async-storage/async-storage');
       const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
       const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
-      
+
       if (nuclearFlag === 'true') {
         const timestamp = parseInt(logoutTimestamp || '0');
         const timeSinceLogout = Date.now() - timestamp;
-        
+
         if (timeSinceLogout < 12000) {
           console.log('NUCLEAR LOGIN BLOCKED: Nuclear logout in progress', {
             timeSinceLogout,
@@ -136,20 +136,20 @@ export const authAPI = {
       return response.data;
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
-      
+
       // SECOND CHECK: Block ALL developer fallbacks during logout (extended to 10 seconds)
       const timeSinceLogout = Date.now() - logoutStartTime;
       if (authenticationLocked || isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 10000)) {
         console.log('BLOCKED: Authentication locked or logout in progress');
         throw new Error('Authentication disabled during logout');
       }
-      
+
       // THIRD CHECK: Special block for developer account during logout (extended to 10 seconds)
       if (email === 'djjetfuel@gmail.com' && (authenticationLocked || isLoggingOut || timeSinceLogout < 10000)) {
         console.log('BLOCKED: Developer account blocked during logout');
         throw new Error('Developer login blocked during logout');
       }
-      
+
       // If backend fails, fall back to developer login (only if not locked)
       if (email === 'djjetfuel@gmail.com' && password === 'dev123' && !authenticationLocked) {
         console.log('Using developer fallback login');
@@ -191,7 +191,12 @@ export const authAPI = {
     return response.data;
   },
 
-  resendVerification: async (email: string) => {
+  async sendVerification(email: string) {
+    const response = await api.post('/auth/send-verification', { email });
+    return response.data;
+  },
+
+  async resendVerification: async (email: string) => {
     const response = await api.post('/auth/resend-verification', { email });
     return response.data;
   },

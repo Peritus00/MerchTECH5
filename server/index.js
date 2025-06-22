@@ -51,10 +51,11 @@ if (process.env.BREVO_API_KEY) {
     port: 587,
     secure: false,
     auth: {
-      user: process.env.BREVO_EMAIL || 'noreply@merchtech.com',
+      user: 'help@merchtech.net',
       pass: process.env.BREVO_API_KEY
     }
   });
+  console.log('Brevo email service configured with help@merchtech.net');
 } else {
   console.log('WARNING: BREVO_API_KEY not set. Email functionality will be limited.');
   // Create a test transporter for development
@@ -191,11 +192,11 @@ app.get('/api/health', async (req, res) => {
   try {
     // Test database connection
     await pool.query('SELECT 1');
-    
+
     // Also check users count
     const userCount = await pool.query('SELECT COUNT(*) FROM users');
     const pendingCount = await pool.query('SELECT COUNT(*) FROM pending_users');
-    
+
     res.json({ 
       status: 'ok', 
       database: 'connected',
@@ -625,7 +626,7 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
     console.log('Admin users request from user:', req.user);
     console.log('User isAdmin:', req.user.isAdmin);
     console.log('User username:', req.user.username);
-    
+
     if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
       console.log('Access denied - not admin or djjetfuel');
       return res.status(403).json({ error: 'Admin access required' });
@@ -699,7 +700,7 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       status: u.status,
       isPending: u.isPending 
     })));
-    
+
     res.json(allUsers);
   } catch (error) {
     console.error('Get all users error:', error);
@@ -712,7 +713,7 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
   try {
     console.log('Delete user request from:', req.user);
     console.log('User identifier to delete:', req.params.identifier);
-    
+
     if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
       console.log('Delete access denied - not admin or djjetfuel');
       return res.status(403).json({ error: 'Admin access required' });
@@ -843,10 +844,10 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log('  GET /api/admin/all-users');
   console.log('  DELETE /api/admin/users/:identifier');
   await initializeDatabase();
-  
+
   // Start periodic cleanup of expired pending users (every hour)
   setInterval(cleanupExpiredPendingUsers, 60 * 60 * 1000);
-  
+
   // Run initial cleanup
   await cleanupExpiredPendingUsers();
 });

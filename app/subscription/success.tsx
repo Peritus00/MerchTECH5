@@ -1,23 +1,27 @@
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { SUBSCRIPTION_TIERS } from '@/types/subscription';
+import { authService } from '@/services/authService';
 
 export default function SubscriptionSuccessScreen() {
-  const { tier, newUser } = useLocalSearchParams();
+  const { tier, newUser, customerId, subscriptionId } = useLocalSearchParams();
   const { user, updateProfile } = useAuth();
   const router = useRouter();
   const isNewUser = newUser === 'true';
-  
-  const selectedTier = SUBSCRIPTION_TIERS[tier as string];
+
+  const subscriptionTier = tier as string; // More specific type
+
+  const selectedTier = SUBSCRIPTION_TIERS[subscriptionTier];
 
   useEffect(() => {
     // Clear the new user flag once they complete subscription selection
@@ -25,6 +29,33 @@ export default function SubscriptionSuccessScreen() {
       updateProfile({ isNewUser: false });
     }
   }, [isNewUser, user, updateProfile]);
+
+  useEffect(() => {
+    // Process the subscription update and send verification email
+    if (subscriptionTier && customerId && subscriptionId && user?.email) {
+      console.log('Subscription successful:', {
+        tier: subscriptionTier,
+        customerId,
+        subscriptionId
+      });
+
+      // Send verification email now that subscription is selected
+      const sendVerificationEmail = async () => {
+        try {
+          const result = await authService.sendEmailVerificationAfterSubscription(user.email);
+          if (result.success) {
+            console.log('Verification email sent successfully');
+          } else {
+            console.error('Failed to send verification email:', result.message);
+          }
+        } catch (error) {
+          console.error('Error sending verification email:', error);
+        }
+      };
+
+      sendVerificationEmail();
+    }
+  }, [subscriptionTier, customerId, subscriptionId, user?.email]);
 
   if (!selectedTier) {
     return (
@@ -40,7 +71,7 @@ export default function SubscriptionSuccessScreen() {
         <View style={styles.iconContainer}>
           <ThemedText style={styles.successIcon}>✅</ThemedText>
         </View>
-        
+
         <ThemedText type="title" style={styles.title}>
           {isNewUser ? `Welcome to MerchTech ${selectedTier.name}!` : `Welcome to ${selectedTier.name}!`}
         </ThemedText>
@@ -49,12 +80,12 @@ export default function SubscriptionSuccessScreen() {
             ? 'Your account is set up and your subscription is active! You can now start creating QR codes and managing your media.'
             : 'Your subscription is now active and ready to use.'
           }
-        </ThemedText>t>
+        </ThemedText>
 
         <ThemedView style={styles.planDetails}>
           <ThemedText type="subtitle" style={styles.planName}>{selectedTier.name} Plan</ThemedText>
           <ThemedText style={styles.planPrice}>${selectedTier.price}/month</ThemedText>
-          
+
           <View style={styles.featuresContainer}>
             {selectedTier.features.slice(0, 3).map((feature, index) => (
               <View key={index} style={styles.featureRow}>
