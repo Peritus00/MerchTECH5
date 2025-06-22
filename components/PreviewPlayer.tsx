@@ -25,6 +25,10 @@ interface PreviewPlayerProps {
   autoplay?: boolean;
 }
 
+// Global audio instance manager to prevent multiple players
+let globalAudioInstance: Audio.Sound | null = null;
+let activePlayerId: string | null = null;
+
 export default function PreviewPlayer({
   mediaFiles,
   playlistName,
@@ -39,7 +43,8 @@ export default function PreviewPlayer({
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [previewEnded, setPreviewEnded] = useState(false);
-  // Add singleton instance tracking
+  // Create unique instance ID
+  const [playerId] = useState(() => Math.random().toString(36).substr(2, 9));
   const [isInstanceActive, setIsInstanceActive] = useState(false);
 
   const currentMedia = mediaFiles[currentTrack];
@@ -65,14 +70,34 @@ export default function PreviewPlayer({
     initializeAudio();
 
     return () => {
+      // Clean up this instance
       if (sound) {
         sound.unloadAsync();
       }
+      
+      // Clean up global instance if it's ours
+      if (globalAudioInstance && activePlayerId === playerId) {
+        globalAudioInstance.unloadAsync();
+        globalAudioInstance = null;
+        activePlayerId = null;
+      }
+      
+      setIsInstanceActive(false);
     };
   }, []);
 
-  // Load track
+  // Load track with global instance management
   const loadTrack = async (index: number) => {
+    // Stop any existing global audio instance
+    if (globalAudioInstance && activePlayerId !== playerId) {
+      try {
+        await globalAudioInstance.unloadAsync();
+      } catch (error) {
+        console.log('Error stopping previous audio instance:', error);
+      }
+      globalAudioInstance = null;
+    }
+
     if (sound) {
       await sound.unloadAsync();
       setSound(null);
@@ -83,6 +108,7 @@ export default function PreviewPlayer({
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setIsInstanceActive(true);
+    activePlayerId = playerId;
 
     const media = mediaFiles[index];
     if (!media) return;
@@ -101,10 +127,11 @@ export default function PreviewPlayer({
 
       const { sound: newSound } = await demoAudio;
       setSound(newSound);
+      globalAudioInstance = newSound;
 
       // Set up status update listener with instance check
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (!isInstanceActive) return; // Prevent updates from inactive instances
+        if (!isInstanceActive || activePlayerId !== playerId) return; // Prevent updates from inactive instances
 
         if (status.isLoaded && status.positionMillis !== undefined) {
           const currentTimeSeconds = Math.floor(status.positionMillis / 1000);

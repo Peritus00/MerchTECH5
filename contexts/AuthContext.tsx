@@ -17,7 +17,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Singleton to prevent multiple auth contexts
+let authContextInstance: any = null;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  // Prevent multiple instances
+  if (authContextInstance) {
+    return authContextInstance;
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -27,8 +35,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const isAuthenticated = !!user;
 
+  // Initialize auth on mount with debouncing
   useEffect(() => {
-    initializeAuth();
+    console.log('🔴 AuthContext: Component mounted, initializing...');
+
+    // Debounce initialization to prevent rapid re-initialization
+    const timer = setTimeout(() => {
+      initializeAuth();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, []);
 
   // Separate effect for route navigation with more stable dependencies
@@ -159,22 +175,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const contextValue: AuthContextType = {
-    user,
-    isAuthenticated,
-    isLoading,
-    isInitialized,
-    login,
-    register,
-    logout,
-    refreshUser,
-  };
-
-  return (
-    <AuthContext.Provider value={contextValue}>
+  const contextValue = (
+    <AuthContext.Provider value={{
+        user,
+        isAuthenticated,
+        isLoading,
+        isInitialized,
+        login,
+        register,
+        logout,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
+
+  // Store instance to prevent duplicates
+  authContextInstance = contextValue;
+
+  return contextValue;
 }
 
 export function useAuth() {

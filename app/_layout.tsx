@@ -10,19 +10,23 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
-  const { isAuthenticated, isLoading, isInitialized, user } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+// Global flag to prevent multiple layout instances
+let layoutInitialized = false;
 
-  // Remove duplicate navigation logic since AuthContext handles this
+function RootLayoutNav() {
+  const { isAuthenticated, isLoading, isInitialized, user } = useAuth();
+
+  // Prevent multiple initializations
   useEffect(() => {
-    if (!isInitialized || isLoading) {
-      console.log('🔴 RootLayout: Waiting for initialization/loading to complete');
+    if (layoutInitialized) {
+      console.log('🔴 RootLayout: Already initialized, skipping');
       return;
     }
-    console.log('🔴 RootLayout: Auth state stable, user:', user?.username || 'none');
+
+    if (isInitialized && !isLoading) {
+      layoutInitialized = true;
+      console.log('🔴 RootLayout: Layout initialized for user:', user?.username || 'none');
+    }
   }, [isInitialized, isLoading, user?.username]);
 
   if (!isInitialized || isLoading) {
