@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -22,6 +23,7 @@ export default function SubscriptionScreen() {
   const router = useRouter();
   const { newUser } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
+  const [showFreeConfirmation, setShowFreeConfirmation] = useState(false);
   const isNewUser = newUser === 'true';
 
   const getTierIcon = (tierKey: string) => {
@@ -34,6 +36,88 @@ export default function SubscriptionScreen() {
         return '👑';
       default:
         return '❓';
+    }
+  };
+
+  const handleConfirmFreeAccount = async () => {
+    console.log('🎯 User confirmed free plan selection - starting setup process');
+    setShowFreeConfirmation(false);
+    
+    try {
+      setIsLoading('free');
+      const token = await AsyncStorage.getItem('authToken');
+      console.log('Retrieved token:', token ? 'Present' : 'Missing');
+      
+      if (token && user?.email) {
+        // Update user status to not new user and trigger email verification
+        console.log('Starting free account setup...');
+        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
+        console.log('API URL:', apiUrl);
+        
+        const response = await fetch(`${apiUrl}/user/subscription`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            subscriptionTier: 'free',
+            isNewUser: false
+          })
+        });
+        
+        console.log('Response status:', response.status);
+        const responseText = await response.text();
+        console.log('Response:', responseText);
+
+        if (response.ok) {
+          console.log('User status updated to not new user');
+          
+          // Send verification email
+          console.log('Sending verification email to:', user.email);
+          const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
+          if (verificationResult.success) {
+            console.log('Verification email sent successfully');
+            Alert.alert(
+              'Welcome to MerchTech!',
+              'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
+              [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+            );
+          } else {
+            console.error('Failed to send verification email:', verificationResult.message);
+            Alert.alert(
+              'Account Created',
+              'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
+              [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
+            );
+          }
+        } else {
+          console.error('Failed to update user status. Response:', responseText);
+          throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
+        }
+      } else {
+        console.error('Missing token or user email:', { 
+          hasToken: !!token, 
+          hasEmail: !!user?.email 
+        });
+        throw new Error('Missing authentication or email');
+      }
+    } catch (error) {
+      console.error('❌ Failed to process free account selection:', error);
+      console.error('Error details:', {
+        message: error?.message || 'Unknown error',
+        stack: error?.stack || 'No stack trace',
+        userEmail: user?.email || 'Missing',
+        hasToken: !!await AsyncStorage.getItem('authToken'),
+        apiUrl: process.env.EXPO_PUBLIC_API_URL || 'Default URL'
+      });
+      Alert.alert(
+        'Setup Error',
+        `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${error?.message || 'Unknown error'}`,
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoading(null);
     }
   };
 
@@ -65,102 +149,10 @@ export default function SubscriptionScreen() {
         if (isNewUser) {
           console.log('Showing confirmation for new user choosing free tier');
           // Show confirmation for new users choosing free tier
-          Alert.alert(
-            'Confirm Free Plan',
-            'Are you sure you want to continue with the free plan? You can upgrade anytime.',
-            [
-              { 
-                text: 'Cancel', 
-                style: 'cancel',
-                onPress: () => console.log('User canceled free plan selection')
-              },
-              { 
-                text: 'Continue with Free', 
-                style: 'default',
-                onPress: async () => {
-                  console.log('🎯 User confirmed free plan selection - starting setup process');
-                  try {
-                    setIsLoading('free');
-                    const token = await AsyncStorage.getItem('authToken');
-                    console.log('Retrieved token:', token ? 'Present' : 'Missing');
-                    
-                    if (token && user?.email) {
-                      // Update user status to not new user and trigger email verification
-                      console.log('Starting free account setup...');
-                      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
-                      console.log('API URL:', apiUrl);
-                      
-                      const response = await fetch(`${apiUrl}/user/subscription`, {
-                        method: 'PUT',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify({
-                          subscriptionTier: 'free',
-                          isNewUser: false
-                        })
-                      });
-                      
-                      console.log('Response status:', response.status);
-                      const responseText = await response.text();
-                      console.log('Response:', responseText);
-
-                      if (response.ok) {
-                        console.log('User status updated to not new user');
-                        
-                        // Send verification email
-                        console.log('Sending verification email to:', user.email);
-                        const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
-                        if (verificationResult.success) {
-                          console.log('Verification email sent successfully');
-                          Alert.alert(
-                            'Welcome to MerchTech!',
-                            'Your free account is now active. We\'ve sent a verification email to your inbox. Please verify your email within 48 hours to keep your account active.',
-                            [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
-                          );
-                        } else {
-                          console.error('Failed to send verification email:', verificationResult.message);
-                          Alert.alert(
-                            'Account Created',
-                            'Your free account is active, but we encountered an issue sending the verification email. Please check your settings later.',
-                            [{ text: 'OK', onPress: () => router.push('/(tabs)/') }]
-                          );
-                        }
-                      } else {
-                        console.error('Failed to update user status. Response:', responseText);
-                        throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
-                      }
-                    } else {
-                      console.error('Missing token or user email:', { 
-                        hasToken: !!token, 
-                        hasEmail: !!user?.email 
-                      });
-                      throw new Error('Missing authentication or email');
-                    }
-                  } catch (error) {
-                    console.error('❌ Failed to process free account selection:', error);
-                    console.error('Error details:', {
-                      message: error?.message || 'Unknown error',
-                      stack: error?.stack || 'No stack trace',
-                      userEmail: user?.email || 'Missing',
-                      hasToken: !!await AsyncStorage.getItem('authToken'),
-                      apiUrl: process.env.EXPO_PUBLIC_API_URL || 'Default URL'
-                    });
-                    Alert.alert(
-                      'Setup Error',
-                      `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${error?.message || 'Unknown error'}`,
-                      [{ text: 'OK' }]
-                    );
-                  } finally {
-                    setIsLoading(null);
-                  }
-                }
-              }
-            ]
-          );
+          setShowFreeConfirmation(true);
           return;
         }
+                  
         
         console.log('Free tier selected for existing user');
         if (user) {
@@ -290,6 +282,47 @@ export default function SubscriptionScreen() {
           </ThemedText>
         </View>
       </ThemedView>
+
+      {/* Custom Confirmation Modal */}
+      <Modal
+        visible={showFreeConfirmation}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowFreeConfirmation(false);
+          console.log('User canceled free plan selection');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <ThemedView style={styles.modalContent}>
+            <ThemedText type="title" style={styles.modalTitle}>
+              Confirm Free Plan
+            </ThemedText>
+            <ThemedText style={styles.modalMessage}>
+              Are you sure you want to continue with the free plan? You can upgrade anytime.
+            </ThemedText>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowFreeConfirmation(false);
+                  console.log('User canceled free plan selection');
+                }}
+              >
+                <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={handleConfirmFreeAccount}
+              >
+                <ThemedText style={styles.confirmButtonText}>Continue with Free</ThemedText>
+              </TouchableOpacity>
+            </View>
+          </ThemedView>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -441,5 +474,54 @@ const styles = StyleSheet.create({
     fontSize: 12,
     opacity: 0.5,
     textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  modalMessage: {
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+  },
+  confirmButton: {
+    backgroundColor: '#3b82f6',
+  },
+  cancelButtonText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
