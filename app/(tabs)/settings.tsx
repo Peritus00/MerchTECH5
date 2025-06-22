@@ -32,13 +32,16 @@ export default function Settings() {
       // Call logout function
       await logout();
       
+      console.log('Settings: Logout completed, navigating to login');
+      
       // Force navigation to login page
       router.replace('/auth/login');
       
-      console.log('Settings: Logout completed, navigating to login');
     } catch (error) {
       console.error('Settings: Logout failed:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
+    } finally {
+      // Always reset loading state
       setIsLoggingOut(false);
     }
   };
