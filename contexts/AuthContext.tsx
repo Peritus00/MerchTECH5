@@ -135,8 +135,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('State updated, navigating to login...');
 
-      // Navigate immediately without setTimeout
-      router.replace('/auth/login');
+      // Add small delay to ensure state is fully updated before navigation
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 50);
 
     } catch (error) {
       console.error('Logout failed:', error);
@@ -150,7 +152,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Navigate to login screen even if logout fails
-      router.replace('/auth/login');
+      setTimeout(() => {
+        router.replace('/auth/login');
+      }, 50);
     }
   };
 
