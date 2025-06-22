@@ -37,22 +37,29 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
+    console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
     Alert.alert(
       'Logout',
       'Are you sure you want to logout?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('Profile: Logout cancelled by user')
+        },
         {
           text: 'Logout',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Profile: Logout confirmed, starting logout process...');
+              console.log('🔴 Profile: Logout confirmed, starting logout process...');
+              console.log('Profile: Current user before logout:', user);
               await logout();
-              console.log('Profile: Logout completed, navigating to login...');
+              console.log('🔴 Profile: Logout completed successfully, navigating to login...');
               router.replace('/auth/login');
+              console.log('🔴 Profile: Navigation to login completed');
             } catch (error) {
-              console.error('Profile logout error:', error);
+              console.error('🔴 Profile logout error:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
