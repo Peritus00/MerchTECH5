@@ -1,7 +1,7 @@
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -12,17 +12,18 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isAuthenticated, isLoading, isInitialized, user } = useAuth();
+  const { isInitialized, isLoading } = useAuth();
 
-  // Minimal logging to prevent cascade
+  // Minimal effect to prevent cascading
   useEffect(() => {
     if (isInitialized && !isLoading) {
-      console.log('🔴 RootLayout: Ready, user:', user?.username || 'none');
+      console.log('🔴 RootLayout: Auth ready');
     }
   }, [isInitialized, isLoading]);
 
+  // Don't render anything while loading
   if (!isInitialized || isLoading) {
-    return null; // Show nothing while loading
+    return null;
   }
 
   return (
