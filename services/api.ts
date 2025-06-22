@@ -76,11 +76,17 @@ export default api;
 
 // Flag to prevent developer fallback during logout
 let isLoggingOut = false;
+let logoutStartTime = 0;
 
 // Auth endpoints
 export const authAPI = {
   setLoggingOut: (status: boolean) => {
     isLoggingOut = status;
+    if (status) {
+      logoutStartTime = Date.now();
+    } else {
+      logoutStartTime = 0;
+    }
   },
 
   login: async (email: string, password: string) => {
@@ -90,9 +96,10 @@ export const authAPI = {
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
       
-      // Don't use developer fallback during logout process
-      if (isLoggingOut) {
-        console.log('Skipping developer fallback - logout in progress');
+      // Don't use developer fallback during logout process or within 5 seconds of logout
+      const timeSinceLogout = Date.now() - logoutStartTime;
+      if (isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 5000)) {
+        console.log('Skipping developer fallback - logout in progress or recent');
         throw new Error('Logout in progress');
       }
       

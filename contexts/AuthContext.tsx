@@ -43,6 +43,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const initializeAuth = async () => {
     try {
+      // Don't initialize auth if we're in the middle of logging out
+      if (state.isLoggingOut) {
+        console.log('Skipping auth initialization - logout in progress');
+        return;
+      }
+
       setState(prev => ({ ...prev, isLoading: true }));
       
       // Check if there's existing auth data instead of clearing it
@@ -160,12 +166,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       console.log('State updated, navigating to login...');
 
-      // Reset the logging out flag
-      authAPI.setLoggingOut(false);
-
       // Use longer delay to ensure everything is cleared
       setTimeout(() => {
         router.replace('/auth/login');
+        // Reset the logging out flag AFTER navigation
+        authAPI.setLoggingOut(false);
       }, 200);
 
     } catch (error) {
