@@ -896,8 +896,7 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
              'confirmed' as status,
              false as is_pending,
              false as is_suspended
-      FROM users WHERE is_email_verified = TRUE ORDER BY created_at```tool_code
- DESC
+      FROM users WHERE is_email_verified = TRUE ORDER BY created_at DESC
     `);
 
     console.log('Confirmed users found:', confirmedUsers.rows.length);
