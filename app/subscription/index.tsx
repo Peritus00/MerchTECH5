@@ -138,13 +138,13 @@ export default function SubscriptionScreen() {
             loading && styles.loadingButton,
           ]}
           onPress={() => handleSelectPlan(tierKey)}
-          disabled={loading || isCurrent}
+          disabled={loading || (isCurrent && tierKey !== 'free')}
         >
           {loading ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <ThemedText style={styles.buttonText}>
-              {isCurrent ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : 'Select Plan'}
+              {isCurrent && tierKey !== 'free' ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : 'Select Plan'}
             </ThemedText>
           )}
         </TouchableOpacity>
