@@ -111,6 +111,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔴 Redirecting existing user to home');
         router.replace('/(tabs)');
       }
+    } else if (isAuthenticated && userIsNew && !inSubscriptionGroup) {
+      // Handle case where new user is already logged in but not in subscription flow
+      console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
+      router.replace('/subscription/index?newUser=true');
     }
   }, [user, isInitialized, isLoading, segments[0]]);
 
