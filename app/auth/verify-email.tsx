@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -8,18 +8,46 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { authService } from '@/services/authService';
+import { MaterialIcons } from '@expo/vector-icons';
 
 export default function VerifyEmailScreen() {
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
   const router = useRouter();
-  const { email } = useLocalSearchParams();
+  const { email, token } = useLocalSearchParams();
+
+  // Auto-verify if token is provided in URL
+  useEffect(() => {
+    if (token && typeof token === 'string') {
+      setInitialLoading(true);
+      handleAutoVerification(token);
+    }
+  }, [token]);
+
+  const handleAutoVerification = async (verificationToken: string) => {
+    try {
+      const result = await authService.verifyEmailToken(verificationToken);
+      
+      if (result.success) {
+        setVerified(true);
+      } else {
+        Alert.alert('Verification Failed', result.message);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Verification failed. Please try entering the code manually.');
+    } finally {
+      setInitialLoading(false);
+    }
+  };
 
   const handleVerifyEmail = async () => {
     if (!verificationCode.trim()) {
@@ -32,16 +60,7 @@ export default function VerifyEmailScreen() {
       const result = await authService.verifyEmailToken(verificationCode);
       
       if (result.success) {
-        Alert.alert(
-          'Success!', 
-          result.message,
-          [
-            {
-              text: 'OK',
-              onPress: () => router.replace('/(tabs)')
-            }
-          ]
-        );
+        setVerified(true);
       } else {
         Alert.alert('Error', result.message);
       }
@@ -69,6 +88,49 @@ export default function VerifyEmailScreen() {
     }
   };
 
+  const handleContinue = () => {
+    router.replace('/(tabs)');
+  };
+
+  // Show loading while auto-verifying
+  if (initialLoading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007BFF" />
+          <ThemedText style={styles.loadingText}>Verifying your email...</ThemedText>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Show success screen
+  if (verified) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.successContainer}>
+          <MaterialIcons name="check-circle" size={80} color="#22c55e" />
+          <ThemedText type="title" style={styles.successTitle}>
+            Email Verified!
+          </ThemedText>
+          <ThemedText style={styles.successText}>
+            Your email has been successfully verified. You can now access all features of MerchTech.
+          </ThemedText>
+          
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={handleContinue}
+          >
+            <ThemedText style={styles.continueButtonText}>
+              Continue to Dashboard
+            </ThemedText>
+          </TouchableOpacity>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // Show verification form
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
@@ -76,9 +138,13 @@ export default function VerifyEmailScreen() {
     >
       <ThemedView style={styles.content}>
         <View style={styles.header}>
+          <MaterialIcons name="email" size={48} color="#007BFF" />
           <ThemedText type="title">Verify Your Email</ThemedText>
           <ThemedText type="subtitle" style={styles.subtitle}>
-            We've sent a verification code to {email}
+            {email 
+              ? `We've sent a verification code to ${email}`
+              : 'Enter your verification code below'
+            }
           </ThemedText>
         </View>
 
@@ -89,10 +155,8 @@ export default function VerifyEmailScreen() {
               style={styles.input}
               value={verificationCode}
               onChangeText={setVerificationCode}
-              placeholder="Enter 6-digit code"
+              placeholder="Enter 6-digit code or paste token"
               placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={6}
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -108,15 +172,17 @@ export default function VerifyEmailScreen() {
             </ThemedText>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.resendButton, resendLoading && styles.disabled]}
-            onPress={handleResendCode}
-            disabled={resendLoading}
-          >
-            <ThemedText style={styles.resendButtonText}>
-              {resendLoading ? 'Sending...' : 'Resend Code'}
-            </ThemedText>
-          </TouchableOpacity>
+          {email && (
+            <TouchableOpacity
+              style={[styles.resendButton, resendLoading && styles.disabled]}
+              onPress={handleResendCode}
+              disabled={resendLoading}
+            >
+              <ThemedText style={styles.resendButtonText}>
+                {resendLoading ? 'Sending...' : 'Resend Code'}
+              </ThemedText>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.linkButton}
@@ -140,6 +206,46 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+  },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  successTitle: {
+    textAlign: 'center',
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  successText: {
+    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 32,
+    opacity: 0.8,
+  },
+  continueButton: {
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    minWidth: 200,
+  },
+  continueButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   header: {
     alignItems: 'center',
@@ -166,10 +272,8 @@ const styles = StyleSheet.create({
     borderColor: '#d0d0d0',
     borderRadius: 8,
     padding: 16,
-    fontSize: 18,
+    fontSize: 16,
     backgroundColor: '#fff',
-    textAlign: 'center',
-    letterSpacing: 4,
   },
   verifyButton: {
     backgroundColor: '#007BFF',

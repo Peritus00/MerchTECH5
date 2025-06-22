@@ -303,7 +303,7 @@ app.post('/api/test-email', async (req, res) => {
   try {
     const { email } = req.body;
     console.log('Testing email service to:', email);
-    
+
     if (!transporter) {
       return res.status(500).json({ error: 'Email service not configured' });
     }
@@ -729,21 +729,28 @@ app.post('/api/auth/send-verification', async (req, res) => {
       return res.status(400).json({ error: 'Email already verified' });
     }
 
-    const verificationToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign(
+        { email, type: 'verification' },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+    );
+
+    // Use the external domain instead of localhost
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : 'http://localhost:8081';
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
 
     // Store verification token in users table
     await pool.query(
       'UPDATE users SET verification_token = $1 WHERE email = $2',
-      [verificationToken, email]
+      [token, email]
     );
 
     // Send verification email
     try {
       console.log('Attempting to send verification email to:', email);
       console.log('Using transporter config:', transporter.options);
-      
-      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
-      console.log('Verification URL:', verificationUrl);
 
       const emailResult = await transporter.sendMail({
         from: 'help@merchtech.net',
@@ -871,19 +878,27 @@ app.post('/api/auth/resend-verification', async (req, res) => {
       return res.status(400).json({ error: 'Email already verified' });
     }
 
-    const newToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign(
+        { email, type: 'verification' },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+    );
+
+    // Use the external domain instead of localhost
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}`
+      : 'http://localhost:8081';
+    const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`;
 
     // Update token
     await pool.query(
       'UPDATE users SET verification_token = $1 WHERE email = $2',
-      [newToken, email]
+      [token, email]
     );
 
     // Send verification email
     try {
       console.log('Attempting to resend verification email to:', email);
-      const verificationUrl = `${process.env.APP_URL || 'http://localhost:8081'}/auth/verify-email?token=${newToken}`;
-      console.log('Verification URL:', verificationUrl);
 
       const emailResult = await transporter.sendMail({
         from: 'help@merchtech.net',

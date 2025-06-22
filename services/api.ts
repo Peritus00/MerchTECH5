@@ -113,7 +113,7 @@ export const authAPI = {
       return response.data;
     } catch (error: any) {
       console.log('API registration failed, checking for developer fallback');
-      
+
       // If backend fails, fall back to developer registration  
       if (email === 'djjetfuel@gmail.com') {
         console.log('Using developer fallback registration');
@@ -135,7 +135,7 @@ export const authAPI = {
           refreshToken: 'dev_refresh_token_djjetfuel_67890'
         };
       }
-      
+
       if (error.response?.status === 400) {
         throw new Error('Username or email already exists. Please try a different one.');
       }
@@ -144,7 +144,7 @@ export const authAPI = {
   },
 
   verifyEmail: async (token: string) => {
-    const response = await api.post('/auth/verify-email', { token });
+    const response = await api.get(`/auth/verify-email/${token}`);
     return response.data;
   },
 
