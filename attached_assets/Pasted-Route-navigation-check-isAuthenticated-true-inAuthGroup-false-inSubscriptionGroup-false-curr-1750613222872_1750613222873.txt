@@ -1,0 +1,199 @@
+Route navigation check: {isAuthenticated: true, inAuthGroup: false, inSubscriptionGroup: false, currentSegments: Array(1), userIsNew: false}
+eruda.js:2 Route navigation check: {isAuthenticated: true, inAuthGroup: false, inSubscriptionGroup: false, currentSegments: Array(2), userIsNew: false}
+7eruda.js:2 🔴 PROFILE LOGOUT BUTTON PRESSED!
+Console.js:61 Running application "main" with appParams:
+ {rootTag: '#root', hydrate: undefined} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Console.js:61 "shadow*" style props are deprecated. Use "boxShadow".
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+preprocess @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25523
+compileAndInsertAtomic @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22519
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22562
+create @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22550
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:74354
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75712
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:44054
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43765
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43519
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43746
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73352
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73412
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73220
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73100
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69938
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75920
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 API Base URL: https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api
+Console.js:61 [expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+Mt.forEach.n.<computed> @ Console.js:61
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:155333
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154783
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154569
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43633
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43746
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73352
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73412
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73220
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73100
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69938
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75920
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 Running application "main" with appParams:
+ {rootTag: '#root', hydrate: undefined} 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+Console.js:61 "shadow*" style props are deprecated. Use "boxShadow".
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+preprocess @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25523
+compileAndInsertAtomic @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22519
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22562
+create @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:22550
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:74354
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75712
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:44054
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43765
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43519
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43746
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73352
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73412
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73220
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73100
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69938
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75920
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 API Base URL: https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api
+Console.js:61 [expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+Mt.forEach.n.<computed> @ Console.js:61
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:155333
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154783
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:163
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154569
+loadModuleImplementation @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:256
+guardedLoadModule @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:156
+metroRequire @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83
+get @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43633
+metroContext @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:43746
+loadRoute @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73352
+getDirectoryTree @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73412
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73220
+getRoutes @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:73100
+useStore @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:69938
+ContextNavigator @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:75920
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateFunctionComponent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10539
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11157
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 props.pointerEvents is deprecated. Use style.pointerEvents
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+createDOMProps @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:27449
+createElement @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26481
+View @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26422
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateForwardRef @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10445
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11213
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 props.pointerEvents is deprecated. Use style.pointerEvents
+Mt.forEach.n.<computed> @ Console.js:61
+warnOnce @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:25629
+createDOMProps @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:27449
+createElement @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26481
+View @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:26422
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:17953
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9270
+updateForwardRef @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:10445
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11213
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13742
+workLoopConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13738
+renderRootConcurrent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13721
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13357
+performWorkOnRootViaSchedulerTask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14183
+performWorkUntilDeadline @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:19802Understand this warning
+Console.js:61 Route navigation check: {isAuthenticated: true, inAuthGroup: false, inSubscriptionGroup: false, currentSegments: Array(1), userIsNew: false}
+Console.js:61 Route navigation check: {isAuthenticated: true, inAuthGroup: false, inSubscriptionGroup: false, currentSegments: Array(1), userIsNew: false}
