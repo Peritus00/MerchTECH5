@@ -14,12 +14,12 @@ import { CartProvider } from '@/contexts/CartContext';
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isAuthenticated, isInitialized, user } = useAuth();
+  const { isAuthenticated, isInitialized, user, isLoggingOut } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoggingOut) return;
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';

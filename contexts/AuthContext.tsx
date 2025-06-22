@@ -8,6 +8,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   isInitialized: boolean;
+  isLoggingOut: boolean;
 }
 
 interface AuthContextType extends AuthState {
@@ -32,6 +33,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
     isLoading: true,
     isInitialized: false,
+    isLoggingOut: false,
   });
 
   // Initialize authentication state on app start
@@ -42,15 +44,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initializeAuth = async () => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
-      // Clear any stale authentication data on app start
-      await authService.logout();
-
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
+      
+      // Check if there's existing auth data instead of clearing it
+      const currentUser = await authService.getCurrentUser();
+      
+      if (currentUser) {
+        setState({
+          user: currentUser,
+          isAuthenticated: true,
+          isLoading: false,
+          isInitialized: true,
+          isLoggingOut: false,
+        });
+      } else {
+        setState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          isInitialized: true,
+          isLoggingOut: false,
+        });
+      }
     } catch (error) {
       console.error('Auth initialization error:', error);
       setState({
@@ -58,6 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
+        isLoggingOut: false,
       });
     }
   };
@@ -119,11 +134,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     try {
       console.log('Starting logout process...');
-      setState(prev => ({ ...prev, isLoading: true }));
+      setState(prev => ({ ...prev, isLoading: true, isLoggingOut: true }));
 
       // Clear authentication data
       await authService.logout();
       console.log('Auth service logout completed');
+
+      // Force clear AsyncStorage again to ensure it's completely cleared
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'currentUser']);
+      console.log('Additional AsyncStorage cleanup completed');
 
       // Update state immediately
       setState({
@@ -131,19 +151,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
+        isLoggingOut: false,
       });
 
       console.log('State updated, navigating to login...');
 
-      // Add small delay to ensure state is fully updated before navigation
+      // Use longer delay to ensure everything is cleared
       setTimeout(() => {
         router.replace('/auth/login');
-      }, 50);
+      }, 200);
 
     } catch (error) {
       console.error('Logout failed:', error);
 
-      // Even if logout fails, clear the local state
+      // Even if logout fails, force clear everything
+      const AsyncStorage = require('@react-native-async-storage/async-storage');
+      await AsyncStorage.clear(); // Nuclear option - clear everything
+      
       setState({
         user: null,
         isAuthenticated: false,
@@ -151,10 +175,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isInitialized: true,
       });
 
-      // Navigate to login screen even if logout fails
       setTimeout(() => {
         router.replace('/auth/login');
-      }, 50);
+      }, 200);
     }
   };
 
