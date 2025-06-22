@@ -1,0 +1,180 @@
+API login failed, checking for developer fallback
+Console.js:61 Using developer fallback login
+Console.js:61 🔴 AuthService: Login API response: {user: {…}, token: 'dev_jwt_token_djjetfuel_12345', refreshToken: 'dev_refresh_token_djjetfuel_67890'}
+Console.js:61 🔴 AuthService: Storing auth data...
+Console.js:61 🔴 AuthService: Auth data stored successfully
+Console.js:61 🔴 RootLayout: Still loading...
+Console.js:61 🔴 RootLayout: Waiting for initialization/loading to complete
+Console.js:61 🔴 RootLayout: Still loading...
+Network.js:219 
+            
+            
+           POST https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api/auth/refresh 404 (Not Found)
+window.fetch @ Network.js:219
+refreshToken @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103274
+refreshToken @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102964
+await in refreshToken
+getCurrentUser @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102940
+await in getCurrentUser
+initializeAuth @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102594
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102587
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:18015
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:6498
+commitHookEffectListMount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11612
+commitHookPassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:11649
+reconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12603
+recursivelyTraverseReconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12594
+reconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12617
+recursivelyTraverseReconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12594
+reconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12602
+recursivelyTraverseReconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12594
+reconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12602
+recursivelyTraverseReconnectPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12594
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12581
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12589
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12555
+recursivelyTraversePassiveMountEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12547
+commitPassiveMountOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:12560
+flushPassiveEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13938
+commitRootImpl @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13891
+commitRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13850
+commitRootWhenReady @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13456
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:13434
+performSyncWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14191
+flushSyncWorkAcrossRoots_impl @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14114
+processRootScheduleInMicrotask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14131
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14202
+XMLHttpRequest.send
+t.enable.e.send @ Network.js:159
+dispatchXhrRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:105994
+xhr @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:105832
+dispatchRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:105002
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:104402
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:104298
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:104454
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:104250
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:103210
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102855
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:102625
+handleLogin @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:152972
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:31691
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14292
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14589
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:7960
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:14372
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16454
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:16436Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: false, inSubscriptionGroup: false, currentSegments: Array(1), userIsNew: false, …}
+Console.js:61 🔴 RootLayout: User not authenticated, checking if redirect needed
+Console.js:61 🔴 RootLayout: Redirecting to login from: ['(tabs)']
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, currentSegments: Array(2), userIsNew: false, …}
+Console.js:61 🔴 RootLayout: User not authenticated, checking if redirect needed
