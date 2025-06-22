@@ -14,6 +14,7 @@ interface AuthContextType {
   register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -89,39 +90,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const navigationTimeout = setTimeout(() => {
       const inAuthGroup = segments[0] === 'auth';
       const inSubscriptionGroup = segments[0] === 'subscription';
+      const inNotFoundGroup = segments[0] === '+not-found';
       const isAuthenticated = !!user;
       const userIsNew = user?.isNewUser === true;
 
       console.log('🔴 Route navigation check:', { 
         isAuthenticated, 
         inAuthGroup, 
-        inSubscriptionGroup, 
+        inSubscriptionGroup,
+        inNotFoundGroup,
         currentSegments: segments.slice(0, 2),
         userIsNew,
         user: user?.username
       });
 
+      // Prevent redirect loops by checking if we're already in the target location
       if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
         console.log('🔴 Redirecting to login');
         router.replace('/auth/login');
-      } else if (isAuthenticated && inAuthGroup) {
-        // Check if user is new and should go to subscription selection
-        if (userIsNew) {
-          console.log('🔴 Redirecting new user to subscription selection');
-          router.replace('/subscription/index?newUser=true');
-        } else {
-          console.log('🔴 Redirecting existing user to home');
-          router.replace('/(tabs)');
-        }
-      } else if (isAuthenticated && userIsNew && !inSubscriptionGroup) {
+      } else if (isAuthenticated && inAuthGroup && !userIsNew) {
+        // Only redirect existing users away from auth pages
+        console.log('🔴 Redirecting existing user to home');
+        router.replace('/(tabs)');
+      } else if (isAuthenticated && userIsNew && !inSubscriptionGroup && !inNotFoundGroup) {
         // Handle case where new user is already logged in but not in subscription flow
+        // Avoid redirecting if already on not-found to prevent loops
         console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
-        router.replace('/subscription/index?newUser=true');
+        router.replace('/subscription/?newUser=true');
+      } else if (isAuthenticated && inAuthGroup && userIsNew) {
+        // Redirect new users from auth to subscription
+        console.log('🔴 Redirecting new user to subscription selection');
+        router.replace('/subscription/?newUser=true');
       }
-    }, 100); // Small delay to prevent rapid navigation
+    }, 150); // Slightly longer delay to allow route transitions
 
     return () => clearTimeout(navigationTimeout);
-  }, [user, isInitialized, isLoading, segments[0]]);
+  }, [user, isInitialized, isLoading, segments[0], segments[1]]);
 
   const login = async (email: string, password: string) => {
     try {
@@ -183,6 +187,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateProfile = async (updates: Partial<User>) => {
+    try {
+      const updatedUser = await authService.updateProfile(updates);
+      globalAuthState.user = updatedUser;
+      setUser(updatedUser);
+      return { success: true };
+    } catch (error: any) {
+      console.error('🔴 Auth: Update profile error:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -193,6 +209,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       logout,
       refreshUser,
+      updateProfile,
     }}>
       {children}
     </AuthContext.Provider>
