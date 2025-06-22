@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { useSegments } from 'expo-router';
@@ -17,106 +18,160 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Singleton to prevent multiple auth contexts
-let authContextInstance: any = null;
+// Global singleton state to prevent any re-initialization
+let globalAuthState = {
+  user: null as User | null,
+  isAuthenticated: false,
+  isLoading: false,
+  isInitialized: false,
+  hasBeenInitialized: false,
+  initPromise: null as Promise<void> | null,
+};
+
+// Global instance counter
+let instanceCount = 0;
+let masterInstanceId: number | null = null;
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  // Prevent multiple instances
-  if (authContextInstance) {
-    return authContextInstance;
+  const instanceId = ++instanceCount;
+  
+  // Only allow the first instance to be the master
+  if (masterInstanceId === null) {
+    masterInstanceId = instanceId;
+    console.log(`🔴 AuthContext: Master instance created (${instanceId})`);
+  } else {
+    console.log(`🔴 AuthContext: Slave instance created (${instanceId}) - will use master state`);
   }
 
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(false);
+  const [localUser, setLocalUser] = useState<User | null>(globalAuthState.user);
+  const [localIsLoading, setLocalIsLoading] = useState(globalAuthState.isLoading);
+  const [localIsInitialized, setLocalIsInitialized] = useState(globalAuthState.isInitialized);
+  
   const router = useRouter();
   const segments = useSegments();
 
-  const isAuthenticated = !!user;
+  const isAuthenticated = !!localUser;
+  const isMaster = instanceId === masterInstanceId;
 
-  // Initialize auth on mount with debouncing
+  // Sync local state with global state
   useEffect(() => {
-    console.log('🔴 AuthContext: Component mounted, initializing...');
+    const syncInterval = setInterval(() => {
+      if (
+        localUser !== globalAuthState.user ||
+        localIsLoading !== globalAuthState.isLoading ||
+        localIsInitialized !== globalAuthState.isInitialized
+      ) {
+        setLocalUser(globalAuthState.user);
+        setLocalIsLoading(globalAuthState.isLoading);
+        setLocalIsInitialized(globalAuthState.isInitialized);
+      }
+    }, 50);
 
-    // Debounce initialization to prevent rapid re-initialization
-    const timer = setTimeout(() => {
-      initializeAuth();
-    }, 100);
+    return () => clearInterval(syncInterval);
+  }, [localUser, localIsLoading, localIsInitialized]);
 
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Separate effect for route navigation with more stable dependencies
+  // Only master instance handles initialization
   useEffect(() => {
-    if (!isInitialized || isLoading) {
+    if (!isMaster) return;
+    
+    if (globalAuthState.hasBeenInitialized) {
+      console.log('🔴 AuthContext: Already initialized, skipping');
+      return;
+    }
+
+    if (globalAuthState.initPromise) {
+      console.log('🔴 AuthContext: Initialization already in progress');
+      return;
+    }
+
+    console.log('🔴 AuthContext: Master instance starting initialization...');
+    globalAuthState.initPromise = initializeAuth();
+  }, [isMaster]);
+
+  // Only master instance handles route navigation
+  useEffect(() => {
+    if (!isMaster || !localIsInitialized || localIsLoading) {
       return;
     }
 
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
 
-    // Only redirect on authentication state changes, not on every segment change
     if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
-      console.log('🔴 Route navigation: Redirecting unauthenticated user to login');
+      console.log('🔴 Route navigation: Master redirecting unauthenticated user to login');
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
-      console.log('🔴 Route navigation: Redirecting authenticated user to home');
+      console.log('🔴 Route navigation: Master redirecting authenticated user to home');
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated, isInitialized, isLoading]); // Removed segments dependency to prevent constant re-renders
+  }, [isAuthenticated, localIsInitialized, localIsLoading, isMaster]);
+
+  const updateGlobalState = (updates: Partial<typeof globalAuthState>) => {
+    Object.assign(globalAuthState, updates);
+    
+    // Force update all instances
+    setLocalUser(globalAuthState.user);
+    setLocalIsLoading(globalAuthState.isLoading);
+    setLocalIsInitialized(globalAuthState.isInitialized);
+  };
 
   const initializeAuth = async () => {
-    if (isInitializing || isInitialized) {
-      console.log('🔴 AuthContext: Skipping initialization - already in progress or completed');
-      return;
-    }
-
+    if (globalAuthState.hasBeenInitialized) return;
+    
     try {
-      setIsInitializing(true);
-      setIsLoading(true);
+      updateGlobalState({ isLoading: true });
       console.log('🔴 AuthContext: Starting authentication initialization...');
 
       const currentUser = await authService.getCurrentUser();
       console.log('🔴 AuthContext: Current user from storage:', currentUser);
 
+      updateGlobalState({
+        user: currentUser,
+        isAuthenticated: !!currentUser,
+      });
+
       if (currentUser) {
-        setUser(currentUser);
         console.log('🔴 AuthContext: User authenticated successfully:', currentUser.username);
       } else {
         console.log('🔴 AuthContext: No authenticated user found');
       }
     } catch (error) {
       console.error('🔴 AuthContext: Initialize auth error:', error);
-      setUser(null);
+      updateGlobalState({ user: null, isAuthenticated: false });
     } finally {
-      setIsLoading(false);
-      setIsInitialized(true);
-      setIsInitializing(false);
+      updateGlobalState({
+        isLoading: false,
+        isInitialized: true,
+        hasBeenInitialized: true,
+      });
+      globalAuthState.initPromise = null;
       console.log('🔴 AuthContext: Authentication initialization completed');
     }
   };
 
   const login = async (email: string, password: string) => {
     try {
-      setIsLoading(true);
+      updateGlobalState({ isLoading: true });
       console.log('🔴 AuthContext: Starting login for:', email);
 
       const response = await authService.login({ email, password });
       console.log('🔴 AuthContext: Login successful:', response.user);
 
-      setUser(response.user);
+      updateGlobalState({
+        user: response.user,
+        isAuthenticated: true,
+      });
     } catch (error: any) {
       console.error('🔴 AuthContext: Login error:', error);
       throw error;
     } finally {
-      setIsLoading(false);
+      updateGlobalState({ isLoading: false });
     }
   };
 
   const register = async (email: string, password: string, username: string, firstName?: string, lastName?: string) => {
     try {
-      setIsLoading(true);
+      updateGlobalState({ isLoading: true });
       console.log('🔴 AuthContext: Starting registration for:', email);
 
       const response = await authService.register({
@@ -128,32 +183,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       console.log('🔴 AuthContext: Registration successful:', response.user);
-      setUser(response.user);
+      updateGlobalState({
+        user: response.user,
+        isAuthenticated: true,
+      });
     } catch (error: any) {
       console.error('🔴 AuthContext: Registration error:', error);
       throw error;
     } finally {
-      setIsLoading(false);
+      updateGlobalState({ isLoading: false });
     }
   };
 
   const logout = async () => {
     try {
-      setIsLoading(true);
+      updateGlobalState({ isLoading: true });
       console.log('🔴 AuthContext: Starting logout...');
 
       await authService.logout();
-      setUser(null);
+      updateGlobalState({
+        user: null,
+        isAuthenticated: false,
+      });
 
       console.log('🔴 AuthContext: Logout completed successfully');
       router.replace('/auth/login');
     } catch (error) {
       console.error('🔴 AuthContext: Logout error:', error);
       // Even if logout fails, clear local state
-      setUser(null);
+      updateGlobalState({
+        user: null,
+        isAuthenticated: false,
+      });
       router.replace('/auth/login');
     } finally {
-      setIsLoading(false);
+      updateGlobalState({ isLoading: false });
     }
   };
 
@@ -163,38 +227,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const currentUser = await authService.getCurrentUser();
 
       if (currentUser) {
-        setUser(currentUser);
+        updateGlobalState({
+          user: currentUser,
+          isAuthenticated: true,
+        });
         console.log('🔴 AuthContext: User data refreshed:', currentUser.username);
       } else {
         console.log('🔴 AuthContext: No user found during refresh');
-        setUser(null);
+        updateGlobalState({
+          user: null,
+          isAuthenticated: false,
+        });
       }
     } catch (error) {
       console.error('🔴 AuthContext: Refresh user error:', error);
-      setUser(null);
+      updateGlobalState({
+        user: null,
+        isAuthenticated: false,
+      });
     }
   };
 
-  const contextValue = (
+  return (
     <AuthContext.Provider value={{
-        user,
-        isAuthenticated,
-        isLoading,
-        isInitialized,
-        login,
-        register,
-        logout,
-        refreshUser,
-      }}
-    >
+      user: localUser,
+      isAuthenticated,
+      isLoading: localIsLoading,
+      isInitialized: localIsInitialized,
+      login,
+      register,
+      logout,
+      refreshUser,
+    }}>
       {children}
     </AuthContext.Provider>
   );
-
-  // Store instance to prevent duplicates
-  authContextInstance = contextValue;
-
-  return contextValue;
 }
 
 export function useAuth() {

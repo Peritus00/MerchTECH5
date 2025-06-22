@@ -1,3 +1,4 @@
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -10,28 +11,18 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Global flag to prevent multiple layout instances
-let layoutInitialized = false;
-
 function RootLayoutNav() {
   const { isAuthenticated, isLoading, isInitialized, user } = useAuth();
 
-  // Prevent multiple initializations
+  // Minimal logging to prevent cascade
   useEffect(() => {
-    if (layoutInitialized) {
-      console.log('🔴 RootLayout: Already initialized, skipping');
-      return;
-    }
-
     if (isInitialized && !isLoading) {
-      layoutInitialized = true;
-      console.log('🔴 RootLayout: Layout initialized for user:', user?.username || 'none');
+      console.log('🔴 RootLayout: Ready, user:', user?.username || 'none');
     }
-  }, [isInitialized, isLoading, user?.username]);
+  }, [isInitialized, isLoading]);
 
   if (!isInitialized || isLoading) {
-    console.log('🔴 RootLayout: Still loading...');
-    return null; // or a loading screen
+    return null; // Show nothing while loading
   }
 
   return (
