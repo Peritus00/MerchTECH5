@@ -49,7 +49,7 @@ class AuthService {
     }
   }
 
-  async register(credentials: RegisterCredentials): Promise<{ success: boolean; message: string }> {
+  async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     try {
       // Validate input
       this.validateRegistrationData(credentials);
@@ -60,16 +60,16 @@ class AuthService {
         credentials.username
       );
 
-      if (!response.user) {
+      if (!response.user || !response.token) {
         throw new Error('Invalid response from server');
       }
 
-      // Don't auto-login after registration to prevent navigation conflicts
-      // User will need to login explicitly
-      return {
-        success: true,
-        message: 'Registration successful. Please login to continue.'
-      };
+      // Store authentication data for new user
+      console.log('🔴 AuthService: Storing registration auth data...');
+      await this.storeAuthData(response);
+      console.log('🔴 AuthService: Registration auth data stored successfully');
+
+      return response;
     } catch (error: any) {
       console.error('Registration error:', error);
       throw new Error(error.message || 'Registration failed. Please try again.');

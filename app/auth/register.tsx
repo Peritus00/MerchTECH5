@@ -162,7 +162,8 @@ export default function RegisterScreen() {
       
       if (result.success) {
         // User is automatically logged in, redirect to subscription selection
-        router.push('/subscription/index?newUser=true');
+        console.log('🔴 Registration: Success, redirecting to subscription');
+        router.replace('/subscription/?newUser=true');
       } else {
         setErrors({ general: result.error || 'Registration failed' });
       }

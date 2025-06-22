@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { useSegments } from 'expo-router';
@@ -49,9 +48,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializationRef.current = true;
     globalAuthState.isInitializing = true;
-    
+
     console.log('🔴 AuthContext: Starting initialization...');
-    
+
     const initializeAuth = async () => {
       try {
         setIsLoading(true);
@@ -62,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         globalAuthState.user = currentUser;
         globalAuthState.isInitialized = true;
         globalAuthState.isInitializing = false;
-        
+
         setUser(currentUser);
       } catch (error) {
         console.error('🔴 AuthContext: Init error:', error);
@@ -141,17 +140,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (email: string, password: string, username: string, firstName?: string, lastName?: string) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
-      const response = await authService.register({
-        email,
-        password,
-        username,
-        firstName,
-        lastName
-      });
-      return { success: response.success, message: response.message };
+      console.log('🔴 Auth: Starting registration for:', email);
+      const authResponse = await authService.register({ email, password, username, firstName, lastName });
+
+      // Registration now returns auth response with user and token
+      console.log('🔴 Auth: Registration successful, user logged in:', authResponse.user.username);
+      globalAuthState.user = authResponse.user;
+      setUser(authResponse.user);
+
+      return { success: true, user: authResponse.user };
     } catch (error: any) {
+      console.error('🔴 Auth: Registration error:', error);
       return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
