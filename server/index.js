@@ -421,17 +421,25 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Check if user already exists
     const existingUser = await pool.query(
-      'SELECT email, username FROM users WHERE email = $1 OR username = $2',
+      'SELECT email, username, is_email_verified FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
     if (existingUser.rows.length > 0) {
       const user = existingUser.rows[0];
-      if (user.email === email) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-      if (user.username === username) {
-        return res.status(400).json({ error: 'Username already taken' });
+      
+      // If user exists but email is not verified, allow re-registration by deleting the old unverified user
+      if ((user.email === email || user.username === username) && !user.is_email_verified) {
+        console.log('Deleting existing unverified user to allow re-registration:', { email, username });
+        await pool.query('DELETE FROM users WHERE email = $1 OR username = $2', [email, username]);
+      } else {
+        // User exists and is verified, return appropriate error
+        if (user.email === email) {
+          return res.status(400).json({ error: 'Email already registered' });
+        }
+        if (user.username === username) {
+          return res.status(400).json({ error: 'Username already taken' });
+        }
       }
     }
 
