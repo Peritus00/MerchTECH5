@@ -262,31 +262,7 @@ export default function UserPermissionsScreen() {
 
     console.log('Showing delete confirmation dialog');
 
-    Alert.alert(
-      isPending ? 'Remove Pending User' : 'Delete User',
-      `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => console.log('Delete cancelled')
-        },
-        {
-          text: isPending ? 'Remove' : 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
-            console.log('Delete confirmed - attempting to delete user with ID:', userId);
-            console.log('Target user:', targetUser);
-
-            // Execute the delete operation immediately without async/await in the onPress
-            executeDelete();
-          },
-        },
-      ]
-    );
-
-    // Separate function to handle the actual deletion
+    // Define the delete execution function outside of the Alert.alert call
     const executeDelete = async () => {
       try {
         console.log('Calling deleteUser function...');
@@ -308,6 +284,30 @@ export default function UserPermissionsScreen() {
         Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
       }
     };
+
+    Alert.alert(
+      isPending ? 'Remove Pending User' : 'Delete User',
+      `Are you sure you want to ${actionText} (${targetUser.username})? This action cannot be undone.`,
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('Delete cancelled')
+        },
+        {
+          text: isPending ? 'Remove' : 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
+            console.log('Delete confirmed - attempting to delete user with ID:', userId);
+            console.log('Target user:', targetUser);
+
+            // Execute the delete operation
+            executeDelete();
+          },
+        },
+      ]
+    );
   };
 
   const handleEditUser = (userId: number | string) => {
