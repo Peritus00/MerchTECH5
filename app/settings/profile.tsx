@@ -45,12 +45,16 @@ export default function ProfileScreen() {
         {
           text: 'Logout',
           style: 'destructive',
-          onPress: () => {
-            // Remove async/await from the Alert callback
-            logout().catch(error => {
-              console.error('Logout error:', error);
+          onPress: async () => {
+            try {
+              console.log('Profile: Logout confirmed, starting logout process...');
+              await logout();
+              console.log('Profile: Logout completed, navigating to login...');
+              router.replace('/auth/login');
+            } catch (error) {
+              console.error('Profile logout error:', error);
               Alert.alert('Error', 'Failed to logout. Please try again.');
-            });
+            }
           },
         },
       ]
