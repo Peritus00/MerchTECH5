@@ -128,67 +128,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = async () => {
-    console.log('🔴 AuthContext: Starting logout process...');
-    console.log('🔴 AuthContext: Current state before logout:', {
-      user: state.user?.username,
-      isAuthenticated: state.isAuthenticated,
-      isLoading: state.isLoading
-    });
-    
-    // Step 1: Immediately clear authentication state to prevent UI delays
-    console.log('🔴 AuthContext: Immediately clearing authentication state...');
-    const loggedOutState = {
-      user: null,
-      isAuthenticated: false,
-      isLoading: true, // Keep loading true while cleaning up
-      isInitialized: true,
-    };
-    setState(loggedOutState);
-    console.log('🔴 AuthContext: State immediately set to:', loggedOutState);
-    
+  const logout = async (): Promise<void> => {
     try {
-      // Step 2: Clear auth service data in background
+      console.log('🔴 AuthContext: Starting logout...');
+      setState(prev => ({ ...prev, isLoading: true }));
+
       console.log('🔴 AuthContext: Calling authService.logout()...');
       await authService.logout();
-      console.log('🔴 AuthContext: authService.logout() completed');
-      
-      // Step 3: Set final logged out state
-      console.log('🔴 AuthContext: Setting final logged out state...');
-      const finalState = {
+
+      console.log('🔴 AuthContext: Setting logged out state...');
+      setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-      };
-      setState(finalState);
-      console.log('🔴 AuthContext: Final state set to:', finalState);
-      
-      // Step 4: Navigate to login
-      console.log('🔴 AuthContext: Navigating to login...');
-      router.replace('/auth/login');
-      console.log('🔴 AuthContext: Navigation completed');
-      
+      });
+      console.log('🔴 AuthContext: Logout completed successfully');
     } catch (error) {
-      console.error('🔴 AuthContext: Error during logout cleanup:', error);
-      console.error('🔴 AuthContext: Error stack:', error.stack);
-      
-      // Ensure state is still cleared even on error
-      const errorState = {
+      console.error('🔴 AuthContext: Logout error:', error);
+      // Force clear state even if logout fails
+      console.log('🔴 AuthContext: Force clearing auth state due to error');
+      setState({
         user: null,
         isAuthenticated: false,
         isLoading: false,
         isInitialized: true,
-      };
-      setState(errorState);
-      console.log('🔴 AuthContext: Error state set to:', errorState);
-      
-      // Force navigation even on cleanup error
-      console.log('🔴 AuthContext: Force navigating to login due to cleanup error...');
-      router.replace('/auth/login');
-      
-      // Don't re-throw the error since logout should always succeed from UI perspective
-      console.log('🔴 AuthContext: Logout completed despite cleanup error');
+      });
     }
   };
 

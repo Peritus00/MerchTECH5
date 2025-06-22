@@ -29,18 +29,22 @@ class AuthService {
 
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     try {
+      console.log('🔴 AuthService: Attempting login for:', credentials.email);
       const response = await authAPI.login(credentials.email, credentials.password);
+      console.log('🔴 AuthService: Login API response:', response);
 
       if (!response.token || !response.user) {
         throw new Error('Invalid response from server');
       }
 
       // Store authentication data
+      console.log('🔴 AuthService: Storing auth data...');
       await this.storeAuthData(response);
+      console.log('🔴 AuthService: Auth data stored successfully');
 
       return response;
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('🔴 AuthService: Login error:', error);
       throw new Error(error.message || 'Login failed. Please check your credentials.');
     }
   }
