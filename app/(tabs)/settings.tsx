@@ -26,22 +26,28 @@ export default function Settings() {
 
   const handleLogout = async () => {
     try {
-      console.log('Settings: Logout button pressed');
+      console.log('Settings: Logout button pressed - starting logout process');
+      console.log('Settings: Current user before logout:', user);
+      console.log('Settings: Current isAuthenticated before logout:', isAuthenticated);
+      
       setIsLoggingOut(true);
       
       // Call logout function
+      console.log('Settings: Calling logout function...');
       await logout();
-      
-      console.log('Settings: Logout completed, navigating to login');
+      console.log('Settings: Logout function completed successfully');
       
       // Force navigation to login page
+      console.log('Settings: Navigating to login page...');
       router.replace('/auth/login');
+      console.log('Settings: Navigation to login completed');
       
     } catch (error) {
       console.error('Settings: Logout failed:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
     } finally {
       // Always reset loading state
+      console.log('Settings: Resetting loading state');
       setIsLoggingOut(false);
     }
   };
