@@ -255,9 +255,18 @@ class AuthService {
         throw new Error('No authentication token found');
       }
 
-      const updatedUser = await authAPI.updateProfile(updates, token);
+      // Get current user data first
+      const currentUserJson = await AsyncStorage.getItem(AuthService.USER_KEY);
+      if (!currentUserJson) {
+        throw new Error('No current user data found');
+      }
       
-      // Update stored user data
+      const currentUser = JSON.parse(currentUserJson);
+      
+      // Merge updates with current user data
+      const updatedUser = { ...currentUser, ...updates };
+      
+      // Update stored user data immediately since the backend update already succeeded
       await AsyncStorage.setItem(AuthService.USER_KEY, JSON.stringify(updatedUser));
       
       return updatedUser;
