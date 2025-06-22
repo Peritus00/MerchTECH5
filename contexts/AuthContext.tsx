@@ -129,37 +129,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    try {
-      console.log('Starting simple logout...');
-
-      // Step 1: Immediately update state to logged out
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
-
-      // Step 2: Clear auth service data
-      await authService.logout();
-
-      // Step 3: Navigate to login
-      router.replace('/auth/login');
-
-      console.log('Logout completed successfully');
-    } catch (error) {
-      console.error('Logout error:', error);
-
-      // Even if there's an error, ensure user is logged out
-      setState({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        isInitialized: true,
-      });
-
-      router.replace('/auth/login');
-    }
+    console.log('AuthContext: Starting logout process...');
+    
+    // Step 1: Clear auth service data first
+    await authService.logout();
+    
+    // Step 2: Update state to logged out
+    setState({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      isInitialized: true,
+    });
+    
+    console.log('AuthContext: Logout completed, state updated');
   };
 
   const verifyEmail = async (token: string) => {

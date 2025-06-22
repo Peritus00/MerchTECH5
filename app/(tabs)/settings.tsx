@@ -28,13 +28,17 @@ export default function Settings() {
     try {
       console.log('Settings: Logout button pressed');
       setIsLoggingOut(true);
+      
+      // Call logout function
       await logout();
-      console.log('Settings: Logout completed');
-      // Navigation will be handled by AuthContext
+      
+      // Force navigation to login page
+      router.replace('/auth/login');
+      
+      console.log('Settings: Logout completed, navigating to login');
     } catch (error) {
       console.error('Settings: Logout failed:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
-    } finally {
       setIsLoggingOut(false);
     }
   };
