@@ -56,14 +56,12 @@ class AuthService {
         credentials.username
       );
 
-      if (!response.user) {
+      if (!response.user || !response.token) {
         throw new Error('Invalid response from server');
       }
 
-      // If user doesn't require verification, store auth data immediately
-      if (!response.requiresVerification && response.token) {
-        await this.storeAuthData(response);
-      }
+      // Store auth data immediately since user is created and logged in
+      await this.storeAuthData(response);
 
       return response;
     } catch (error: any) {

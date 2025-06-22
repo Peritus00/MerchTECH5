@@ -135,7 +135,9 @@ async function initializeDatabase() {
         stripe_customer_id VARCHAR(255),
         stripe_subscription_id VARCHAR(255),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        verification_token VARCHAR(255),
+        is_new_user BOOLEAN DEFAULT TRUE
       );
     `);
 
@@ -419,7 +421,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Check if user already exists
     const existingUser = await pool.query(
-      'SELECT email, username FROM pending_users WHERE email = $1 OR username = $2',
+      'SELECT email, username FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
@@ -433,34 +435,79 @@ app.post('/api/auth/register', async (req, res) => {
       }
     }
 
-    const existingUserInUsers = await pool.query(
-        'SELECT email, username FROM users WHERE email = $1 OR username = $2',
-        [email, username]
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    // Create user directly in main users table with unverified status
+    const newUser = await pool.query(
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified, subscription_tier, is_new_user) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at`,
+      [email, username, passwordHash, firstName, lastName, false, 'free', true]
     );
 
-    if (existingUserInUsers.rows.length > 0) {
-        const user = existingUserInUsers.rows[0];
-        if (user.email === email) {
-            return res.status(400).json({ error: 'Email already registered' });
-        }
-        if (user.username === username) {
-            return res.status(400).json({ error: 'Username already taken' });
-        }
+    console.log('User created (unverified):', newUser.rows[0]);
+
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { 
+        id: newUser.rows[0].id, 
+        email: newUser.rows[0].email, 
+        username: newUser.rows[0].username,
+        isAdmin: false
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      message: 'Registration successful! Please select your subscription.',
+      user: {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        username: newUser.rows[0].username,
+        firstName: newUser.rows[0].first_name,
+        lastName: newUser.rows[0].last_name,
+        isEmailVerified: newUser.rows[0].is_email_verified,
+        subscriptionTier: newUser.rows[0].subscription_tier,
+        isNewUser: newUser.rows[0].is_new_user,
+        createdAt: newUser.rows[0].created_at
+      },
+      token,
+      requiresVerification: false
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Send verification email after subscription
+app.post('/api/auth/send-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const user = userResult.rows[0];
+
+    if (user.is_email_verified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
     const verificationToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-    // Store in pending_users
-    const newPendingUser = await pool.query(
-      `INSERT INTO pending_users (email, username, password_hash, first_name, last_name, verification_token, expires_at) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id, email, username, first_name, last_name`,
-      [email, username, passwordHash, firstName, lastName, verificationToken, expiresAt]
+    // Store verification token in users table
+    await pool.query(
+      'UPDATE users SET verification_token = $1 WHERE email = $2',
+      [verificationToken, email]
     );
-
-    console.log('Pending user created:', newPendingUser.rows[0]);
 
     // Send verification email
     try {
@@ -478,16 +525,14 @@ app.post('/api/auth/register', async (req, res) => {
         `
       });
 
-      res.status(201).json({
-        message: 'Registration successful! Please verify your email.',
-        requiresVerification: true
-      });
+      console.log('Verification email sent successfully');
+      res.json({ message: 'Verification email sent successfully' });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
       res.status(500).json({ error: 'Failed to send verification email' });
     }
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('Send verification error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -509,57 +554,54 @@ app.post('/api/auth/verify-email', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
-    // Find pending user
-    const pendingResult = await pool.query(
-      'SELECT * FROM pending_users WHERE verification_token = $1 AND expires_at > NOW()',
+    // Find user with verification token
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE verification_token = $1',
       [token]
     );
 
-    if (pendingResult.rows.length === 0) {
+    if (userResult.rows.length === 0) {
       return res.status(400).json({ error: 'Invalid or expired verification token' });
     }
 
-    const pendingUser = pendingResult.rows[0];
-
-    // Move user from pending_users to users table
-    const userResult = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified) 
-       VALUES ($1, $2, $3, $4, $5, true) RETURNING *`,
-      [pendingUser.email, pendingUser.username, pendingUser.password_hash, pendingUser.first_name, pendingUser.last_name]
-    );
-
     const user = userResult.rows[0];
 
-    // Remove from pending_users
-    await pool.query('DELETE FROM pending_users WHERE id = $1', [pendingUser.id]);
-
-    // Create JWT token for immediate login
-    const authToken = jwt.sign(
-      { 
-        id: user.id, 
-        email: user.email, 
-        username: user.username,
-        isAdmin: user.is_admin 
-      },
-      JWT_SECRET,
-      { expiresIn: '24h' }
+    // Update user to verified status
+    const updatedUser = await pool.query(
+      `UPDATE users SET is_email_verified = true, verification_token = null, is_new_user = false WHERE id = $1 
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at, is_new_user`,
+      [user.id]
     );
 
+    console.log('User email verified:', updatedUser.rows[0]);
+
+    // Generate new JWT for logged in session
+        const authToken = jwt.sign(
+            {
+                id: updatedUser.rows[0].id,
+                email: updatedUser.rows[0].email,
+                username: updatedUser.rows[0].username,
+                isAdmin: false
+            },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
     res.json({
-      message: 'Email verified successfully',
+      success: true,
+      message: 'Email verified successfully!',
       user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isEmailVerified: user.is_email_verified,
-        isAdmin: user.is_admin,
-        subscriptionTier: user.subscription_tier,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at
+        id: updatedUser.rows[0].id,
+        email: updatedUser.rows[0].email,
+        username: updatedUser.rows[0].username,
+        firstName: updatedUser.rows[0].first_name,
+        lastName: updatedUser.rows[0].last_name,
+        isEmailVerified: updatedUser.rows[0].is_email_verified,
+        subscriptionTier: updatedUser.rows[0].subscription_tier,
+        createdAt: updatedUser.rows[0].created_at,
+        isNewUser: updatedUser.rows[0].is_new_user
       },
-      token: authToken
+            token: authToken
     });
   } catch (error) {
     console.error('Email verification error:', error);
@@ -572,23 +614,27 @@ app.post('/api/auth/resend-verification', async (req, res) => {
   try {
     const { email } = req.body;
 
-    const pendingResult = await pool.query(
-      'SELECT * FROM pending_users WHERE email = $1',
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
       [email]
     );
 
-    if (pendingResult.rows.length === 0) {
-      return res.status(404).json({ error: 'No pending registration found for this email' });
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    const pendingUser = pendingResult.rows[0];
+    const user = userResult.rows[0];
+
+    if (user.is_email_verified) {
+      return res.status(400).json({ error: 'Email already verified' });
+    }
+
     const newToken = jwt.sign({ email, type: 'verification' }, JWT_SECRET, { expiresIn: '24h' });
-    const newExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
     // Update token
     await pool.query(
-      'UPDATE pending_users SET verification_token = $1, expires_at = $2 WHERE email = $3',
-      [newToken, newExpiresAt, email]
+      'UPDATE users SET verification_token = $1 WHERE email = $2',
+      [newToken, email]
     );
 
     // Send verification email
@@ -607,6 +653,7 @@ app.post('/api/auth/resend-verification', async (req, res) => {
         `
       });
 
+      console.log('Verification email resent successfully');
       res.json({ message: 'Verification email sent successfully' });
     } catch (emailError) {
       console.error('Email sending error:', emailError);
@@ -658,22 +705,22 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
              'confirmed' as status,
              false as is_pending,
              false as is_suspended
-      FROM users ORDER BY created_at DESC
+      FROM users WHERE is_email_verified = TRUE ORDER BY created_at DESC
     `);
 
     console.log('Confirmed users found:', confirmedUsers.rows.length);
     console.log('Confirmed users:', confirmedUsers.rows.map(u => ({ id: u.id, email: u.email, username: u.username })));
 
-    // Get pending users from pending_users table
-    const pendingUsers = await pool.query(`
-      SELECT id, email, username, first_name, last_name,
-             false as is_admin, 'free' as subscription_tier, 
-             created_at, created_at as updated_at,
-             'pending' as status, expires_at,
-             true as is_pending,
-             false as is_suspended
-      FROM pending_users ORDER BY created_at DESC
-    `);
+    // Get pending users from users table that are NOT yet email verified
+        const pendingUsers = await pool.query(`
+            SELECT id, email, username, first_name, last_name,
+                   false as is_admin, 'free' as subscription_tier,
+                   created_at, created_at as updated_at,
+                   'pending' as status, created_at as expires_at,
+                   true as is_pending,
+                   false as is_suspended
+            FROM users WHERE is_email_verified = FALSE ORDER BY created_at DESC
+        `);
 
     console.log('Pending users found:', pendingUsers.rows.length);
     console.log('Pending users:', pendingUsers.rows.map(u => ({ id: u.id, email: u.email, username: u.username })));
@@ -695,7 +742,7 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
         isSuspended: false
       })),
       ...pendingUsers.rows.map(user => ({
-        id: `pending_${user.id}`, // Ensure unique IDs between tables
+        id: user.id, // Ensure unique IDs between tables
         email: user.email,
         username: user.username || user.email?.split('@')[0] || 'Unknown',
         firstName: user.first_name,
@@ -707,7 +754,7 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
         status: 'pending',
         isPending: true,
         isSuspended: false,
-        expiresAt: user.expires_at
+        expiresAt: user.created_at // Using created_at as expires_at for pending users
       }))
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
@@ -750,13 +797,7 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
       [isNaN(identifier) ? null : parseInt(identifier), identifier, identifier]
     );
 
-    const checkPendingResult = await pool.query(
-      'SELECT id, email, username FROM pending_users WHERE id = $1 OR email = $2 OR username = $3',
-      [isNaN(identifier) ? null : parseInt(identifier), identifier, identifier]
-    );
-
     console.log('Found in users table:', checkUserResult.rowCount);
-    console.log('Found in pending_users table:', checkPendingResult.rowCount);
 
     // Try to delete from users table first (by ID or email or username)
     const userResult = await pool.query(
@@ -768,18 +809,6 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
       deletedFrom.push('users');
       deletedUser = userResult.rows[0];
       console.log(`Deleted user from users table: ${deletedUser.email} (ID: ${deletedUser.id})`);
-    }
-
-    // Try to delete from pending_users table (by ID or email or username)
-    const pendingResult = await pool.query(
-      'DELETE FROM pending_users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',
-      [isNaN(identifier) ? null : parseInt(identifier), identifier, identifier]
-    );
-
-    if (pendingResult.rowCount > 0) {
-      deletedFrom.push('pending_users');
-      deletedUser = pendingResult.rows[0];
-      console.log(`Deleted user from pending_users table: ${deletedUser.email} (ID: ${deletedUser.id})`);
     }
 
     if (deletedFrom.length === 0) {
@@ -810,7 +839,7 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
     const result = await pool.query(
-      'SELECT id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at FROM users WHERE id = $1',
+      'SELECT id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at, is_new_user FROM users WHERE id = $1',
       [userId]
     );
 
@@ -823,11 +852,12 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
       id: user.id,
       email: user.email,
       username: user.username,
-      firstName: user.firstName,
-      lastName: user.lastName,
+      firstName: user.first_name,
+      lastName: user.last_name,
       isEmailVerified: user.is_email_verified,
       subscriptionTier: user.subscriptionTier,
-      createdAt: user.createdAt
+      createdAt: user.createdAt,
+      isNewUser: user.is_new_user
     });
   } catch (error) {
     console.error('Get profile error:', error);

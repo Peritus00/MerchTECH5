@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS pending_users (
 );
 
 -- Create users table
-CREATE TABLE IF NOT EXISTS users (
+CREATE TABLE users (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   username VARCHAR(100),
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   is_admin BOOLEAN DEFAULT false,
   stripe_customer_id VARCHAR(255),
   stripe_subscription_id VARCHAR(255),
+  verification_token VARCHAR(500),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -164,15 +165,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_users_updated_at') THEN
     CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
-  
+
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_qr_codes_updated_at') THEN
     CREATE TRIGGER update_qr_codes_updated_at BEFORE UPDATE ON qr_codes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
-  
+
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_products_updated_at') THEN
     CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
-  
+
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_slideshows_updated_at') THEN
     CREATE TRIGGER update_slideshows_updated_at BEFORE UPDATE ON slideshows FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
