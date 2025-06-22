@@ -352,12 +352,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
     textAlign: 'center',
+    color: '#22c55e',
   },
   modalMessage: {
     fontSize: 16,
     marginBottom: 24,
     textAlign: 'center',
     lineHeight: 22,
+    color: '#22c55e',
   },
   modalButtons: {
     flexDirection: 'row',
@@ -376,7 +378,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DC3545',
   },
   cancelButtonText: {
-    color: '#374151',
+    color: '#22c55e',
     fontSize: 16,
     fontWeight: '600',
   },
