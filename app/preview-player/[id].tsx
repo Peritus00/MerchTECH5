@@ -93,7 +93,7 @@ export default function PreviewPlayerScreen() {
         mediaFiles={mediaFiles}
         playlistName={playlistName}
         previewDuration={25}
-        autoplay={true}
+        autoplay={false}
       />
 
       {/* Footer with action buttons */}
