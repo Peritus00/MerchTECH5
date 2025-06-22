@@ -160,30 +160,42 @@ class AuthService {
   async refreshToken(): Promise<boolean> {
     try {
       const refreshToken = await AsyncStorage.getItem(AuthService.REFRESH_TOKEN_KEY);
+      console.log('🔴 AuthService: Attempting refresh with token:', !!refreshToken);
       if (!refreshToken) {
+        console.log('🔴 AuthService: No refresh token found');
         return false;
       }
 
       const response = await authAPI.refreshToken(refreshToken);
       if (response.token) {
+        console.log('🔴 AuthService: Refresh successful, updating tokens');
         await AsyncStorage.setItem(AuthService.TOKEN_KEY, response.token);
         if (response.refreshToken) {
           await AsyncStorage.setItem(AuthService.REFRESH_TOKEN_KEY, response.refreshToken);
         }
         return true;
       }
+      console.log('🔴 AuthService: Refresh response missing token');
       return false;
     } catch (error) {
-      // Don't call logout here to prevent circular dependencies
-      // Just clear the tokens silently
+      console.error('🔴 AuthService: Refresh token error:', error);
+      // For dev login, don't clear tokens on refresh failure since they might still be valid
+      // Only clear if it's a legitimate auth failure, not a network/endpoint issue
+      if (error.message && error.message.includes('404')) {
+        console.log('🔴 AuthService: 404 error on refresh - keeping existing tokens for dev login');
+        return false; // Don't clear tokens for 404 errors
+      }
+      
+      // Only clear tokens for genuine auth failures
       try {
+        console.log('🔴 AuthService: Clearing tokens due to refresh failure');
         await Promise.all([
           AsyncStorage.removeItem(AuthService.TOKEN_KEY),
           AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
           AsyncStorage.removeItem(AuthService.USER_KEY),
         ]);
       } catch (clearError) {
-        console.error('Failed to clear tokens during refresh failure:', clearError);
+        console.error('🔴 AuthService: Failed to clear tokens during refresh failure:', clearError);
       }
       return false;
     }

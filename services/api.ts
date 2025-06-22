@@ -134,7 +134,8 @@ export const authAPI = {
     return response.data;
   },
 
-  async refreshToken(refreshToken: string) {
+  async refreshToken(refreshToken: string): Promise<{ token: string; refreshToken?: string }> {
+    console.log('🔴 API: Attempting refresh token with URL:', `${API_BASE_URL}/auth/refresh`);
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
@@ -143,11 +144,16 @@ export const authAPI = {
       body: JSON.stringify({ refreshToken }),
     });
 
+    console.log('🔴 API: Refresh token response status:', response.status);
     if (!response.ok) {
-      throw new Error('Failed to refresh token');
+      const errorText = await response.text();
+      console.error('🔴 API: Refresh token failed:', errorText);
+      throw new Error('Token refresh failed');
     }
 
-    return response.json();
+    const result = await response.json();
+    console.log('🔴 API: Refresh token success:', result);
+    return result;
   },
 
   async forgotPassword(email: string) {
@@ -259,3 +265,4 @@ export const adminAPI = {
     return response.data;
   }
 };
+```
