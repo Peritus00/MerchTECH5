@@ -74,84 +74,17 @@ api.interceptors.response.use(
 
 export default api;
 
-// Global authentication lock during logout
-let isLoggingOut = false;
-let logoutStartTime = 0;
-let authenticationLocked = false;
-
 // Auth endpoints
 export const authAPI = {
-  setLoggingOut: (status: boolean) => {
-    isLoggingOut = status;
-    if (status) {
-      logoutStartTime = Date.now();
-      authenticationLocked = true;
-    } else {
-      logoutStartTime = 0;
-      authenticationLocked = false;
-    }
-  },
-
-  lockAuthentication: () => {
-    authenticationLocked = true;
-    console.log('AUTHENTICATION LOCKED');
-  },
-
-  unlockAuthentication: () => {
-    authenticationLocked = false;
-    console.log('AUTHENTICATION UNLOCKED');
-  },
-
   login: async (email: string, password: string) => {
-    // NUCLEAR CHECK: Block ALL authentication attempts if nuclear flag exists
-    try {
-      const AsyncStorage = require('@react-native-async-storage/async-storage');
-      const nuclearFlag = await AsyncStorage.getItem('NUCLEAR_LOGOUT_FLAG');
-      const logoutTimestamp = await AsyncStorage.getItem('LOGOUT_TIMESTAMP');
-
-      if (nuclearFlag === 'true') {
-        const timestamp = parseInt(logoutTimestamp || '0');
-        const timeSinceLogout = Date.now() - timestamp;
-
-        if (timeSinceLogout < 12000) {
-          console.log('NUCLEAR LOGIN BLOCKED: Nuclear logout in progress', {
-            timeSinceLogout,
-            remainingTime: 12000 - timeSinceLogout
-          });
-          throw new Error('Authentication disabled during nuclear logout');
-        }
-      }
-    } catch (storageError) {
-      console.error('Error checking nuclear flags:', storageError);
-    }
-
-    // FIRST CHECK: Block ALL authentication attempts if locked
-    if (authenticationLocked) {
-      console.log('AUTHENTICATION BLOCKED: Global authentication lock is active');
-      throw new Error('Authentication temporarily disabled');
-    }
-
     try {
       const response = await api.post('/auth/login', { email, password });
       return response.data;
     } catch (error: any) {
       console.log('API login failed, checking for developer fallback');
 
-      // SECOND CHECK: Block ALL developer fallbacks during logout (extended to 10 seconds)
-      const timeSinceLogout = Date.now() - logoutStartTime;
-      if (authenticationLocked || isLoggingOut || (logoutStartTime > 0 && timeSinceLogout < 10000)) {
-        console.log('BLOCKED: Authentication locked or logout in progress');
-        throw new Error('Authentication disabled during logout');
-      }
-
-      // THIRD CHECK: Special block for developer account during logout (extended to 10 seconds)
-      if (email === 'djjetfuel@gmail.com' && (authenticationLocked || isLoggingOut || timeSinceLogout < 10000)) {
-        console.log('BLOCKED: Developer account blocked during logout');
-        throw new Error('Developer login blocked during logout');
-      }
-
-      // If backend fails, fall back to developer login (only if not locked)
-      if (email === 'djjetfuel@gmail.com' && password === 'dev123' && !authenticationLocked) {
+      // If backend fails, fall back to developer login
+      if (email === 'djjetfuel@gmail.com' && password === 'dev123') {
         console.log('Using developer fallback login');
         return {
           user: {

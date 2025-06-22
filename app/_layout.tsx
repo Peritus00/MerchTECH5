@@ -1,31 +1,23 @@
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef } from 'react';
-import 'react-native-reanimated';
-
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { useEffect } from 'react';
+import 'react-native-reanimated/lib/reanimated2/js-reanimated';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isAuthenticated, isInitialized, user, isLoggingOut } = useAuth();
+  const { isAuthenticated, isInitialized, user } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const navigationLockRef = useRef(false);
 
   useEffect(() => {
-    // NUCLEAR NAVIGATION LOCK: Block ALL navigation during nuclear logout
-    if (isLoggingOut || navigationLockRef.current) {
-      console.log('NUCLEAR NAVIGATION BLOCKED: Logout in progress');
-      return;
-    }
-    
     if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === 'auth';
@@ -57,7 +49,7 @@ function RootLayoutNav() {
         router.replace('/(tabs)');
       }
     }
-  }, [isAuthenticated, isInitialized, segments, user, isLoggingOut]);
+  }, [isAuthenticated, isInitialized, segments, user]);
 
   return (
     <Stack>
@@ -90,7 +82,6 @@ export default function RootLayout() {
       <AuthProvider>
         <CartProvider>
           <RootLayoutNav />
-          <StatusBar style="auto" />
         </CartProvider>
       </AuthProvider>
     </ThemeProvider>
