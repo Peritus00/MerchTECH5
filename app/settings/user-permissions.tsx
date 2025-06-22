@@ -232,6 +232,32 @@ export default function UserPermissionsScreen() {
     );
   };
 
+  const executeDelete = async (userId: number | string, targetUser: any) => {
+    console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
+    console.log('Delete confirmed - attempting to delete user with ID:', userId);
+    console.log('Target user:', targetUser);
+
+    try {
+      console.log('Calling deleteUser function...');
+      const success = await deleteUser(userId);
+      console.log('Delete operation completed with result:', success);
+
+      if (success) {
+        console.log('User deleted successfully');
+        Alert.alert('Success', 'User deleted successfully');
+        // Refresh the user list
+        console.log('Refreshing user list...');
+        await refreshUsers();
+      } else {
+        console.log('Delete operation failed');
+        Alert.alert('Error', 'Failed to delete user. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error in delete handler:', error);
+      Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
+    }
+  };
+
   const handleDeleteUser = async (userId: number | string) => {
     console.log('Delete button clicked for user ID:', userId);
 
@@ -268,34 +294,7 @@ export default function UserPermissionsScreen() {
         {
           text: isPending ? 'Remove' : 'Delete',
           style: 'destructive',
-          onPress: () => {
-            console.log('=== DELETE BUTTON PRESSED IN DIALOG ===');
-            console.log('Delete confirmed - attempting to delete user with ID:', userId);
-            console.log('Target user:', targetUser);
-
-            // Use setTimeout to ensure the alert dismisses before executing the async operation
-            setTimeout(async () => {
-              try {
-                console.log('Calling deleteUser function...');
-                const success = await deleteUser(userId);
-                console.log('Delete operation completed with result:', success);
-
-                if (success) {
-                  console.log('User deleted successfully');
-                  Alert.alert('Success', 'User deleted successfully');
-                  // Refresh the user list
-                  console.log('Refreshing user list...');
-                  await refreshUsers();
-                } else {
-                  console.log('Delete operation failed');
-                  Alert.alert('Error', 'Failed to delete user. Please try again.');
-                }
-              } catch (error) {
-                console.error('Error in delete handler:', error);
-                Alert.alert('Error', `An unexpected error occurred: ${error.message || 'Unknown error'}`);
-              }
-            }, 100);
-          },
+          onPress: () => executeDelete(userId, targetUser),
         },
       ]
     );
