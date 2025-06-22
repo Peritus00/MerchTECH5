@@ -1,3 +1,4 @@
+// Ensure isNewUser field is included in register response
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -788,7 +789,7 @@ app.post('/api/auth/verify-email', async (req, res) => {
         lastName: updatedUser.rows[0].last_name,
         isEmailVerified: updatedUser.rows[0].is_email_verified,
         subscriptionTier: updatedUser.rows[0].subscription_tier,
-        createdAt: updatedUser.rows[0].created_at,
+        createdAt: updatedUser.rows[0].createdAt,
         isNewUser: updatedUser.rows[0].is_new_user
       },
             token: authToken
@@ -895,7 +896,8 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
              'confirmed' as status,
              false as is_pending,
              false as is_suspended
-      FROM users WHERE is_email_verified = TRUE ORDER BY created_at DESC
+      FROM users WHERE is_email_verified = TRUE ORDER BY created_at```tool_code
+ DESC
     `);
 
     console.log('Confirmed users found:', confirmedUsers.rows.length);
@@ -991,11 +993,11 @@ app.delete('/api/admin/users/:identifier', authenticateToken, async (req, res) =
 
     if (checkUserResult.rowCount > 0) {
       const userId = checkUserResult.rows[0].id;
-      
+
       // First delete related refresh tokens
       await pool.query('DELETE FROM refresh_tokens WHERE user_id = $1', [userId]);
       console.log('Deleted refresh tokens for user:', userId);
-      
+
       // Then delete the user
       const userResult = await pool.query(
         'DELETE FROM users WHERE id = $1 OR email = $2 OR username = $3 RETURNING id, email, username',

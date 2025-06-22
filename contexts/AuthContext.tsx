@@ -11,7 +11,7 @@ interface AuthContextType {
   isLoading: boolean;
   isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<void>;
+  register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
 }
@@ -88,20 +88,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const isAuthenticated = !!user;
+    const userIsNew = user?.isNewUser === true;
 
     console.log('🔴 Auth navigation check:', { 
       isAuthenticated, 
       inAuthGroup, 
       inSubscriptionGroup, 
-      segments: segments.slice(0, 2) // Only log first 2 segments
+      segments: segments.slice(0, 2), // Only log first 2 segments
+      userIsNew,
+      user: user?.username
     });
 
     if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
       console.log('🔴 Redirecting to login');
       router.replace('/auth/login');
     } else if (isAuthenticated && inAuthGroup) {
-      console.log('🔴 Redirecting to home');
-      router.replace('/(tabs)');
+      // Check if user is new and should go to subscription selection
+      if (userIsNew) {
+        console.log('🔴 Redirecting new user to subscription selection');
+        router.replace('/subscription/index?newUser=true');
+      } else {
+        console.log('🔴 Redirecting existing user to home');
+        router.replace('/(tabs)');
+      }
     }
   }, [user, isInitialized, isLoading, segments[0]]);
 
@@ -130,8 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       globalAuthState.user = response.user;
       setUser(response.user);
+      return { success: true, user: response.user };
     } catch (error: any) {
-      throw error;
+      return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
     }
