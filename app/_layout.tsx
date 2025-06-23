@@ -1,31 +1,79 @@
 
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import 'react-native-reanimated';
+import { StripeProvider } from '@stripe/stripe-react-native';
+
+import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
-import { useColorScheme } from '@/hooks/useColorScheme';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 function RootLayoutNav() {
-  const { isInitialized, isLoading } = useAuth();
+  const colorScheme = useColorScheme();
+  const { user, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
 
-  // Show nothing while initializing - prevent multiple renders
-  if (!isInitialized || isLoading) {
-    return null;
-  }
+  console.log('🔴 Route navigation check:', {
+    isAuthenticated: !!user,
+    inAuthGroup: segments[0] === 'auth',
+    inSubscriptionGroup: segments[0] === 'subscription',
+    inNotFoundGroup: segments[0] === '+not-found',
+    currentSegments: segments,
+    userIsNew: user?.isNewUser,
+    user: user?.username
+  });
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    const inAuthGroup = segments[0] === 'auth';
+    const inSubscriptionGroup = segments[0] === 'subscription';
+    const inNotFoundGroup = segments[0] === '+not-found';
+
+    if (user) {
+      // User is signed in
+      if (inAuthGroup) {
+        // Redirect away from sign-in if already authenticated
+        router.replace('/(tabs)/');
+      } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup) {
+        console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
+        router.replace('/subscription');
+      }
+    } else {
+      // User is not signed in
+      if (!inAuthGroup && !inNotFoundGroup) {
+        router.replace('/auth/login');
+      }
+    }
+  }, [user, segments, isLoading]);
 
   return (
-    <Stack>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="auth" options={{ headerShown: false }} />
-      <Stack.Screen name="subscription" options={{ headerShown: false }} />
-      <Stack.Screen name="+not-found" />
-    </Stack>
+    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <Stack>
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="auth" options={{ headerShown: false }} />
+        <Stack.Screen name="subscription" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
+        <Stack.Screen name="legal" options={{ headerShown: false }} />
+        <Stack.Screen name="store" options={{ headerShown: false }} />
+        <Stack.Screen name="qr-details" options={{ headerShown: false }} />
+        <Stack.Screen name="media-player" options={{ headerShown: false }} />
+        <Stack.Screen name="preview-player" options={{ headerShown: false }} />
+        <Stack.Screen name="playlist-access" options={{ headerShown: false }} />
+        <Stack.Screen name="product-links" options={{ headerShown: false }} />
+        <Stack.Screen name="demo-players" options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found" />
+      </Stack>
+      <StatusBar style="auto" />
+    </ThemeProvider>
   );
 }
 
@@ -46,12 +94,15 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <StripeProvider
+      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}
+      merchantIdentifier="merchant.com.merchtech.app"
+    >
       <AuthProvider>
         <CartProvider>
           <RootLayoutNav />
         </CartProvider>
       </AuthProvider>
-    </ThemeProvider>
+    </StripeProvider>
   );
 }

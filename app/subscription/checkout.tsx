@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -6,13 +5,13 @@ import {
   ActivityIndicator,
   Alert,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useStripe, CardField } from '@stripe/stripe-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,13 +23,8 @@ export default function SubscriptionCheckoutScreen() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState({
-    cardNumber: '',
-    expiryDate: '',
-    cvv: '',
-    cardholderName: '',
-  });
-  const [errors, setErrors] = useState({});
+  const [cardComplete, setCardComplete] = useState(false);
+  const { confirmPayment } = useStripe();
   const isNewUser = newUser === 'true';
 
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
@@ -47,7 +41,7 @@ export default function SubscriptionCheckoutScreen() {
   const initializePayment = async () => {
     try {
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/create-payment-intent`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/stripe/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,123 +69,44 @@ export default function SubscriptionCheckoutScreen() {
     }
   };
 
-  const validatePaymentForm = () => {
-    const newErrors = {};
-    
-    if (!paymentMethod.cardNumber || paymentMethod.cardNumber.length < 16) {
-      newErrors.cardNumber = 'Valid card number required';
-    }
-    
-    if (!paymentMethod.expiryDate || !/^\d{2}\/\d{2}$/.test(paymentMethod.expiryDate)) {
-      newErrors.expiryDate = 'Valid expiry date required (MM/YY)';
-    }
-    
-    if (!paymentMethod.cvv || paymentMethod.cvv.length < 3) {
-      newErrors.cvv = 'Valid CVV required';
-    }
-    
-    if (!paymentMethod.cardholderName.trim()) {
-      newErrors.cardholderName = 'Cardholder name required';
-    }
-    
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const formatCardNumber = (text) => {
-    // Remove all non-digits
-    const cleaned = text.replace(/\D/g, '');
-    
-    // Limit to 16 digits
-    const limited = cleaned.substring(0, 16);
-    
-    // Add spaces every 4 digits
-    const formatted = limited.replace(/(\d{4})(?=\d)/g, '$1 ');
-    
-    return formatted;
-  };
-
-  const formatExpiryDate = (text) => {
-    const cleaned = text.replace(/\D/g, '');
-    if (cleaned.length >= 2) {
-      return cleaned.substring(0, 2) + '/' + cleaned.substring(2, 4);
-    }
-    return cleaned;
-  };
-
   const handlePayment = async () => {
-    if (!validatePaymentForm()) {
-      Alert.alert('Invalid Payment Details', 'Please check your payment information and try again.');
+    if (!cardComplete) {
+      Alert.alert('Invalid Payment Details', 'Please enter complete payment information.');
+      return;
+    }
+
+    if (!clientSecret) {
+      Alert.alert('Error', 'Payment not initialized. Please try again.');
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log('Starting payment process for tier:', tier);
-      
-      const token = await AsyncStorage.getItem('authToken');
-      
-      if (!clientSecret) {
-        throw new Error('Payment not initialized. Please try again.');
-      }
+      console.log('Starting secure payment process for tier:', tier);
 
-      console.log('Processing payment with client secret...');
-      
-      // Validate payment method data
-      if (!paymentMethod.cardNumber || !paymentMethod.expiryDate || !paymentMethod.cvv) {
-        throw new Error('Please fill in all payment information');
-      }
-
-      // Parse expiry date
-      const [expMonth, expYear] = paymentMethod.expiryDate.split('/');
-      if (!expMonth || !expYear || expMonth.length !== 2 || expYear.length !== 2) {
-        throw new Error('Please enter expiry date in MM/YY format');
-      }
-
-      console.log('Processing payment with backend...');
-      console.log('Payment details being sent:', {
-        cardNumber: paymentMethod.cardNumber.substring(0, 4) + '****',
-        expMonth,
-        expYear: `20${expYear}`,
-        cardholderName: paymentMethod.cardholderName
-      });
-
-      // Send payment details directly to backend for processing
-      const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+      // Use Stripe's secure payment confirmation
+      const { error, paymentIntent } = await confirmPayment(clientSecret, {
+        paymentMethodType: 'Card',
+        paymentMethodData: {
+          billingDetails: {
+            name: user?.username || 'Customer',
+            email: user?.email,
+          },
         },
-        body: JSON.stringify({
-          clientSecret,
-          subscriptionTier: tier,
-          paymentDetails: {
-            cardNumber: paymentMethod.cardNumber.replace(/\s/g, ''),
-            expMonth: expMonth,
-            expYear: `20${expYear}`,
-            cvv: paymentMethod.cvv,
-            cardholderName: paymentMethod.cardholderName || 'Customer',
-          }
-        })
       });
 
-      console.log('Payment response status:', paymentResponse.status);
-
-      if (!paymentResponse.ok) {
-        const errorData = await paymentResponse.json();
-        console.error('Payment failed:', errorData);
-        throw new Error(errorData.error || 'Payment failed');
+      if (error) {
+        console.error('Payment confirmation error:', error);
+        Alert.alert('Payment Failed', error.message || 'Payment could not be processed.');
+        return;
       }
 
-      const paymentResult = await paymentResponse.json();
-      console.log('Payment result:', paymentResult);
-      
-      if (paymentResult.success) {
+      if (paymentIntent.status === 'Succeeded') {
         console.log('Payment successful, updating user subscription...');
-        
+
         // Update user subscription tier
-        const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
+        const token = await AsyncStorage.getItem('authToken');
+        const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/user/subscription`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -199,8 +114,8 @@ export default function SubscriptionCheckoutScreen() {
           },
           body: JSON.stringify({
             subscriptionTier: tier,
-            stripeCustomerId: paymentResult.customerId,
-            stripeSubscriptionId: paymentResult.subscriptionId
+            stripeCustomerId: paymentIntent.customer,
+            stripeSubscriptionId: paymentIntent.id
           })
         });
 
@@ -209,20 +124,13 @@ export default function SubscriptionCheckoutScreen() {
           console.error('Failed to update subscription:', updateError);
           throw new Error('Failed to update subscription');
         }
-        
+
         console.log('Subscription updated successfully, navigating to success page...');
-        
+
         // Navigate to success screen
-        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentResult.customerId}&subscriptionId=${paymentResult.subscriptionId}`);
-      } else if (paymentResult.requires_action) {
-        // Handle additional authentication if needed
-        Alert.alert(
-          'Payment Requires Authentication', 
-          'Your payment requires additional authentication. Please complete the authentication and try again.',
-          [{ text: 'OK' }]
-        );
+        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentIntent.customer}&subscriptionId=${paymentIntent.id}`);
       } else {
-        throw new Error(paymentResult.error || 'Payment failed');
+        throw new Error(`Payment status: ${paymentIntent.status}`);
       }
     } catch (error) {
       console.error('Payment error:', error);
@@ -251,7 +159,7 @@ export default function SubscriptionCheckoutScreen() {
           <ThemedText style={styles.backButton}>← Back</ThemedText>
         </TouchableOpacity>
       </View>
-      
+
       <KeyboardAvoidingView 
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -283,64 +191,22 @@ export default function SubscriptionCheckoutScreen() {
 
       <ThemedView style={styles.paymentContainer}>
         <ThemedText type="subtitle" style={styles.paymentTitle}>Payment Method</ThemedText>
-        
+
         <View style={styles.paymentForm}>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Cardholder Name</ThemedText>
-            <TextInput
-              style={[styles.input, errors.cardholderName && styles.inputError]}
-              value={paymentMethod.cardholderName}
-              onChangeText={(text) => setPaymentMethod(prev => ({ ...prev, cardholderName: text }))}
-              placeholder="John Doe"
-              placeholderTextColor="#9ca3af"
-            />
-            {errors.cardholderName && <ThemedText style={styles.errorText}>{errors.cardholderName}</ThemedText>}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.inputLabel}>Card Number</ThemedText>
-            <TextInput
-              style={[styles.input, errors.cardNumber && styles.inputError]}
-              value={paymentMethod.cardNumber}
-              onChangeText={(text) => setPaymentMethod(prev => ({ ...prev, cardNumber: formatCardNumber(text) }))}
-              placeholder="1234 5678 9012 3456"
-              placeholderTextColor="#9ca3af"
-              keyboardType="default"
-              maxLength={19}
-            />
-            {errors.cardNumber && <ThemedText style={styles.errorText}>{errors.cardNumber}</ThemedText>}
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
-              <ThemedText style={styles.inputLabel}>Expiry Date</ThemedText>
-              <TextInput
-                style={[styles.input, errors.expiryDate && styles.inputError]}
-                value={paymentMethod.expiryDate}
-                onChangeText={(text) => setPaymentMethod(prev => ({ ...prev, expiryDate: formatExpiryDate(text) }))}
-                placeholder="MM/YY"
-                placeholderTextColor="#9ca3af"
-                keyboardType="numeric"
-                maxLength={5}
-              />
-              {errors.expiryDate && <ThemedText style={styles.errorText}>{errors.expiryDate}</ThemedText>}
-            </View>
-
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
-              <ThemedText style={styles.inputLabel}>CVV</ThemedText>
-              <TextInput
-                style={[styles.input, errors.cvv && styles.inputError]}
-                value={paymentMethod.cvv}
-                onChangeText={(text) => setPaymentMethod(prev => ({ ...prev, cvv: text.replace(/[^0-9]/g, '') }))}
-                placeholder="123"
-                placeholderTextColor="#9ca3af"
-                keyboardType="numeric"
-                maxLength={4}
-                secureTextEntry
-              />
-              {errors.cvv && <ThemedText style={styles.errorText}>{errors.cvv}</ThemedText>}
-            </View>
-          </View>
+          <CardField
+            postalCodeEnabled={true}
+            placeholders={{
+              number: '4242 4242 4242 4242',
+            }}
+            cardStyle={{
+              backgroundColor: '#FFFFFF',
+              textColor: '#000000',
+            }}
+            style={styles.cardField}
+            onCardChange={(cardDetails) => {
+              setCardComplete(cardDetails.complete);
+            }}
+          />
 
           <View style={styles.securityBadge}>
             <ThemedText style={styles.securityText}>🔒 Secure payment powered by Stripe</ThemedText>
@@ -351,7 +217,7 @@ export default function SubscriptionCheckoutScreen() {
       <TouchableOpacity
         style={[styles.payButton, isLoading && styles.payButtonDisabled]}
         onPress={handlePayment}
-        disabled={isLoading}
+        disabled={isLoading || !cardComplete}
       >
         {isLoading ? (
           <ActivityIndicator color="#fff" size="small" />
@@ -449,35 +315,10 @@ const styles = StyleSheet.create({
   paymentForm: {
     gap: 16,
   },
-  inputGroup: {
-    marginBottom: 4,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 8,
-    color: '#ef4444',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fff',
-    color: '#1f2937',
-  },
-  inputError: {
-    borderColor: '#ef4444',
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+  cardField: {
+    width: '100%',
+    height: 50,
+    marginVertical: 20,
   },
   securityBadge: {
     backgroundColor: '#f9fafb',
