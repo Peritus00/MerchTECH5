@@ -423,7 +423,10 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
     const testPaymentMethod = await stripe.paymentMethods.create({
       type: 'card',
       card: {
-        token: 'tok_visa'  // Test token for development
+        number: '4242424242424242',
+        exp_month: 12,
+        exp_year: 2025,
+        cvc: '123'
       }
     });
 
