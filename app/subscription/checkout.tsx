@@ -99,20 +99,16 @@ export default function SubscriptionCheckoutScreen() {
   };
 
   const formatCardNumber = (text) => {
-    const cleaned = text.replace(/\s/g, '').replace(/[^0-9]/gi, '');
-    const matches = cleaned.match(/\d{4,16}/g);
-    const match = matches && matches[0] || '';
-    const parts = [];
-
-    for (let i = 0, len = match.length; i < len; i += 4) {
-      parts.push(match.substring(i, i + 4));
-    }
-
-    if (parts.length) {
-      return parts.join(' ');
-    } else {
-      return match;
-    }
+    // Remove all non-digits
+    const cleaned = text.replace(/\D/g, '');
+    
+    // Limit to 16 digits
+    const limited = cleaned.substring(0, 16);
+    
+    // Add spaces every 4 digits
+    const formatted = limited.replace(/(\d{4})(?=\d)/g, '$1 ');
+    
+    return formatted;
   };
 
   const formatExpiryDate = (text) => {
@@ -266,7 +262,7 @@ export default function SubscriptionCheckoutScreen() {
               onChangeText={(text) => setPaymentMethod(prev => ({ ...prev, cardNumber: formatCardNumber(text) }))}
               placeholder="1234 5678 9012 3456"
               placeholderTextColor="#9ca3af"
-              keyboardType="numeric"
+              keyboardType="default"
               maxLength={19}
             />
             {errors.cardNumber && <ThemedText style={styles.errorText}>{errors.cardNumber}</ThemedText>}
