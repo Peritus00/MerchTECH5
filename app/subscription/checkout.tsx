@@ -148,35 +148,9 @@ export default function SubscriptionCheckoutScreen() {
         throw new Error('Please enter expiry date in MM/YY format');
       }
 
-      console.log('Creating payment method with Stripe...');
+      console.log('Processing payment with backend...');
 
-      // Create payment method with Stripe using proper API endpoint
-      const stripeResponse = await fetch('https://api.stripe.com/v1/payment_methods', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          'type': 'card',
-          'card[number]': paymentMethod.cardNumber.replace(/\s/g, ''),
-          'card[exp_month]': expMonth,
-          'card[exp_year]': `20${expYear}`,
-          'card[cvc]': paymentMethod.cvv,
-          'billing_details[name]': paymentMethod.cardholderName || 'Customer',
-        }),
-      });
-
-      if (!stripeResponse.ok) {
-        const stripeError = await stripeResponse.json();
-        console.error('Stripe payment method creation failed:', stripeError);
-        throw new Error(stripeError.error?.message || 'Invalid payment information');
-      }
-
-      const stripePaymentMethod = await stripeResponse.json();
-      console.log('Payment method created successfully:', stripePaymentMethod.id);
-
-      // Process payment through our backend with the payment method
+      // Send payment details directly to backend for processing
       const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
         method: 'POST',
         headers: {
@@ -186,7 +160,13 @@ export default function SubscriptionCheckoutScreen() {
         body: JSON.stringify({
           clientSecret,
           subscriptionTier: tier,
-          paymentMethodId: stripePaymentMethod.id
+          paymentDetails: {
+            cardNumber: paymentMethod.cardNumber.replace(/\s/g, ''),
+            expMonth: expMonth,
+            expYear: `20${expYear}`,
+            cvv: paymentMethod.cvv,
+            cardholderName: paymentMethod.cardholderName || 'Customer',
+          }
         })
       });
 

@@ -407,7 +407,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
   try {
-    const { clientSecret, subscriptionTier, paymentMethodId } = req.body;
+    const { clientSecret, subscriptionTier, paymentDetails } = req.body;
     console.log('Processing payment for subscription:', subscriptionTier);
 
     // Get the payment intent
@@ -420,17 +420,39 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
 
     console.log('Payment Intent status:', paymentIntent.status);
 
-    // If payment method is provided, attach it to the payment intent
-    if (paymentMethodId && paymentIntent.status === 'requires_payment_method') {
+    // Create payment method on server side (secure)
+    if (paymentDetails && paymentIntent.status === 'requires_payment_method') {
       try {
+        console.log('Creating payment method on server...');
+        
+        // Create payment method using server-side Stripe
+        const paymentMethod = await stripe.paymentMethods.create({
+          type: 'card',
+          card: {
+            number: paymentDetails.cardNumber,
+            exp_month: parseInt(paymentDetails.expMonth),
+            exp_year: parseInt(paymentDetails.expYear),
+            cvc: paymentDetails.cvv,
+          },
+          billing_details: {
+            name: paymentDetails.cardholderName || 'Customer',
+          },
+        });
+
+        console.log('Payment method created:', paymentMethod.id);
+
+        // Update payment intent with the payment method
         const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-          payment_method: paymentMethodId
+          payment_method: paymentMethod.id
         });
         
+        // Confirm the payment intent
         const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntentId);
         console.log('Payment confirmed with status:', confirmedPaymentIntent.status);
         
         if (confirmedPaymentIntent.status === 'succeeded') {
+          console.log('Payment successful, creating subscription...');
+          
           // Create subscription for recurring billing
           const subscription = await stripe.subscriptions.create({
             customer: paymentIntent.customer,
@@ -446,7 +468,7 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
                 }
               }
             }],
-            default_payment_method: paymentMethodId
+            default_payment_method: paymentMethod.id
           });
 
           console.log('Subscription created successfully:', subscription.id);
@@ -457,12 +479,25 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
             subscriptionId: subscription.id,
             paymentIntentId: confirmedPaymentIntent.id
           });
+        } else if (confirmedPaymentIntent.status === 'requires_action') {
+          // Handle 3D Secure or other authentication requirements
+          return res.json({
+            success: false,
+            error: 'Payment requires additional authentication',
+            requires_action: true,
+            payment_intent: {
+              id: confirmedPaymentIntent.id,
+              client_secret: confirmedPaymentIntent.client_secret
+            }
+          });
+        } else {
+          throw new Error(`Payment failed with status: ${confirmedPaymentIntent.status}`);
         }
-      } catch (confirmError) {
-        console.error('Payment confirmation failed:', confirmError);
+      } catch (paymentError) {
+        console.error('Payment processing failed:', paymentError);
         return res.status(400).json({
           success: false,
-          error: confirmError.message || 'Payment confirmation failed'
+          error: paymentError.message || 'Payment failed'
         });
       }
     }
@@ -497,27 +532,11 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
         subscriptionId: subscription.id,
         paymentIntentId: paymentIntent.id
       });
-    } else if (paymentIntent.status === 'requires_action') {
-      // Handle 3D Secure or other authentication requirements
-      res.json({
-        success: false,
-        error: 'Payment requires additional authentication',
-        requires_action: true,
-        payment_intent: {
-          id: paymentIntent.id,
-          client_secret: paymentIntent.client_secret
-        }
-      });
-    } else if (paymentIntent.status === 'requires_payment_method') {
-      res.status(400).json({
-        success: false,
-        error: 'Payment method required. Please provide a valid payment method.'
-      });
     } else {
-      console.log('Payment failed with status:', paymentIntent.status);
+      console.log('Payment requires payment method. Status:', paymentIntent.status);
       res.status(400).json({
         success: false,
-        error: `Payment failed with status: ${paymentIntent.status}`
+        error: 'Payment method required. Please provide valid payment information.'
       });
     }
   } catch (error) {
