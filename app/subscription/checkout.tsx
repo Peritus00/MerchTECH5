@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,11 +12,23 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useStripe, CardField } from '@stripe/stripe-react-native';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
+
+// Platform-specific Stripe imports
+let useStripe, CardField, StripeCardElement;
+
+if (Platform.OS !== 'web') {
+  // Mobile: Use React Native Stripe
+  const StripeRN = require('@stripe/stripe-react-native');
+  useStripe = StripeRN.useStripe;
+  CardField = StripeRN.CardField;
+} else {
+  // Web: Use regular Stripe.js (we'll implement this as a fallback)
+  console.log('Web platform detected - using web payment form');
+}
 
 export default function SubscriptionCheckoutScreen() {
   const { tier, newUser } = useLocalSearchParams();
@@ -24,17 +37,27 @@ export default function SubscriptionCheckoutScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [cardComplete, setCardComplete] = useState(false);
-  const { confirmPayment } = useStripe();
-  const isNewUser = newUser === 'true';
+  
+  // Payment form state for web
+  const [cardDetails, setCardDetails] = useState({
+    number: '',
+    expMonth: '',
+    expYear: '',
+    cvv: '',
+    cardholderName: ''
+  });
 
+  const isNewUser = newUser === 'true';
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
+
+  // Mobile Stripe hook (only available on mobile)
+  const mobileStripe = Platform.OS !== 'web' && useStripe ? useStripe() : null;
 
   useEffect(() => {
     if (!tier || !tierInfo) {
       router.push('/subscription');
       return;
     }
-    // Initialize payment
     initializePayment();
   }, [tier]);
 
@@ -49,7 +72,7 @@ export default function SubscriptionCheckoutScreen() {
         },
         body: JSON.stringify({
           subscriptionTier: tier,
-          amount: tierInfo.price * 100, // Convert to cents
+          amount: tierInfo.price * 100,
         })
       });
 
@@ -69,23 +92,17 @@ export default function SubscriptionCheckoutScreen() {
     }
   };
 
-  const handlePayment = async () => {
-    if (!cardComplete) {
-      Alert.alert('Invalid Payment Details', 'Please enter complete payment information.');
-      return;
-    }
-
-    if (!clientSecret) {
-      Alert.alert('Error', 'Payment not initialized. Please try again.');
+  const handleMobilePayment = async () => {
+    if (!mobileStripe || !mobileStripe.confirmPayment) {
+      Alert.alert('Error', 'Stripe not initialized for mobile');
       return;
     }
 
     try {
       setIsLoading(true);
-      console.log('🔥 Starting secure payment process for tier:', tier);
+      console.log('🔥 Starting mobile payment process for tier:', tier);
 
-      // Use Stripe's secure payment confirmation
-      const { error, paymentIntent } = await confirmPayment(clientSecret, {
+      const { error, paymentIntent } = await mobileStripe.confirmPayment(clientSecret, {
         paymentMethodType: 'Card',
         paymentMethodData: {
           billingDetails: {
@@ -96,54 +113,121 @@ export default function SubscriptionCheckoutScreen() {
       });
 
       if (error) {
-        console.error('🔥 Payment confirmation error:', error);
+        console.error('🔥 Mobile payment error:', error);
         Alert.alert('Payment Failed', error.message || 'Payment could not be processed.');
         return;
       }
 
-      console.log('🔥 Payment intent result:', paymentIntent);
-
       if (paymentIntent && paymentIntent.status === 'Succeeded') {
-        console.log('🔥 Payment successful! Updating user subscription...');
-
-        // Update user subscription tier
-        const token = await AsyncStorage.getItem('authToken');
-        const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/user/subscription`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            subscriptionTier: tier,
-            stripeCustomerId: paymentIntent.customer,
-            stripeSubscriptionId: paymentIntent.id
-          })
-        });
-
-        if (!updateResponse.ok) {
-          const updateError = await updateResponse.json();
-          console.error('🔥 Failed to update subscription:', updateError);
-          throw new Error('Failed to update subscription');
-        }
-
-        const updateResult = await updateResponse.json();
-        console.log('🔥 Subscription updated successfully:', updateResult);
-
-        // Navigate to success screen
-        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentIntent.customer}&subscriptionId=${paymentIntent.id}`);
-      } else {
-        throw new Error(`Payment status: ${paymentIntent?.status || 'Unknown'}`);
+        await updateSubscription(paymentIntent);
       }
     } catch (error) {
-      console.error('🔥 Payment processing error:', error);
-      Alert.alert(
-        'Payment Failed', 
-        error.message || 'An unexpected error occurred. Please try again.',
-        [{ text: 'OK' }]
-      );
+      console.error('🔥 Mobile payment processing error:', error);
+      Alert.alert('Payment Failed', error.message || 'An unexpected error occurred.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleWebPayment = async () => {
+    if (!isWebCardComplete()) {
+      Alert.alert('Invalid Payment Details', 'Please enter complete payment information.');
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      console.log('🔥 Starting web payment process for tier:', tier);
+
+      const token = await AsyncStorage.getItem('authToken');
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/stripe/process-payment`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          clientSecret,
+          subscriptionTier: tier,
+          paymentDetails: {
+            cardNumber: cardDetails.number.replace(/\s/g, ''),
+            expMonth: cardDetails.expMonth,
+            expYear: cardDetails.expYear,
+            cvv: cardDetails.cvv,
+            cardholderName: cardDetails.cardholderName || user?.username || 'Customer'
+          }
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${result.customerId}&subscriptionId=${result.subscriptionId}`);
+      } else {
+        throw new Error(result.error || 'Payment processing failed');
+      }
+    } catch (error) {
+      console.error('🔥 Web payment processing error:', error);
+      Alert.alert('Payment Failed', error.message || 'An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateSubscription = async (paymentIntent: any) => {
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/user/subscription`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          subscriptionTier: tier,
+          stripeCustomerId: paymentIntent.customer,
+          stripeSubscriptionId: paymentIntent.id
+        })
+      });
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update subscription');
+      }
+
+      router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentIntent.customer}&subscriptionId=${paymentIntent.id}`);
+    } catch (error) {
+      console.error('🔥 Subscription update error:', error);
+      Alert.alert('Error', 'Payment successful but failed to update subscription. Please contact support.');
+    }
+  };
+
+  const isWebCardComplete = () => {
+    return cardDetails.number.replace(/\s/g, '').length >= 13 &&
+           cardDetails.expMonth.length === 2 &&
+           cardDetails.expYear.length === 4 &&
+           cardDetails.cvv.length >= 3;
+  };
+
+  const formatCardNumber = (text: string) => {
+    const cleaned = text.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
+    const matches = cleaned.match(/\d{4,16}/g);
+    const match = matches && matches[0] || '';
+    const parts = [];
+    for (let i = 0, len = match.length; i < len; i += 4) {
+      parts.push(match.substring(i, i + 4));
+    }
+    if (parts.length) {
+      return parts.join(' ');
+    } else {
+      return text;
+    }
+  };
+
+  const handlePayment = () => {
+    if (Platform.OS === 'web') {
+      handleWebPayment();
+    } else {
+      handleMobilePayment();
     }
   };
 
@@ -154,6 +238,116 @@ export default function SubscriptionCheckoutScreen() {
       </ThemedView>
     );
   }
+
+  const renderPaymentForm = () => {
+    if (Platform.OS === 'web') {
+      return (
+        <View style={styles.paymentForm}>
+          <View style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Cardholder Name</ThemedText>
+            <View style={styles.textInput}>
+              <input
+                type="text"
+                placeholder="John Doe"
+                value={cardDetails.cardholderName}
+                onChange={(e) => setCardDetails({...cardDetails, cardholderName: e.target.value})}
+                style={webInputStyles}
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputContainer}>
+            <ThemedText style={styles.inputLabel}>Card Number</ThemedText>
+            <View style={styles.textInput}>
+              <input
+                type="text"
+                placeholder="1234 5678 9012 3456"
+                value={cardDetails.number}
+                onChange={(e) => setCardDetails({...cardDetails, number: formatCardNumber(e.target.value)})}
+                maxLength={19}
+                style={webInputStyles}
+              />
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <ThemedText style={styles.inputLabel}>Exp Month</ThemedText>
+              <View style={styles.textInput}>
+                <input
+                  type="text"
+                  placeholder="12"
+                  value={cardDetails.expMonth}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 2) setCardDetails({...cardDetails, expMonth: value});
+                  }}
+                  maxLength={2}
+                  style={webInputStyles}
+                />
+              </View>
+            </View>
+
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <ThemedText style={styles.inputLabel}>Exp Year</ThemedText>
+              <View style={styles.textInput}>
+                <input
+                  type="text"
+                  placeholder="2025"
+                  value={cardDetails.expYear}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 4) setCardDetails({...cardDetails, expYear: value});
+                  }}
+                  maxLength={4}
+                  style={webInputStyles}
+                />
+              </View>
+            </View>
+
+            <View style={[styles.inputContainer, styles.halfWidth]}>
+              <ThemedText style={styles.inputLabel}>CVV</ThemedText>
+              <View style={styles.textInput}>
+                <input
+                  type="text"
+                  placeholder="123"
+                  value={cardDetails.cvv}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, '');
+                    if (value.length <= 4) setCardDetails({...cardDetails, cvv: value});
+                  }}
+                  maxLength={4}
+                  style={webInputStyles}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      );
+    } else {
+      // Mobile: Use React Native Stripe CardField
+      return CardField ? (
+        <CardField
+          postalCodeEnabled={true}
+          placeholders={{
+            number: '4242 4242 4242 4242',
+          }}
+          cardStyle={{
+            backgroundColor: '#FFFFFF',
+            textColor: '#000000',
+          }}
+          style={styles.cardField}
+          onCardChange={(cardDetails) => {
+            setCardComplete(cardDetails.complete);
+          }}
+        />
+      ) : (
+        <ThemedText style={styles.errorText}>Payment form not available on this platform</ThemedText>
+      );
+    }
+  };
+
+  const isPaymentReady = Platform.OS === 'web' ? isWebCardComplete() : cardComplete;
 
   return (
     <ThemedView style={styles.container}>
@@ -173,65 +367,47 @@ export default function SubscriptionCheckoutScreen() {
           showsVerticalScrollIndicator={true}
           keyboardShouldPersistTaps="handled"
         >
+          <ThemedView style={styles.planHeader}>
+            <View style={styles.iconContainer}>
+              <ThemedText style={styles.iconText}>⭐</ThemedText>
+            </View>
+            <ThemedText type="title" style={styles.planName}>{tierInfo.name} Plan</ThemedText>
+            <ThemedText style={styles.price}>${tierInfo.price}/month</ThemedText>
+          </ThemedView>
 
-      <ThemedView style={styles.planHeader}>
-        <View style={styles.iconContainer}>
-          <ThemedText style={styles.iconText}>⭐</ThemedText>
-        </View>
-        <ThemedText type="title" style={styles.planName}>{tierInfo.name} Plan</ThemedText>
-        <ThemedText style={styles.price}>${tierInfo.price}/month</ThemedText>
-      </ThemedView>
+          <ThemedView style={styles.featuresContainer}>
+            <ThemedText type="subtitle" style={styles.featuresTitle}>What's included:</ThemedText>
+            {tierInfo.features.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <ThemedText style={styles.bullet}>•</ThemedText>
+                <ThemedText style={styles.featureText}>{feature}</ThemedText>
+              </View>
+            ))}
+          </ThemedView>
 
-      <ThemedView style={styles.featuresContainer}>
-        <ThemedText type="subtitle" style={styles.featuresTitle}>What's included:</ThemedText>
-        {tierInfo.features.map((feature, index) => (
-          <View key={index} style={styles.featureRow}>
-            <ThemedText style={styles.bullet}>•</ThemedText>
-            <ThemedText style={styles.featureText}>{feature}</ThemedText>
-          </View>
-        ))}
-      </ThemedView>
+          <ThemedView style={styles.paymentContainer}>
+            <ThemedText type="subtitle" style={styles.paymentTitle}>Payment Method</ThemedText>
+            {renderPaymentForm()}
+            <View style={styles.securityBadge}>
+              <ThemedText style={styles.securityText}>🔒 Secure payment powered by Stripe</ThemedText>
+            </View>
+          </ThemedView>
 
-      <ThemedView style={styles.paymentContainer}>
-        <ThemedText type="subtitle" style={styles.paymentTitle}>Payment Method</ThemedText>
+          <TouchableOpacity
+            style={[styles.payButton, (isLoading || !isPaymentReady) && styles.payButtonDisabled]}
+            onPress={handlePayment}
+            disabled={isLoading || !isPaymentReady}
+          >
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <ThemedText style={styles.payButtonText}>
+                Subscribe for ${tierInfo.price}/month
+              </ThemedText>
+            )}
+          </TouchableOpacity>
 
-        <View style={styles.paymentForm}>
-          <CardField
-            postalCodeEnabled={true}
-            placeholders={{
-              number: '4242 4242 4242 4242',
-            }}
-            cardStyle={{
-              backgroundColor: '#FFFFFF',
-              textColor: '#000000',
-            }}
-            style={styles.cardField}
-            onCardChange={(cardDetails) => {
-              setCardComplete(cardDetails.complete);
-            }}
-          />
-
-          <View style={styles.securityBadge}>
-            <ThemedText style={styles.securityText}>🔒 Secure payment powered by Stripe</ThemedText>
-          </View>
-        </View>
-      </ThemedView>
-
-      <TouchableOpacity
-        style={[styles.payButton, isLoading && styles.payButtonDisabled]}
-        onPress={handlePayment}
-        disabled={isLoading || !cardComplete}
-      >
-        {isLoading ? (
-          <ActivityIndicator color="#fff" size="small" />
-        ) : (
-          <ThemedText style={styles.payButtonText}>
-            Subscribe for ${tierInfo.price}/month
-          </ThemedText>
-        )}
-      </TouchableOpacity>
-
-      <ThemedText style={styles.disclaimer}>
+          <ThemedText style={styles.disclaimer}>
             You can cancel anytime. No hidden fees or long-term commitments.
           </ThemedText>
         </ScrollView>
@@ -239,6 +415,16 @@ export default function SubscriptionCheckoutScreen() {
     </ThemedView>
   );
 }
+
+const webInputStyles = {
+  width: '100%',
+  padding: '12px',
+  border: '1px solid #e5e7eb',
+  borderRadius: '8px',
+  fontSize: '16px',
+  backgroundColor: '#ffffff',
+  outline: 'none'
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -318,6 +504,28 @@ const styles = StyleSheet.create({
   paymentForm: {
     gap: 16,
   },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    opacity: 0.8,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfWidth: {
+    flex: 1,
+  },
   cardField: {
     width: '100%',
     height: 50,
@@ -358,5 +566,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 18,
     color: '#6b7280',
+  },
+  errorText: {
+    color: '#ef4444',
+    textAlign: 'center',
+    padding: 20,
   },
 });
