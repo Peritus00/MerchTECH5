@@ -7,12 +7,12 @@ const getApiBaseUrl = () => {
     return process.env.API_BASE_URL;
   }
 
-  // For Replit environment
+  // For Replit deployment environment
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    if (hostname.includes('replit.dev')) {
-      // Use the same hostname with port 5000 for API calls in Replit
-      return `${window.location.protocol}//${hostname}:5000/api`;
+    if (hostname.includes('replit.dev') || hostname.includes('replit.app')) {
+      // For deployment, use the same hostname without port (handled by Replit's proxy)
+      return `${window.location.protocol}//${hostname}/api`;
     }
     return `${window.location.protocol}//${hostname}:5000/api`;
   }

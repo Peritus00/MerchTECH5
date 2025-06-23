@@ -137,7 +137,60 @@ export default function SubscriptionCheckoutScreen() {
 
       console.log('Processing payment with client secret...');
       
-      // Process payment with Stripe (using test card data for development)
+      // Validate payment method data
+      if (!paymentMethod.cardNumber || !paymentMethod.expiryDate || !paymentMethod.cvv) {
+        throw new Error('Please fill in all payment information');
+      }
+
+      // Parse expiry date
+      const [expMonth, expYear] = paymentMethod.expiryDate.split('/');
+      if (!expMonth || !expYear || expMonth.length !== 2 || expYear.length !== 2) {
+        throw new Error('Please enter expiry date in MM/YY format');
+      }
+
+      // Create payment method with Stripe
+      const stripeResponse = await fetch('https://api.stripe.com/v1/payment_methods', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          'type': 'card',
+          'card[number]': paymentMethod.cardNumber.replace(/\s/g, ''),
+          'card[exp_month]': expMonth,
+          'card[exp_year]': `20${expYear}`,
+          'card[cvc]': paymentMethod.cvv,
+          'billing_details[name]': paymentMethod.cardholderName || 'Customer',
+        }),
+      });
+
+      if (!stripeResponse.ok) {
+        const stripeError = await stripeResponse.json();
+        throw new Error(stripeError.error?.message || 'Invalid payment information');
+      }
+
+      const stripePaymentMethod = await stripeResponse.json();
+
+      // Confirm payment intent with the created payment method
+      const confirmResponse = await fetch('https://api.stripe.com/v1/payment_intents/' + clientSecret.split('_secret_')[0] + '/confirm', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          'payment_method': stripePaymentMethod.id,
+          'return_url': 'https://yourapp.com/return',
+        }),
+      });
+
+      if (!confirmResponse.ok) {
+        const confirmError = await confirmResponse.json();
+        throw new Error(confirmError.error?.message || 'Payment confirmation failed');
+      }
+
+      // Process payment through our backend
       const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
         method: 'POST',
         headers: {
@@ -146,20 +199,6 @@ export default function SubscriptionCheckoutScreen() {
         },
         body: JSON.stringify({
           clientSecret,
-          paymentMethod: {
-            // In development, we'll use test data
-            type: 'card',
-            card: {
-              // Test card details - in production this would be tokenized by Stripe Elements
-              number: '4242424242424242',
-              exp_month: 12,
-              exp_year: 2025,
-              cvc: '123'
-            },
-            billing_details: {
-              name: paymentMethod.cardholderName || 'Test User',
-            }
-          },
           subscriptionTier: tier
         })
       });

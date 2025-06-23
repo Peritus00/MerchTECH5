@@ -407,7 +407,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
   try {
-    const { clientSecret, paymentMethod, subscriptionTier } = req.body;
+    const { clientSecret, subscriptionTier } = req.body;
     console.log('Processing payment for subscription:', subscriptionTier);
 
     // Get the payment intent
@@ -418,34 +418,12 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid Payment Intent' });
     }
 
-    // Create a test payment method for development (simulating successful payment)
-    // In production, you would use Stripe Elements or mobile SDK to tokenize cards securely
-    const testPaymentMethod = await stripe.paymentMethods.create({
-      type: 'card',
-      card: {
-        number: '4242424242424242',
-        exp_month: 12,
-        exp_year: 2025,
-        cvc: '123'
-      }
-    });
+    console.log('Payment Intent status:', paymentIntent.status);
 
-    // Attach payment method to customer
-    await stripe.paymentMethods.attach(testPaymentMethod.id, {
-      customer: paymentIntent.customer
-    });
+    // Check if payment is already succeeded
+    if (paymentIntent.status === 'succeeded') {
+      console.log('Payment already succeeded, creating subscription...');
 
-    // Update payment intent with the payment method
-    const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-      payment_method: testPaymentMethod.id
-    });
-
-    // Confirm payment intent
-    const confirmedPayment = await stripe.paymentIntents.confirm(paymentIntentId);
-
-    if (confirmedPayment.status === 'succeeded') {
-      console.log('Payment successful, creating subscription...');
-      
       // Create subscription for recurring billing
       const subscription = await stripe.subscriptions.create({
         customer: paymentIntent.customer,
@@ -461,7 +439,7 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
             }
           }
         }],
-        default_payment_method: testPaymentMethod.id
+        default_payment_method: paymentIntent.payment_method
       });
 
       console.log('Subscription created successfully:', subscription.id);
@@ -470,24 +448,29 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
         success: true,
         customerId: paymentIntent.customer,
         subscriptionId: subscription.id,
-        paymentIntentId: confirmedPayment.id
+        paymentIntentId: paymentIntent.id
       });
-    } else if (confirmedPayment.status === 'requires_action') {
+    } else if (paymentIntent.status === 'requires_action') {
       // Handle 3D Secure or other authentication requirements
       res.json({
         success: false,
         error: 'Payment requires additional authentication',
         requires_action: true,
         payment_intent: {
-          id: confirmedPayment.id,
-          client_secret: confirmedPayment.client_secret
+          id: paymentIntent.id,
+          client_secret: paymentIntent.client_secret
         }
       });
-    } else {
-      console.log('Payment failed with status:', confirmedPayment.status);
+    } else if (paymentIntent.status === 'requires_payment_method') {
       res.status(400).json({
         success: false,
-        error: 'Payment failed'
+        error: 'Payment method required. Please provide a valid payment method.'
+      });
+    } else {
+      console.log('Payment failed with status:', paymentIntent.status);
+      res.status(400).json({
+        success: false,
+        error: `Payment failed with status: ${paymentIntent.status}`
       });
     }
   } catch (error) {
@@ -856,12 +839,12 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     if (user.is_email_verified) {
       console.log('🔥 EMAIL VERIFICATION (GET): Email already verified, redirecting...');
-      
+
       // Redirect to the React Native app's verify-email page
       const appUrl = process.env.REPLIT_DEV_DOMAIN 
         ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/verify-email`
         : 'http://localhost:8081/auth/verify-email';
-      
+
       return res.redirect(appUrl);
     }
 
@@ -895,12 +878,12 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
     );
 
     console.log('🔥 EMAIL VERIFICATION (GET): Redirecting to email verified page with new auth token...');
-    
+
     // Redirect to the React Native app's verify-email page
     const appUrl = process.env.REPLIT_DEV_DOMAIN 
       ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/verify-email`
       : 'http://localhost:8081/auth/verify-email';
-    
+
     return res.redirect(appUrl);
   } catch (error) {
     console.error('🔥 EMAIL VERIFICATION (GET): Email verification error:', error);
