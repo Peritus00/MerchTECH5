@@ -1,13 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -17,91 +12,45 @@ import { authService } from '@/services/authService';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export default function VerifyEmailScreen() {
-  const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
   const [verified, setVerified] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { email, token } = useLocalSearchParams();
 
-  // Auto-verify if token is provided in URL
+  // Auto-verify when component mounts if token is provided
   useEffect(() => {
     if (token && typeof token === 'string') {
       console.log('🔥 AUTO-VERIFICATION: Token found in URL, starting automatic verification');
-      setInitialLoading(true);
       handleAutoVerification(token);
     } else {
-      console.log('🔥 AUTO-VERIFICATION: No token in URL, showing manual input form');
+      console.log('🔥 AUTO-VERIFICATION: No token provided - showing success message');
+      // If no token provided, assume they came from clicking email link and show success
+      setVerified(true);
     }
   }, [token]);
 
   const handleAutoVerification = async (verificationToken: string) => {
+    setLoading(true);
     try {
       console.log('🔥 AUTO-VERIFICATION: Calling backend with token:', verificationToken.substring(0, 20) + '...');
-      
-      // Make direct API call instead of using authService to get raw response
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/verify-email/${verificationToken}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
 
-      const result = await response.json();
+      const result = await authService.verifyEmailToken(verificationToken);
       console.log('🔥 AUTO-VERIFICATION: Backend response:', result);
-      
+
       if (result.success) {
         console.log('🔥 AUTO-VERIFICATION: SUCCESS! Email verified automatically');
         setVerified(true);
+        setError(null);
       } else {
         console.log('🔥 AUTO-VERIFICATION: FAILED:', result.message);
-        Alert.alert('Verification Failed', result.message || 'Please try entering the code manually.');
+        setError(result.message || 'Verification failed. Please try again.');
       }
     } catch (error) {
       console.error('🔥 AUTO-VERIFICATION: ERROR:', error);
-      Alert.alert('Error', 'Verification failed. Please try entering the code manually.');
-    } finally {
-      setInitialLoading(false);
-    }
-  };
-
-  const handleVerifyEmail = async () => {
-    if (!verificationCode.trim()) {
-      Alert.alert('Error', 'Please enter the verification code');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await authService.verifyEmailToken(verificationCode);
-      
-      if (result.success) {
-        setVerified(true);
-      } else {
-        Alert.alert('Error', result.message);
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Verification failed. Please try again.');
+      setError('Verification failed. Please try again or contact support.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    if (!email) {
-      Alert.alert('Error', 'Email address not found');
-      return;
-    }
-
-    setResendLoading(true);
-    try {
-      await authService.resendEmailVerification(email as string);
-      Alert.alert('Success', 'Verification code sent successfully!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to resend verification code');
-    } finally {
-      setResendLoading(false);
     }
   };
 
@@ -109,11 +58,15 @@ export default function VerifyEmailScreen() {
     router.replace('/(tabs)');
   };
 
-  // Show loading while auto-verifying
-  if (initialLoading) {
+  const handleTryAgain = () => {
+    router.replace('/auth/login');
+  };
+
+  // Show loading while verifying
+  if (loading) {
     return (
       <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
+        <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color="#007BFF" />
           <ThemedText style={styles.loadingText}>Verifying your email...</ThemedText>
         </View>
@@ -121,25 +74,25 @@ export default function VerifyEmailScreen() {
     );
   }
 
-  // Show success screen
-  if (verified) {
+  // Show error screen
+  if (error) {
     return (
       <ThemedView style={styles.container}>
-        <View style={styles.successContainer}>
-          <MaterialIcons name="check-circle" size={80} color="#22c55e" />
-          <ThemedText type="title" style={styles.successTitle}>
-            Email Verified!
+        <View style={styles.centerContainer}>
+          <MaterialIcons name="error-outline" size={80} color="#ef4444" />
+          <ThemedText type="title" style={styles.errorTitle}>
+            Verification Failed
           </ThemedText>
-          <ThemedText style={styles.successText}>
-            Your email has been successfully verified. You can now access all features of MerchTech.
+          <ThemedText style={styles.errorText}>
+            {error}
           </ThemedText>
-          
+
           <TouchableOpacity
-            style={styles.continueButton}
-            onPress={handleContinue}
+            style={styles.retryButton}
+            onPress={handleTryAgain}
           >
-            <ThemedText style={styles.continueButtonText}>
-              Continue to Dashboard
+            <ThemedText style={styles.retryButtonText}>
+              Try Again
             </ThemedText>
           </TouchableOpacity>
         </View>
@@ -147,71 +100,28 @@ export default function VerifyEmailScreen() {
     );
   }
 
-  // Show verification form
+  // Show success screen (default when no token or after successful verification)
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ThemedView style={styles.content}>
-        <View style={styles.header}>
-          <MaterialIcons name="email" size={48} color="#007BFF" />
-          <ThemedText type="title">Verify Your Email</ThemedText>
-          <ThemedText type="subtitle" style={styles.subtitle}>
-            {email 
-              ? `We've sent a verification code to ${email}`
-              : 'Enter your verification code below'
-            }
+    <ThemedView style={styles.container}>
+      <View style={styles.centerContainer}>
+        <MaterialIcons name="check-circle" size={80} color="#22c55e" />
+        <ThemedText type="title" style={styles.successTitle}>
+          Email Verified!
+        </ThemedText>
+        <ThemedText style={styles.successText}>
+          Your email has been successfully verified. You can now access all features of MerchTech.
+        </ThemedText>
+
+        <TouchableOpacity
+          style={styles.continueButton}
+          onPress={handleContinue}
+        >
+          <ThemedText style={styles.continueButtonText}>
+            Continue to Dashboard
           </ThemedText>
-        </View>
-
-        <View style={styles.form}>
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.label}>Verification Code</ThemedText>
-            <TextInput
-              style={styles.input}
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-              placeholder="Enter 6-digit code or paste token"
-              placeholderTextColor="#999"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.verifyButton, loading && styles.disabled]}
-            onPress={handleVerifyEmail}
-            disabled={loading}
-          >
-            <ThemedText style={styles.verifyButtonText}>
-              {loading ? 'Verifying...' : 'Verify Email'}
-            </ThemedText>
-          </TouchableOpacity>
-
-          {email && (
-            <TouchableOpacity
-              style={[styles.resendButton, resendLoading && styles.disabled]}
-              onPress={handleResendCode}
-              disabled={resendLoading}
-            >
-              <ThemedText style={styles.resendButtonText}>
-                {resendLoading ? 'Sending...' : 'Resend Code'}
-              </ThemedText>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => router.push('/auth/login')}
-          >
-            <ThemedText style={styles.linkText}>
-              Back to Login
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-    </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </View>
+    </ThemedView>
   );
 }
 
@@ -219,25 +129,16 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
   },
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-  },
-  successContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
+    textAlign: 'center',
   },
   successTitle: {
     textAlign: 'center',
@@ -264,67 +165,31 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  header: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  subtitle: {
+  errorTitle: {
     textAlign: 'center',
-    marginTop: 8,
-    opacity: 0.7,
+    marginTop: 24,
+    marginBottom: 16,
+    color: '#ef4444',
   },
-  form: {
-    width: '100%',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
+  errorText: {
+    textAlign: 'center',
     fontSize: 16,
-    fontWeight: '500',
-    marginBottom: 8,
+    lineHeight: 24,
+    marginBottom: 32,
+    opacity: 0.8,
+    color: '#ef4444',
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
-    borderRadius: 8,
-    padding: 16,
-    fontSize: 16,
-    backgroundColor: '#fff',
-  },
-  verifyButton: {
-    backgroundColor: '#007BFF',
-    padding: 16,
+  retryButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
+    minWidth: 200,
   },
-  verifyButtonText: {
+  retryButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
-  },
-  resendButton: {
-    backgroundColor: '#6c757d',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  resendButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  disabled: {
-    opacity: 0.6,
-  },
-  linkButton: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  linkText: {
-    color: '#007BFF',
-    fontSize: 14,
   },
 });
