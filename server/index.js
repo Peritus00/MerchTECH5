@@ -831,7 +831,13 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     if (user.is_email_verified) {
       console.log('🔥 EMAIL VERIFICATION (GET): Email already verified, redirecting...');
-      return res.redirect('/email-already-verified'); // Redirect to the email-already-verified page
+      
+      // Redirect to the React Native app's verify-email page
+      const appUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/verify-email`
+        : 'http://localhost:8081/auth/verify-email';
+      
+      return res.redirect(appUrl);erified page
     }
 
     // Update user to verified status
@@ -864,7 +870,13 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
     );
 
     console.log('🔥 EMAIL VERIFICATION (GET): Redirecting to email verified page with new auth token...');
-    return res.redirect(`/email-verified?token=${authToken}`);
+    
+    // Redirect to the React Native app's verify-email page
+    const appUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/verify-email`
+      : 'http://localhost:8081/auth/verify-email';
+    
+    return res.redirect(appUrl);
   } catch (error) {
     console.error('🔥 EMAIL VERIFICATION (GET): Email verification error:', error);
     return res.status(500).json({ 

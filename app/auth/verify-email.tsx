@@ -1,106 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   View,
   StyleSheet,
   TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { authService } from '@/services/authService';
 import { MaterialIcons } from '@expo/vector-icons';
 
 export default function VerifyEmailScreen() {
-  const [loading, setLoading] = useState(false);
-  const [verified, setVerified] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const router = useRouter();
-  const { email, token } = useLocalSearchParams();
-
-  // Auto-verify when component mounts if token is provided
-  useEffect(() => {
-    if (token && typeof token === 'string') {
-      console.log('🔥 AUTO-VERIFICATION: Token found in URL, starting automatic verification');
-      handleAutoVerification(token);
-    } else {
-      console.log('🔥 AUTO-VERIFICATION: No token provided - showing success message');
-      // If no token provided, assume they came from clicking email link and show success
-      setVerified(true);
-    }
-  }, [token]);
-
-  const handleAutoVerification = async (verificationToken: string) => {
-    setLoading(true);
-    try {
-      console.log('🔥 AUTO-VERIFICATION: Calling backend with token:', verificationToken.substring(0, 20) + '...');
-
-      const result = await authService.verifyEmailToken(verificationToken);
-      console.log('🔥 AUTO-VERIFICATION: Backend response:', result);
-
-      if (result.success) {
-        console.log('🔥 AUTO-VERIFICATION: SUCCESS! Email verified automatically');
-        setVerified(true);
-        setError(null);
-      } else {
-        console.log('🔥 AUTO-VERIFICATION: FAILED:', result.message);
-        setError(result.message || 'Verification failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('🔥 AUTO-VERIFICATION: ERROR:', error);
-      setError('Verification failed. Please try again or contact support.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleContinue = () => {
     router.replace('/(tabs)');
   };
 
-  const handleTryAgain = () => {
-    router.replace('/auth/login');
-  };
-
-  // Show loading while verifying
-  if (loading) {
-    return (
-      <ThemedView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <ActivityIndicator size="large" color="#007BFF" />
-          <ThemedText style={styles.loadingText}>Verifying your email...</ThemedText>
-        </View>
-      </ThemedView>
-    );
-  }
-
-  // Show error screen
-  if (error) {
-    return (
-      <ThemedView style={styles.container}>
-        <View style={styles.centerContainer}>
-          <MaterialIcons name="error-outline" size={80} color="#ef4444" />
-          <ThemedText type="title" style={styles.errorTitle}>
-            Verification Failed
-          </ThemedText>
-          <ThemedText style={styles.errorText}>
-            {error}
-          </ThemedText>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={handleTryAgain}
-          >
-            <ThemedText style={styles.retryButtonText}>
-              Try Again
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-    );
-  }
-
-  // Show success screen (default when no token or after successful verification)
+  // Always show success screen - email verification happens on server side
   return (
     <ThemedView style={styles.container}>
       <View style={styles.centerContainer}>
