@@ -75,3 +75,6 @@ mode = "parallel"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node monitor.js"
+
+[deployment]
+run = ["sh", "-c", "cd server && node index.js"]
