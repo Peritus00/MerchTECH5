@@ -407,7 +407,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
   try {
-    const { clientSecret, subscriptionTier } = req.body;
+    const { clientSecret, subscriptionTier, paymentMethodId } = req.body;
     console.log('Processing payment for subscription:', subscriptionTier);
 
     // Get the payment intent
@@ -419,6 +419,53 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
     }
 
     console.log('Payment Intent status:', paymentIntent.status);
+
+    // If payment method is provided, attach it to the payment intent
+    if (paymentMethodId && paymentIntent.status === 'requires_payment_method') {
+      try {
+        const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+          payment_method: paymentMethodId
+        });
+        
+        const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntentId);
+        console.log('Payment confirmed with status:', confirmedPaymentIntent.status);
+        
+        if (confirmedPaymentIntent.status === 'succeeded') {
+          // Create subscription for recurring billing
+          const subscription = await stripe.subscriptions.create({
+            customer: paymentIntent.customer,
+            items: [{
+              price_data: {
+                currency: 'usd',
+                product_data: {
+                  name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`
+                },
+                unit_amount: paymentIntent.amount,
+                recurring: {
+                  interval: 'month'
+                }
+              }
+            }],
+            default_payment_method: paymentMethodId
+          });
+
+          console.log('Subscription created successfully:', subscription.id);
+
+          return res.json({
+            success: true,
+            customerId: paymentIntent.customer,
+            subscriptionId: subscription.id,
+            paymentIntentId: confirmedPaymentIntent.id
+          });
+        }
+      } catch (confirmError) {
+        console.error('Payment confirmation failed:', confirmError);
+        return res.status(400).json({
+          success: false,
+          error: confirmError.message || 'Payment confirmation failed'
+        });
+      }
+    }
 
     // Check if payment is already succeeded
     if (paymentIntent.status === 'succeeded') {

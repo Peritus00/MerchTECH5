@@ -148,11 +148,13 @@ export default function SubscriptionCheckoutScreen() {
         throw new Error('Please enter expiry date in MM/YY format');
       }
 
-      // Create payment method with Stripe
+      console.log('Creating payment method with Stripe...');
+
+      // Create payment method with Stripe using proper API endpoint
       const stripeResponse = await fetch('https://api.stripe.com/v1/payment_methods', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}`,
+          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}`,
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
@@ -167,30 +169,14 @@ export default function SubscriptionCheckoutScreen() {
 
       if (!stripeResponse.ok) {
         const stripeError = await stripeResponse.json();
+        console.error('Stripe payment method creation failed:', stripeError);
         throw new Error(stripeError.error?.message || 'Invalid payment information');
       }
 
       const stripePaymentMethod = await stripeResponse.json();
+      console.log('Payment method created successfully:', stripePaymentMethod.id);
 
-      // Confirm payment intent with the created payment method
-      const confirmResponse = await fetch('https://api.stripe.com/v1/payment_intents/' + clientSecret.split('_secret_')[0] + '/confirm', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}`,
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          'payment_method': stripePaymentMethod.id,
-          'return_url': 'https://yourapp.com/return',
-        }),
-      });
-
-      if (!confirmResponse.ok) {
-        const confirmError = await confirmResponse.json();
-        throw new Error(confirmError.error?.message || 'Payment confirmation failed');
-      }
-
-      // Process payment through our backend
+      // Process payment through our backend with the payment method
       const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
         method: 'POST',
         headers: {
@@ -199,7 +185,8 @@ export default function SubscriptionCheckoutScreen() {
         },
         body: JSON.stringify({
           clientSecret,
-          subscriptionTier: tier
+          subscriptionTier: tier,
+          paymentMethodId: stripePaymentMethod.id
         })
       });
 
@@ -255,7 +242,7 @@ export default function SubscriptionCheckoutScreen() {
       console.error('Payment error:', error);
       Alert.alert(
         'Payment Failed', 
-        `${error.message || 'An unexpected error occurred. Please try again.'}\n\nFor development purposes, we're using test payment processing.`,
+        error.message || 'An unexpected error occurred. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
