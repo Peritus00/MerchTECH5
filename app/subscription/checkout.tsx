@@ -82,7 +82,7 @@ export default function SubscriptionCheckoutScreen() {
 
     try {
       setIsLoading(true);
-      console.log('Starting secure payment process for tier:', tier);
+      console.log('🔥 Starting secure payment process for tier:', tier);
 
       // Use Stripe's secure payment confirmation
       const { error, paymentIntent } = await confirmPayment(clientSecret, {
@@ -96,13 +96,15 @@ export default function SubscriptionCheckoutScreen() {
       });
 
       if (error) {
-        console.error('Payment confirmation error:', error);
+        console.error('🔥 Payment confirmation error:', error);
         Alert.alert('Payment Failed', error.message || 'Payment could not be processed.');
         return;
       }
 
-      if (paymentIntent.status === 'Succeeded') {
-        console.log('Payment successful, updating user subscription...');
+      console.log('🔥 Payment intent result:', paymentIntent);
+
+      if (paymentIntent && paymentIntent.status === 'Succeeded') {
+        console.log('🔥 Payment successful! Updating user subscription...');
 
         // Update user subscription tier
         const token = await AsyncStorage.getItem('authToken');
@@ -121,19 +123,20 @@ export default function SubscriptionCheckoutScreen() {
 
         if (!updateResponse.ok) {
           const updateError = await updateResponse.json();
-          console.error('Failed to update subscription:', updateError);
+          console.error('🔥 Failed to update subscription:', updateError);
           throw new Error('Failed to update subscription');
         }
 
-        console.log('Subscription updated successfully, navigating to success page...');
+        const updateResult = await updateResponse.json();
+        console.log('🔥 Subscription updated successfully:', updateResult);
 
         // Navigate to success screen
         router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentIntent.customer}&subscriptionId=${paymentIntent.id}`);
       } else {
-        throw new Error(`Payment status: ${paymentIntent.status}`);
+        throw new Error(`Payment status: ${paymentIntent?.status || 'Unknown'}`);
       }
     } catch (error) {
-      console.error('Payment error:', error);
+      console.error('🔥 Payment processing error:', error);
       Alert.alert(
         'Payment Failed', 
         error.message || 'An unexpected error occurred. Please try again.',
