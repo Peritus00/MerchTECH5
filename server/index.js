@@ -837,7 +837,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
         ? `https://${process.env.REPLIT_DEV_DOMAIN}/auth/verify-email`
         : 'http://localhost:8081/auth/verify-email';
       
-      return res.redirect(appUrl);erified page
+      return res.redirect(appUrl);
     }
 
     // Update user to verified status
