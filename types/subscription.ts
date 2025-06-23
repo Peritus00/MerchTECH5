@@ -1,4 +1,3 @@
-
 export interface SubscriptionTier {
   id: string;
   name: string;
@@ -44,7 +43,6 @@ export const SUBSCRIPTION_TIERS: Record<string, SubscriptionTier> = {
     id: "basic",
     name: "Basic",
     price: 15.00,
-    stripePriceId: "price_basic_monthly",
     description: "Great for small businesses",
     features: [
       "3 QR codes",
@@ -68,7 +66,6 @@ export const SUBSCRIPTION_TIERS: Record<string, SubscriptionTier> = {
     id: "premium",
     name: "Premium", 
     price: 40.00,
-    stripePriceId: "price_premium_monthly",
     description: "For power users and agencies",
     features: [
       "10 QR codes",
