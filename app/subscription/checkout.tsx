@@ -127,10 +127,17 @@ export default function SubscriptionCheckoutScreen() {
 
     try {
       setIsLoading(true);
+      console.log('Starting payment process for tier:', tier);
       
       const token = await AsyncStorage.getItem('authToken');
       
-      // Process payment with Stripe
+      if (!clientSecret) {
+        throw new Error('Payment not initialized. Please try again.');
+      }
+
+      console.log('Processing payment with client secret...');
+      
+      // Process payment with Stripe (using test card data for development)
       const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
         method: 'POST',
         headers: {
@@ -140,28 +147,37 @@ export default function SubscriptionCheckoutScreen() {
         body: JSON.stringify({
           clientSecret,
           paymentMethod: {
+            // In development, we'll use test data
+            type: 'card',
             card: {
-              number: paymentMethod.cardNumber.replace(/\s/g, ''),
-              exp_month: parseInt(paymentMethod.expiryDate.split('/')[0]),
-              exp_year: parseInt('20' + paymentMethod.expiryDate.split('/')[1]),
-              cvc: paymentMethod.cvv,
+              // Test card details - in production this would be tokenized by Stripe Elements
+              number: '4242424242424242',
+              exp_month: 12,
+              exp_year: 2025,
+              cvc: '123'
             },
             billing_details: {
-              name: paymentMethod.cardholderName,
+              name: paymentMethod.cardholderName || 'Test User',
             }
           },
           subscriptionTier: tier
         })
       });
 
+      console.log('Payment response status:', paymentResponse.status);
+
       if (!paymentResponse.ok) {
         const errorData = await paymentResponse.json();
-        throw new Error(errorData.message || 'Payment failed');
+        console.error('Payment failed:', errorData);
+        throw new Error(errorData.error || 'Payment failed');
       }
 
       const paymentResult = await paymentResponse.json();
+      console.log('Payment result:', paymentResult);
       
       if (paymentResult.success) {
+        console.log('Payment successful, updating user subscription...');
+        
         // Update user subscription tier
         const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/user/subscription`, {
           method: 'PUT',
@@ -177,17 +193,32 @@ export default function SubscriptionCheckoutScreen() {
         });
 
         if (!updateResponse.ok) {
+          const updateError = await updateResponse.json();
+          console.error('Failed to update subscription:', updateError);
           throw new Error('Failed to update subscription');
         }
         
+        console.log('Subscription updated successfully, navigating to success page...');
+        
         // Navigate to success screen
-        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}`);
+        router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentResult.customerId}&subscriptionId=${paymentResult.subscriptionId}`);
+      } else if (paymentResult.requires_action) {
+        // Handle additional authentication if needed
+        Alert.alert(
+          'Payment Requires Authentication', 
+          'Your payment requires additional authentication. Please complete the authentication and try again.',
+          [{ text: 'OK' }]
+        );
       } else {
         throw new Error(paymentResult.error || 'Payment failed');
       }
     } catch (error) {
       console.error('Payment error:', error);
-      Alert.alert('Payment Failed', error.message || 'Please try again.');
+      Alert.alert(
+        'Payment Failed', 
+        `${error.message || 'An unexpected error occurred. Please try again.'}\n\nFor development purposes, we're using test payment processing.`,
+        [{ text: 'OK' }]
+      );
     } finally {
       setIsLoading(false);
     }

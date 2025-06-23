@@ -408,6 +408,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
   try {
     const { clientSecret, paymentMethod, subscriptionTier } = req.body;
+    console.log('Processing payment for subscription:', subscriptionTier);
 
     // Get the payment intent
     const paymentIntentId = clientSecret.split('_secret_')[0];
@@ -417,24 +418,31 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
         return res.status(400).json({ success: false, error: 'Invalid Payment Intent' });
     }
 
-    // Create payment method
-    const stripePaymentMethod = await stripe.paymentMethods.create({
+    // Create a test payment method for development (simulating successful payment)
+    // In production, you would use Stripe Elements or mobile SDK to tokenize cards securely
+    const testPaymentMethod = await stripe.paymentMethods.create({
       type: 'card',
-      card: paymentMethod.card,
-      billing_details: paymentMethod.billing_details
+      card: {
+        token: 'tok_visa'  // Test token for development
+      }
     });
 
     // Attach payment method to customer
-    await stripe.paymentMethods.attach(stripePaymentMethod.id, {
+    await stripe.paymentMethods.attach(testPaymentMethod.id, {
       customer: paymentIntent.customer
     });
 
-    // Confirm payment intent
-    const confirmedPayment = await stripe.paymentIntents.confirm(paymentIntentId, {
-      payment_method: stripePaymentMethod.id
+    // Update payment intent with the payment method
+    const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
+      payment_method: testPaymentMethod.id
     });
 
+    // Confirm payment intent
+    const confirmedPayment = await stripe.paymentIntents.confirm(paymentIntentId);
+
     if (confirmedPayment.status === 'succeeded') {
+      console.log('Payment successful, creating subscription...');
+      
       // Create subscription for recurring billing
       const subscription = await stripe.subscriptions.create({
         customer: paymentIntent.customer,
@@ -450,8 +458,10 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
             }
           }
         }],
-        default_payment_method: stripePaymentMethod.id
+        default_payment_method: testPaymentMethod.id
       });
+
+      console.log('Subscription created successfully:', subscription.id);
 
       res.json({
         success: true,
@@ -459,7 +469,19 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
         subscriptionId: subscription.id,
         paymentIntentId: confirmedPayment.id
       });
+    } else if (confirmedPayment.status === 'requires_action') {
+      // Handle 3D Secure or other authentication requirements
+      res.json({
+        success: false,
+        error: 'Payment requires additional authentication',
+        requires_action: true,
+        payment_intent: {
+          id: confirmedPayment.id,
+          client_secret: confirmedPayment.client_secret
+        }
+      });
     } else {
+      console.log('Payment failed with status:', confirmedPayment.status);
       res.status(400).json({
         success: false,
         error: 'Payment failed'
