@@ -1326,6 +1326,7 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
   console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
+  console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
   console.log('Available routes:');
   console.log('  GET /api/health');
   console.log('  GET /api/admin/all-users');
