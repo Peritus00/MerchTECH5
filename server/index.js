@@ -420,7 +420,7 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
 
     console.log('Payment Intent status:', paymentIntent.status);
 
-    // Create payment method on server side (secure)
+    // Create payment method and process payment on server side (secure)
     if (paymentDetails && paymentIntent.status === 'requires_payment_method') {
       try {
         console.log('Creating payment method on server...');
@@ -441,13 +441,17 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
 
         console.log('Payment method created:', paymentMethod.id);
 
-        // Update payment intent with the payment method
-        const updatedPaymentIntent = await stripe.paymentIntents.update(paymentIntentId, {
-          payment_method: paymentMethod.id
+        // Attach payment method to customer
+        await stripe.paymentMethods.attach(paymentMethod.id, {
+          customer: paymentIntent.customer,
+        });
+
+        // Confirm the payment intent with the payment method
+        const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntentId, {
+          payment_method: paymentMethod.id,
+          return_url: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success`
         });
         
-        // Confirm the payment intent
-        const confirmedPaymentIntent = await stripe.paymentIntents.confirm(paymentIntentId);
         console.log('Payment confirmed with status:', confirmedPaymentIntent.status);
         
         if (confirmedPaymentIntent.status === 'succeeded') {

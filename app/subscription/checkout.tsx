@@ -149,6 +149,12 @@ export default function SubscriptionCheckoutScreen() {
       }
 
       console.log('Processing payment with backend...');
+      console.log('Payment details being sent:', {
+        cardNumber: paymentMethod.cardNumber.substring(0, 4) + '****',
+        expMonth,
+        expYear: `20${expYear}`,
+        cardholderName: paymentMethod.cardholderName
+      });
 
       // Send payment details directly to backend for processing
       const paymentResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api'}/stripe/process-payment`, {
