@@ -28,21 +28,38 @@ export default function VerifyEmailScreen() {
   // Auto-verify if token is provided in URL
   useEffect(() => {
     if (token && typeof token === 'string') {
+      console.log('🔥 AUTO-VERIFICATION: Token found in URL, starting automatic verification');
       setInitialLoading(true);
       handleAutoVerification(token);
+    } else {
+      console.log('🔥 AUTO-VERIFICATION: No token in URL, showing manual input form');
     }
   }, [token]);
 
   const handleAutoVerification = async (verificationToken: string) => {
     try {
-      const result = await authService.verifyEmailToken(verificationToken);
+      console.log('🔥 AUTO-VERIFICATION: Calling backend with token:', verificationToken.substring(0, 20) + '...');
+      
+      // Make direct API call instead of using authService to get raw response
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/verify-email/${verificationToken}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      console.log('🔥 AUTO-VERIFICATION: Backend response:', result);
       
       if (result.success) {
+        console.log('🔥 AUTO-VERIFICATION: SUCCESS! Email verified automatically');
         setVerified(true);
       } else {
-        Alert.alert('Verification Failed', result.message);
+        console.log('🔥 AUTO-VERIFICATION: FAILED:', result.message);
+        Alert.alert('Verification Failed', result.message || 'Please try entering the code manually.');
       }
     } catch (error) {
+      console.error('🔥 AUTO-VERIFICATION: ERROR:', error);
       Alert.alert('Error', 'Verification failed. Please try entering the code manually.');
     } finally {
       setInitialLoading(false);

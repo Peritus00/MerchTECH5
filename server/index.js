@@ -786,6 +786,95 @@ app.post('/api/auth/send-verification', async (req, res) => {
   }
 });
 
+// Email verification endpoint via URL (GET request)
+app.get('/api/auth/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    console.log('🔥 EMAIL VERIFICATION (GET): Token received:', token.substring(0, 20) + '...');
+
+    if (!token) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Verification token required' 
+      });
+    }
+
+    // Verify JWT token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+      console.log('🔥 EMAIL VERIFICATION (GET): Token decoded successfully:', decoded);
+    } catch (err) {
+      console.log('🔥 EMAIL VERIFICATION (GET): Token verification failed:', err.message);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid or expired verification token' 
+      });
+    }
+
+    // Find user by email from decoded token
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [decoded.email]
+    );
+
+    if (userResult.rows.length === 0) {
+      console.log('🔥 EMAIL VERIFICATION (GET): User not found for email:', decoded.email);
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
+    }
+
+    const user = userResult.rows[0];
+    console.log('🔥 EMAIL VERIFICATION (GET): User found:', user.email, 'Already verified:', user.is_email_verified);
+
+    if (user.is_email_verified) {
+      console.log('🔥 EMAIL VERIFICATION (GET): Email already verified, redirecting...');
+      return res.redirect('/email-already-verified'); // Redirect to the email-already-verified page
+    }
+
+    // Update user to verified status
+    const updatedUser = await pool.query(
+      `UPDATE users SET is_email_verified = true, verification_token = null, is_new_user = false WHERE email = $1 
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at, is_new_user`,
+      [decoded.email]
+    );
+
+    if (updatedUser.rows.length === 0) {
+      console.log('🔥 EMAIL VERIFICATION (GET): Failed to update user verification status.');
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to update user verification status' 
+      });
+    }
+
+    console.log('🔥 EMAIL VERIFICATION (GET): User email verified successfully:', updatedUser.rows[0].email);
+
+    // Generate new JWT for logged in session
+    const authToken = jwt.sign(
+      {
+        id: updatedUser.rows[0].id,
+        email: updatedUser.rows[0].email,
+        username: updatedUser.rows[0].username,
+        isAdmin: false
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('🔥 EMAIL VERIFICATION (GET): Redirecting to email verified page with new auth token...');
+    return res.redirect(`/email-verified?token=${authToken}`);
+  } catch (error) {
+    console.error('🔥 EMAIL VERIFICATION (GET): Email verification error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      error: 'Internal server error',
+      details: error.message 
+    });
+  }
+});
+
 // Email verification endpoint
 app.post('/api/auth/verify-email', async (req, res) => {
   try {

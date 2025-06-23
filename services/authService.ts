@@ -236,10 +236,38 @@ class AuthService {
 
   async verifyEmailToken(token: string): Promise<{ success: boolean; message: string }> {
     try {
+      console.log('🔴 AuthService: Verifying email token:', token.substring(0, 20) + '...');
+      
+      // Try direct API call for URL-based tokens first
+      if (token.length > 50) { // JWT tokens are longer than simple codes
+        try {
+          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/verify-email/${token}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          const result = await response.json();
+          console.log('🔴 AuthService: URL verification response:', result);
+          
+          if (result.success) {
+            // Update stored user data if verification includes user data
+            if (result.user) {
+              await AsyncStorage.setItem(AuthService.USER_KEY, JSON.stringify(result.user));
+            }
+            return { success: true, message: result.message || 'Email verified successfully!' };
+          }
+        } catch (urlError) {
+          console.log('🔴 AuthService: URL verification failed, trying POST method:', urlError);
+        }
+      }
+      
+      // Fallback to POST method for manual codes
       const response = await authAPI.verifyEmail(token);
       return response;
     } catch (error: any) {
-      console.error('Email verification error:', error);
+      console.error('🔴 AuthService: Email verification error:', error);
       return {
         success: false,
         message: error.message || 'Verification failed. Please try again.'
