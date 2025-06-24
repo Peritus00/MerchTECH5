@@ -91,6 +91,9 @@ export default function RootLayout() {
     return null;
   }
 
+  // Web-only build - no Stripe React Native provider needed
+  console.log('Web platform - using standard payment processing');
+
   return (
     <AuthProvider>
       <CartProvider>

@@ -1,3 +1,7 @@
+` tags.
+
+```python
+<replit_final_file>
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,11 +20,16 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
+// Define API_BASE_URL here or import it from a config file
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
+
 export default function SubscriptionCheckoutScreen() {
   const { tier, newUser } = useLocalSearchParams();
   const { user } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedTier, setSelectedTier] = useState(tier as string); // Initialize with the tier from params
+  const [loading, setLoading] = useState(false);
 
   const isNewUser = newUser === 'true';
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
@@ -31,6 +40,10 @@ export default function SubscriptionCheckoutScreen() {
       return;
     }
   }, [tier]);
+
+  useEffect(() => {
+    console.log('Platform detected:', Platform.OS);
+  }, []);
 
   const handlePayment = async () => {
     try {
@@ -95,6 +108,80 @@ export default function SubscriptionCheckoutScreen() {
       </View>
     );
   };
+
+  const updateUserSubscription = async (tier, customerId, paymentIntentId) => {
+      try {
+          const token = await AsyncStorage.getItem('authToken');
+          const updateResponse = await fetch(`${API_BASE_URL}/api/user/update-subscription`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                  subscriptionTier: tier,
+                  stripeCustomerId: customerId,
+                  stripePaymentIntentId: paymentIntentId,
+              }),
+          });
+
+          if (!updateResponse.ok) {
+              throw new Error('Failed to update subscription');
+          }
+
+          console.log('Subscription updated successfully!');
+          Alert.alert('Subscription Successful', 'Your subscription has been successfully updated.');
+          router.push('/home');
+
+      } catch (error) {
+          console.error('Subscription update error:', error);
+          Alert.alert('Subscription Update Failed', error.message || 'Please try again.');
+      }
+  };
+
+
+  const handleWebCheckout = async () => {
+    if (!selectedTier) return;
+
+    setLoading(true);
+    try {
+      console.log('Starting web checkout process...');
+        const token = await AsyncStorage.getItem('authToken');
+
+      // Create payment intent on the backend
+      const response = await fetch(`${API_BASE_URL}/stripe/create-payment-intent`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          subscriptionTier: selectedTier,
+          amount: tierInfo.price * 100, // Convert to cents
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create payment intent');
+      }
+
+      const { clientSecret, customerId } = await response.json();
+
+      // For demo purposes, simulate successful payment
+      console.log('Payment intent created, simulating successful payment...');
+
+      // Update user subscription
+      await updateUserSubscription(selectedTier, customerId, 'demo_payment_' + Date.now());
+
+      console.log('Web checkout completed successfully');
+    } catch (error) {
+      console.error('Web checkout error:', error);
+      Alert.alert('Checkout Failed', error.message || 'Please try again');
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
   if (!tierInfo) {
     return (
