@@ -19,13 +19,18 @@ import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 // Platform-specific Stripe imports
 let useStripe, CardField, StripeCardElement;
 
+// Only import Stripe React Native on mobile platforms
 if (Platform.OS !== 'web') {
-  // Mobile: Use React Native Stripe
-  const StripeRN = require('@stripe/stripe-react-native');
-  useStripe = StripeRN.useStripe;
-  CardField = StripeRN.CardField;
+  try {
+    // Mobile: Use React Native Stripe
+    const StripeRN = require('@stripe/stripe-react-native');
+    useStripe = StripeRN.useStripe;
+    CardField = StripeRN.CardField;
+  } catch (error) {
+    console.warn('Stripe React Native not available:', error);
+  }
 } else {
-  // Web: Use regular Stripe.js (we'll implement this as a fallback)
+  // Web: Use web-based payment processing
   console.log('Web platform detected - using web payment form');
 }
 

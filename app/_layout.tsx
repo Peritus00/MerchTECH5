@@ -18,8 +18,10 @@ if (Platform.OS !== 'web') {
   try {
     const StripeModule = require('@stripe/stripe-react-native');
     StripeProvider = StripeModule.StripeProvider;
+    console.log('Stripe React Native loaded successfully for mobile');
   } catch (error) {
     console.warn('Stripe React Native not available:', error);
+    StripeProvider = null;
   }
 }
 
