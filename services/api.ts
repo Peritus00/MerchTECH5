@@ -3,21 +3,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const getApiBaseUrl = () => {
-  if (process.env.API_BASE_URL) {
-    return process.env.API_BASE_URL;
+  // Check for explicit environment variable first
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
   // For Replit deployment environment
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    if (hostname.includes('replit.dev') || hostname.includes('replit.app')) {
+    if (hostname.includes('replit.dev') || hostname.includes('replit.app') || hostname.includes('picard.replit.dev')) {
       // For deployment, use the same hostname without port (handled by Replit's proxy)
       return `${window.location.protocol}//${hostname}/api`;
     }
     return `${window.location.protocol}//${hostname}:5000/api`;
   }
 
-  return 'http://localhost:5000/api';
+  // Fallback to the known Replit URL for this project
+  return 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -187,11 +189,6 @@ export const authAPI = {
 
   async resendVerification(email: string) {
     const response = await api.post('/auth/resend-verification', { email });
-    return response.data;
-  },
-
-  async refreshToken(refreshToken: string) {
-    const response = await api.post('/auth/refresh', { refreshToken });
     return response.data;
   },
 

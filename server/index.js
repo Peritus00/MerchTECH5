@@ -424,7 +424,7 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
     if (paymentDetails && paymentIntent.status === 'requires_payment_method') {
       try {
         console.log('Creating payment method on server...');
-        
+
         // Create payment method using server-side Stripe
         const paymentMethod = await stripe.paymentMethods.create({
           type: 'card',
@@ -451,12 +451,12 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
           payment_method: paymentMethod.id,
           return_url: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success`
         });
-        
+
         console.log('Payment confirmed with status:', confirmedPaymentIntent.status);
-        
+
         if (confirmedPaymentIntent.status === 'succeeded') {
           console.log('Payment successful, creating subscription...');
-          
+
           // Create subscription for recurring billing
           const subscription = await stripe.subscriptions.create({
             customer: paymentIntent.customer,
@@ -556,7 +556,7 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
 app.post('/api/auth/refresh', async (req, res) => {
   try {
     const { refreshToken } = req.body;
-    
+
     if (!refreshToken) {
       return res.status(401).json({ error: 'Refresh token required' });
     }
@@ -644,76 +644,154 @@ app.post('/api/auth/refresh', async (req, res) => {
 });
 
 // Auth routes
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
 
-    const userResult = await pool.query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
+// Registration endpoint
+app.post('/api/auth/register', async (req, res) => {
+  console.log('=== REGISTRATION ENDPOINT HIT ===');
+  console.log('Registration request:', { email: req.body.email, username: req.body.username });
+  try {
+    const { email, password, username, firstName, lastName } = req.body;
+
+    console.log('Registration attempt for:', { email, username });
+
+    // Check if user already exists
+    const existingUser = await pool.query(
+      'SELECT email, username, is_email_verified FROM users WHERE email = $1 OR username = $2',
+      [email, username]
     );
 
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (existingUser.rows.length > 0) {
+      const user = existingUser.rows[0];
+
+      // If user exists but email is not verified, allow re-registration by deleting the old unverified user
+      if ((user.email === email || user.username === username) && !user.is_email_verified) {
+        console.log('Deleting existing unverified user to allow re-registration:', { email, username });
+        await pool.query('DELETE FROM users WHERE email = $1 OR username = $2', [email, username]);
+      } else {
+        // User exists and is verified, return appropriate error
+        if (user.email === email) {
+          return res.status(400).json({ error: 'Email already registered' });
+        }
+        if (user.username === username) {
+          return res.status(400).json({ error: 'Username already taken' });
+        }
+      }
     }
 
-    const user = userResult.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    if (!validPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
+    // Create user directly in main users table with unverified status
+    const newUser = await pool.query(
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified, subscription_tier, is_new_user) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at`,
+      [email, username, passwordHash, firstName, lastName, false, 'free', true]
+    );
 
-    // Check if account is suspended
-    if (user.subscription_tier === 'suspended') {
-      return res.status(403).json({ 
-        error: 'Account suspended',
-        message: 'Your account has been temporarily suspended. Please contact help@merchtech.net for assistance.'
-      });
-    }
+    console.log('User created (unverified):', newUser.rows[0]);
 
+    // Generate JWT token for immediate login
     const token = jwt.sign(
       { 
-        id: user.id, 
-        email: user.email, 
-        username: user.username,
-        isAdmin: user.is_admin 
+        id: newUser.rows[0].id, 
+        email: newUser.rows[0].email, 
+        username: newUser.rows[0].username,
+        isAdmin: false
+      },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
+      user: {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        username: newUser.rows[0].username,
+        firstName: newUser.rows[0].first_name,
+        lastName: newUser.rows[0].last_name,
+        isEmailVerified: newUser.rows[0].is_email_verified,
+        isAdmin: false,
+        subscriptionTier: newUser.rows[0].subscription_tier,
+        isNewUser: newUser.rows[0].is_new_user,
+        createdAt: newUser.rows[0].created_at,
+        updatedAt: newUser.rows[0].created_at
+      },
+      token,
+      success: true
+    });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Internal server error during registration' });
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  console.log('=== LOGIN ENDPOINT HIT ===');
+  const { email, password } = req.body;
+  console.log('Login request:', { email });
+
+  try {
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Check if user exists
+    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+
+    if (user.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const foundUser = user.rows[0];
+
+    // Check password
+    const passwordMatch = await bcrypt.compare(password, foundUser.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate tokens
+    const token = jwt.sign(
+      { 
+        userId: foundUser.id, 
+        email: foundUser.email,
+        username: foundUser.username,
+        isAdmin: foundUser.is_admin || false
       },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
     const refreshToken = jwt.sign(
-      { id: user.id, type: 'refresh' },
+      { userId: foundUser.id },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
 
-    // Store refresh token
-    await pool.query(
-      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
-      [user.id, refreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)]
-    );
+    console.log('Login successful for user:', foundUser.email);
 
     res.json({
       user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.first_name,
-        lastName: user.last_name,
-        isEmailVerified: user.is_email_verified,
-        isAdmin: user.is_admin,
-        subscriptionTier: user.subscription_tier,
-        createdAt: user.created_at,
-        updatedAt: user.updated_at
+        id: foundUser.id,
+        email: foundUser.email,
+        username: foundUser.username,
+        firstName: foundUser.first_name,
+        lastName: foundUser.last_name,
+        isEmailVerified: foundUser.is_email_verified,
+        isAdmin: foundUser.is_admin || false,
+        subscriptionTier: foundUser.subscription_tier,
+        createdAt: foundUser.created_at,
+        updatedAt: foundUser.updated_at
       },
       token,
       refreshToken
     });
+
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error during login' });
   }
 });
 
@@ -801,82 +879,6 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
 });
 
 // User management endpoints
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, password, username, firstName, lastName } = req.body;
-
-    console.log('Registration attempt for:', { email, username });
-
-    // Check if user already exists
-    const existingUser = await pool.query(
-      'SELECT email, username, is_email_verified FROM users WHERE email = $1 OR username = $2',
-      [email, username]
-    );
-
-    if (existingUser.rows.length > 0) {
-      const user = existingUser.rows[0];
-
-      // If user exists but email is not verified, allow re-registration by deleting the old unverified user
-      if ((user.email === email || user.username === username) && !user.is_email_verified) {
-        console.log('Deleting existing unverified user to allow re-registration:', { email, username });
-        await pool.query('DELETE FROM users WHERE email = $1 OR username = $2', [email, username]);
-      } else {
-        // User exists and is verified, return appropriate error
-        if (user.email === email) {
-          return res.status(400).json({ error: 'Email already registered' });
-        }
-        if (user.username === username) {
-          return res.status(400).json({ error: 'Username already taken' });
-        }
-      }
-    }
-
-    const passwordHash = await bcrypt.hash(password, 10);
-
-    // Create user directly in main users table with unverified status
-    const newUser = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified, subscription_tier, is_new_user) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at`,
-      [email, username, passwordHash, firstName, lastName, false, 'free', true]
-    );
-
-    console.log('User created (unverified):', newUser.rows[0]);
-
-    // Generate JWT token for immediate login
-    const token = jwt.sign(
-      { 
-        id: newUser.rows[0].id, 
-        email: newUser.rows[0].email, 
-        username: newUser.rows[0].username,
-        isAdmin: false
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      user: {
-        id: newUser.rows[0].id,
-        email: newUser.rows[0].email,
-        username: newUser.rows[0].username,
-        firstName: newUser.rows[0].first_name,
-        lastName: newUser.rows[0].last_name,
-        isEmailVerified: newUser.rows[0].is_email_verified,
-        isAdmin: false,
-        subscriptionTier: newUser.rows[0].subscription_tier,
-        isNewUser: newUser.rows[0].is_new_user,
-        createdAt: newUser.rows[0].created_at,
-        updatedAt: newUser.rows[0].created_at
-      },
-      token,
-      success: true
-    });
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // Send verification email after subscription
 app.post('/api/auth/send-verification', async (req, res) => {
@@ -1117,8 +1119,8 @@ app.post('/api/auth/verify-email', async (req, res) => {
         lastName: updatedUser.rows[0].last_name,
         isEmailVerified: updatedUser.rows[0].is_email_verified,
         subscriptionTier: updatedUser.rows[0].subscription_tier,
-        createdAt: updatedUser.rows[0].createdAt,
-        isNewUser: updatedUser.rows[0].is_new_user
+        createdAt: updatedUser.createdAt,
+        isNewUser: updatedUser.is_new_user
       },
             token: authToken
     });
@@ -1420,6 +1422,9 @@ app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
   console.log('Available routes:');
   console.log('  GET /api/health');
+  console.log('  POST /api/auth/register');
+  console.log('  POST /api/auth/login');
+  console.log('  POST /api/auth/refresh');
   console.log('  GET /api/admin/all-users');
   console.log('  DELETE /api/admin/users/:identifier');
   await initializeDatabase();
