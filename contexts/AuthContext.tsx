@@ -85,7 +85,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Add a small delay to prevent rapid navigation changes
+    // Add a longer delay to prevent rapid navigation changes and allow Metro to stabilize
     const navigationTimeout = setTimeout(() => {
       const inAuthGroup = segments[0] === 'auth';
       const inSubscriptionGroup = segments[0] === 'subscription';
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔴 Redirecting new user to subscription selection');
         router.replace('/subscription/?newUser=true');
       }
-    }, 150); // Slightly longer delay to allow route transitions
+    }, 500); // Longer delay to allow Metro and route transitions to stabilize
 
     return () => clearTimeout(navigationTimeout);
   }, [user, isInitialized, isLoading, segments[0], segments[1]]);
