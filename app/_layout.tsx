@@ -4,26 +4,13 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
-
-// Conditionally import StripeProvider for mobile only
-let StripeProvider: any = null;
-if (Platform.OS !== 'web') {
-  try {
-    const StripeModule = require('@stripe/stripe-react-native');
-    StripeProvider = StripeModule.StripeProvider;
-    console.log('Stripe React Native loaded successfully for mobile');
-  } catch (error) {
-    console.warn('Stripe React Native not available:', error);
-    StripeProvider = null;
-  }
-}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -90,6 +77,50 @@ function RootLayoutNav() {
   );
 }
 
+function StripeWrapper({ children }: { children: React.ReactNode }) {
+  const [StripeProvider, setStripeProvider] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadStripe = async () => {
+      if (Platform.OS !== 'web') {
+        try {
+          console.log('Loading Stripe React Native for mobile...');
+          const StripeModule = await import('@stripe/stripe-react-native');
+          setStripeProvider(() => StripeModule.StripeProvider);
+          console.log('Stripe React Native loaded successfully for mobile');
+        } catch (error) {
+          console.warn('Stripe React Native not available:', error);
+          setStripeProvider(null);
+        }
+      } else {
+        console.log('Web platform - skipping Stripe React Native');
+        setStripeProvider(null);
+      }
+      setIsLoading(false);
+    };
+
+    loadStripe();
+  }, []);
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (Platform.OS !== 'web' && StripeProvider) {
+    return (
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}
+        merchantIdentifier="merchant.com.merchtech.app"
+      >
+        {children}
+      </StripeProvider>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [loaded] = useFonts({
@@ -106,25 +137,13 @@ export default function RootLayout() {
     return null;
   }
 
-  const content = (
-    <AuthProvider>
-      <CartProvider>
-        <RootLayoutNav />
-      </CartProvider>
-    </AuthProvider>
+  return (
+    <StripeWrapper>
+      <AuthProvider>
+        <CartProvider>
+          <RootLayoutNav />
+        </CartProvider>
+      </AuthProvider>
+    </StripeWrapper>
   );
-
-  // Only wrap with StripeProvider on mobile platforms
-  if (Platform.OS !== 'web' && StripeProvider) {
-    return (
-      <StripeProvider
-        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}
-        merchantIdentifier="merchant.com.merchtech.app"
-      >
-        {content}
-      </StripeProvider>
-    );
-  }
-
-  return content;
 }
