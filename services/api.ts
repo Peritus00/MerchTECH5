@@ -5,21 +5,37 @@ import { Platform } from 'react-native';
 const getApiBaseUrl = () => {
   // Check for explicit environment variable first
   if (process.env.EXPO_PUBLIC_API_URL) {
+    console.log('Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
   // For Replit deployment environment
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
+    console.log('Window hostname detected:', hostname);
+    
     if (hostname.includes('replit.dev') || hostname.includes('replit.app') || hostname.includes('picard.replit.dev')) {
-      // For deployment, use the same hostname without port (handled by Replit's proxy)
-      return `${window.location.protocol}//${hostname}/api`;
+      const url = `${window.location.protocol}//${hostname}/api`;
+      console.log('Using window-based URL for Replit:', url);
+      return url;
     }
-    return `${window.location.protocol}//${hostname}:5000/api`;
+    
+    const url = `${window.location.protocol}//${hostname}:5000/api`;
+    console.log('Using window-based URL with port:', url);
+    return url;
+  }
+
+  // Check for REPLIT_DEV_DOMAIN environment variable
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    const url = `https://${process.env.REPLIT_DEV_DOMAIN}/api`;
+    console.log('Using REPLIT_DEV_DOMAIN:', url);
+    return url;
   }
 
   // Fallback to the known Replit URL for this project
-  return 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
+  const fallbackUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
+  console.log('Using fallback URL:', fallbackUrl);
+  return fallbackUrl;
 };
 
 const API_BASE_URL = getApiBaseUrl();

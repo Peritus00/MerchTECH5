@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { useSegments } from 'expo-router';
 import { User } from '@/types';
@@ -75,6 +75,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.log('🔴 AuthContext: Initialization complete');
       }
     };
+
+  // Debounced version to prevent rapid re-initialization
+  const debouncedInitializeAuth = useMemo(() => {
+    let timeoutId: NodeJS.Timeout;
+    return () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        initializeAuth();
+      }, 100); // 100ms debounce
+    };
+  }, [initializeAuth]);
 
     initializeAuth();
   }, []);
