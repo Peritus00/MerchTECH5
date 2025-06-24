@@ -160,6 +160,12 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
+    const refreshToken = jwt.sign(
+      { id: foundUser.id, type: 'refresh' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
     res.json({
       user: {
         id: foundUser.id,
@@ -171,12 +177,77 @@ app.post('/api/auth/login', async (req, res) => {
         createdAt: foundUser.created_at,
         updatedAt: foundUser.updated_at
       },
-      token
+      token,
+      refreshToken
     });
 
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Internal server error during login' });
+  }
+});
+
+// Refresh token endpoint
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ error: 'Invalid token type' });
+    }
+
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [decoded.id]);
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    const newToken = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        username: user.username,
+        isAdmin: user.is_admin 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    const newRefreshToken = jwt.sign(
+      { id: user.id, type: 'refresh' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      token: newToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        isEmailVerified: user.is_email_verified,
+        isAdmin: user.is_admin,
+        subscriptionTier: user.subscription_tier,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 
