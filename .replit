@@ -17,7 +17,7 @@ localPort = 8082
 externalPort = 3000
 
 [workflows]
-runButton = "Stable Backend Server"
+runButton = "Quick Backend"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -114,6 +114,15 @@ args = "cd server && node simple-server.js"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --tunnel"
+
+[[workflows.workflow]]
+name = "Quick Backend"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node simple-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
