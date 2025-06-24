@@ -36,21 +36,26 @@ function RootLayoutNav() {
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
 
-    if (user) {
-      // User is signed in
-      if (inAuthGroup) {
-        // Redirect away from sign-in if already authenticated
-        router.replace('/(tabs)/');
-      } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup) {
-        console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
-        router.replace('/subscription');
+    // Add a small delay to prevent rapid navigation changes
+    const navigationTimeout = setTimeout(() => {
+      if (user) {
+        // User is signed in
+        if (inAuthGroup) {
+          // Redirect away from sign-in if already authenticated
+          router.replace('/(tabs)/');
+        } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup) {
+          console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
+          router.replace('/subscription');
+        }
+      } else {
+        // User is not signed in
+        if (!inAuthGroup && !inNotFoundGroup) {
+          router.replace('/auth/login');
+        }
       }
-    } else {
-      // User is not signed in
-      if (!inAuthGroup && !inNotFoundGroup) {
-        router.replace('/auth/login');
-      }
-    }
+    }, 100);
+
+    return () => clearTimeout(navigationTimeout);
   }, [user, segments, isLoading]);
 
   return (

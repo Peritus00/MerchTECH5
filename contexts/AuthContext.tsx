@@ -26,116 +26,42 @@ let globalAuthState = {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(globalAuthState.user);
-  const [isLoading, setIsLoading] = useState(!globalAuthState.isInitialized);
-  const [isInitialized, setIsInitialized] = useState(globalAuthState.isInitialized);
-  const initializationRef = useRef(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
 
-  const router = useRouter();
-  const segments = useSegments();
-
-  // Single initialization effect
+  // Check for existing authentication on mount
   useEffect(() => {
-    // Prevent duplicate initialization
-    if (initializationRef.current || globalAuthState.isInitialized || globalAuthState.isInitializing) {
-      if (globalAuthState.isInitialized) {
-        setUser(globalAuthState.user);
-        setIsLoading(false);
-        setIsInitialized(true);
-      }
-      return;
+    if (!initialized) {
+      checkAuthState();
     }
+  }, [initialized]);
 
-    initializationRef.current = true;
-    globalAuthState.isInitializing = true;
+  const checkAuthState = async () => {
+    if (initialized) return;
 
     console.log('🔴 AuthContext: Starting initialization...');
 
-    const initializeAuth = async () => {
-      try {
-        setIsLoading(true);
+    try {
+      setIsLoading(true);
+      const currentUser = await authService.getCurrentUser();
 
-        const currentUser = await authService.getCurrentUser();
-        console.log('🔴 AuthContext: Current user:', currentUser?.username || 'none');
-
-        globalAuthState.user = currentUser;
-        globalAuthState.isInitialized = true;
-        globalAuthState.isInitializing = false;
-
+      if (currentUser) {
+        console.log('🔴 AuthContext: Current user:', currentUser.username);
         setUser(currentUser);
-      } catch (error) {
-        console.error('🔴 AuthContext: Init error:', error);
-        globalAuthState.user = null;
-        globalAuthState.isInitialized = true;
-        globalAuthState.isInitializing = false;
+      } else {
+        console.log('🔴 AuthContext: Current user:', 'none');
         setUser(null);
-      } finally {
-        setIsLoading(false);
-        setIsInitialized(true);
-        console.log('🔴 AuthContext: Initialization complete');
       }
-    };
-
-  // Debounced version to prevent rapid re-initialization
-  const debouncedInitializeAuth = useMemo(() => {
-    let timeoutId: NodeJS.Timeout;
-    return () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(() => {
-        initializeAuth();
-      }, 100); // 100ms debounce
-    };
-  }, [initializeAuth]);
-
-    initializeAuth();
-  }, []);
-
-  // Handle navigation only when auth is ready and not during initialization
-  useEffect(() => {
-    if (!isInitialized || isLoading || globalAuthState.isInitializing) {
-      return;
+    } catch (error) {
+      console.error('🔴 AuthContext: Auth check failed:', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+      setInitialized(true);
+      console.log('🔴 AuthContext: Initialization complete');
     }
-
-    // Add a longer delay to prevent rapid navigation changes and allow Metro to stabilize
-    const navigationTimeout = setTimeout(() => {
-      const inAuthGroup = segments[0] === 'auth';
-      const inSubscriptionGroup = segments[0] === 'subscription';
-      const inNotFoundGroup = segments[0] === '+not-found';
-      const isAuthenticated = !!user;
-      const userIsNew = user?.isNewUser === true;
-
-      console.log('🔴 Route navigation check:', { 
-        isAuthenticated, 
-        inAuthGroup, 
-        inSubscriptionGroup,
-        inNotFoundGroup,
-        currentSegments: segments.slice(0, 2),
-        userIsNew,
-        user: user?.username
-      });
-
-      // Prevent redirect loops by checking if we're already in the target location
-      if (!isAuthenticated && !inAuthGroup && !inSubscriptionGroup) {
-        console.log('🔴 Redirecting to login');
-        router.replace('/auth/login');
-      } else if (isAuthenticated && inAuthGroup && !userIsNew) {
-        // Only redirect existing users away from auth pages
-        console.log('🔴 Redirecting existing user to home');
-        router.replace('/(tabs)');
-      } else if (isAuthenticated && userIsNew && !inSubscriptionGroup && !inNotFoundGroup) {
-        // Handle case where new user is already logged in but not in subscription flow
-        // Avoid redirecting if already on not-found to prevent loops
-        console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
-        router.replace('/subscription/?newUser=true');
-      } else if (isAuthenticated && inAuthGroup && userIsNew) {
-        // Redirect new users from auth to subscription
-        console.log('🔴 Redirecting new user to subscription selection');
-        router.replace('/subscription/?newUser=true');
-      }
-    }, 500); // Longer delay to allow Metro and route transitions to stabilize
-
-    return () => clearTimeout(navigationTimeout);
-  }, [user, isInitialized, isLoading, segments[0], segments[1]]);
+  };
 
   const login = async (email: string, password: string) => {
     try {
@@ -216,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user,
       isAuthenticated: !!user,
       isLoading,
-      isInitialized,
+      isInitialized: initialized,
       login,
       register,
       logout,

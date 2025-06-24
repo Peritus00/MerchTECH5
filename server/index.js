@@ -647,8 +647,6 @@ app.post('/api/auth/refresh', async (req, res) => {
 });
 
 // Auth routes
-
-// Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
   console.log('=== REGISTRATION ENDPOINT HIT ===');
   console.log('Registration request:', { email: req.body.email, username: req.body.username });
@@ -729,7 +727,6 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Login endpoint
 app.post('/api/auth/login', async (req, res) => {
   console.log('=== LOGIN ENDPOINT HIT ===');
   const { email, password } = req.body;

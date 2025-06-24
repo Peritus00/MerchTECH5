@@ -7,13 +7,13 @@ const getApiBaseUrl = () => {
   const replitUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
   
   // Check for explicit environment variable override
-  if (process.env.EXPO_PUBLIC_API_URL) {
+  if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL !== 'undefined') {
     console.log('Using EXPO_PUBLIC_API_URL override:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
   // For web platform, try to use current window location if available
-  if (typeof window !== 'undefined' && window.location) {
+  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
     const hostname = window.location.hostname;
     
     if (hostname.includes('replit.dev') || hostname.includes('replit.app') || hostname.includes('picard.replit.dev')) {
