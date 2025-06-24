@@ -70,8 +70,8 @@ function healthCheck() {
 // Start the server
 startServer();
 
-// Run health checks every 2 minutes to reduce connection spam and prevent multiple restarts
-setInterval(healthCheck, 120000);
+// Run health checks every 5 minutes to reduce connection spam and prevent multiple restarts
+setInterval(healthCheck, 300000);
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

@@ -6,24 +6,8 @@ const getApiBaseUrl = () => {
   // Primary: Use the fixed Replit URL for this project
   const replitUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
   
-  // Check for explicit environment variable override
-  if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL !== 'undefined') {
-    console.log('Using EXPO_PUBLIC_API_URL override:', process.env.EXPO_PUBLIC_API_URL);
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-
-  // For web platform, try to use current window location if available
-  if (typeof window !== 'undefined' && window.location && window.location.hostname) {
-    const hostname = window.location.hostname;
-    
-    if (hostname.includes('replit.dev') || hostname.includes('replit.app') || hostname.includes('picard.replit.dev')) {
-      const url = `${window.location.protocol}//${hostname}/api`;
-      console.log('Using current window URL for Replit:', url);
-      return url;
-    }
-  }
-
-  console.log('Using primary Replit URL:', replitUrl);
+  // Always use the fixed Replit URL to prevent undefined issues
+  console.log('Using fixed Replit URL:', replitUrl);
   return replitUrl;
 };
 

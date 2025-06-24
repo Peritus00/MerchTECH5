@@ -1,6 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { useSegments } from 'expo-router';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
@@ -102,12 +101,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await authService.logout();
       globalAuthState.user = null;
       setUser(null);
-      router.replace('/auth/login');
     } catch (error) {
       console.error('🔴 Auth: Logout error:', error);
       globalAuthState.user = null;
       setUser(null);
-      router.replace('/auth/login');
     } finally {
       setIsLoading(false);
     }
