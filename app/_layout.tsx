@@ -5,12 +5,23 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import 'react-native-reanimated';
-import { StripeProvider } from '@stripe/stripe-react-native';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+
+// Conditionally import StripeProvider for mobile only
+let StripeProvider: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    const StripeModule = require('@stripe/stripe-react-native');
+    StripeProvider = StripeModule.StripeProvider;
+  } catch (error) {
+    console.warn('Stripe React Native not available:', error);
+  }
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -93,16 +104,25 @@ export default function RootLayout() {
     return null;
   }
 
-  return (
-    <StripeProvider
-      publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}
-      merchantIdentifier="merchant.com.merchtech.app"
-    >
-      <AuthProvider>
-        <CartProvider>
-          <RootLayoutNav />
-        </CartProvider>
-      </AuthProvider>
-    </StripeProvider>
+  const content = (
+    <AuthProvider>
+      <CartProvider>
+        <RootLayoutNav />
+      </CartProvider>
+    </AuthProvider>
   );
+
+  // Only wrap with StripeProvider on mobile platforms
+  if (Platform.OS !== 'web' && StripeProvider) {
+    return (
+      <StripeProvider
+        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_your_publishable_key_here'}
+        merchantIdentifier="merchant.com.merchtech.app"
+      >
+        {content}
+      </StripeProvider>
+    );
+  }
+
+  return content;
 }

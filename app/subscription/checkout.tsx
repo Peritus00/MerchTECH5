@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -37,7 +36,7 @@ export default function SubscriptionCheckoutScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [clientSecret, setClientSecret] = useState('');
   const [cardComplete, setCardComplete] = useState(false);
-  
+
   // Payment form state for web
   const [cardDetails, setCardDetails] = useState({
     number: '',
@@ -241,108 +240,44 @@ export default function SubscriptionCheckoutScreen() {
 
   const renderPaymentForm = () => {
     if (Platform.OS === 'web') {
+      // Web: Simple payment message with redirect to Stripe Checkout
       return (
-        <View style={styles.paymentForm}>
-          <View style={styles.inputContainer}>
-            <ThemedText style={styles.inputLabel}>Cardholder Name</ThemedText>
-            <View style={styles.textInput}>
-              <input
-                type="text"
-                placeholder="John Doe"
-                value={cardDetails.cardholderName}
-                onChange={(e) => setCardDetails({...cardDetails, cardholderName: e.target.value})}
-                style={webInputStyles}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputContainer}>
-            <ThemedText style={styles.inputLabel}>Card Number</ThemedText>
-            <View style={styles.textInput}>
-              <input
-                type="text"
-                placeholder="1234 5678 9012 3456"
-                value={cardDetails.number}
-                onChange={(e) => setCardDetails({...cardDetails, number: formatCardNumber(e.target.value)})}
-                maxLength={19}
-                style={webInputStyles}
-              />
-            </View>
-          </View>
-
-          <View style={styles.row}>
-            <View style={[styles.inputContainer, styles.halfWidth]}>
-              <ThemedText style={styles.inputLabel}>Exp Month</ThemedText>
-              <View style={styles.textInput}>
-                <input
-                  type="text"
-                  placeholder="12"
-                  value={cardDetails.expMonth}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    if (value.length <= 2) setCardDetails({...cardDetails, expMonth: value});
-                  }}
-                  maxLength={2}
-                  style={webInputStyles}
-                />
-              </View>
-            </View>
-
-            <View style={[styles.inputContainer, styles.halfWidth]}>
-              <ThemedText style={styles.inputLabel}>Exp Year</ThemedText>
-              <View style={styles.textInput}>
-                <input
-                  type="text"
-                  placeholder="2025"
-                  value={cardDetails.expYear}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    if (value.length <= 4) setCardDetails({...cardDetails, expYear: value});
-                  }}
-                  maxLength={4}
-                  style={webInputStyles}
-                />
-              </View>
-            </View>
-
-            <View style={[styles.inputContainer, styles.halfWidth]}>
-              <ThemedText style={styles.inputLabel}>CVV</ThemedText>
-              <View style={styles.textInput}>
-                <input
-                  type="text"
-                  placeholder="123"
-                  value={cardDetails.cvv}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '');
-                    if (value.length <= 4) setCardDetails({...cardDetails, cvv: value});
-                  }}
-                  maxLength={4}
-                  style={webInputStyles}
-                />
-              </View>
-            </View>
+        <View style={styles.cardContainer}>
+          <ThemedText style={styles.sectionTitle}>Payment Information</ThemedText>
+          <View style={styles.webPaymentInfo}>
+            <ThemedText style={styles.webPaymentText}>
+              You will be redirected to Stripe's secure checkout page to complete your payment.
+            </ThemedText>
+            <ThemedText style={styles.webPaymentSubtext}>
+              Your payment information is processed securely by Stripe.
+            </ThemedText>
           </View>
         </View>
       );
     } else {
       // Mobile: Use React Native Stripe CardField
       return CardField ? (
-        <CardField
-          postalCodeEnabled={true}
-          placeholders={{
-            number: '4242 4242 4242 4242',
-          }}
-          cardStyle={{
-            backgroundColor: '#FFFFFF',
-            textColor: '#000000',
-          }}
-          style={styles.cardField}
-          onCardChange={(cardDetails) => {
-            setCardComplete(cardDetails.complete);
-          }}
-        />
+        <View style={styles.cardContainer}>
+          <ThemedText style={styles.sectionTitle}>Payment Information</ThemedText>
+          <CardField
+            postalCodeEnabled={true}
+            placeholders={{
+              number: '4242 4242 4242 4242',
+            }}
+            cardStyle={{
+              backgroundColor: '#FFFFFF',
+              textColor: '#000000',
+            }}
+            style={styles.cardField}
+            onCardChange={(cardDetails) => {
+              setCardComplete(cardDetails.complete);
+            }}
+          />
+        </View>
       ) : (
-        <ThemedText style={styles.errorText}>Payment form not available on this platform</ThemedText>
+        <View style={styles.cardContainer}>
+          <ThemedText style={styles.errorText}>Payment form not available on this platform</ThemedText>
+        </View>
       );
     }
   };
@@ -571,5 +506,28 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     textAlign: 'center',
     padding: 20,
+  },
+  cardContainer: {
+    padding: 20,
+    borderRadius: 16,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+  },
+  webPaymentInfo: {
+    alignItems: 'center',
+  },
+  webPaymentText: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  webPaymentSubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#6b7280',
   },
 });
