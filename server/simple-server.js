@@ -182,7 +182,21 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`Simple server running on port ${PORT}`);
-  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
-  await initializeDatabase();
+  console.log(`🚀 Simple server starting...`);
+  console.log(`📡 Server running on port ${PORT}`);
+  console.log(`🌐 Local URL: http://0.0.0.0:${PORT}`);
+  console.log(`🔗 External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
+  console.log(`📊 Health check: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
+  
+  try {
+    await initializeDatabase();
+    console.log(`✅ Simple server fully initialized and ready!`);
+  } catch (error) {
+    console.error(`❌ Server initialization failed:`, error);
+  }
+}).on('error', (err) => {
+  console.error(`❌ Server failed to start:`, err);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Try stopping other processes or use a different port.`);
+  }
 });
