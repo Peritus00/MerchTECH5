@@ -133,18 +133,5 @@ mode = "sequential"
 task = "shell.exec"
 args = "cd server && node simple-server.js"
 
-[[workflows.workflow]]
-name = "Full App"
-author = 42127692
-mode = "parallel"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx expo start --web"
-
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
