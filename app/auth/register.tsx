@@ -154,6 +154,7 @@ export default function RegisterScreen() {
     setErrors({});
 
     try {
+      console.log('🔴 Registration: Starting registration process...');
       const result = await register(
         formData.email.trim(),
         formData.password,
@@ -165,10 +166,33 @@ export default function RegisterScreen() {
         console.log('🔴 Registration: Success, redirecting to subscription');
         router.replace('/subscription/?newUser=true');
       } else {
-        setErrors({ general: result.error || 'Registration failed' });
+        console.error('🔴 Registration: Failed with result:', result);
+        setErrors({ 
+          general: result.error || 'Registration failed. Please check your information and try again.' 
+        });
       }
     } catch (error: any) {
-      setErrors({ general: error.message || 'An unexpected error occurred' });
+      console.error('🔴 Registration: Exception caught:', error);
+      
+      // Provide user-friendly error messages
+      let errorMessage = 'An unexpected error occurred during registration.';
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      // Show specific field errors if possible
+      if (errorMessage.includes('email')) {
+        setErrors({ email: errorMessage });
+      } else if (errorMessage.includes('username')) {
+        setErrors({ username: errorMessage });
+      } else if (errorMessage.includes('password')) {
+        setErrors({ password: errorMessage });
+      } else {
+        setErrors({ general: errorMessage });
+      }
     } finally {
       setIsSubmitting(false);
     }

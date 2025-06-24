@@ -63,7 +63,7 @@ class AuthService {
 
       if (!response.user || !response.token) {
         console.error('🔴 AuthService: Invalid registration response:', response);
-        throw new Error('Invalid response from server - missing user or token');
+        throw new Error('Registration completed but server response was invalid. Please try logging in.');
       }
 
       // Store authentication data for new user
@@ -74,19 +74,33 @@ class AuthService {
       return response;
     } catch (error: any) {
       console.error('🔴 AuthService: Registration error:', error);
+      console.error('🔴 AuthService: Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
       
-      // Provide more specific error messages
-      if (error.message.includes('Email already registered')) {
-        throw new Error('This email is already registered. Please use a different email or try logging in.');
-      } else if (error.message.includes('Username already taken')) {
-        throw new Error('This username is already taken. Please choose a different username.');
-      } else if (error.message.includes('network') || error.message.includes('Network')) {
-        throw new Error('Network error. Please check your connection and try again.');
+      // Provide more specific error messages based on the actual error
+      if (error.response?.status === 400) {
+        const errorMessage = error.response?.data?.error || error.message;
+        if (errorMessage.includes('Email already registered') || errorMessage.includes('already exists')) {
+          throw new Error('This email is already registered. Please use a different email or try logging in.');
+        } else if (errorMessage.includes('Username already taken') || errorMessage.includes('username')) {
+          throw new Error('This username is already taken. Please choose a different username.');
+        } else {
+          throw new Error(errorMessage || 'Registration failed. Please check your information and try again.');
+        }
       } else if (error.response?.status === 500) {
-        throw new Error('Server error. Please try again in a few moments.');
+        throw new Error('Server error occurred during registration. Please try again in a few moments.');
+      } else if (error.message.includes('network') || error.message.includes('Network') || !error.response) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
+      } else if (error.response?.status === 422) {
+        throw new Error('Invalid registration data. Please check all fields and try again.');
       }
       
-      throw new Error(error.message || 'Registration failed. Please check your information and try again.');
+      // Fallback error message
+      const fallbackMessage = error.response?.data?.error || error.message || 'Registration failed for an unknown reason.';
+      throw new Error(fallbackMessage);
     }
   }
 

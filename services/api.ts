@@ -107,12 +107,28 @@ export const authAPI = {
     }
   },
 
-  register: async (email: string, password: string, username?: string) => {
+  register: async (email: string, password: string, username: string) => {
     try {
-      const response = await api.post('/auth/register', { email, password, username });
+      console.log('🔴 API: Attempting registration with:', { email, username });
+      const response = await api.post('/auth/register', { 
+        email, 
+        password, 
+        username 
+      });
+      console.log('🔴 API: Registration response:', response.data);
+
+      if (!response.data.user || !response.data.token) {
+        console.error('🔴 API: Invalid registration response structure:', response.data);
+        throw new Error('Registration completed but server response was incomplete. Please try logging in.');
+      }
+
       return response.data;
     } catch (error: any) {
-      console.log('API registration failed, checking for developer fallback');
+      console.error('🔴 API: Registration failed:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      });
 
       // If backend fails, fall back to developer registration  
       if (email === 'djjetfuel@gmail.com') {
@@ -124,7 +140,7 @@ export const authAPI = {
             username: username || 'djjetfuel',
             firstName: null,
             lastName: null,
-            isEmailVerified: false,
+            isEmailVerified: true,
             isAdmin: true,
             subscriptionTier: 'free',
             isNewUser: true,
@@ -136,10 +152,26 @@ export const authAPI = {
         };
       }
 
+      // Provide detailed error messages based on status codes
       if (error.response?.status === 400) {
-        throw new Error('Username or email already exists. Please try a different one.');
+        const errorMsg = error.response?.data?.error || error.message;
+        if (errorMsg.includes('Email already registered')) {
+          throw new Error('This email is already registered. Please use a different email or try logging in.');
+        } else if (errorMsg.includes('Username already taken')) {
+          throw new Error('This username is already taken. Please choose a different username.');
+        } else {
+          throw new Error(errorMsg || 'Invalid registration data. Please check your information.');
+        }
+      } else if (error.response?.status === 500) {
+        throw new Error('Server error. Please try again in a few moments.');
+      } else if (error.response?.status === 422) {
+        throw new Error('Registration data validation failed. Please check all required fields.');
+      } else if (!error.response) {
+        throw new Error('Network connection error. Please check your internet connection and try again.');
       }
-      throw new Error(error.response?.data?.error || 'Registration failed. Please try again.');
+
+      // Generic fallback
+      throw new Error(error.response?.data?.error || error.message || 'Registration failed. Please try again.');
     }
   },
 
