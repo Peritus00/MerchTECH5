@@ -18,10 +18,13 @@ console.log('API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 30000, // Increased timeout
   headers: {
     'Content-Type': 'application/json',
   },
+  // Add retry logic
+  retry: 3,
+  retryDelay: 1000,
 });
 
 // Request interceptor to add auth token
@@ -42,10 +45,32 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor for error handling
+// Response interceptor for error handling with retry logic
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const config = error.config;
+
+    // Retry logic for network errors
+    if (!config || !config.retry) {
+      config.retry = 0;
+    }
+
+    if (config.retry < 3 && (
+      error.code === 'ERR_NETWORK' ||
+      error.code === 'ECONNABORTED' ||
+      error.code === 'ETIMEDOUT' ||
+      !error.response
+    )) {
+      config.retry += 1;
+      console.log(`Retrying request (attempt ${config.retry}/3)...`);
+      
+      // Wait before retrying
+      await new Promise(resolve => setTimeout(resolve, 1000 * config.retry));
+      
+      return api(config);
+    }
+
     if (error.response?.status === 401) {
       // Handle unauthorized access - clear all auth data
       await AsyncStorage.multiRemove(['authToken', 'refreshToken', 'currentUser']);
@@ -57,7 +82,8 @@ api.interceptors.response.use(
       code: error.code,
       baseURL: API_BASE_URL,
       status: error.response?.status,
-      url: error.config?.url
+      url: error.config?.url,
+      retries: config.retry || 0
     });
 
     return Promise.reject(error);
