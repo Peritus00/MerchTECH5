@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -22,140 +21,22 @@ export default function SubscriptionCheckoutScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [clientSecret, setClientSecret] = useState('');
-  const [cardComplete, setCardComplete] = useState(false);
-  const [stripeReady, setStripeReady] = useState(false);
-  const [stripeHook, setStripeHook] = useState(null);
-  const [CardFieldComponent, setCardFieldComponent] = useState(null);
-
-  // Payment form state for web
-  const [cardDetails, setCardDetails] = useState({
-    number: '',
-    expMonth: '',
-    expYear: '',
-    cvv: '',
-    cardholderName: ''
-  });
 
   const isNewUser = newUser === 'true';
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
-
-  // Dynamically load Stripe components only on mobile
-  useEffect(() => {
-    const loadStripe = async () => {
-      if (Platform.OS !== 'web') {
-        try {
-          console.log('Loading Stripe React Native for mobile...');
-          const StripeModule = await import('@stripe/stripe-react-native');
-          const { useStripe, CardField } = StripeModule;
-          
-          setCardFieldComponent(() => CardField);
-          setStripeReady(true);
-          console.log('Stripe React Native loaded successfully');
-        } catch (error) {
-          console.warn('Failed to load Stripe React Native:', error);
-          setStripeReady(false);
-        }
-      } else {
-        console.log('Web platform - skipping Stripe React Native');
-        setStripeReady(true);
-      }
-    };
-
-    loadStripe();
-  }, []);
 
   useEffect(() => {
     if (!tier || !tierInfo) {
       router.push('/subscription');
       return;
     }
-    initializePayment();
   }, [tier]);
 
-  const initializePayment = async () => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/stripe/create-payment-intent`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          subscriptionTier: tier,
-          amount: tierInfo.price * 100,
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      const data = await response.json();
-      setClientSecret(data.clientSecret);
-    } catch (error) {
-      console.error('Subscription creation error:', error);
-      Alert.alert(
-        'Error',
-        'Failed to initialize payment. Please try again.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    }
-  };
-
-  const handleMobilePayment = async () => {
-    if (Platform.OS === 'web') {
-      handleWebPayment();
-      return;
-    }
-
+  const handlePayment = async () => {
     try {
       setIsLoading(true);
-      console.log('🔥 Starting mobile payment process for tier:', tier);
+      console.log('🔥 Starting secure checkout for tier:', tier);
 
-      // Dynamically import and use Stripe
-      const StripeModule = await import('@stripe/stripe-react-native');
-      const { useStripe } = StripeModule;
-      
-      // This won't work in this context - we need to handle this differently
-      Alert.alert(
-        'Mobile Payment',
-        'Mobile payment processing will redirect to Stripe checkout',
-        [
-          {
-            text: 'Continue',
-            onPress: () => handleWebCheckout()
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel'
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('🔥 Mobile payment processing error:', error);
-      Alert.alert('Payment Failed', 'Please try the web checkout option.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleWebPayment = async () => {
-    try {
-      setIsLoading(true);
-      console.log('🔥 Starting web payment process for tier:', tier);
-      await handleWebCheckout();
-    } catch (error) {
-      console.error('🔥 Web payment processing error:', error);
-      Alert.alert('Payment Failed', error.message || 'An unexpected error occurred.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleWebCheckout = async () => {
-    try {
       const token = await AsyncStorage.getItem('authToken');
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/stripe/create-checkout-session`, {
         method: 'POST',
@@ -166,109 +47,59 @@ export default function SubscriptionCheckoutScreen() {
         body: JSON.stringify({
           subscriptionTier: tier,
           amount: tierInfo.price * 100,
-          successUrl: `${window.location.origin}/subscription/success?tier=${tier}&newUser=${isNewUser}`,
-          cancelUrl: `${window.location.origin}/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
+          successUrl: Platform.OS === 'web' 
+            ? `${window.location.origin}/subscription/success?tier=${tier}&newUser=${isNewUser}`
+            : `https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/subscription/success?tier=${tier}&newUser=${isNewUser}`,
+          cancelUrl: Platform.OS === 'web'
+            ? `${window.location.origin}/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
+            : `https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
         })
       });
 
       const result = await response.json();
 
       if (result.success && result.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = result.url;
+        if (Platform.OS === 'web') {
+          // Web: Direct redirect
+          window.location.href = result.url;
+        } else {
+          // Mobile: Use Expo WebBrowser for in-app browser
+          const { WebBrowser } = require('expo-web-browser');
+          await WebBrowser.openBrowserAsync(result.url);
+        }
       } else {
         throw new Error(result.error || 'Failed to create checkout session');
       }
     } catch (error) {
-      console.error('Checkout session error:', error);
-      throw error;
-    }
-  };
-
-  const updateSubscription = async (paymentIntent) => {
-    try {
-      const token = await AsyncStorage.getItem('authToken');
-      const updateResponse = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/user/subscription`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          subscriptionTier: tier,
-          stripeCustomerId: paymentIntent.customer,
-          stripeSubscriptionId: paymentIntent.id
-        })
-      });
-
-      if (!updateResponse.ok) {
-        throw new Error('Failed to update subscription');
-      }
-
-      router.push(`/subscription/success?tier=${tier}&newUser=${isNewUser}&customerId=${paymentIntent.customer}&subscriptionId=${paymentIntent.id}`);
-    } catch (error) {
-      console.error('🔥 Subscription update error:', error);
-      Alert.alert('Error', 'Payment successful but failed to update subscription. Please contact support.');
+      console.error('🔥 Payment processing error:', error);
+      Alert.alert('Payment Failed', error.message || 'An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const renderPaymentForm = () => {
-    if (Platform.OS === 'web') {
-      // Web: Simple message about Stripe Checkout redirect
-      return (
-        <View style={styles.cardContainer}>
-          <ThemedText style={styles.sectionTitle}>Payment Information</ThemedText>
-          <View style={styles.webPaymentInfo}>
-            <ThemedText style={styles.webPaymentText}>
-              You will be redirected to Stripe's secure checkout page to complete your payment.
-            </ThemedText>
-            <ThemedText style={styles.webPaymentSubtext}>
-              Your payment information is processed securely by Stripe.
-            </ThemedText>
-          </View>
+    return (
+      <View style={styles.cardContainer}>
+        <ThemedText style={styles.sectionTitle}>Secure Payment</ThemedText>
+        <View style={styles.paymentInfo}>
+          <ThemedText style={styles.paymentText}>
+            You will be redirected to Stripe's secure checkout page to complete your payment safely and securely.
+          </ThemedText>
+          <ThemedText style={styles.paymentSubtext}>
+            • SSL encrypted payment processing{'\n'}
+            • Support for all major credit and debit cards{'\n'}
+            • No payment information stored on our servers
+          </ThemedText>
         </View>
-      );
-    } else {
-      // Mobile: Show loading or redirect message
-      return (
-        <View style={styles.cardContainer}>
-          <ThemedText style={styles.sectionTitle}>Payment Information</ThemedText>
-          <View style={styles.webPaymentInfo}>
-            <ThemedText style={styles.webPaymentText}>
-              You will be redirected to secure checkout to complete your payment.
-            </ThemedText>
-            <ThemedText style={styles.webPaymentSubtext}>
-              Your payment information is processed securely by Stripe.
-            </ThemedText>
-          </View>
-        </View>
-      );
-    }
-  };
-
-  const handlePayment = () => {
-    if (Platform.OS === 'web') {
-      handleWebPayment();
-    } else {
-      handleMobilePayment();
-    }
+      </View>
+    );
   };
 
   if (!tierInfo) {
     return (
       <ThemedView style={styles.container}>
         <ThemedText>Invalid subscription tier</ThemedText>
-      </ThemedView>
-    );
-  }
-
-  if (!stripeReady) {
-    return (
-      <ThemedView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3b82f6" />
-          <ThemedText style={styles.loadingText}>Loading payment system...</ThemedText>
-        </View>
       </ThemedView>
     );
   }
@@ -343,16 +174,6 @@ export default function SubscriptionCheckoutScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 16,
-    opacity: 0.7,
   },
   keyboardAvoid: {
     flex: 1,
@@ -435,18 +256,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 16,
   },
-  webPaymentInfo: {
+  paymentInfo: {
     alignItems: 'center',
   },
-  webPaymentText: {
+  paymentText: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 16,
   },
-  webPaymentSubtext: {
+  paymentSubtext: {
     fontSize: 14,
-    textAlign: 'center',
+    textAlign: 'left',
     color: '#6b7280',
+    lineHeight: 20,
   },
   securityBadge: {
     backgroundColor: '#f9fafb',
