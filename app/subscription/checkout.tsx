@@ -1,7 +1,4 @@
-` tags.
 
-```python
-<replit_final_file>
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -28,7 +25,7 @@ export default function SubscriptionCheckoutScreen() {
   const { user } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedTier, setSelectedTier] = useState(tier as string); // Initialize with the tier from params
+  const [selectedTier, setSelectedTier] = useState(tier as string);
   const [loading, setLoading] = useState(false);
 
   const isNewUser = newUser === 'true';
@@ -139,7 +136,6 @@ export default function SubscriptionCheckoutScreen() {
       }
   };
 
-
   const handleWebCheckout = async () => {
     if (!selectedTier) return;
 
@@ -181,7 +177,6 @@ export default function SubscriptionCheckoutScreen() {
       setLoading(false);
     }
   };
-
 
   if (!tierInfo) {
     return (
