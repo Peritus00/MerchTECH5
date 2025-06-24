@@ -356,15 +356,13 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <View style={styles.checkboxTextContainer}>
-                    <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
-                    <TouchableOpacity
-                      onPress={() => router.push('/legal/terms')}
-                      style={styles.linkButton}
-                    >
-                      <ThemedText style={styles.linkText}>Terms of Service</ThemedText>
-                    </TouchableOpacity>
-                  </View>
+                  <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
+                  <TouchableOpacity
+                    onPress={() => router.push('/legal/terms')}
+                    style={styles.linkButton}
+                  >
+                    <ThemedText style={styles.linkText}>Terms of Service</ThemedText>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -378,15 +376,13 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <View style={styles.checkboxTextContainer}>
-                    <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
-                    <TouchableOpacity
-                      onPress={() => router.push('/legal/privacy')}
-                      style={styles.linkButton}
-                    >
-                      <ThemedText style={styles.linkText}>Privacy Policy</ThemedText>
-                    </TouchableOpacity>
-                  </View>
+                  <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
+                  <TouchableOpacity
+                    onPress={() => router.push('/legal/privacy')}
+                    style={styles.linkButton}
+                  >
+                    <ThemedText style={styles.linkText}>Privacy Policy</ThemedText>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -414,7 +410,7 @@ export default function RegisterScreen() {
               onPress={() => router.push('/auth/login')}
             >
               <View style={styles.loginLinkContainer}>
-                <ThemedText style={styles.linkText}>Already have an account? </ThemedText>
+                <ThemedText style={styles.checkboxText}>Already have an account? </ThemedText>
                 <ThemedText style={styles.linkBold}>Sign in</ThemedText>
               </View>
             </TouchableOpacity>
@@ -558,7 +554,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   linkButton: {
-    display: 'inline',
+    marginLeft: 0,
   },
   linkText: {
     color: '#3b82f6',
@@ -596,19 +592,12 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 14,
   },
-  linkButton: {
-    display: 'inline',
-  },
   loginLinkButton: {
     alignItems: 'center',
   },
   loginLinkContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  linkText: {
-    color: '#6b7280',
-    fontSize: 14,
   },
   linkBold: {
     color: '#3b82f6',
