@@ -3,11 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const getApiBaseUrl = () => {
-  // Primary: Use the fixed Replit URL for this project
-  const replitUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
+  // Primary: Use the fixed Replit URL for this project with explicit port
+  const replitUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
   
   // Always use the fixed Replit URL to prevent undefined issues
-  console.log('Using fixed Replit URL:', replitUrl);
+  console.log('Using fixed Replit URL with port:', replitUrl);
   return replitUrl;
 };
 

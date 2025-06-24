@@ -67,11 +67,11 @@ function RootLayoutNav() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
         <Stack.Screen name="store" options={{ headerShown: false }} />
-        <Stack.Screen name="qr-details" options={{ headerShown: false }} />
-        <Stack.Screen name="media-player" options={{ headerShown: false }} />
-        <Stack.Screen name="preview-player" options={{ headerShown: false }} />
-        <Stack.Screen name="playlist-access" options={{ headerShown: false }} />
-        <Stack.Screen name="product-links" options={{ headerShown: false }} />
+        <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="media-player/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="preview-player/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="playlist-access/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="demo-players" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>

@@ -646,6 +646,13 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
+// Add explicit route logging middleware
+app.use('/api/auth/*', (req, res, next) => {
+  console.log(`🟢 AUTH ROUTE HIT: ${req.method} ${req.originalUrl}`);
+  console.log('Request body keys:', Object.keys(req.body || {}));
+  next();
+});
+
 // Auth routes
 app.post('/api/auth/register', async (req, res) => {
   console.log('=== REGISTRATION ENDPOINT HIT ===');
@@ -1418,8 +1425,8 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
-  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
-  console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
+  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api`);
+  console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
   console.log('Available routes:');
   console.log('  GET /api/health');
   console.log('  POST /api/auth/register');
