@@ -17,7 +17,7 @@ localPort = 8082
 externalPort = 3000
 
 [workflows]
-runButton = "Stable Dev"
+runButton = "Working Dev Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -90,7 +90,7 @@ task = "shell.exec"
 args = "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --tunnel"
 
 [[workflows.workflow]]
-name = "Stable Dev"
+name = "Working Dev Server"
 author = 42127692
 mode = "parallel"
 
