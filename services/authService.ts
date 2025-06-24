@@ -221,58 +221,32 @@ class AuthService {
   async refreshToken(): Promise<boolean> {
     try {
       const refreshToken = await AsyncStorage.getItem(AuthService.REFRESH_TOKEN_KEY);
-      console.log('🔴 AuthService: Attempting refresh with token:', !!refreshToken);
       if (!refreshToken) {
-        console.log('🔴 AuthService: No refresh token found');
         return false;
       }
 
       const response = await authAPI.refreshToken(refreshToken);
       if (response.token) {
-        console.log('🔴 AuthService: Refresh successful, updating tokens');
         await AsyncStorage.setItem(AuthService.TOKEN_KEY, response.token);
         if (response.refreshToken) {
           await AsyncStorage.setItem(AuthService.REFRESH_TOKEN_KEY, response.refreshToken);
         }
         return true;
       }
-      console.log('🔴 AuthService: Refresh response missing token');
       return false;
     } catch (error: any) {
       console.error('🔴 AuthService: Refresh token error:', error);
       
-      // For development mode, be more lenient with refresh failures
-      // Check if it's a network error, 404, or 500 (server issues)
-      if (error.message && (
-        error.message.includes('404') || 
-        error.message.includes('Network') || 
-        error.message.includes('500') ||
-        error.message.includes('Failed to fetch')
-      )) {
-        console.log('🔴 AuthService: Server/Network error on refresh - keeping existing session for development');
-        return false; // Don't clear tokens for server/network errors in development
-      }
-
-      // Check response status codes
-      if (error.response) {
-        const status = error.response.status;
-        if (status === 404 || status === 500 || status >= 500) {
-          console.log('🔴 AuthService: Server error on refresh - keeping existing session for development');
-          return false; // Don't clear tokens for server errors
-        }
-        
-        // Only clear tokens for genuine auth failures (401, 403, etc.)
-        if (status === 401 || status === 403) {
-          console.log('🔴 AuthService: Auth error on refresh - clearing tokens');
-          try {
-            await Promise.all([
-              AsyncStorage.removeItem(AuthService.TOKEN_KEY),
-              AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
-              AsyncStorage.removeItem(AuthService.USER_KEY),
-            ]);
-          } catch (clearError) {
-            console.error('🔴 AuthService: Failed to clear tokens during refresh failure:', clearError);
-          }
+      // Only clear tokens for actual auth failures, not network/server errors
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        try {
+          await Promise.all([
+            AsyncStorage.removeItem(AuthService.TOKEN_KEY),
+            AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
+            AsyncStorage.removeItem(AuthService.USER_KEY),
+          ]);
+        } catch (clearError) {
+          console.error('🔴 AuthService: Failed to clear tokens:', clearError);
         }
       }
       

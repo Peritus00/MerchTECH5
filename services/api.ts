@@ -3,39 +3,28 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const getApiBaseUrl = () => {
-  // Check for explicit environment variable first
+  // Primary: Use the fixed Replit URL for this project
+  const replitUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
+  
+  // Check for explicit environment variable override
   if (process.env.EXPO_PUBLIC_API_URL) {
-    console.log('Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    console.log('Using EXPO_PUBLIC_API_URL override:', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // For Replit deployment environment
+  // For web platform, try to use current window location if available
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
-    console.log('Window hostname detected:', hostname);
     
     if (hostname.includes('replit.dev') || hostname.includes('replit.app') || hostname.includes('picard.replit.dev')) {
       const url = `${window.location.protocol}//${hostname}/api`;
-      console.log('Using window-based URL for Replit:', url);
+      console.log('Using current window URL for Replit:', url);
       return url;
     }
-    
-    const url = `${window.location.protocol}//${hostname}:5000/api`;
-    console.log('Using window-based URL with port:', url);
-    return url;
   }
 
-  // Check for REPLIT_DEV_DOMAIN environment variable
-  if (process.env.REPLIT_DEV_DOMAIN) {
-    const url = `https://${process.env.REPLIT_DEV_DOMAIN}/api`;
-    console.log('Using REPLIT_DEV_DOMAIN:', url);
-    return url;
-  }
-
-  // Fallback to the known Replit URL for this project
-  const fallbackUrl = 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api';
-  console.log('Using fallback URL:', fallbackUrl);
-  return fallbackUrl;
+  console.log('Using primary Replit URL:', replitUrl);
+  return replitUrl;
 };
 
 const API_BASE_URL = getApiBaseUrl();

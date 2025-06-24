@@ -282,9 +282,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// Debug middleware to log all requests
+// Simple request logging without overwhelming output
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Query:`, req.query, '- Body:', Object.keys(req.body || {}).length > 0 ? '[BODY_PRESENT]' : 'undefined');
+  // Only log non-health check requests to reduce noise
+  if (req.path !== '/api/health') {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  }
   next();
 });
 
