@@ -552,6 +552,97 @@ app.post('/api/stripe/process-payment', authenticateToken, async (req, res) => {
   }
 });
 
+// Refresh token endpoint
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(401).json({ error: 'Refresh token required' });
+    }
+
+    // Verify refresh token
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, JWT_SECRET);
+    } catch (err) {
+      return res.status(401).json({ error: 'Invalid refresh token' });
+    }
+
+    if (decoded.type !== 'refresh') {
+      return res.status(401).json({ error: 'Invalid token type' });
+    }
+
+    // Check if refresh token exists in database
+    const tokenResult = await pool.query(
+      'SELECT * FROM refresh_tokens WHERE token = $1 AND user_id = $2 AND expires_at > NOW()',
+      [refreshToken, decoded.id]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(401).json({ error: 'Refresh token not found or expired' });
+    }
+
+    // Get user
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE id = $1',
+      [decoded.id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate new access token
+    const newToken = jwt.sign(
+      { 
+        id: user.id, 
+        email: user.email, 
+        username: user.username,
+        isAdmin: user.is_admin 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Optionally generate new refresh token
+    const newRefreshToken = jwt.sign(
+      { id: user.id, type: 'refresh' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    // Delete old refresh token and store new one
+    await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [refreshToken]);
+    await pool.query(
+      'INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ($1, $2, $3)',
+      [user.id, newRefreshToken, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)]
+    );
+
+    res.json({
+      token: newToken,
+      refreshToken: newRefreshToken,
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isEmailVerified: user.is_email_verified,
+        isAdmin: user.is_admin,
+        subscriptionTier: user.subscription_tier,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
   try {

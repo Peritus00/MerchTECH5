@@ -54,6 +54,7 @@ class AuthService {
       // Validate input
       this.validateRegistrationData(credentials);
 
+      console.log('🔴 AuthService: Attempting registration for:', credentials.email);
       const response = await authAPI.register(
         credentials.email,
         credentials.password,
@@ -61,7 +62,8 @@ class AuthService {
       );
 
       if (!response.user || !response.token) {
-        throw new Error('Invalid response from server');
+        console.error('🔴 AuthService: Invalid registration response:', response);
+        throw new Error('Invalid response from server - missing user or token');
       }
 
       // Store authentication data for new user
@@ -71,8 +73,20 @@ class AuthService {
 
       return response;
     } catch (error: any) {
-      console.error('Registration error:', error);
-      throw new Error(error.message || 'Registration failed. Please try again.');
+      console.error('🔴 AuthService: Registration error:', error);
+      
+      // Provide more specific error messages
+      if (error.message.includes('Email already registered')) {
+        throw new Error('This email is already registered. Please use a different email or try logging in.');
+      } else if (error.message.includes('Username already taken')) {
+        throw new Error('This username is already taken. Please choose a different username.');
+      } else if (error.message.includes('network') || error.message.includes('Network')) {
+        throw new Error('Network error. Please check your connection and try again.');
+      } else if (error.response?.status === 500) {
+        throw new Error('Server error. Please try again in a few moments.');
+      }
+      
+      throw new Error(error.message || 'Registration failed. Please check your information and try again.');
     }
   }
 
@@ -210,26 +224,29 @@ class AuthService {
       }
       console.log('🔴 AuthService: Refresh response missing token');
       return false;
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔴 AuthService: Refresh token error:', error);
-      // For dev login, don't clear tokens on refresh failure since they might still be valid
-      // Only clear if it's a legitimate auth failure, not a network/endpoint issue
-      if (error.message && error.message.includes('404')) {
-        console.log('🔴 AuthService: 404 error on refresh - keeping existing tokens for dev login');
-        return false; // Don't clear tokens for 404 errors
+      
+      // Check if it's a network error or 404 (endpoint not found)
+      if (error.message && (error.message.includes('404') || error.message.includes('Network'))) {
+        console.log('🔴 AuthService: 404/Network error on refresh - keeping existing tokens for dev mode');
+        return false; // Don't clear tokens for 404/network errors
       }
       
-      // Only clear tokens for genuine auth failures
-      try {
-        console.log('🔴 AuthService: Clearing tokens due to refresh failure');
-        await Promise.all([
-          AsyncStorage.removeItem(AuthService.TOKEN_KEY),
-          AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
-          AsyncStorage.removeItem(AuthService.USER_KEY),
-        ]);
-      } catch (clearError) {
-        console.error('🔴 AuthService: Failed to clear tokens during refresh failure:', clearError);
+      // Only clear tokens for genuine auth failures (401, 403, etc.)
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.log('🔴 AuthService: Auth error on refresh - clearing tokens');
+        try {
+          await Promise.all([
+            AsyncStorage.removeItem(AuthService.TOKEN_KEY),
+            AsyncStorage.removeItem(AuthService.REFRESH_TOKEN_KEY),
+            AsyncStorage.removeItem(AuthService.USER_KEY),
+          ]);
+        } catch (clearError) {
+          console.error('🔴 AuthService: Failed to clear tokens during refresh failure:', clearError);
+        }
       }
+      
       return false;
     }
   }

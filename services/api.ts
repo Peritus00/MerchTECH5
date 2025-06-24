@@ -158,6 +158,11 @@ export const authAPI = {
     return response.data;
   },
 
+  async refreshToken(refreshToken: string) {
+    const response = await api.post('/auth/refresh', { refreshToken });
+    return response.data;
+  },
+
   async refreshToken(refreshToken: string): Promise<{ token: string; refreshToken?: string }> {
     console.log('🔴 API: Attempting refresh token with URL:', `${API_BASE_URL}/auth/refresh`);
     const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
