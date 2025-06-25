@@ -369,11 +369,24 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 // Create checkout session
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
+    console.log('🛒 Creating checkout session for:', req.user.email);
+    console.log('🛒 Request data:', req.body);
+
     if (!stripe) {
       return res.status(503).json({ error: 'Stripe not configured' });
     }
 
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
+
+    if (!subscriptionTier || !amount) {
+      return res.status(400).json({ error: 'Missing required parameters: subscriptionTier and amount' });
+    }
+
+    // Create or retrieve customer
+    let customer;
+    try {
+      const existingCustomers = await stripe.customers.list({
+        email: req.user.email,cessUrl, cancelUrl } = req.body;
 
     if (!subscriptionTier || !amount) {
       return res.status(400).json({ error: 'Subscription tier and amount are required' });
