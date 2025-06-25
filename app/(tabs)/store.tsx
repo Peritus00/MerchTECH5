@@ -47,39 +47,52 @@ export default function StoreScreen() {
       // Mock data for development
       const mockProducts: Product[] = [
         {
-          id: 1,
+          id: '1',
           name: 'Test Product',
           description: 'A test product for store functionality',
-          price: 2999,
-          imageUrl: 'https://picsum.photos/400/400?random=1',
+          images: ['https://picsum.photos/400/400?random=1'],
           category: 'Electronics',
           inStock: true,
           slug: 'test-product',
           hasSizes: false,
           isSuspended: false,
           createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' }
+          creator: { username: 'dijetfuel' },
+          prices: [
+            {
+              id: 'price_1',
+              unit_amount: 2999,
+              currency: 'usd',
+              type: 'one_time'
+            }
+          ]
         },
         {
-          id: 2,
+          id: '2',
           name: 'Premium Headphones',
           description: 'High-quality wireless headphones with noise cancellation',
-          price: 19999,
-          imageUrl: 'https://picsum.photos/400/400?random=2',
+          images: ['https://picsum.photos/400/400?random=2'],
           category: 'Electronics',
           inStock: true,
           slug: 'premium-headphones',
           hasSizes: false,
           isSuspended: false,
           createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' }
+          creator: { username: 'dijetfuel' },
+          prices: [
+            {
+              id: 'price_2',
+              unit_amount: 19999,
+              currency: 'usd',
+              type: 'one_time'
+            }
+          ]
         },
         {
-          id: 3,
+          id: '3',
           name: 'Brand T-Shirt',
           description: 'Comfortable cotton t-shirt with logo',
-          price: 2499,
-          imageUrl: 'https://picsum.photos/400/400?random=3',
+          images: ['https://picsum.photos/400/400?random=3'],
           category: 'Apparel',
           inStock: true,
           slug: 'brand-t-shirt',
@@ -87,7 +100,15 @@ export default function StoreScreen() {
           availableSizes: ['S', 'M', 'L', 'XL'],
           isSuspended: false,
           createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' }
+          creator: { username: 'dijetfuel' },
+          prices: [
+            {
+              id: 'price_3',
+              unit_amount: 2499,
+              currency: 'usd',
+              type: 'one_time'
+            }
+          ]
         }
       ];
       setProducts(mockProducts);
