@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
@@ -35,7 +34,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
 async function initializeDatabase() {
   try {
     console.log('🟢 CLEAN SERVER: Initializing database...');
-    
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -72,24 +71,150 @@ app.get('/', (req, res) => {
 
 // Health check
 app.get('/api/health', async (req, res) => {
-  console.log('🟢 CLEAN SERVER: Health check hit');
   try {
-    await pool.query('SELECT 1');
+    // Test database connection
+    const result = await pool.query('SELECT NOW()');
+    const userCount = await pool.query('SELECT COUNT(*) FROM users');
+    const pendingCount = await pool.query('SELECT COUNT(*) FROM pending_users');
+
     res.json({ 
       status: 'ok', 
       database: 'connected',
-      server: 'clean-server.js',
-      timestamp: new Date().toISOString()
+      users: parseInt(userCount.rows[0].count),
+      pendingUsers: parseInt(pendingCount.rows[0].count),
+      timestamp: new Date().toISOString() 
     });
   } catch (error) {
-    console.error('🟢 CLEAN SERVER: Health check failed:', error);
+    console.error('Health check database error:', error);
     res.status(503).json({ 
       status: 'error', 
       database: 'disconnected',
-      server: 'clean-server.js',
-      error: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString() 
     });
+  }
+});
+
+// Stripe payment endpoints
+app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
+    console.log('Creating Stripe checkout session for:', subscriptionTier);
+
+    // For now, simulate successful checkout session creation
+    // In production, you would integrate with actual Stripe
+    const mockSession = {
+      success: true,
+      url: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?tier=${subscriptionTier}&newUser=true&customerId=mock_customer&subscriptionId=mock_subscription`,
+      sessionId: 'mock_session_' + Date.now()
+    };
+
+    console.log('Mock checkout session created:', mockSession);
+    res.json(mockSession);
+  } catch (error) {
+    console.error('Stripe checkout session error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create checkout session' 
+    });
+  }
+});
+
+app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, amount } = req.body;
+    console.log('Creating payment intent for:', subscriptionTier);
+
+    // Mock payment intent for development
+    const mockPaymentIntent = {
+      clientSecret: 'pi_mock_' + Date.now() + '_secret_mock',
+      customerId: 'cus_mock_' + req.user.id
+    };
+
+    console.log('Mock payment intent created');
+    res.json(mockPaymentIntent);
+  } catch (error) {
+    console.error('Payment intent error:', error);
+    res.status(500).json({ message: 'Failed to create payment intent' });
+  }
+});
+
+// User subscription update endpoint
+app.put('/api/user/subscription', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const userId = req.user.id;
+
+    console.log('Updating user subscription:', {
+      userId,
+      subscriptionTier,
+      isNewUser,
+      stripeCustomerId,
+      stripeSubscriptionId
+    });
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (subscriptionTier !== undefined) {
+      updates.push(`subscription_tier = $${++paramCount}`);
+      values.push(subscriptionTier);
+    }
+
+    if (isNewUser !== undefined) {
+      updates.push(`is_new_user = $${++paramCount}`);
+      values.push(isNewUser);
+    }
+
+    if (stripeCustomerId !== undefined) {
+      updates.push(`stripe_customer_id = $${++paramCount}`);
+      values.push(stripeCustomerId);
+    }
+
+    if (stripeSubscriptionId !== undefined) {
+      updates.push(`stripe_subscription_id = $${++paramCount}`);
+      values.push(stripeSubscriptionId);
+    }
+
+    updates.push(`updated_at = $${++paramCount}`);
+    values.push(new Date());
+
+    values.push(userId);
+
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = $${values.length}
+      RETURNING id, email, username, subscription_tier, is_new_user, updated_at
+    `;
+
+    console.log('Executing update query:', query);
+    console.log('With values:', values);
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const updatedUser = result.rows[0];
+    console.log('User subscription updated successfully:', updatedUser);
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        subscriptionTier: updatedUser.subscription_tier,
+        isNewUser: updatedUser.is_new_user,
+        updatedAt: updatedUser.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Update subscription error:', error);
+    res.status(500).json({ error: 'Failed to update subscription' });
   }
 });
 
@@ -97,7 +222,7 @@ app.get('/api/health', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   console.log('🟢 CLEAN SERVER: Registration endpoint hit');
   console.log('🟢 CLEAN SERVER: Request body:', req.body);
-  
+
   try {
     const { email, password, username, firstName, lastName } = req.body;
 
@@ -268,7 +393,7 @@ app.listen(PORT, HOST, async () => {
   console.log(`🟢 CLEAN SERVER: Health: http://${HOST}:${PORT}/api/health`);
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
   console.log(`🟢 CLEAN SERVER: Database initialized`);
-  
+
   await initializeDatabase();
 });
 
@@ -284,3 +409,22 @@ process.on('SIGINT', () => {
   if (pool) pool.end();
   process.exit(0);
 });
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (token == null) {
+    console.log('No token provided for authentication');
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.log('Token authentication failed:', err);
+      return res.sendStatus(403);
+    }
+    req.user = user
+    next()
+  })
+}

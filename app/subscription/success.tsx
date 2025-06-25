@@ -12,6 +12,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
 import { authService } from '@/services/authService';
+import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
 export default function SubscriptionSuccessScreen() {
   const { tier, newUser, customerId, subscriptionId } = useLocalSearchParams();
