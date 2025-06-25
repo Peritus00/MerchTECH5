@@ -71,18 +71,6 @@ app.use(cors({
 
 app.use(express.json());
 
-// Debug middleware to log all requests - after basic middleware
-app.use((req, res, next) => {
-  console.log(`🟢 CLEAN SERVER: *** INCOMING REQUEST DEBUG ***`);
-  console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
-  console.log(`🟢 CLEAN SERVER: Original URL: ${req.originalUrl}`);
-  console.log(`🟢 CLEAN SERVER: Path: ${req.path}`);
-  console.log(`🟢 CLEAN SERVER: Query: ${JSON.stringify(req.query)}`);
-  console.log(`🟢 CLEAN SERVER: Headers: ${JSON.stringify(req.headers, null, 2)}`);
-  console.log(`🟢 CLEAN SERVER: *** END REQUEST DEBUG ***`);
-  next();
-});
-
 // Database
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
@@ -135,6 +123,18 @@ async function initializeDatabase() {
 
 // Initialize database immediately
 initializeDatabase();
+
+// Debug middleware to log all requests - after basic middleware
+app.use((req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: *** INCOMING REQUEST DEBUG ***`);
+  console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
+  console.log(`🟢 CLEAN SERVER: Original URL: ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: Path: ${req.path}`);
+  console.log(`🟢 CLEAN SERVER: Query: ${JSON.stringify(req.query)}`);
+  console.log(`🟢 CLEAN SERVER: Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  console.log(`🟢 CLEAN SERVER: *** END REQUEST DEBUG ***`);
+  next();
+});
 
 // Root route
 app.get('/', (req, res) => {
@@ -398,9 +398,8 @@ if (app._router && app._router.stack) {
 }
 console.log('🟢 CLEAN SERVER: *** END IMMEDIATE ROUTE VERIFICATION ***');
 
-
-
-
+// ==================== USER ROUTES ====================
+console.log('🟢 CLEAN SERVER: Registering User routes...');
 
 // User subscription update endpoint  
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
@@ -492,7 +491,11 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   }
 });
 
+console.log('🟢 CLEAN SERVER: User routes registered successfully');
 console.log('🟢 CLEAN SERVER: All routes registered successfully');
+
+// ==================== AUTH ROUTES ====================
+console.log('🟢 CLEAN SERVER: Registering Auth routes...');
 
 // Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
