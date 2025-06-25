@@ -1,7 +1,7 @@
 
 const axios = require('axios');
 
-const API_BASE_URL = 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api';
+const API_BASE_URL = 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api';
 
 // Test configuration
 const TEST_USER = {
