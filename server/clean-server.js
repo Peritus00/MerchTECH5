@@ -150,8 +150,8 @@ app.get('/', (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes immediately...');
 
-// Route hit logging middleware for ALL Stripe routes
-app.use('/api/stripe*', (req, res, next) => {
+// Route hit logging middleware for Stripe routes (Express v5 compatible)
+app.use('/api/stripe', (req, res, next) => {
   console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE HIT ***`);
   console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
   console.log(`🟢 CLEAN SERVER: URL: ${req.originalUrl}`);
