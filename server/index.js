@@ -1421,6 +1421,18 @@ app.get('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// 404 handler
+app.use('/*splat', (req, res) => {
+  console.log(`🔴 MAIN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+    server: 'index.js',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Server running on port ${PORT}`);
