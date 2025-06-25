@@ -386,16 +386,6 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
     let customer;
     try {
       const existingCustomers = await stripe.customers.list({
-        email: req.user.email,cessUrl, cancelUrl } = req.body;
-
-    if (!subscriptionTier || !amount) {
-      return res.status(400).json({ error: 'Subscription tier and amount are required' });
-    }
-
-    // Create or retrieve customer
-    let customer;
-    try {
-      const existingCustomers = await stripe.customers.list({
         email: req.user.email,
         limit: 1
       });
