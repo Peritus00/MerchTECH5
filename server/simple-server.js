@@ -125,6 +125,52 @@ app.post('/api/stripe/create-payment-intent', async (req, res) => {
   }
 });
 
+// Get all Stripe products with prices
+app.get('/api/stripe/products', async (req, res) => {
+  console.log('🔴 SERVER: Get Stripe products requested');
+
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+
+  try {
+    const products = await stripe.products.list({
+      limit: 100,
+      active: true
+    });
+
+    // For each product, fetch its associated prices
+    const productsWithPrices = await Promise.all(
+      products.data.map(async (product) => {
+        const prices = await stripe.prices.list({
+          product: product.id,
+          active: true,
+        });
+        return {
+          id: product.id, // Stripe Product ID (prod_...)
+          name: product.name,
+          description: product.description,
+          images: product.images,
+          metadata: product.metadata,
+          prices: prices.data.map(price => ({
+            id: price.id, // Stripe Price ID (price_...)
+            unit_amount: price.unit_amount, // Amount in cents
+            currency: price.currency,
+            type: price.type, // 'one_time' or 'recurring'
+            recurring: price.recurring,
+          })),
+        };
+      })
+    );
+
+    console.log('✅ SERVER: Products fetched:', productsWithPrices.length);
+    res.json(productsWithPrices);
+  } catch (error) {
+    console.error('❌ SERVER: Get products error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Create Checkout Session
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   console.log('🔴 SERVER: Create checkout session requested');
@@ -134,19 +180,23 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   }
 
   try {
-    const { priceId, tier } = req.body;
+    const { priceId, quantity = 1 } = req.body;
 
     if (!priceId) {
       return res.status(400).json({ error: 'Price ID is required' });
     }
 
+    // Determine mode based on price type
+    const price = await stripe.prices.retrieve(priceId);
+    const mode = price.type === 'recurring' ? 'subscription' : 'payment';
+
     const session = await stripe.checkout.sessions.create({
-      mode: 'subscription',
+      mode: mode,
       payment_method_types: ['card'],
       line_items: [
         {
           price: priceId,
-          quantity: 1,
+          quantity: quantity,
         },
       ],
       success_url: `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,

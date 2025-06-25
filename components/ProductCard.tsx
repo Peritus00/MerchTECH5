@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  Text,
 } from 'react-native';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
@@ -27,6 +28,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
     addToCart(product);
   };
 
+  // Get the first image or use a default
+  const imageUrl = product.images && product.images.length > 0
+    ? product.images[0]
+    : 'https://via.placeholder.com/400x400?text=No+Image';
+
+  // Get the lowest price for display
+  const lowestPrice = product.prices.length > 0
+    ? Math.min(...product.prices.map(p => p.unit_amount))
+    : 0;
+
+  const hasMultiplePrices = product.prices.length > 1;
+
   const formatPrice = (priceInCents: number) => {
     return `$${(priceInCents / 100).toFixed(2)}`;
   };
@@ -34,9 +47,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.7}>
       <ThemedView style={styles.imageContainer}>
-        <Image source={{ uri: product.imageUrl }} style={styles.image} />
+        <Image source={{ uri: imageUrl }} style={styles.image} />
         <ThemedView style={styles.priceTag}>
-          <ThemedText style={styles.priceText}>{formatPrice(product.price)}</ThemedText>
+          <ThemedText style={styles.priceText}>{formatPrice(lowestPrice)}</ThemedText>
         </ThemedView>
         {!product.inStock && (
           <ThemedView style={styles.outOfStockOverlay}>
@@ -51,12 +64,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
         </ThemedText>
 
         <ThemedText style={styles.description} numberOfLines={2}>
-          {product.description}
+          {product.description || 'No description available'}
         </ThemedText>
 
-        {product.category && (
+        {product.metadata?.category && (
           <ThemedView style={styles.categoryContainer}>
-            <ThemedText style={styles.categoryText}>{product.category}</ThemedText>
+            <ThemedText style={styles.categoryText}>{product.metadata.category}</ThemedText>
           </ThemedView>
         )}
 
@@ -86,6 +99,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
             </ThemedText>
           </TouchableOpacity>
         </ThemedView>
+        {product.prices.length > 0 && (
+          <Text style={styles.priceCount}>
+            {product.prices.length} price option{product.prices.length > 1 ? 's' : ''}
+          </Text>
+        )}
       </ThemedView>
     </TouchableOpacity>
   );
@@ -189,6 +207,20 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 18,
+  },
+  category: {
+    color: '#666',
+    fontSize: 12,
+    fontWeight: '500',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  priceCount: {
+    color: '#888',
+    fontSize: 11,
+    marginTop: 4,
   },
 });
 

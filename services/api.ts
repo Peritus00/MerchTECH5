@@ -396,6 +396,30 @@ export const qrCodeAPI = {
   }
 };
 
+// Stripe endpoints
+export const stripeAPI = {
+  getProducts: async () => {
+    const response = await api.get('/stripe/products');
+    return response.data;
+  },
+
+  createCheckoutSession: async (priceId: string, quantity: number = 1) => {
+    const response = await api.post('/stripe/create-checkout-session', {
+      priceId,
+      quantity
+    });
+    return response.data;
+  },
+
+  createPaymentIntent: async (amount: number, currency: string = 'usd') => {
+    const response = await api.post('/stripe/create-payment-intent', {
+      amount,
+      currency
+    });
+    return response.data;
+  }
+};
+
 // Analytics endpoints
 export const analyticsAPI = {
   getSummary: async () => {

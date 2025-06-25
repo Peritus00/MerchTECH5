@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -18,6 +17,7 @@ import { Product } from '@/shared/product-schema';
 import ProductCard from '@/components/ProductCard';
 import SearchBar from '@/components/SearchBar';
 import CategoryFilter from '@/components/CategoryFilter';
+import { stripeAPI } from '@/services/api';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +30,7 @@ export default function StoreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [error, setError] = useState<string | null>(null);
 
   const categories = ['All', 'Apparel', 'Music', 'Merchandise', 'Electronics', 'Other'];
 
@@ -148,7 +149,7 @@ export default function StoreScreen() {
           <ThemedText type="title" style={styles.headerTitle}>Store</ThemedText>
           <ThemedText style={styles.headerSubtitle}>Browse our products and services</ThemedText>
         </ThemedView>
-        
+
         <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
           <ThemedText style={styles.cartIcon}>🛒</ThemedText>
           {getTotalItems() > 0 && (

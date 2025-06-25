@@ -1,23 +1,37 @@
 
 export interface Product {
-  id: number;
+  id: string; // Changed to string for Stripe Product ID (prod_...)
   userId?: number;
   name: string;
   description: string;
-  price: number; // Price in cents
-  imageUrl: string;
-  category: string;
-  inStock: boolean;
-  slug: string;
+  price?: number; // Deprecated - use prices array instead
+  imageUrl?: string;
+  images?: string[]; // Stripe product images
+  category?: string;
+  inStock?: boolean;
+  slug?: string;
   tags?: string[];
   externalUrl?: string;
-  hasSizes: boolean;
+  hasSizes?: boolean;
   availableSizes?: string[];
-  isSuspended: boolean;
-  createdAt: string;
+  isSuspended?: boolean;
+  createdAt?: string;
   updatedAt?: string;
   creator?: {
     username: string;
+  };
+  metadata?: Record<string, string>; // Stripe metadata
+  prices: ProductPrice[]; // Stripe prices for this product
+}
+
+export interface ProductPrice {
+  id: string; // Stripe Price ID (price_...)
+  unit_amount: number; // Amount in cents
+  currency: string;
+  type: 'one_time' | 'recurring';
+  recurring?: {
+    interval: 'day' | 'week' | 'month' | 'year';
+    interval_count: number;
   };
 }
 

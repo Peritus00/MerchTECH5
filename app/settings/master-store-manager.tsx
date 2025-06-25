@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   ScrollView,
@@ -19,6 +19,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { Product } from '@/shared/product-schema';
+import { stripeAPI } from '@/services/api';
 
 const productCategories = [
   'Merchandise',
@@ -77,57 +78,37 @@ export default function MasterStoreManagerScreen() {
   }, []);
 
   const fetchProducts = async () => {
+    setIsLoading(true);
     try {
-      // Mock data for development - in production this would fetch from API
-      const mockProducts: Product[] = [
-        {
-          id: 1,
-          name: 'Premium Headphones',
-          description: 'High-quality wireless headphones with noise cancellation',
-          price: 19999,
-          imageUrl: 'https://picsum.photos/400/400?random=1',
-          category: 'Electronics',
-          inStock: true,
-          slug: 'premium-headphones',
-          hasSizes: false,
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'djjetfuel' }
-        },
-        {
-          id: 2,
-          name: 'Artist T-Shirt',
-          description: 'Comfortable cotton t-shirt with artist logo',
-          price: 2499,
-          imageUrl: 'https://picsum.photos/400/400?random=2',
-          category: 'Apparel',
-          inStock: true,
-          slug: 'artist-t-shirt',
-          hasSizes: true,
-          availableSizes: ['S', 'M', 'L', 'XL'],
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'djjetfuel' }
-        },
-        {
-          id: 3,
-          name: 'Digital Album',
-          description: 'Latest album in high-quality digital format',
-          price: 999,
-          imageUrl: 'https://picsum.photos/400/400?random=3',
-          category: 'Digital',
-          inStock: true,
-          slug: 'digital-album',
-          hasSizes: false,
-          isSuspended: true,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'djjetfuel' }
-        }
-      ];
-      setProducts(mockProducts);
+      const response = await stripeAPI.get('/products');
+      if (response.status !== 200) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const productData = response.data;
+
+      // Map Stripe data to your Product interface
+      const formattedProducts = productData.map((item: any) => ({
+        id: item.id, // item.id is the stripe product id
+        name: item.name,
+        description: item.description,
+        price: item.default_price,
+        imageUrl: item.images[0] || 'https://picsum.photos/400/400?random=10', // Use a default image
+        category: item.metadata.category || 'Merchandise', // Assuming you have category in metadata
+        inStock: item.metadata.inStock === 'true', // Assuming inStock is stored as a string
+        slug: item.name.toLowerCase().replace(/\s+/g, '-'),
+        hasSizes: item.metadata.hasSizes === 'true', // Assuming hasSizes is stored as a string
+        availableSizes: item.metadata.availableSizes ? item.metadata.availableSizes.split(',') : [],
+        isSuspended: item.metadata.isSuspended === 'true', // Assuming isSuspended is stored as a string
+        createdAt: new Date(item.created * 1000).toISOString(), // Stripe uses seconds, convert to milliseconds
+        creator: { username: 'admin' }, // Set a default creator
+        stripeProductId: item.id,
+        stripePriceId: item.default_price
+      }));
+
+      setProducts(formattedProducts);
     } catch (error) {
       console.error('Error fetching products:', error);
-      Alert.alert('Error', 'Failed to load products. Please try again.');
+      Alert.alert('Error', 'Failed to load products from Stripe');
     } finally {
       setIsLoading(false);
     }
