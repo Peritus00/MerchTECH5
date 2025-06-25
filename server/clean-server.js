@@ -395,7 +395,7 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
 // ==================== ERROR HANDLING ====================
 
 // Catch-all for undefined routes
-app.use('*', (req, res) => {
+app.use('/*splat', (req, res) => {
   res.status(404).json({
     error: 'Route not found',
     method: req.method,
@@ -416,7 +416,11 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', (error) => {
+  if (error) {
+    console.error('❌ Server failed to start:', error);
+    process.exit(1);
+  }
   console.log('🚀 ================================');
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Base URL: http://0.0.0.0:${PORT}`);
