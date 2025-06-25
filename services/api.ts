@@ -3,13 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 const getApiBaseUrl = () => {
-  // Use environment variable or fallback to current Replit URL without port
+  // Use environment variable first
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  const replitUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api';
-
-  const finalUrl = envUrl || replitUrl;
-  console.log('API Base URL:', finalUrl);
-  return finalUrl;
+  
+  if (envUrl) {
+    console.log('API Base URL (from env):', envUrl);
+    return envUrl;
+  }
+  
+  // If no env var, throw an error to make it obvious
+  console.error('❌ EXPO_PUBLIC_API_URL environment variable not set!');
+  throw new Error('API URL not configured - EXPO_PUBLIC_API_URL environment variable is required');
 };
 
 const API_BASE_URL = getApiBaseUrl();
