@@ -1,0 +1,55 @@
+Running application "main" with appParams:
+ 
+Object {rootTag: "#root", hydrate: undefined}
+ 
+Development-level warnings: ON.
+Performance optimizations: OFF.
+"shadow*" style props are deprecated. Use "boxShadow".
+API Base URL: https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api
+[expo-av]: Expo AV has been deprecated and will be removed in SDK 54. Use the `expo-audio` and `expo-video` packages to replace the required functionality.
+API Base URL: https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api
+Web platform - using standard payment processing
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: false, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(1), …}
+props.pointerEvents is deprecated. Use style.pointerEvents
+🔴 AuthContext: Starting initialization...
+Web platform - using standard payment processing
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: false, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(1), …}
+🔴 AuthContext: Current user: none
+🔴 AuthContext: Initialization complete
+Web platform - using standard payment processing
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: false, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(1), …}
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Disconnected from Metro (1006: "").
+
+To reconnect:
+- Ensure that Metro is running and available on the same network
+- Reload this app (will trigger further help if Metro cannot be connected to)
+      
+Unexpected text node: . A text node cannot be a child of a <View>.
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Unexpected text node: . A text node cannot be a child of a <View>.
+🔴 AuthService: Attempting login for: djjetfuel@gmail.com
+🔴 Route navigation check: 
+Object {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Unexpected text node: . A text node cannot be a child of a <View>.
+🔵 API Request: 
+Object {method: "POST", url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", headers: AxiosHeaders, …}
+🔴 API Response Error: 
+Object {status: undefined, statusText: undefined, url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", …}
+Retrying request (attempt 1/3)...
+🔵 API Request: 
+Object {method: "POST", url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", headers: AxiosHeaders, …}
+🔴 API Response Error: 
+Object {status: undefined, statusText: undefined, url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", …}
+Retrying request (attempt 2/3)...
+🔵 API Request: 
+Object {method: "POST", url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", headers: AxiosHeaders, …}
+🔴 API Response Error: 
+Object {status: undefined, statusText: undefined, url: "/auth/login", baseURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api", fullURL: "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/login", …}
