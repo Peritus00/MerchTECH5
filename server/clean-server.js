@@ -6,11 +6,18 @@ const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+console.log('🟢 CLEAN SERVER: Starting...');
+
+// Create Express app with explicit router initialization
 const app = express();
+
+// Force Express to initialize its router immediately
+app.use((req, res, next) => {
+  next();
+});
+
 const PORT = 5000;
 const HOST = '0.0.0.0';
-
-console.log('🟢 CLEAN SERVER: Starting...');
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
@@ -306,7 +313,7 @@ app.post('/api/auth/login', async (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
-// Stripe health check endpoint - Direct app registration
+// Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
   console.log('🟢 CLEAN SERVER: Request method:', req.method);
@@ -337,7 +344,7 @@ app.get('/api/stripe/health', (req, res) => {
   res.json(response);
 });
 
-// Stripe checkout session endpoint - Direct app registration
+// Stripe checkout session endpoint
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
@@ -362,7 +369,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
           currency: 'usd',
           product_data: {
             name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
-          description: `MerchTech QR ${subscriptionTier} subscription`
+            description: `MerchTech QR ${subscriptionTier} subscription`
           },
           unit_amount: amount,
           recurring: {
@@ -397,9 +404,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
-console.log('🟢 CLEAN SERVER: All Stripe routes registered directly on app');
-
-// Stripe payment intent endpoint (keeping original pattern too)
+// Stripe payment intent endpoint
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
