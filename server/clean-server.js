@@ -206,32 +206,62 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ==================== STRIPE ROUTES ====================
 
+// Stripe health check
+app.get('/api/stripe/health', (req, res) => {
+  try {
+    const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
+    const secretKeyValid = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_');
+    const secretKeyType = process.env.STRIPE_SECRET_KEY ? 
+      (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_') ? 'test' : 
+       process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'unknown') : 
+      'none';
+
+    res.json({
+      stripeConfigured,
+      secretKeyValid,
+      secretKeyType,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Stripe health check error:', error);
+    res.status(503).json({ 
+      error: 'Stripe health check failed',
+      timestamp: new Date().toISOString() 
+    });
+  }
+});
+
+// Create payment intent
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
-    console.log('Creating payment intent for:', { subscriptionTier, amount, userEmail: req.user.email });
 
-    if (!stripe) {
-      console.error('Stripe not configured - no secret key');
-      return res.status(503).json({ error: 'Stripe not configured' });
+    if (!subscriptionTier || !amount) {
+      return res.status(400).json({ error: 'Subscription tier and amount are required' });
     }
 
     // Create or retrieve customer
     let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: req.user.email,
-      limit: 1
-    });
-
-    if (existingCustomers.data.length > 0) {
-      customer = existingCustomers.data[0];
-      console.log('Found existing customer:', customer.id);
-    } else {
-      customer = await stripe.customers.create({
+    try {
+      const existingCustomers = await stripe.customers.list({
         email: req.user.email,
-        name: req.user.username,
+        limit: 1
       });
-      console.log('Created new customer:', customer.id);
+
+      if (existingCustomers.data.length > 0) {
+        customer = existingCustomers.data[0];
+      } else {
+        customer = await stripe.customers.create({
+          email: req.user.email,
+          name: req.user.username,
+          metadata: {
+            userId: req.user.userId?.toString() || req.user.id?.toString()
+          }
+        });
+      }
+    } catch (customerError) {
+      console.error('Customer creation error:', customerError);
+      return res.status(500).json({ error: 'Failed to create customer' });
     }
 
     // Create payment intent
@@ -239,19 +269,16 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
       amount: amount,
       currency: 'usd',
       customer: customer.id,
-      setup_future_usage: 'off_session',
       metadata: {
         subscriptionTier,
-        userId: req.user.id.toString()
+        userId: req.user.userId?.toString() || req.user.id?.toString()
       }
     });
-
-    console.log('Payment intent created successfully:', paymentIntent.id);
 
     res.json({
       clientSecret: paymentIntent.client_secret,
       customerId: customer.id,
-      subscriptionTier
+      paymentIntentId: paymentIntent.id
     });
 
   } catch (error) {
@@ -260,31 +287,39 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
   }
 });
 
+// Create checkout session
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
 
-    if (!stripe) {
-      return res.status(503).json({ error: 'Stripe not configured' });
+    if (!subscriptionTier || !amount) {
+      return res.status(400).json({ error: 'Subscription tier and amount are required' });
     }
 
     // Create or retrieve customer
     let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: req.user.email,
-      limit: 1
-    });
-
-    if (existingCustomers.data.length > 0) {
-      customer = existingCustomers.data[0];
-    } else {
-      customer = await stripe.customers.create({
+    try {
+      const existingCustomers = await stripe.customers.list({
         email: req.user.email,
-        name: req.user.username,
+        limit: 1
       });
+
+      if (existingCustomers.data.length > 0) {
+        customer = existingCustomers.data[0];
+      } else {
+        customer = await stripe.customers.create({
+          email: req.user.email,
+          name: req.user.username,
+          metadata: {
+            userId: req.user.userId?.toString() || req.user.id?.toString()
+          }
+        });
+      }
+    } catch (customerError) {
+      console.error('Customer creation error:', customerError);
+      return res.status(500).json({ error: 'Failed to create customer' });
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customer.id,
       payment_method_types: ['card'],
@@ -294,52 +329,58 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
             currency: 'usd',
             product_data: {
               name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Subscription`,
+              description: `Monthly subscription to ${subscriptionTier} plan`
             },
             unit_amount: amount,
+            recurring: {
+              interval: 'month'
+            }
           },
           quantity: 1,
         },
       ],
-      mode: 'payment',
-      success_url: successUrl || `${req.protocol}://${req.get('host')}/subscription/success`,
-      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/subscription`,
+      mode: 'subscription',
+      success_url: successUrl || `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${req.headers.origin}/subscription`,
       metadata: {
         subscriptionTier,
-        userId: req.user.id.toString()
+        userId: req.user.userId?.toString() || req.user.id?.toString()
       }
     });
 
     res.json({
-      sessionId: session.id,
+      success: true,
       url: session.url,
-      customerId: customer.id
+      sessionId: session.id
     });
 
   } catch (error) {
     console.error('Create checkout session error:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    res.status(500).json({ error: 'Failed to create checkout session', details: error.message });
   }
 });
 
-// ==================== USER MANAGEMENT ROUTES ====================
-
+// Update user subscription
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
-    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
-    const userId = req.user.id;
+    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId, isNewUser } = req.body;
 
-    // Update user subscription in database
-    const updateQuery = `
-      UPDATE users 
-      SET 
-        "subscriptionTier" = $1,
-        "isNewUser" = $2,
-        "updatedAt" = CURRENT_TIMESTAMP
-      WHERE id = $3
-      RETURNING *
-    `;
+    if (!subscriptionTier) {
+      return res.status(400).json({ error: 'Subscription tier is required' });
+    }
 
-    const result = await pool.query(updateQuery, [subscriptionTier, isNewUser || false, userId]);
+    const userId = req.user.userId || req.user.id;
+
+    // Update user in database
+    const result = await pool.query(
+      `UPDATE users 
+       SET subscription_tier = $1, 
+           is_new_user = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+       RETURNING id, email, username, subscription_tier, is_new_user`,
+      [subscriptionTier, isNewUser !== undefined ? isNewUser : false, userId]
+    );
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -354,16 +395,62 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
         id: updatedUser.id,
         email: updatedUser.email,
         username: updatedUser.username,
-        subscriptionTier: updatedUser.subscriptionTier,
-        isNewUser: updatedUser.isNewUser
+        subscriptionTier: updatedUser.subscription_tier,
+        isNewUser: updatedUser.is_new_user
       }
     });
 
   } catch (error) {
     console.error('Update subscription error:', error);
-    res.status(500).json({ error: 'Failed to update subscription' });
+    res.status(500).json({ error: 'Failed to update subscription', details: error.message });
   }
 });
+
+// ==================== QR CODE ROUTES ====================
+
+// ==================== USER MANAGEMENT ROUTES ====================
+
+//app.put('/api/user/subscription', authenticateToken, async (req, res) => {
+//  try {
+//    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
+//    const userId = req.user.id;
+//
+//    // Update user subscription in database
+//    const updateQuery = `
+//      UPDATE users 
+//      SET 
+//        "subscriptionTier" = $1,
+//        "isNewUser" = $2,
+//        "updatedAt" = CURRENT_TIMESTAMP
+//      WHERE id = $3
+//      RETURNING *
+//    `;
+//
+//    const result = await pool.query(updateQuery, [subscriptionTier, isNewUser || false, userId]);
+//
+//    if (result.rows.length === 0) {
+//      return res.status(404).json({ error: 'User not found' });
+//    }
+//
+//    const updatedUser = result.rows[0];
+//
+//    res.json({
+//      success: true,
+//      message: 'Subscription updated successfully',
+//      user: {
+//        id: updatedUser.id,
+//        email: updatedUser.email,
+//        username: updatedUser.username,
+//        subscriptionTier: updatedUser.subscriptionTier,
+//        isNewUser: updatedUser.isNewUser
+//      }
+//    });
+//
+//  } catch (error) {
+//    console.error('Update subscription error:', error);
+//    res.status(500).json({ error: 'Failed to update subscription' });
+//  }
+//});
 
 // ==================== ERROR HANDLING ====================
 
