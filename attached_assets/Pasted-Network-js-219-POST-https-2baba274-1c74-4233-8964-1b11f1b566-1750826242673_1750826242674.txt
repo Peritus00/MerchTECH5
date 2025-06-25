@@ -1,0 +1,45 @@
+Network.js:219 
+            
+            
+           POST https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api/stripe/create-checkout-session 404 (Not Found)
+window.fetch @ Network.js:219
+handlePayment @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:178671
+await in handlePayment
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191386
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191683
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185054
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191466
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193548
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193530Understand this error
+Console.js:61 🔥 Payment processing error: Error: Route not found
+    at handlePayment (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:178697:17)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+handlePayment @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:178700
+await in handlePayment
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191386
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191683
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185054
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191466
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193548
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193530Understand this error
+Console.js:61 🔥 Starting secure checkout for tier: basic
+Network.js:219 
+            
+            
+           POST https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api/stripe/create-checkout-session 404 (Not Found)
+window.fetch @ Network.js:219
+handlePayment @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:178671
+await in handlePayment
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191386
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191683
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185054
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191466
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193548
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193530Understand this error
+Console.js:61 🔥 Payment processing error: Error: Route not found
+    at handlePayment (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:178697:17)
