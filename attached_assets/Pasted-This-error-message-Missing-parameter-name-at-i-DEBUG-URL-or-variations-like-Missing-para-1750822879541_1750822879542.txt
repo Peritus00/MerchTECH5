@@ -1,0 +1,84 @@
+This error message: "Missing parameter name at ${i}: ${DEBUG_URL}" (or variations like "Missing parameter name at 1: https://git.new/pathToRegexpError") is a well-known breaking change introduced in Express.js v5.x (which uses a newer version of path-to-regexp, specifically path-to-regexp@8.x.x).
+
+The core issue is that path-to-regexp (and thus Express.js) now requires named parameters for wildcards (*) and sometimes for optional parameters (?) in your route definitions.
+
+The Problem:
+In Express.js v4.x, you could use routes like:
+
+app.get('/api/*')
+
+app.get('/:param?')
+
+In Express.js v5.x, these are no longer valid because the wildcard * and optional ? now behave more like named parameters, and they must be given a name.
+
+Common Scenarios and Solutions:
+The most frequent culprit for this error is a catch-all route or a route with an unnamed optional parameter.
+
+1. Catch-all route (*):
+
+If you have a route like this (often used for 404 handling or serving static files):
+
+JavaScript
+
+app.all('*', (req, res, next) => {
+    // ...
+});
+Solution: You need to give the wildcard a name. The convention is usually *splat or *any:
+
+JavaScript
+
+// Change this:
+// app.all('*', ...)
+
+// To this:
+app.all('/*splat', (req, res, next) => {
+    // You can access the matched path segments via req.params.splat
+    // For example, if the URL was /foo/bar, req.params.splat would be ['foo', 'bar']
+    // You can also use '{*any}' for similar behavior: app.all('/{*any}', ...)
+});
+2. Optional parameters (?):
+
+If you have routes with optional parameters, they also need to be handled differently. The ? syntax is generally replaced with curly braces {} to make parts of the path optional.
+
+JavaScript
+
+// Change this (Express v4):
+// app.get('/users/:id?', ...)
+
+// To this (Express v5):
+app.get('/users{/:id}', (req, res, next) => {
+    // req.params.id will still work as expected if the ID is present
+});
+3. Other path-to-regexp syntax changes:
+
+Regular expressions in paths: The way regular expressions are handled in paths has also changed. If you were using direct regex in your paths, you might need to adjust them.
+
+Characters ()[]?!+: These characters are now reserved and will cause issues if used without proper escaping or named parameters.
+
+How to Fix It:
+Identify the problematic route(s): The error message usually includes a DEBUG_URL or an index (${i}) which might point to where the path-to-regexp library is encountering the issue. This is extremely helpful! Look at your server's route definitions (e.g., in app.js, server.js, or any route files you've included).
+
+Look for * or ? in your route paths: These are the most common indicators of the problem.
+
+Apply the naming convention for wildcards: Replace * with *splat (or similar) and use {/:paramName} for optional segments.
+
+Review Express.js v5 Migration Guide: If you're explicitly trying to use Express v5, you absolutely need to consult their migration guide for path-to-regexp changes. Many developers choose to downgrade Express to v4.x if they don't want to refactor all their routes immediately.
+
+Action Plan:
+Open your clean-server.js file (and any other files where you define Express routes, e.g., using app.get, app.post, router.get, router.use, app.use, etc.).
+
+Search for app.all('*'...), app.get('*'...), app.use('*'...) or any other route definitions containing * or ? without a parameter name.
+
+Modify these routes as described in the "Common Scenarios and Solutions" section above.
+
+For app.all('*', ...) change to app.all('/*splat', ...) or app.all('/{*any}', ...)
+
+For optional parameters like /:id?, change to {/:id}.
+
+Save the file(s).
+
+Run your server again: cd server && node clean-server.js
+
+If you've just recently updated your express package (perhaps implicitly by doing npm install after a long time without package-lock.json), it's very likely you've moved from Express v4.x to v5.x, causing this breaking change.
+
+Let me know if you find the problematic route and what it looks like!
