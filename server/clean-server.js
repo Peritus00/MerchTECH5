@@ -29,11 +29,29 @@ function authenticateToken(req, res, next) {
 
 // Initialize Stripe with validation
 let stripe;
-if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_live_your_stripe_secret_key_here') {
-  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-  console.log('🟢 CLEAN SERVER: Stripe initialized successfully');
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+
+console.log('🔍 CLEAN SERVER: Checking Stripe configuration...');
+console.log('🔍 CLEAN SERVER: STRIPE_SECRET_KEY exists:', !!stripeSecretKey);
+console.log('🔍 CLEAN SERVER: STRIPE_SECRET_KEY starts with sk_:', stripeSecretKey?.startsWith('sk_'));
+
+if (stripeSecretKey && 
+    stripeSecretKey !== 'sk_live_your_stripe_secret_key_here' && 
+    stripeSecretKey !== 'sk_test_51234567890abcdef_test_key_placeholder' &&
+    (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_'))) {
+  
+  try {
+    stripe = require('stripe')(stripeSecretKey);
+    console.log('🟢 CLEAN SERVER: Stripe initialized successfully with key:', stripeSecretKey.substring(0, 12) + '...');
+    console.log('🟢 CLEAN SERVER: Stripe mode:', stripeSecretKey.startsWith('sk_live_') ? 'LIVE' : 'TEST');
+  } catch (error) {
+    console.error('🔴 CLEAN SERVER: Stripe initialization failed:', error.message);
+    console.log('🟡 CLEAN SERVER: Falling back to test mode');
+  }
 } else {
-  console.log('🟡 CLEAN SERVER: Stripe not initialized - missing or placeholder API key');
+  console.log('🟡 CLEAN SERVER: Stripe not initialized - invalid or missing API key');
+  console.log('🟡 CLEAN SERVER: Expected format: sk_test_... or sk_live_...');
+  console.log('🟡 CLEAN SERVER: Current key preview:', stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'undefined');
   console.log('🟡 CLEAN SERVER: Payment endpoints will return test responses');
 }
 
@@ -309,14 +327,23 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+  
   res.json({
     stripeConfigured: !!stripe,
+    secretKeyExists: !!stripeSecretKey,
+    secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
+    secretKeyType: stripeSecretKey?.startsWith('sk_live_') ? 'live' : stripeSecretKey?.startsWith('sk_test_') ? 'test' : 'invalid',
+    publishableKeyExists: !!stripePublishableKey,
+    publishableKeyValid: stripePublishableKey && (stripePublishableKey.startsWith('pk_test_') || stripePublishableKey.startsWith('pk_live_')),
     endpoints: [
       'POST /api/stripe/create-checkout-session (auth required)',
       'POST /api/stripe/create-payment-intent (auth required)'
     ],
     testMode: !stripe,
-    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - payments will return mock responses',
+    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
+    keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
     timestamp: new Date().toISOString()
   });
 });
