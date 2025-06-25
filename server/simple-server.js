@@ -301,6 +301,8 @@ app.put('/api/user/subscription', async (req, res) => {
   }
 });
 
+// ==================== AUTH ENDPOINTS ====================
+
 // Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
   console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG START ============');
