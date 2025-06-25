@@ -1,3 +1,66 @@
+
+const express = require('express');
+const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const rateLimit = require('express-rate-limit');
+require('dotenv').config();
+
+// Initialize Express app
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+// Initialize Stripe
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+} else {
+  console.warn('⚠️ Stripe not configured - STRIPE_SECRET_KEY missing');
+}
+
+// Database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+});
+
+// Middleware
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? [`https://${process.env.REPLIT_DEV_DOMAIN}`, `https://${process.env.REPLIT_DEV_DOMAIN}:443`]
+    : true,
+  credentials: true
+}));
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+app.use('/api/', limiter);
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
 // Routes
 app.get('/api/health', async (req, res) => {
   try {
@@ -43,6 +106,84 @@ app.get('/api/stripe/health', (req, res) => {
       error: 'Stripe health check failed',
       timestamp: new Date().toISOString() 
     });
+  }
+});
+
+// Auth routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, username } = req.body;
+
+    // Check if user exists
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (existingUser.rows.length > 0) {
+      return res.status(400).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user
+    const newUser = await pool.query(
+      'INSERT INTO users (email, password, username) VALUES ($1, $2, $3) RETURNING id, email, username',
+      [email, hashedPassword, username]
+    );
+
+    // Generate token
+    const token = jwt.sign(
+      { id: newUser.rows[0].id, email: newUser.rows[0].email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: newUser.rows[0]
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user
+    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (user.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Check password
+    const validPassword = await bcrypt.compare(password, user.rows[0].password);
+    if (!validPassword) {
+      return res.status(400).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { id: user.rows[0].id, email: user.rows[0].email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
+        id: user.rows[0].id,
+        email: user.rows[0].email,
+        username: user.rows[0].username,
+        subscriptionTier: user.rows[0].subscriptionTier,
+        isNewUser: user.rows[0].isNewUser
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
   }
 });
 
@@ -199,3 +340,23 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to update subscription' });
   }
 });
+
+// Catch-all for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+    server: 'clean-server.js',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start server
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`📍 Base URL: http://0.0.0.0:${PORT}`);
+  console.log(`💳 Stripe configured: ${!!stripe}`);
+});
+
+module.exports = app;
