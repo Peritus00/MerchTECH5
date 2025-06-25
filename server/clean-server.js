@@ -61,7 +61,17 @@ const HOST = '0.0.0.0';
 
 console.log('🟢 CLEAN SERVER: Starting...');
 
-// Debug middleware to log all requests - must be before route definitions
+// CORS - simple and permissive
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+app.use(express.json());
+
+// Debug middleware to log all requests - after basic middleware
 app.use((req, res, next) => {
   console.log(`🟢 CLEAN SERVER: *** INCOMING REQUEST DEBUG ***`);
   console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
@@ -73,25 +83,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS - simple and permissive
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-app.use(express.json());
-
 // Database
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-
-
-// Database initialization
+// Database initialization - sync version for immediate setup
 async function initializeDatabase() {
   try {
     console.log('🟢 CLEAN SERVER: Initializing database...');
@@ -134,6 +132,9 @@ async function initializeDatabase() {
     console.error('🟢 CLEAN SERVER: Database error:', error);
   }
 }
+
+// Initialize database immediately
+initializeDatabase();
 
 // Root route
 app.get('/', (req, res) => {
@@ -382,6 +383,20 @@ console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
 console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
+
+// Immediate route verification
+console.log('🟢 CLEAN SERVER: *** IMMEDIATE ROUTE VERIFICATION ***');
+if (app._router && app._router.stack) {
+  console.log('🟢 CLEAN SERVER: Router stack length:', app._router.stack.length);
+  app._router.stack.forEach((layer, index) => {
+    if (layer.route) {
+      console.log(`🟢 CLEAN SERVER: Route ${index}: ${Object.keys(layer.route.methods)[0].toUpperCase()} ${layer.route.path}`);
+    }
+  });
+} else {
+  console.log('🟡 CLEAN SERVER: Router stack not available yet');
+}
+console.log('🟢 CLEAN SERVER: *** END IMMEDIATE ROUTE VERIFICATION ***');
 
 
 
@@ -717,16 +732,15 @@ function listRegisteredRoutes() {
 }
 
 // Start server
-app.listen(PORT, HOST, async () => {
+app.listen(PORT, HOST, () => {
   console.log(`🟢 CLEAN SERVER: Running on ${HOST}:${PORT}`);
   console.log(`🟢 CLEAN SERVER: Health: http://${HOST}:${PORT}/api/health`);
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
-  console.log(`🟢 CLEAN SERVER: Database initialized`);
-
-  await initializeDatabase();
   
-  // List all registered routes for debugging
-  listRegisteredRoutes();
+  // List all registered routes for debugging after server starts
+  setTimeout(() => {
+    listRegisteredRoutes();
+  }, 100);
 });
 
 // Graceful shutdown
