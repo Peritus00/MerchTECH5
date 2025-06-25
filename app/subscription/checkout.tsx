@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -49,7 +48,7 @@ export default function SubscriptionCheckoutScreen() {
       console.log('🔥 Starting secure checkout for tier:', tier);
 
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/stripe/create-checkout-session`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/api'}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -110,8 +109,8 @@ export default function SubscriptionCheckoutScreen() {
   const updateUserSubscription = async (tier, customerId, paymentIntentId) => {
       try {
           const token = await AsyncStorage.getItem('authToken');
-          const updateResponse = await fetch(`${API_BASE_URL}/api/user/update-subscription`, {
-              method: 'POST',
+          const updateResponse = await fetch(`${API_BASE_URL}/api/user/subscription`, {
+              method: 'PUT',
               headers: {
                   'Content-Type': 'application/json',
                   'Authorization': `Bearer ${token}`,
