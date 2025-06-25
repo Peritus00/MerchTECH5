@@ -1,0 +1,103 @@
+🔴 API Response Error: {status: 404, statusText: 'Not Found', url: '/auth/register', baseURL: 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api', fullURL: 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api/auth/register', …}
+Console.js:61 API Error Details: {message: 'Request failed with status code 404', code: 'ERR_BAD_REQUEST', baseURL: 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api', status: 404, url: '/auth/register', …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82501
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83765
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83661
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83817
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83613
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82552
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82065
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 API: Registration failed: {status: 404, data: '<!DOCTYPE html><html  lang="en"><head><title data-…rm.routerRoot=app" defer>\x3C/script>\n</body></html>', message: 'Request failed with status code 404'}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82564
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82065
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 AuthService: Registration error: Error: Request failed with status code 404
+    at Object.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82611:15)
+    at async AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82065:26)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82077
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 AuthService: Error details: {message: 'Request failed with status code 404', status: undefined, data: undefined}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82078
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 Auth: Registration error: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82097:17)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81928:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:81945
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153879
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 Registration: Failed with result: {success: false, error: 'Network connection error. Please check your internet connection and try again.'}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4006
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3944
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:153885
+await in handleRegister
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15065
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191027
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191324
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184695
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191107
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193189
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193171Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
