@@ -51,18 +51,60 @@ class AuthService {
 
   async register(credentials: RegisterCredentials): Promise<AuthResponse> {
     try {
-      // Validate input
-      this.validateRegistrationData(credentials);
+      console.log('🔴 AuthService: ============ AUTH SERVICE REGISTRATION DEBUG START ============');
+      console.log('🔴 AuthService: Starting registration process for:', {
+        email: credentials.email,
+        username: credentials.username,
+        hasPassword: !!credentials.password,
+        passwordLength: credentials.password?.length,
+        timestamp: new Date().toISOString()
+      });
 
-      console.log('🔴 AuthService: Attempting registration for:', credentials.email);
+      // Validate input
+      console.log('🔴 AuthService: Validating registration data...');
+      this.validateRegistrationData(credentials);
+      console.log('🔴 AuthService: Registration data validation passed');
+
+      console.log('🔴 AuthService: Calling authAPI.register...');
       const response = await authAPI.register(
         credentials.email,
         credentials.password,
         credentials.username
       );
 
+      console.log('🔴 AuthService: Received response from authAPI.register');
+      console.log('🔴 AuthService: Response type:', typeof response);
+      console.log('🔴 AuthService: Response keys:', Object.keys(response || {}));
+      console.log('🔴 AuthService: Response data:', response);
+
+      if (!response) {
+        console.error('🔴 AuthService: No response received from authAPI!');
+        throw new Error('No response received from authentication service');
+      }
+
+      if (!response.user) {
+        console.error('🔴 AuthService: No user in response:', {
+          hasUser: !!response.user,
+          userType: typeof response.user,
+          user: response.user
+        });
+      }
+
+      if (!response.token) {
+        console.error('🔴 AuthService: No token in response:', {
+          hasToken: !!response.token,
+          tokenType: typeof response.token,
+          tokenLength: response.token?.length
+        });
+      }
+
       if (!response.user || !response.token) {
-        console.error('🔴 AuthService: Invalid registration response:', response);
+        console.error('🔴 AuthService: Invalid registration response structure:', {
+          hasUser: !!response.user,
+          hasToken: !!response.token,
+          responseKeys: Object.keys(response),
+          fullResponse: response
+        });
         throw new Error('Registration completed but server response was invalid. Please try logging in.');
       }
 
@@ -70,18 +112,35 @@ class AuthService {
       console.log('🔴 AuthService: Storing registration auth data...');
       await this.storeAuthData(response);
       console.log('🔴 AuthService: Registration auth data stored successfully');
+      console.log('🔴 AuthService: ============ AUTH SERVICE REGISTRATION DEBUG END ============');
 
       return response;
     } catch (error: any) {
-      console.error('🔴 AuthService: Registration error:', error);
-      console.error('🔴 AuthService: Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        data: error.response?.data
-      });
+      console.error('🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG START ============');
+      console.error('🔴 AuthService: Registration error caught:', error);
+      console.error('🔴 AuthService: Error type:', typeof error);
+      console.error('🔴 AuthService: Error name:', error.name);
+      console.error('🔴 AuthService: Error message:', error.message);
+      console.error('🔴 AuthService: Error stack:', error.stack);
+      
+      if (error.response) {
+        console.error('🔴 AuthService: Error response details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          headers: error.response.headers,
+          data: error.response.data
+        });
+      } else {
+        console.error('🔴 AuthService: No error response available');
+      }
+      
+      console.error('🔴 AuthService: Full error object:', error);
+      console.error('🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG END ============');
       
       // Provide more specific error messages based on the actual error
-      if (error.response?.status === 400) {
+      if (error.response?.status === 404) {
+        throw new Error('Registration service not found. Please try again later.');
+      } else if (error.response?.status === 400) {
         const errorMessage = error.response?.data?.error || error.message;
         if (errorMessage.includes('Email already registered') || errorMessage.includes('already exists')) {
           throw new Error('This email is already registered. Please use a different email or try logging in.');

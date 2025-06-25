@@ -148,51 +148,102 @@ export const authAPI = {
 
   register: async (email: string, password: string, username: string) => {
     try {
-      console.log('🔴 API: Attempting registration with:', { email, username });
+      console.log('🔴 API: ============ REGISTRATION DEBUG START ============');
+      console.log('🔴 API: Registration attempt with:', { 
+        email, 
+        username, 
+        passwordLength: password?.length,
+        timestamp: new Date().toISOString()
+      });
+      console.log('🔴 API: Current base URL:', api.defaults.baseURL);
+      console.log('🔴 API: Full registration URL:', `${api.defaults.baseURL}/auth/register`);
+
+      // Test server health first
+      try {
+        console.log('🔴 API: Testing server health...');
+        const healthResponse = await api.get('/health');
+        console.log('🔴 API: Server health check successful:', healthResponse.data);
+      } catch (healthError: any) {
+        console.error('🔴 API: Server health check failed:', {
+          status: healthError.response?.status,
+          statusText: healthError.response?.statusText,
+          data: healthError.response?.data,
+          message: healthError.message
+        });
+      }
+
+      // Make the registration request
+      console.log('🔴 API: Making registration request...');
       const response = await api.post('/auth/register', { 
         email, 
         password, 
         username 
       });
-      console.log('🔴 API: Registration response:', response.data);
+
+      console.log('🔴 API: Registration response received!');
+      console.log('🔴 API: Response status:', response.status);
+      console.log('🔴 API: Response headers:', response.headers);
+      console.log('🔴 API: Response data:', response.data);
+
+      if (!response.data) {
+        console.error('🔴 API: No response data received!');
+        throw new Error('No response data received from server');
+      }
 
       if (!response.data.user || !response.data.token) {
-        console.error('🔴 API: Invalid registration response structure:', response.data);
+        console.error('🔴 API: Invalid registration response structure:', {
+          hasUser: !!response.data.user,
+          hasToken: !!response.data.token,
+          responseKeys: Object.keys(response.data),
+          fullResponse: response.data
+        });
         throw new Error('Registration completed but server response was incomplete. Please try logging in.');
       }
 
+      console.log('🔴 API: Registration successful!', {
+        userId: response.data.user?.id,
+        userEmail: response.data.user?.email,
+        tokenLength: response.data.token?.length
+      });
+      console.log('🔴 API: ============ REGISTRATION DEBUG END ============');
+
       return response.data;
     } catch (error: any) {
-      console.error('🔴 API: Registration failed:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message
-      });
+      console.error('🔴 API: ============ REGISTRATION ERROR DEBUG START ============');
+      console.error('🔴 API: Registration failed with error:', error);
+      console.error('🔴 API: Error type:', typeof error);
+      console.error('🔴 API: Error name:', error.name);
+      console.error('🔴 API: Error message:', error.message);
 
-      // If backend fails, fall back to developer registration  
-      if (email === 'djjetfuel@gmail.com') {
-        console.log('Using developer fallback registration');
-        return {
-          user: {
-            id: 1,
-            email: 'djjetfuel@gmail.com',
-            username: username || 'djjetfuel',
-            firstName: null,
-            lastName: null,
-            isEmailVerified: true,
-            isAdmin: true,
-            subscriptionTier: 'free',
-            isNewUser: true,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          token: 'dev_jwt_token_djjetfuel_12345',
-          refreshToken: 'dev_refresh_token_djjetfuel_67890'
-        };
+      if (error.response) {
+        console.error('🔴 API: Error response details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          headers: error.response.headers,
+          dataType: typeof error.response.data,
+          dataPreview: typeof error.response.data === 'string' 
+            ? error.response.data.substring(0, 500) + '...'
+            : error.response.data
+        });
+
+        // Check if we're getting HTML instead of JSON (404 page)
+        if (typeof error.response.data === 'string' && error.response.data.includes('<!DOCTYPE html>')) {
+          console.error('🔴 API: Server returned HTML instead of JSON - this means the endpoint does not exist!');
+          console.error('🔴 API: This is a 404 error - the registration route is not found on the server');
+        }
+      } else if (error.request) {
+        console.error('🔴 API: Request was made but no response received:', error.request);
+      } else {
+        console.error('🔴 API: Error setting up request:', error.message);
       }
 
+      console.error('🔴 API: Error config:', error.config);
+      console.error('🔴 API: ============ REGISTRATION ERROR DEBUG END ============');
+
       // Provide detailed error messages based on status codes
-      if (error.response?.status === 400) {
+      if (error.response?.status === 404) {
+        throw new Error('Registration endpoint not found. Server may not be running correctly.');
+      } else if (error.response?.status === 400) {
         const errorMsg = error.response?.data?.error || error.message;
         if (errorMsg.includes('Email already registered')) {
           throw new Error('This email is already registered. Please use a different email or try logging in.');

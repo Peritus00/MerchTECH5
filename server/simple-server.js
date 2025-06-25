@@ -65,28 +65,59 @@ app.get('/api/health', async (req, res) => {
 
 // Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
+  console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG START ============');
+  console.log('🔴 SERVER: Registration endpoint hit at:', new Date().toISOString());
+  console.log('🔴 SERVER: Request method:', req.method);
+  console.log('🔴 SERVER: Request URL:', req.url);
+  console.log('🔴 SERVER: Request headers:', req.headers);
+  console.log('🔴 SERVER: Request body:', req.body);
+  
   try {
     const { email, password, username } = req.body;
 
-    console.log('Registration attempt:', { email, username });
+    console.log('🔴 SERVER: Extracted registration data:', { 
+      email, 
+      username, 
+      hasPassword: !!password,
+      passwordLength: password?.length 
+    });
 
+    if (!email || !password || !username) {
+      console.error('🔴 SERVER: Missing required fields:', {
+        hasEmail: !!email,
+        hasPassword: !!password,
+        hasUsername: !!username
+      });
+      return res.status(400).json({ error: 'Email, password, and username are required' });
+    }
+
+    console.log('🔴 SERVER: Checking for existing user...');
     // Check if user already exists
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
+    console.log('🔴 SERVER: Existing user check result:', {
+      foundUsers: existingUser.rows.length,
+      existingUsers: existingUser.rows
+    });
+
     if (existingUser.rows.length > 0) {
+      console.log('🔴 SERVER: User already exists, returning error');
       return res.status(400).json({ 
         error: 'Email or username already exists' 
       });
     }
 
+    console.log('🔴 SERVER: Hashing password...');
     // Hash password
     const bcrypt = require('bcrypt');
     const saltRounds = 12;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
+    console.log('🔴 SERVER: Password hashed successfully');
 
+    console.log('🔴 SERVER: Inserting new user into database...');
     // Insert new user
     const result = await pool.query(
       `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user, created_at, updated_at)
@@ -95,8 +126,15 @@ app.post('/api/auth/register', async (req, res) => {
       [email, username, hashedPassword]
     );
 
-    const user = result.rows[0];
+    console.log('🔴 SERVER: Database insert result:', {
+      rowCount: result.rowCount,
+      rows: result.rows
+    });
 
+    const user = result.rows[0];
+    console.log('🔴 SERVER: Created user:', user);
+
+    console.log('🔴 SERVER: Generating JWT token...');
     // Generate JWT token
     const jwt = require('jsonwebtoken');
     const token = jwt.sign(
@@ -109,9 +147,12 @@ app.post('/api/auth/register', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    console.log('Registration successful:', { userId: user.id, email: user.email, username: user.username });
+    console.log('🔴 SERVER: JWT token generated:', {
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 20) + '...'
+    });
 
-    res.status(201).json({
+    const responseData = {
       user: {
         id: user.id,
         email: user.email,
@@ -126,12 +167,32 @@ app.post('/api/auth/register', async (req, res) => {
       },
       token,
       refreshToken: `refresh_${token}`
+    };
+
+    console.log('🔴 SERVER: Sending registration response:', {
+      hasUser: !!responseData.user,
+      hasToken: !!responseData.token,
+      userId: responseData.user?.id,
+      userEmail: responseData.user?.email
     });
 
+    console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
+    console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
+
+    res.status(201).json(responseData);
+
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG START ============');
+    console.error('🔴 SERVER: Registration error:', error);
+    console.error('🔴 SERVER: Error type:', typeof error);
+    console.error('🔴 SERVER: Error name:', error.name);
+    console.error('🔴 SERVER: Error message:', error.message);
+    console.error('🔴 SERVER: Error stack:', error.stack);
+    console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG END ============');
+    
     res.status(500).json({ 
-      error: 'Internal server error during registration' 
+      error: 'Internal server error during registration',
+      details: error.message
     });
   }
 });

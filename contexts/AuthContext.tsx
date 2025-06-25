@@ -76,6 +76,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const register = async (email: string, password: string, username: string, firstName?: string, lastName?: string) => {
+    console.log('🔴 Auth: ============ AUTH CONTEXT REGISTRATION DEBUG START ============');
+    console.log('🔴 Auth: Starting registration for:', {
+      email,
+      username,
+      hasPassword: !!password,
+      passwordLength: password?.length,
+      timestamp: new Date().toISOString()
+    });
+
     setIsLoading(true);
     try {
       console.log('🔴 Auth: Starting registration for:', email);
@@ -88,7 +97,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true, user: authResponse.user };
     } catch (error: any) {
-      console.error('🔴 Auth: Registration error:', error);
+      console.error('🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG START ============');
+      console.error('🔴 Auth: Registration error caught:', error);
+      console.error('🔴 Auth: Error type:', typeof error);
+      console.error('🔴 Auth: Error name:', error.name);
+      console.error('🔴 Auth: Error message:', error.message);
+      console.error('🔴 Auth: Error stack:', error.stack);
+      console.error('🔴 Auth: Full error object:', error);
+      console.error('🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG END ============');
       return { success: false, error: error.message };
     } finally {
       setIsLoading(false);
