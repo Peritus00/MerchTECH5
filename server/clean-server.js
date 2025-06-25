@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
@@ -209,6 +210,10 @@ app.post('/api/auth/login', async (req, res) => {
 // Create payment intent
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe not configured' });
+    }
+
     const { subscriptionTier, amount } = req.body;
 
     if (!subscriptionTier || !amount) {
@@ -265,6 +270,10 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 // Create checkout session
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(503).json({ error: 'Stripe not configured' });
+    }
+
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
 
     if (!subscriptionTier || !amount) {
@@ -335,6 +344,8 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
+// ==================== USER MANAGEMENT ROUTES ====================
+
 // Update user subscription
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
@@ -380,52 +391,6 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to update subscription', details: error.message });
   }
 });
-
-// ==================== QR CODE ROUTES ====================
-
-// ==================== USER MANAGEMENT ROUTES ====================
-
-//app.put('/api/user/subscription', authenticateToken, async (req, res) => {
-//  try {
-//    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
-//    const userId = req.user.id;
-//
-//    // Update user subscription in database
-//    const updateQuery = `
-//      UPDATE users 
-//      SET 
-//        "subscriptionTier" = $1,
-//        "isNewUser" = $2,
-//        "updatedAt" = CURRENT_TIMESTAMP
-//      WHERE id = $3
-//      RETURNING *
-//    `;
-//
-//    const result = await pool.query(updateQuery, [subscriptionTier, isNewUser || false, userId]);
-//
-//    if (result.rows.length === 0) {
-//      return res.status(404).json({ error: 'User not found' });
-//    }
-//
-//    const updatedUser = result.rows[0];
-//
-//    res.json({
-//      success: true,
-//      message: 'Subscription updated successfully',
-//      user: {
-//        id: updatedUser.id,
-//        email: updatedUser.email,
-//        username: updatedUser.username,
-//        subscriptionTier: updatedUser.subscriptionTier,
-//        isNewUser: updatedUser.isNewUser
-//      }
-//    });
-//
-//  } catch (error) {
-//    console.error('Update subscription error:', error);
-//    res.status(500).json({ error: 'Failed to update subscription' });
-//  }
-//});
 
 // ==================== ERROR HANDLING ====================
 
