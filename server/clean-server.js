@@ -652,47 +652,67 @@ app.use((req, res) => {
 function listRegisteredRoutes() {
   console.log('🟢 CLEAN SERVER: *** REGISTERED ROUTES DEBUG ***');
   
-  const routes = [];
-  app._router.stack.forEach((middleware, index) => {
-    if (middleware.route) {
-      // Direct route
-      routes.push({
-        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
-        path: middleware.route.path,
-        type: 'direct',
-        index: index
-      });
-    } else if (middleware.name === 'router') {
-      // Router middleware
-      middleware.handle.stack.forEach((handler, subIndex) => {
-        if (handler.route) {
-          routes.push({
-            method: Object.keys(handler.route.methods)[0].toUpperCase(), 
-            path: handler.route.path,
-            type: 'router',
-            index: index,
-            subIndex: subIndex
+  try {
+    if (!app._router || !app._router.stack) {
+      console.log('🟡 CLEAN SERVER: Router not properly initialized yet');
+      return;
+    }
+
+    const routes = [];
+    app._router.stack.forEach((middleware, index) => {
+      if (middleware.route) {
+        // Direct route
+        routes.push({
+          method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+          path: middleware.route.path,
+          type: 'direct',
+          index: index
+        });
+      } else if (middleware.name === 'router') {
+        // Router middleware
+        if (middleware.handle && middleware.handle.stack) {
+          middleware.handle.stack.forEach((handler, subIndex) => {
+            if (handler.route) {
+              routes.push({
+                method: Object.keys(handler.route.methods)[0].toUpperCase(), 
+                path: handler.route.path,
+                type: 'router',
+                index: index,
+                subIndex: subIndex
+              });
+            }
           });
         }
-      });
-    } else {
-      // Other middleware
-      routes.push({
-        name: middleware.name || 'anonymous',
-        type: 'middleware',
-        index: index
-      });
-    }
-  });
+      } else {
+        // Other middleware
+        routes.push({
+          name: middleware.name || 'anonymous',
+          type: 'middleware',
+          index: index
+        });
+      }
+    });
 
-  console.log('🟢 CLEAN SERVER: Total middleware/routes registered:', routes.length);
-  routes.forEach((route) => {
-    if (route.method && route.path) {
-      console.log(`🟢 CLEAN SERVER: ${route.method} ${route.path} (${route.type})`);
-    } else {
-      console.log(`🟢 CLEAN SERVER: Middleware: ${route.name} (${route.type})`);
-    }
-  });
+    console.log('🟢 CLEAN SERVER: Total middleware/routes registered:', routes.length);
+    routes.forEach((route) => {
+      if (route.method && route.path) {
+        console.log(`🟢 CLEAN SERVER: ${route.method} ${route.path} (${route.type})`);
+      } else {
+        console.log(`🟢 CLEAN SERVER: Middleware: ${route.name} (${route.type})`);
+      }
+    });
+    
+    // Manually list the routes we know should be there
+    console.log('🟢 CLEAN SERVER: Expected Stripe routes:');
+    console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
+    console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
+    console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
+    console.log('🟢 CLEAN SERVER:   PUT /api/user/subscription');
+    
+  } catch (error) {
+    console.error('🟢 CLEAN SERVER: Error listing routes:', error.message);
+  }
+  
   console.log('🟢 CLEAN SERVER: *** END REGISTERED ROUTES DEBUG ***');
 }
 
