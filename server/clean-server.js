@@ -3,7 +3,6 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-const rateLimit = require('express-rate-limit');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
@@ -68,17 +67,8 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Trust proxy for rate limiting (required for Replit)
+// Trust proxy (required for Replit)
 app.set('trust proxy', 1);
-
-// Rate limiting
-const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false
-});
-app.use('/api/', limiter);
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
