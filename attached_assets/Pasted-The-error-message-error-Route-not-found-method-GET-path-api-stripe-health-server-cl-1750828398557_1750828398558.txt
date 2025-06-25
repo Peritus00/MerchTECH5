@@ -1,0 +1,139 @@
+The error message {"error":"Route not found","method":"GET","path":"/api/stripe/health","server":"clean-server.js","timestamp":"2025-06-25T05:11:03.115Z"} is a 404 Not Found error from your Express.js server. This is a different kind of error than the path-to-regexp issue you were facing before.
+
+This means:
+
+Your Express.js server successfully started. (Good! The path-to-regexp issue is likely resolved, or at least the server is getting past that initial parsing phase).
+
+The server received a GET request to the path /api/stripe/health.
+
+Your server does not have a route defined that matches GET /api/stripe/health.
+
+How to Solve "Route Not Found"
+Here's a systematic approach to debug and fix this:
+
+1. Verify the Route Definition:
+
+Locate your server code (likely clean-server.js or index.js or files imported by them).
+
+Search for routes related to /api/stripe/health. Look for lines like:
+
+JavaScript
+
+app.get('/api/stripe/health', (req, res) => { ... });
+router.get('/health', (req, res) => { ... }); // if mounted at /api/stripe
+Check for typos:
+
+Is it health or healthy?
+
+Is it stripe or strip?
+
+Is it /api/stripe/health or /stripe/health or just /health?
+
+Is the HTTP method correct? You're sending a GET request. Do you have an app.get for this path, or is it an app.post by mistake?
+
+2. Route Order Matters:
+
+In Express.js, middleware and route handlers are executed in the order they are defined. If you have a "catch-all" or 404 handler defined before your specific /api/stripe/health route, the catch-all will intercept the request before it ever reaches your intended route.
+
+Make sure your specific routes are defined before any general 404 handler. A typical Express app structure looks like this:
+
+JavaScript
+
+const express = require('express');
+const app = express();
+
+// 1. Middleware (e.g., body-parser, CORS, authentication)
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+// ... other middleware
+
+// 2. ALL your specific API routes
+app.get('/api/stripe/health', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Stripe health check passed' });
+});
+// app.post('/api/users', ...)
+// app.use('/api/products', productRoutes); // If you're using Express Routers
+
+// 3. Catch-all for unhandled routes (404 handler - MUST BE LAST)
+app.use((req, res, next) => {
+    res.status(404).json({
+        error: 'Route not found',
+        method: req.method,
+        path: req.originalUrl,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// 4. Global error handler (has 4 parameters)
+app.use((err, req, res, next) => {
+    console.error(err.stack); // Log the error stack for debugging
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        timestamp: new Date().toISOString()
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
+3. Check Router Mounting (if using express.Router()):
+
+If your Stripe routes are in a separate file (e.g., stripeRoutes.js) and imported via express.Router(), ensure they are correctly mounted.
+
+server.js (or index.js):
+
+JavaScript
+
+const stripeRoutes = require('./routes/stripeRoutes'); // Adjust path as needed
+app.use('/api/stripe', stripeRoutes); // This mounts all routes from stripeRoutes at /api/stripe
+routes/stripeRoutes.js (or similar):
+
+JavaScript
+
+const express = require('express');
+const router = express.Router();
+
+// This GET / will become GET /api/stripe/
+router.get('/', (req, res) => {
+    res.send('Stripe root');
+});
+
+// This GET /health will become GET /api/stripe/health
+router.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Stripe health check passed' });
+});
+
+module.exports = router;
+In this scenario, if your route in stripeRoutes.js was defined as router.get('/api/stripe/health', ...) and then mounted with app.use('/api/stripe', stripeRoutes);, the effective path would become /api/stripe/api/stripe/health, which would lead to a 404. It should be router.get('/health', ...) when mounted at /api/stripe.
+
+4. Debugging console.log:
+
+Add console.log statements in your server to confirm execution flow.
+
+In your Express app setup:
+
+JavaScript
+
+app.get('/api/stripe/health', (req, res) => {
+    console.log('Received GET request for /api/stripe/health');
+    res.status(200).json({ status: 'ok', message: 'Stripe health check passed' });
+});
+If you don't see this console.log output when you hit the endpoint, it means the request is not reaching that specific route handler.
+
+5. How are you making the request?
+
+Browser: If you're typing http://localhost:3000/api/stripe/health directly into your browser, it will make a GET request.
+
+Postman/Insomnia/curl: Double-check that you're sending a GET request to the correct URL.
+
+Frontend code (React, Vue, Angular, plain JS fetch): Verify the URL and method used in your frontend request. Is it axios.get('/api/stripe/health')?
+
+In your specific case, since the error message clearly states /api/stripe/health as the path, the most likely solution is to:
+
+Ensure you have a GET route defined for /api/stripe/health in your server code.
+
+Verify that this specific route is placed before any generic 404 (catch-all) middleware in your clean-server.js or index.js.
+
+Go through these steps, focusing on where GET /api/stripe/health should be handled, and you should be able to resolve the "Route not found" error.
