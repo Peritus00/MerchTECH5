@@ -253,65 +253,28 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
   }
 });
 
-// Stripe checkout session creation
-app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
+// Stripe health check
+app.get('/api/stripe/health', (req, res) => {
   try {
-    const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
-
-    if (!stripe) {
-      return res.status(503).json({ error: 'Stripe not configured' });
-    }
-
-    // Create or retrieve customer
-    let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: req.user.email,
-      limit: 1
-    });
-
-    if (existingCustomers.data.length > 0) {
-      customer = existingCustomers.data[0];
-    } else {
-      customer = await stripe.customers.create({
-        email: req.user.email,
-        name: req.user.username,
-      });
-    }
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customer.id,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Subscription`,
-            },
-            unit_amount: amount,
-          },
-          quantity: 1,
-        },
-      ],
-      mode: 'payment',
-      success_url: successUrl || `${req.protocol}://${req.get('host')}/subscription/success`,
-      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/subscription`,
-      metadata: {
-        subscriptionTier,
-        userId: req.user.id.toString()
-      }
-    });
+    const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
+    const secretKeyValid = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_');
+    const secretKeyType = process.env.STRIPE_SECRET_KEY ? 
+      (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_') ? 'test' : 
+       process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'unknown') : 
+      'none';
 
     res.json({
-      sessionId: session.id,
-      url: session.url,
-      customerId: customer.id
+      stripeConfigured,
+      secretKeyValid,
+      secretKeyType,
+      timestamp: new Date().toISOString()
     });
-
   } catch (error) {
-    console.error('Create checkout session error:', error);
-    res.status(500).json({ error: 'Failed to create checkout session' });
+    console.error('Stripe health check error:', error);
+    res.status(503).json({ 
+      error: 'Stripe health check failed',
+      timestamp: new Date().toISOString() 
+    });
   }
 });
 
