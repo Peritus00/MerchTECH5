@@ -191,8 +191,10 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
+    console.log('Creating payment intent for:', { subscriptionTier, amount, userEmail: req.user.email });
 
     if (!stripe) {
+      console.error('Stripe not configured - no secret key');
       return res.status(503).json({ error: 'Stripe not configured' });
     }
 
@@ -205,11 +207,13 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
     if (existingCustomers.data.length > 0) {
       customer = existingCustomers.data[0];
+      console.log('Found existing customer:', customer.id);
     } else {
       customer = await stripe.customers.create({
         email: req.user.email,
         name: req.user.username,
       });
+      console.log('Created new customer:', customer.id);
     }
 
     // Create payment intent
@@ -224,6 +228,8 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
       }
     });
 
+    console.log('Payment intent created successfully:', paymentIntent.id);
+
     res.json({
       clientSecret: paymentIntent.client_secret,
       customerId: customer.id,
@@ -232,7 +238,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
   } catch (error) {
     console.error('Create payment intent error:', error);
-    res.status(500).json({ error: 'Failed to create payment intent' });
+    res.status(500).json({ error: 'Failed to create payment intent', details: error.message });
   }
 });
 
