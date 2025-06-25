@@ -222,7 +222,7 @@ app.get('/api/health', async (req, res) => {
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
 // Add Stripe route debugging middleware BEFORE route definitions
-app.use('/api/stripe*', (req, res, next) => {
+app.use('/api/stripe/*', (req, res, next) => {
   console.log(`🟢 CLEAN SERVER: *** STRIPE MIDDLEWARE HIT ***`);
   console.log(`🟢 CLEAN SERVER: Stripe route accessed: ${req.method} ${req.originalUrl}`);
   console.log(`🟢 CLEAN SERVER: Stripe route path: ${req.path}`);
