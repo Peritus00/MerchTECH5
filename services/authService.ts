@@ -320,7 +320,12 @@ class AuthService {
       // Try direct API call for URL-based tokens first
       if (token.length > 50) { // JWT tokens are longer than simple codes
         try {
-          const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/verify-email/${token}`, {
+          const apiBaseUrl = process.env.EXPO_PUBLIC_API_URL;
+          if (!apiBaseUrl) {
+            throw new Error('API URL not configured');
+          }
+          
+          const response = await fetch(`${apiBaseUrl}/auth/verify-email/${token}`, {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
