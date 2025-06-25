@@ -79,7 +79,9 @@ async function initializeDatabase() {
         is_new_user BOOLEAN DEFAULT true,
         is_admin BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        stripe_customer_id VARCHAR(255),
+        stripe_subscription_id VARCHAR(255)
       )
     `);
 
@@ -284,19 +286,27 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
       values.push(stripeSubscriptionId);
     }
 
-    updates.push(`updated_at = $${++paramCount}`);
-    values.push(new Date());
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    
 
     values.push(userId);
+    let query;
+    if(values.length > 0){
+      query = `
+        UPDATE users 
+        SET ${updates.join(', ')}
+        WHERE id = $${++paramCount}
+        RETURNING *
+      `;
+    } else {
+      query = `
+        SELECT * FROM users WHERE id = $${++paramCount}
+      `;
+    }
 
-    const query = `
-      UPDATE users 
-      SET ${updates.join(', ')}
-      WHERE id = $${values.length}
-      RETURNING id, email, username, subscription_tier, is_new_user, updated_at
-    `;
+    
 
-    console.log('Executing update query:', query);
+    console.log('Executing query:', query);
     console.log('With values:', values);
 
     const result = await pool.query(query, values);
@@ -316,12 +326,17 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
         username: updatedUser.username,
         subscriptionTier: updatedUser.subscription_tier,
         isNewUser: updatedUser.is_new_user,
-        updatedAt: updatedUser.updated_at
+        stripeCustomerId: updatedUser.stripe_customer_id,
+        stripeSubscriptionId: updatedUser.stripe_subscription_id
       }
     });
+
   } catch (error) {
-    console.error('Update subscription error:', error);
-    res.status(500).json({ error: 'Failed to update subscription' });
+    console.error('Error updating user subscription:', error);
+    res.status(500).json({ 
+      error: 'Failed to update subscription',
+      details: error.message 
+    });
   }
 });
 
