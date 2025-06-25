@@ -94,29 +94,42 @@ app.get('/api/stripe/health', (req, res) => {
 // Create Payment Intent
 app.post('/api/stripe/create-payment-intent', async (req, res) => {
   console.log('🔴 SERVER: Create payment intent requested');
+  console.log('🔴 SERVER: Request body:', req.body);
 
   if (!stripe) {
     return res.status(500).json({ error: 'Stripe not configured' });
   }
 
   try {
-    const { amount, currency = 'usd' } = req.body;
+    const { amount, currency = 'usd', subscriptionTier } = req.body;
 
     if (!amount) {
       return res.status(400).json({ error: 'Amount is required' });
     }
 
+    // Create a customer for this payment
+    const customer = await stripe.customers.create({
+      metadata: {
+        subscriptionTier: subscriptionTier || 'unknown'
+      }
+    });
+
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(amount * 100), // Convert to cents
       currency: currency,
+      customer: customer.id,
       automatic_payment_methods: {
         enabled: true,
       },
+      metadata: {
+        subscriptionTier: subscriptionTier || 'unknown'
+      }
     });
 
     console.log('✅ SERVER: Payment intent created:', paymentIntent.id);
     res.json({
       clientSecret: paymentIntent.client_secret,
+      customerId: customer.id,
       id: paymentIntent.id
     });
   } catch (error) {
@@ -174,43 +187,86 @@ app.get('/api/stripe/products', async (req, res) => {
 // Create Checkout Session
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   console.log('🔴 SERVER: Create checkout session requested');
+  console.log('🔴 SERVER: Request body:', req.body);
 
   if (!stripe) {
     return res.status(500).json({ error: 'Stripe not configured' });
   }
 
   try {
-    const { priceId, quantity = 1 } = req.body;
+    const { priceId, quantity = 1, subscriptionTier, amount, successUrl, cancelUrl } = req.body;
 
-    if (!priceId) {
-      return res.status(400).json({ error: 'Price ID is required' });
+    // Handle both app format (subscriptionTier + amount) and test format (priceId)
+    if (subscriptionTier && amount) {
+      // App format - create subscription with dynamic pricing
+      const lineItems = [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
+            description: `Monthly subscription to ${subscriptionTier} plan`,
+          },
+          unit_amount: Math.round(amount * 100), // Convert to cents
+          recurring: {
+            interval: 'month',
+          },
+        },
+        quantity: 1,
+      }];
+
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        payment_method_types: ['card'],
+        line_items: lineItems,
+        success_url: successUrl || `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || `${req.headers.origin}/subscription`,
+        metadata: {
+          subscriptionTier: subscriptionTier
+        }
+      });
+
+      console.log('✅ SERVER: Checkout session created (app format):', session.id);
+      res.json({
+        success: true,
+        sessionId: session.id,
+        url: session.url
+      });
+
+    } else if (priceId) {
+      // Test format - use existing price ID
+      const price = await stripe.prices.retrieve(priceId);
+      const mode = price.type === 'recurring' ? 'subscription' : 'payment';
+
+      const session = await stripe.checkout.sessions.create({
+        mode: mode,
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            price: priceId,
+            quantity: quantity,
+          },
+        ],
+        success_url: successUrl || `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || `${req.headers.origin}/subscription`,
+      });
+
+      console.log('✅ SERVER: Checkout session created (test format):', session.id);
+      res.json({
+        success: true,
+        sessionId: session.id,
+        url: session.url
+      });
+
+    } else {
+      return res.status(400).json({ error: 'Either priceId or (subscriptionTier + amount) is required' });
     }
 
-    // Determine mode based on price type
-    const price = await stripe.prices.retrieve(priceId);
-    const mode = price.type === 'recurring' ? 'subscription' : 'payment';
-
-    const session = await stripe.checkout.sessions.create({
-      mode: mode,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price: priceId,
-          quantity: quantity,
-        },
-      ],
-      success_url: `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${req.headers.origin}/subscription`,
-    });
-
-    console.log('✅ SERVER: Checkout session created:', session.id);
-    res.json({
-      sessionId: session.id,
-      url: session.url
-    });
   } catch (error) {
     console.error('❌ SERVER: Create checkout session error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 });
 
