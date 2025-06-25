@@ -46,27 +46,45 @@ export default function SubscriptionCheckoutScreen() {
     try {
       setIsLoading(true);
       console.log('🔥 Starting secure checkout for tier:', tier);
+      console.log('🔥 API_BASE_URL:', API_BASE_URL);
+      console.log('🔥 Full URL will be:', `${API_BASE_URL}/stripe/create-checkout-session`);
 
       const token = await AsyncStorage.getItem('authToken');
+      console.log('🔥 Auth token exists:', !!token);
+      
+      const requestBody = JSON.stringify({
+        subscriptionTier: tier,
+        amount: tierInfo.price * 100,
+        successUrl: Platform.OS === 'web' 
+          ? `${window.location.origin}/subscription/success?tier=${tier}&newUser=${isNewUser}`
+          : `https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/subscription/success?tier=${tier}&newUser=${isNewUser}`,
+        cancelUrl: Platform.OS === 'web'
+          ? `${window.location.origin}/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
+          : `https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
+      });
+      
+      console.log('🔥 Request body:', requestBody);
+      
       const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({
-          subscriptionTier: tier,
-          amount: tierInfo.price * 100,
-          successUrl: Platform.OS === 'web' 
-            ? `${window.location.origin}/subscription/success?tier=${tier}&newUser=${isNewUser}`
-            : `https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/subscription/success?tier=${tier}&newUser=${isNewUser}`,
-          cancelUrl: Platform.OS === 'web'
-            ? `${window.location.origin}/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
-            : `https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
-        })
+        body: requestBody
       });
 
+      console.log('🔥 Response status:', response.status);
+      console.log('🔥 Response ok:', response.ok);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('🔥 Response error text:', errorText);
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('🔥 Response result:', result);
 
       if (result.success && result.url) {
         if (Platform.OS === 'web') {
@@ -109,7 +127,7 @@ export default function SubscriptionCheckoutScreen() {
   const updateUserSubscription = async (tier, customerId, paymentIntentId) => {
       try {
           const token = await AsyncStorage.getItem('authToken');
-          const updateResponse = await fetch(`${API_BASE_URL}/api/user/subscription`, {
+          const updateResponse = await fetch(`${API_BASE_URL}/user/subscription`, {
               method: 'PUT',
               headers: {
                   'Content-Type': 'application/json',
