@@ -3,8 +3,20 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
+
+// Initialize Stripe
+let stripe;
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+    console.log('✅ Stripe initialized successfully');
+  } else {
+    console.log('⚠️  Stripe secret key not found in environment variables');
+  }
+} catch (error) {
+  console.error('❌ Failed to initialize Stripe:', error);
+}
 
 // Initialize Express app
 const app = express();
