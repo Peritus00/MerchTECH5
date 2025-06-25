@@ -200,6 +200,35 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Database initialization function
+async function initializeDatabase() {
+  try {
+    console.log('Initializing database...');
+    
+    // Create users table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        is_email_verified BOOLEAN DEFAULT false,
+        subscription_tier VARCHAR(20) DEFAULT 'free',
+        is_new_user BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('Database connected and tables initialized');
+  } catch (error) {
+    console.error('Database initialization error:', error);
+    // Don't exit the process, just log the error
+  }
+}
+
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Simple server running on port ${PORT}`);
