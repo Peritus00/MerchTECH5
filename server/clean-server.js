@@ -15,6 +15,7 @@ const PORT = process.env.PORT || 5000;
 let stripe;
 if (process.env.STRIPE_SECRET_KEY) {
   stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  console.log('✅ Stripe initialized successfully');
 } else {
   console.warn('⚠️ Stripe not configured - STRIPE_SECRET_KEY missing');
 }
@@ -24,6 +25,11 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
+
+// Test database connection
+pool.connect()
+  .then(() => console.log('✅ Database connected successfully'))
+  .catch(err => console.error('❌ Database connection failed:', err));
 
 // Middleware
 app.use(cors({
@@ -72,7 +78,8 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Routes
+// ==================== HEALTH CHECK ROUTES ====================
+
 app.get('/api/health', async (req, res) => {
   try {
     const userCount = await pool.query('SELECT COUNT(*) FROM users');
@@ -95,7 +102,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Stripe health check
 app.get('/api/stripe/health', (req, res) => {
   try {
     const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
@@ -120,7 +126,8 @@ app.get('/api/stripe/health', (req, res) => {
   }
 });
 
-// Auth routes
+// ==================== AUTH ROUTES ====================
+
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username } = req.body;
@@ -198,7 +205,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Stripe payment intent creation
+// ==================== STRIPE ROUTES ====================
+
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
@@ -253,7 +261,6 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
   }
 });
 
-// Stripe checkout session creation
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
@@ -315,7 +322,8 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
-// User subscription update endpoint
+// ==================== USER MANAGEMENT ROUTES ====================
+
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
@@ -358,6 +366,8 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== ERROR HANDLING ====================
+
 // Catch-all for undefined routes
 app.use('*', (req, res) => {
   res.status(404).json({
@@ -369,11 +379,31 @@ app.use('*', (req, res) => {
   });
 });
 
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Start server
 app.listen(PORT, '0.0.0.0', () => {
+  console.log('🚀 ================================');
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📍 Base URL: http://0.0.0.0:${PORT}`);
   console.log(`💳 Stripe configured: ${!!stripe}`);
+  console.log('🚀 Available routes:');
+  console.log('   📊 GET  /api/health');
+  console.log('   💳 GET  /api/stripe/health');
+  console.log('   🔐 POST /api/auth/register');
+  console.log('   🔐 POST /api/auth/login');
+  console.log('   💰 POST /api/stripe/create-payment-intent');
+  console.log('   🛒 POST /api/stripe/create-checkout-session');
+  console.log('   👤 PUT  /api/user/subscription');
+  console.log('🚀 ================================');
 });
 
 module.exports = app;
