@@ -6,7 +6,7 @@ const getApiBaseUrl = () => {
   // Use environment variable or fallback to current Replit URL
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
   const replitUrl = 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api';
-  
+
   const finalUrl = envUrl || replitUrl;
   console.log('API Base URL:', finalUrl);
   return finalUrl;
@@ -64,10 +64,10 @@ api.interceptors.response.use(
     )) {
       config.retry += 1;
       console.log(`Retrying request (attempt ${config.retry}/3)...`);
-      
+
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, 1000 * config.retry));
-      
+
       return api(config);
     }
 
@@ -90,9 +90,74 @@ api.interceptors.response.use(
   }
 );
 
-export default api;
+// API configuration
+const API_BASE_URL_NEW = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 
-// Auth endpoints
+console.log('API Base URL:', API_BASE_URL_NEW);
+
+// Create axios instance with base configuration
+const api_new = axios.create({
+  baseURL: API_BASE_URL_NEW,
+  timeout: 10000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add request interceptor for debugging
+api_new.interceptors.request.use(
+  (config) => {
+    console.log('🔵 API Request:', {
+      method: config.method?.toUpperCase(),
+      url: config.url,
+      baseURL: config.baseURL,
+      fullURL: `${config.baseURL}${config.url}`,
+      headers: config.headers,
+      data: config.data
+    });
+    return config;
+  },
+  (error) => {
+    console.error('🔴 API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Add response interceptor for debugging
+api_new.interceptors.response.use(
+  (response) => {
+    console.log('🟢 API Response:', {
+      status: response.status,
+      url: response.config.url,
+      data: response.data
+    });
+    return response;
+  },
+  (error) => {
+    console.log('🔴 API Response Error:', {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      url: error.config?.url,
+      baseURL: error.config?.baseURL,
+      fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'Unknown',
+      data: error.response?.data
+    });
+
+    // Log the full error for debugging
+    console.error('API Error Details:', {
+      message: error.message,
+      code: error.code,
+      baseURL: error.config?.baseURL,
+      status: error.response?.status,
+      url: error.config?.url,
+      retries: error.config?.retries || 0
+    });
+
+    return Promise.reject(error);
+  }
+);
+
+// Auth API calls
 export const authAPI = {
   login: async (email: string, password: string) => {
     try {
@@ -128,7 +193,7 @@ export const authAPI = {
   register: async (email: string, password: string, username: string) => {
     try {
       console.log('🔴 API: Attempting registration with:', { email, username });
-      const response = await api.post('/auth/register', { 
+      const response = await api_new.post('/auth/register', { 
         email, 
         password, 
         username 
