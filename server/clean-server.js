@@ -28,11 +28,14 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
+// JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
 
-// Initialize database
-async function initDB() {
+// Database initialization
+async function initializeDatabase() {
   try {
+    console.log('🟢 CLEAN SERVER: Initializing database...');
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -49,24 +52,27 @@ async function initDB() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
     console.log('🟢 CLEAN SERVER: Database initialized');
   } catch (error) {
     console.error('🟢 CLEAN SERVER: Database error:', error);
   }
 }
 
-// Routes
+// Root route
 app.get('/', (req, res) => {
   console.log('🟢 CLEAN SERVER: Root route hit');
   res.json({ 
-    message: 'MerchTech Clean Server', 
+    message: 'MerchTech QR API Server - CLEAN VERSION', 
     status: 'running',
-    endpoints: ['/api/health', '/api/auth/register', '/api/auth/login']
+    server: 'clean-server.js',
+    timestamp: new Date().toISOString()
   });
 });
 
+// Health check
 app.get('/api/health', async (req, res) => {
-  console.log('🟢 CLEAN SERVER: Health check');
+  console.log('🟢 CLEAN SERVER: Health check hit');
   try {
     await pool.query('SELECT 1');
     res.json({ 
@@ -76,49 +82,62 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
+    console.error('🟢 CLEAN SERVER: Health check failed:', error);
     res.status(503).json({ 
       status: 'error', 
       database: 'disconnected',
-      error: error.message
+      server: 'clean-server.js',
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
 
+// Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
-  console.log('🟢 CLEAN SERVER: Registration request');
+  console.log('🟢 CLEAN SERVER: Registration endpoint hit');
+  console.log('🟢 CLEAN SERVER: Request body:', req.body);
+  
   try {
-    const { email, password, username } = req.body;
+    const { email, password, username, firstName, lastName } = req.body;
 
     if (!email || !password || !username) {
       return res.status(400).json({ error: 'Email, password, and username are required' });
     }
 
-    // Check existing user
-    const existing = await pool.query(
+    // Check if user already exists
+    const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
-    if (existing.rows.length > 0) {
+    if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: 'Email or username already exists' });
     }
 
     // Hash password
-    const hashedPassword = await bcryptjs.hash(password, 12);
+    const saltRounds = 12;
+    const hashedPassword = await bcryptjs.hash(password, saltRounds);
 
-    // Create user
+    // Insert new user
     const result = await pool.query(
-      `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user)
-       VALUES ($1, $2, $3, false, 'free', true)
-       RETURNING id, email, username, is_email_verified, subscription_tier, is_new_user, created_at`,
-      [email, username, hashedPassword]
+      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, false, 'free', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at, updated_at`,
+      [email, username, hashedPassword, firstName, lastName]
     );
 
     const user = result.rows[0];
 
-    // Generate token
+    // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, username: user.username },
+      { 
+        id: user.id,
+        userId: user.id, 
+        email: user.email,
+        username: user.username,
+        isAdmin: false
+      },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -130,53 +149,71 @@ app.post('/api/auth/register', async (req, res) => {
         id: user.id,
         email: user.email,
         username: user.username,
-        firstName: null,
-        lastName: null,
+        firstName: user.first_name,
+        lastName: user.last_name,
         isEmailVerified: user.is_email_verified,
         subscriptionTier: user.subscription_tier,
         isNewUser: user.is_new_user,
+        isAdmin: false,
         createdAt: user.created_at,
-        updatedAt: user.created_at
+        updatedAt: user.updated_at
       },
       token,
-      refreshToken: `refresh_${token}`
+      success: true
     });
 
   } catch (error) {
     console.error('🟢 CLEAN SERVER: Registration error:', error);
-    res.status(500).json({ error: 'Registration failed', details: error.message });
+    res.status(500).json({ 
+      error: 'Internal server error during registration',
+      details: error.message
+    });
   }
 });
 
+// Login endpoint
 app.post('/api/auth/login', async (req, res) => {
-  console.log('🟢 CLEAN SERVER: Login request');
+  console.log('🟢 CLEAN SERVER: Login endpoint hit');
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password required' });
+      return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    // Get user from database
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
 
     if (result.rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
-    const isValid = await bcryptjs.compare(password, user.password_hash);
 
-    if (!isValid) {
+    // Verify password
+    const isValidPassword = await bcryptjs.compare(password, user.password_hash);
+
+    if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Generate JWT token
     const token = jwt.sign(
-      { userId: user.id, email: user.email, username: user.username },
+      { 
+        id: user.id,
+        userId: user.id, 
+        email: user.email,
+        username: user.username,
+        isAdmin: user.is_admin || false
+      },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    console.log('🟢 CLEAN SERVER: Login successful for:', user.email);
+    console.log('🟢 CLEAN SERVER: Login successful:', { userId: user.id, email: user.email });
 
     res.json({
       user: {
@@ -188,7 +225,7 @@ app.post('/api/auth/login', async (req, res) => {
         isEmailVerified: user.is_email_verified,
         subscriptionTier: user.subscription_tier,
         isNewUser: user.is_new_user,
-        isAdmin: user.is_admin,
+        isAdmin: user.is_admin || false,
         createdAt: user.created_at,
         updatedAt: user.updated_at
       },
@@ -198,8 +235,31 @@ app.post('/api/auth/login', async (req, res) => {
 
   } catch (error) {
     console.error('🟢 CLEAN SERVER: Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: 'Internal server error during login' });
   }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('🟢 CLEAN SERVER: Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    server: 'clean-server.js',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  console.log(`🟢 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+    server: 'clean-server.js',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Start server
@@ -207,15 +267,20 @@ app.listen(PORT, HOST, async () => {
   console.log(`🟢 CLEAN SERVER: Running on ${HOST}:${PORT}`);
   console.log(`🟢 CLEAN SERVER: Health: http://${HOST}:${PORT}/api/health`);
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
-  await initDB();
+  console.log(`🟢 CLEAN SERVER: Database initialized`);
+  
+  await initializeDatabase();
 });
 
+// Graceful shutdown
 process.on('SIGTERM', () => {
-  console.log('🟢 CLEAN SERVER: Shutting down');
+  console.log('🟢 CLEAN SERVER: SIGTERM received, shutting down gracefully');
+  if (pool) pool.end();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
-  console.log('🟢 CLEAN SERVER: Shutting down');
+  console.log('🟢 CLEAN SERVER: SIGINT received, shutting down gracefully');
+  if (pool) pool.end();
   process.exit(0);
 });
