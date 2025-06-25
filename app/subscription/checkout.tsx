@@ -16,7 +16,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api';
 
 console.log('API Base URL:', API_BASE_URL);
 
