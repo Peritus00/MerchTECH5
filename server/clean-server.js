@@ -119,16 +119,44 @@ app.get('/', (req, res) => {
 // Debug routes endpoint
 app.get('/api/routes', (req, res) => {
   const routes = [];
+  
+  // Get all registered routes
   app._router.stack.forEach((middleware) => {
     if (middleware.route) {
+      // Direct route
       routes.push({
         method: Object.keys(middleware.route.methods)[0].toUpperCase(),
-        path: middleware.route.path
+        path: middleware.route.path,
+        type: 'direct'
+      });
+    } else if (middleware.name === 'router') {
+      // Router middleware
+      middleware.handle.stack.forEach((handler) => {
+        if (handler.route) {
+          const fullPath = middleware.regexp.source
+            .replace('\\/?', '')
+            .replace('(?=\\/|$)', '')
+            .replace('^', '') + handler.route.path;
+          routes.push({
+            method: Object.keys(handler.route.methods)[0].toUpperCase(),
+            path: fullPath.replace(/\\\//g, '/'),
+            type: 'router'
+          });
+        }
       });
     }
   });
+
+  // Add manually documented Stripe routes since they might not show up in stack
+  const stripeRoutes = [
+    { method: 'POST', path: '/api/stripe/create-checkout-session', type: 'stripe', auth: 'required' },
+    { method: 'POST', path: '/api/stripe/create-payment-intent', type: 'stripe', auth: 'required' }
+  ];
+
   res.json({ 
     routes: routes,
+    stripeRoutes: stripeRoutes,
+    stripeConfigured: !!stripe,
     server: 'clean-server.js',
     timestamp: new Date().toISOString()
   });
@@ -277,6 +305,20 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
       details: error.message
     });
   }
+});
+
+// Stripe health check endpoint
+app.get('/api/stripe/health', (req, res) => {
+  res.json({
+    stripeConfigured: !!stripe,
+    endpoints: [
+      'POST /api/stripe/create-checkout-session (auth required)',
+      'POST /api/stripe/create-payment-intent (auth required)'
+    ],
+    testMode: !stripe,
+    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - payments will return mock responses',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // User subscription update endpoint
