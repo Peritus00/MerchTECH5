@@ -150,12 +150,19 @@ app.get('/', (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes immediately...');
 
+// Route hit logging middleware for Stripe routes
+app.use('/api/stripe/*', (req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE HIT ***`);
+  console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
+  console.log(`🟢 CLEAN SERVER: URL: ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: Path: ${req.path}`);
+  console.log(`🟢 CLEAN SERVER: Time: ${new Date().toISOString()}`);
+  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE PASSED ***`);
+  next();
+});
+
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
-  console.log(`🟢 CLEAN SERVER: *** STRIPE MIDDLEWARE HIT ***`);
-  console.log(`🟢 CLEAN SERVER: Stripe route accessed: ${req.method} ${req.originalUrl}`);
-  console.log(`🟢 CLEAN SERVER: Stripe route path: ${req.path}`);
-  console.log(`🟢 CLEAN SERVER: *** END STRIPE MIDDLEWARE ***`);
   console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
   console.log('🟢 CLEAN SERVER: Request method:', req.method);
   console.log('🟢 CLEAN SERVER: Request path:', req.path);
@@ -580,6 +587,49 @@ app.use((req, res) => {
   });
 });
 
+// Function to verify routes are actually working
+function verifyRoutesWorking() {
+  console.log('🟢 CLEAN SERVER: *** ROUTE VERIFICATION TEST ***');
+  
+  const routesToTest = [
+    { method: 'GET', path: '/api/stripe/health' },
+    { method: 'GET', path: '/' },
+    { method: 'POST', path: '/api/auth/register' },
+    { method: 'POST', path: '/api/auth/login' }
+  ];
+
+  // Test each route by checking if Express can match it
+  routesToTest.forEach(route => {
+    try {
+      // Create a mock request to test route matching
+      const mockReq = {
+        method: route.method,
+        url: route.path,
+        originalUrl: route.path,
+        path: route.path
+      };
+
+      // Check if any route handlers would match
+      let routeFound = false;
+      if (app._router && app._router.stack) {
+        app._router.stack.forEach(layer => {
+          if (layer.route && layer.route.path === route.path) {
+            if (layer.route.methods[route.method.toLowerCase()]) {
+              routeFound = true;
+            }
+          }
+        });
+      }
+
+      console.log(`🟢 CLEAN SERVER: Route ${route.method} ${route.path}: ${routeFound ? 'FOUND' : 'NOT FOUND'}`);
+    } catch (error) {
+      console.log(`🟢 CLEAN SERVER: Route ${route.method} ${route.path}: ERROR - ${error.message}`);
+    }
+  });
+
+  console.log('🟢 CLEAN SERVER: *** END ROUTE VERIFICATION ***');
+}
+
 // Function to list all registered routes
 function listRegisteredRoutes() {
   console.log('🟢 CLEAN SERVER: *** REGISTERED ROUTES DEBUG ***');
@@ -654,10 +704,17 @@ app.listen(PORT, HOST, () => {
   console.log(`🟢 CLEAN SERVER: Health: http://${HOST}:${PORT}/api/health`);
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
 
+  // Verify routes immediately - they should be registered by now
+  console.log('🟢 CLEAN SERVER: *** IMMEDIATE ROUTE CHECK ***');
+  console.log('🟢 CLEAN SERVER: app._router exists:', !!app._router);
+  console.log('🟢 CLEAN SERVER: app._router.stack exists:', !!(app._router && app._router.stack));
+  console.log('🟢 CLEAN SERVER: app._router.stack length:', app._router?.stack?.length || 0);
+  
   // List all registered routes for debugging after server starts
   setTimeout(() => {
     listRegisteredRoutes();
-  }, 100);
+    verifyRoutesWorking();
+  }, 500);
 });
 
 // Graceful shutdown
