@@ -39,7 +39,7 @@ if (stripeSecretKey &&
     stripeSecretKey !== 'sk_live_your_stripe_secret_key_here' && 
     stripeSecretKey !== 'sk_test_51234567890abcdef_test_key_placeholder' &&
     (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_'))) {
-  
+
   try {
     stripe = require('stripe')(stripeSecretKey);
     console.log('🟢 CLEAN SERVER: Stripe initialized successfully with key:', stripeSecretKey.substring(0, 12) + '...');
@@ -60,6 +60,12 @@ const PORT = 5000;
 const HOST = '0.0.0.0';
 
 console.log('🟢 CLEAN SERVER: Starting...');
+
+// Debug middleware to log all requests - must be before route definitions
+app.use((req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: Incoming request: ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 // CORS - simple and permissive
 app.use(cors({
@@ -137,7 +143,7 @@ app.get('/', (req, res) => {
 // Debug routes endpoint
 app.get('/api/routes', (req, res) => {
   const routes = [];
-  
+
   // Get all registered routes
   app._router.stack.forEach((middleware) => {
     if (middleware.route) {
@@ -216,7 +222,7 @@ app.get('/api/stripe/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
-  
+
   res.json({
     stripeConfigured: !!stripe,
     secretKeyExists: !!stripeSecretKey,
@@ -398,7 +404,7 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
     }
 
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
-    
+
 
     values.push(userId);
     let query;
@@ -415,7 +421,7 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
       `;
     }
 
-    
+
 
     console.log('Executing query:', query);
     console.log('With values:', values);
@@ -608,8 +614,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler
-app.use('/*splat', (req, res) => {
+// 404 handler - MUST be last (Express v5 compatible)
+app.use('*', (req, res) => {
   console.log(`🟢 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     error: 'Route not found',
