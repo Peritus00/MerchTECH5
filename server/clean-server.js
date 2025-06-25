@@ -306,11 +306,8 @@ app.post('/api/auth/login', async (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
-// Try Express Router pattern as alternative
-const stripeRouter = express.Router();
-
-// Stripe health check endpoint
-stripeRouter.get('/health', (req, res) => {
+// Stripe health check endpoint - Direct app registration
+app.get('/api/stripe/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
   console.log('🟢 CLEAN SERVER: Request method:', req.method);
   console.log('🟢 CLEAN SERVER: Request path:', req.path);
@@ -340,7 +337,7 @@ stripeRouter.get('/health', (req, res) => {
   res.json(response);
 });
 
-// Stripe checkout session endpoint
+// Stripe checkout session endpoint - Direct app registration
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
@@ -400,9 +397,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
-// Mount the Stripe router
-app.use('/api/stripe', stripeRouter);
-console.log('🟢 CLEAN SERVER: Stripe router mounted on /api/stripe');
+console.log('🟢 CLEAN SERVER: All Stripe routes registered directly on app');
 
 // Stripe payment intent endpoint (keeping original pattern too)
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
