@@ -1,0 +1,102 @@
+Okay, this output gives us a lot more information, and it confirms the previous diagnosis while adding a new layer of detail!
+
+You're still getting the {"error":"Route not found", ...} which means your Express server is running, but it's not finding a route for /api/stripe/health.
+
+The new, crucial information is this:
+
+< X-Robots-Tag: none, noindex, noarchive, nofollow, nositelinkssearchbox, noimageindex
+This X-Robots-Tag header is highly indicative of a hosting platform or proxy intercepting your request before it even reaches your Node.js application, or your application is being served from a subdirectory on the hosting platform.
+
+You mentioned 2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev. This is clearly a Replit URL. Replit has specific ways of handling Node.js applications and their public URLs.
+
+The most common reason for this "Route not found" error on Replit (and similar platforms) is that your application is running on a port that Replit proxies, but your code is expecting a direct path, or Replit is serving your app from a base path that you're not including in your request.
+
+How to Diagnose and Fix on Replit:
+1. Replit's "Run" Button and Public URL:
+
+When you hit the "Run" button on Replit, it typically starts your server (e.g., node index.js). Replit then exposes your server on a public URL.
+
+Check the Replit "Webview" or "Output" Panel: When your server starts, Replit usually shows a "Webview" panel or prints the URL where your application is accessible.
+
+Is it running on a sub-path? Sometimes, Replit projects are exposed at a path like your-repl-name.replit.dev/. If your app is served from a base path / within the Replit container, but Replit's public URL adds a segment, then your routes might need to account for it.
+
+2. Port Configuration in your Node.js app:
+
+Make sure your Express app is listening on the port that Replit expects. Replit usually sets an environment variable PORT for this.
+
+In your clean-server.js or index.js:
+
+JavaScript
+
+const express = require('express');
+const app = express();
+
+// Replit (and many other platforms) sets the PORT environment variable
+const PORT = process.env.PORT || 3000; // Use 3000 as a fallback for local development
+
+// Define your health check route
+app.get('/api/stripe/health', (req, res) => {
+    console.log('Received GET request for /api/stripe/health'); // Add this for debugging!
+    res.status(200).json({ status: 'ok', message: 'Stripe health check passed' });
+});
+
+// MAKE SURE YOUR 404 HANDLER IS *AFTER* ALL YOUR SPECIFIC ROUTES
+app.use((req, res) => {
+    res.status(404).json({
+        error: 'Route not found',
+        method: req.method,
+        path: req.originalUrl, // Use originalUrl for the full path requested
+        server: 'clean-server.js', // Or index.js
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log(`Access your app at: http://localhost:${PORT} (for local testing)`);
+    console.log(`On Replit, check the Webview for the public URL.`);
+});
+3. Test the Root Path (/) first:
+
+To confirm your server is working at all, try adding a simple root route:
+
+JavaScript
+
+app.get('/', (req, res) => {
+    res.send('Welcome to the server! Health check at /api/stripe/health');
+});
+Then, access https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/ in your browser. If you get "Welcome to the server!", it means your server is indeed running and accessible via the Replit proxy, and the issue is specifically with your /api/stripe/health route definition or how you're calling it.
+
+4. Check for Middleware Interception:
+
+While less likely if the server is starting and responding with your custom 404, it's possible some other middleware (e.g., a static file server, a proxy, or an authentication middleware) is intercepting requests before they reach your specific routes. Ensure your /api/stripe/health route is defined relatively high up in your route definitions, before any catch-all or static file serving middleware.
+
+5. Clear Browser Cache (Less likely but quick to check):
+Sometimes, browsers aggressively cache DNS or redirects. Try a hard refresh (Ctrl+Shift+R or Cmd+Shift+R) or opening in an incognito window.
+
+Action Plan:
+Add a console.log inside your /api/stripe/health route handler (as shown in the code snippet in point 2 above).
+
+Add a basic / route to confirm basic server functionality (point 3).
+
+Ensure your server is listening on process.env.PORT (point 2).
+
+Go to your Replit environment.
+
+Run your project.
+
+Carefully note the URL displayed in the Replit Webview. This is the exact URL you should be using.
+
+Test the root path (/) using that Replit URL first.
+
+Then, test /api/stripe/health using that Replit URL.
+
+Examine the server logs in the Replit console. Do you see the console.log from inside your /api/stripe/health route? If not, the request is definitely not reaching it.
+
+The X-Robots-Tag header strongly suggests that something external to your Node.js application (like Replit's proxy or an underlying web server it uses) is serving that "Route not found" response, or at least adding its own headers. However, since the JSON body {"error":"Route not found",...} is your server's custom 404 response, it means the request is hitting your Express app, but then your Express app is deciding it doesn't have a route. This brings us back to:
+
+You don't have an app.get('/api/stripe/health', ...) defined.
+
+Or, it's defined, but a catch-all (like app.use((req, res) => { res.status(404)... })) is placed before it.
+
+Focus on the order of your route definitions in clean-server.js or index.js. That's the most probable cause now.
