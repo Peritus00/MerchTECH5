@@ -1,0 +1,102 @@
+How to Fix "NO ROUTER STACK FOUND"
+Let's look at a typical clean-server.js or index.js structure and where the problem might be.
+
+Check 1: const app = express(); - Is it there and correct?
+
+This line is fundamental. Without it, you don't have an Express application.
+
+JavaScript
+
+// clean-server.js (or index.js)
+
+// 1. Make sure you are requiring express
+const express = require('express');
+
+// 2. THIS IS THE MOST CRITICAL LINE for this error:
+const app = express(); // <--- Is this line present and correctly spelled?
+                      //      Is it called only ONCE to create your main app?
+
+// 3. All subsequent route and middleware definitions MUST use this 'app' instance
+app.use(express.json()); // Example middleware
+app.get('/api/stripe/health', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Health check' });
+});
+
+// ... other routes and middleware ...
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+});
+Common mistakes leading to "NO ROUTER STACK FOUND":
+
+Forgetting (): const app = express; (Missing parentheses, so app is the express function itself, not an application instance).
+
+Overwriting app: let app = express(); then later app = someOtherValue;
+
+Scoped app: Defining const app = express(); inside a function or block, but then trying to use an app variable outside that scope.
+
+Exporting app incorrectly and importing it elsewhere: If you're creating the app instance in one file and then exporting it to be used in others, ensure the export and import are done correctly.
+
+Main file:
+
+JavaScript
+
+// app.js
+const express = require('express');
+const app = express();
+module.exports = app; // Export the app instance
+Server file (using the exported app):
+
+JavaScript
+
+// index.js (or clean-server.js)
+const app = require('./app'); // Import the app instance
+// ... now use 'app' for middleware and routes ...
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => { console.log(`Listening on ${PORT}`); });
+Check 2: Are you using express.Router() correctly?
+
+If you're using express.Router() in separate files, ensure you are exporting the router instance and then properly mounting it onto your main app instance using app.use().
+
+JavaScript
+
+// routes/myRoutes.js
+const express = require('express');
+const router = express.Router(); // <--- Create a router
+
+router.get('/test', (req, res) => res.send('Router test'));
+
+module.exports = router; // <--- Export it!
+
+// In your main server file (clean-server.js or index.js)
+const app = require('./app'); // Or const app = express();
+const myRoutes = require('./routes/myRoutes');
+
+app.use('/api', myRoutes); // <--- Mount the router!
+Action Plan:
+Open clean-server.js (or index.js, whichever is your primary server file).
+
+Focus on the very beginning of the file.
+
+Find the line const app = express();
+
+Verify it exists.
+
+Verify it's spelled exactly express() (with parentheses).
+
+Verify it's not being overwritten later in the code.
+
+Verify it's not inside a function or conditional block that might prevent it from being executed.
+
+If you are separating concerns into multiple files (e.g., routes/stripe.js), then:
+
+Ensure the express.Router() instance is created and exported from those files.
+
+Ensure that in your main clean-server.js (or index.js), you are importing these routers and using app.use('/your-base-path', yourRouter);.
+
+Remove the debug output lines you added (e.g., Express router exists: false) as they might be interfering or giving misleading info if you didn't check the app instance directly.
+
+After making changes, save the file and restart your server.
+
+Once the "NO ROUTER STACK FOUND" issue is resolved, then you can address the "double /api" frontend issue. It's crucial to fix the backend first, as it's the root cause of all 404s.
