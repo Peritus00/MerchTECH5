@@ -205,11 +205,35 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Stripe health check endpoint
+app.get('/api/stripe/health', (req, res) => {
+  console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+  
+  res.json({
+    stripeConfigured: !!stripe,
+    secretKeyExists: !!stripeSecretKey,
+    secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
+    secretKeyType: stripeSecretKey?.startsWith('sk_live_') ? 'live' : stripeSecretKey?.startsWith('sk_test_') ? 'test' : 'invalid',
+    publishableKeyExists: !!stripePublishableKey,
+    publishableKeyValid: stripePublishableKey && (stripePublishableKey.startsWith('pk_test_') || stripePublishableKey.startsWith('pk_live_')),
+    endpoints: [
+      'POST /api/stripe/create-checkout-session (auth required)',
+      'POST /api/stripe/create-payment-intent (auth required)'
+    ],
+    testMode: !stripe,
+    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
+    keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Stripe payment endpoints
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
-    console.log('Creating Stripe checkout session for:', subscriptionTier);
+    console.log('🟢 CLEAN SERVER: Creating Stripe checkout session for:', subscriptionTier);
 
     // Check if Stripe is properly configured
     if (!stripe) {
@@ -249,14 +273,14 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
       }
     });
 
-    console.log('Stripe checkout session created:', session.id);
+    console.log('🟢 CLEAN SERVER: Stripe checkout session created:', session.id);
     res.json({
       success: true,
       url: session.url,
       sessionId: session.id
     });
   } catch (error) {
-    console.error('Stripe checkout session error:', error);
+    console.error('🟢 CLEAN SERVER: Stripe checkout session error:', error);
     res.status(500).json({ 
       success: false, 
       error: 'Failed to create checkout session',
@@ -268,7 +292,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
-    console.log('Creating payment intent for:', subscriptionTier);
+    console.log('🟢 CLEAN SERVER: Creating payment intent for:', subscriptionTier);
 
     // Check if Stripe is properly configured
     if (!stripe) {
@@ -311,42 +335,18 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
       }
     });
 
-    console.log('Payment intent created:', paymentIntent.id);
+    console.log('🟢 CLEAN SERVER: Payment intent created:', paymentIntent.id);
     res.json({
       clientSecret: paymentIntent.client_secret,
       customerId: customer.id
     });
   } catch (error) {
-    console.error('Payment intent error:', error);
+    console.error('🟢 CLEAN SERVER: Payment intent error:', error);
     res.status(500).json({ 
       message: 'Failed to create payment intent',
       details: error.message
     });
   }
-});
-
-// Stripe health check endpoint
-app.get('/api/stripe/health', (req, res) => {
-  console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
-  
-  res.json({
-    stripeConfigured: !!stripe,
-    secretKeyExists: !!stripeSecretKey,
-    secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
-    secretKeyType: stripeSecretKey?.startsWith('sk_live_') ? 'live' : stripeSecretKey?.startsWith('sk_test_') ? 'test' : 'invalid',
-    publishableKeyExists: !!stripePublishableKey,
-    publishableKeyValid: stripePublishableKey && (stripePublishableKey.startsWith('pk_test_') || stripePublishableKey.startsWith('pk_live_')),
-    endpoints: [
-      'POST /api/stripe/create-checkout-session (auth required)',
-      'POST /api/stripe/create-payment-intent (auth required)'
-    ],
-    testMode: !stripe,
-    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
-    keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
-    timestamp: new Date().toISOString()
-  });
 });
 
 // User subscription update endpoint
