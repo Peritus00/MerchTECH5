@@ -16,7 +16,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api';
 
 console.log('API Base URL:', API_BASE_URL);
 
@@ -48,7 +48,7 @@ export default function SubscriptionCheckoutScreen() {
       console.log('🔥 Starting secure checkout for tier:', tier);
 
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE_URL}/api/stripe/create-checkout-session`, {
+      const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ export default function SubscriptionCheckoutScreen() {
         const token = await AsyncStorage.getItem('authToken');
 
       // Create payment intent on the backend
-      const response = await fetch(`${API_BASE_URL}/api/stripe/create-payment-intent`, {
+      const response = await fetch(`${API_BASE_URL}/stripe/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
