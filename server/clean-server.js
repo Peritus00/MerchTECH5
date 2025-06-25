@@ -37,7 +37,24 @@ pool.connect()
 // Handle database connection errors gracefully
 pool.on('error', (err) => {
   console.error('💥 Database connection error:', err);
-  console.log('🔄 Attempting to reconnect...');
+  console.log('🔄 Connection will be retried automatically');
+});
+
+// Graceful shutdown handlers
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, closing database pool...');
+  pool.end(() => {
+    console.log('📊 Database pool closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 SIGINT received, closing database pool...');
+  pool.end(() => {
+    console.log('📊 Database pool closed');
+    process.exit(0);
+  });
 });
 
 // Middleware
@@ -51,10 +68,8 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Trust proxy for rate limiting in production
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+// Trust proxy for rate limiting (required for Replit)
+app.set('trust proxy', 1);
 
 // Rate limiting
 const limiter = rateLimit({
