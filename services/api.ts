@@ -5,18 +5,19 @@ import { Platform } from 'react-native';
 const getApiBaseUrl = () => {
   // Use environment variable first
   const envUrl = process.env.EXPO_PUBLIC_API_URL;
-  
+
   if (envUrl) {
     console.log('API Base URL (from env):', envUrl);
     return envUrl;
   }
-  
+
   // If no env var, throw an error to make it obvious
   console.error('❌ EXPO_PUBLIC_API_URL environment variable not set!');
   throw new Error('API URL not configured - EXPO_PUBLIC_API_URL environment variable is required');
 };
 
-const API_BASE_URL = getApiBaseUrl();
+// Get the API base URL from environment variable
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:8000/api';
 
 console.log('API Base URL:', API_BASE_URL);
 
