@@ -62,9 +62,13 @@ if (!stripe) {
 app.get('/api/health', async (req, res) => {
   console.log('🔴 SERVER: Health check requested');
   try {
-    await pool.query('SELECT NOW()');
+    const dbResult = await pool.query('SELECT NOW()');
+    const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
+    
     res.json({ 
       status: 'healthy',
+      database: 'connected',
+      users: parseInt(userCountResult.rows[0].count),
       timestamp: new Date().toISOString(),
       server: 'simple-server.js'
     });
@@ -79,7 +83,9 @@ app.get('/api/stripe/health', (req, res) => {
   console.log('🔴 SERVER: Stripe health check requested');
   res.json({
     stripeConfigured: !!stripe,
+    secretKeyValid: !!stripe,
     keyType: stripe ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST') : 'NONE',
+    secretKeyType: stripe ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST') : 'NONE',
     timestamp: new Date().toISOString(),
     server: 'simple-server.js'
   });
