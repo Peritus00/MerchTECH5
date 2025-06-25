@@ -501,6 +501,103 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  console.log('🔴 SERVER: ============ LOGIN ENDPOINT DEBUG START ============');
+  console.log('🔴 SERVER: Login endpoint hit at:', new Date().toISOString());
+  console.log('🔴 SERVER: Request body:', req.body);
+
+  try {
+    const { email, password } = req.body;
+
+    console.log('🔴 SERVER: Login attempt for:', { email, hasPassword: !!password });
+
+    if (!email || !password) {
+      console.error('🔴 SERVER: Missing email or password');
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    console.log('🔴 SERVER: Querying database for user...');
+    // Get user from database
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    console.log('🔴 SERVER: Database query result:', {
+      rowCount: result.rowCount,
+      foundUser: result.rows.length > 0
+    });
+
+    if (result.rows.length === 0) {
+      console.log('🔴 SERVER: User not found for email:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+    console.log('🔴 SERVER: Found user:', { id: user.id, email: user.email, username: user.username });
+
+    console.log('🔴 SERVER: Verifying password...');
+    // Verify password
+    const bcrypt = require('bcrypt');
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+
+    console.log('🔴 SERVER: Password verification result:', isValidPassword);
+
+    if (!isValidPassword) {
+      console.log('🔴 SERVER: Invalid password for user:', email);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    console.log('🔴 SERVER: Generating JWT token...');
+    // Generate JWT token
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        username: user.username 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    const responseData = {
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isEmailVerified: user.is_email_verified,
+        subscriptionTier: user.subscription_tier,
+        isNewUser: user.is_new_user,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      },
+      token,
+      refreshToken: `refresh_${token}`
+    };
+
+    console.log('🔴 SERVER: Login successful for:', { userId: user.id, email: user.email, username: user.username });
+    console.log('🔴 SERVER: ============ LOGIN ENDPOINT DEBUG END ============');
+
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('🔴 SERVER: ============ LOGIN ERROR DEBUG START ============');
+    console.error('🔴 SERVER: Login error:', error);
+    console.error('🔴 SERVER: Error message:', error.message);
+    console.error('🔴 SERVER: Error stack:', error.stack);
+    console.error('🔴 SERVER: ============ LOGIN ERROR DEBUG END ============');
+
+    res.status(500).json({ 
+      error: 'Internal server error during login',
+      details: error.message 
+    });
+  }
+});
+
 // Database initialization function
 async function initializeDatabase() {
   try {
