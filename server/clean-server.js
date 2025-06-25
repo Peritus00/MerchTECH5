@@ -1,9 +1,16 @@
+
 const express = require('express');
 const cors = require('cors');
 const { Pool } = require('pg');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
+
+const app = express();
+const PORT = 5000;
+const HOST = '0.0.0.0';
+
+console.log('🟢 CLEAN SERVER: Starting...');
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
@@ -55,13 +62,7 @@ if (stripeSecretKey &&
   console.log('🟡 CLEAN SERVER: Payment endpoints will return test responses');
 }
 
-const app = express();
-const PORT = 5000;
-const HOST = '0.0.0.0';
-
-console.log('🟢 CLEAN SERVER: Starting...');
-
-// Initialize Express app properly for v5
+// MIDDLEWARE SETUP - PROPER ORDER
 app.disable('x-powered-by');
 
 // CORS - simple and permissive
@@ -140,6 +141,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// ROUTES - AFTER ALL MIDDLEWARE IS SET UP
+
 // Root route
 app.get('/', (req, res) => {
   console.log('🟢 CLEAN SERVER: Root route hit');
@@ -150,265 +153,6 @@ app.get('/', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
-
-// ==================== STRIPE ROUTES ====================
-console.log('🟢 CLEAN SERVER: Registering Stripe routes immediately...');
-
-// Stripe health check endpoint
-app.get('/api/stripe/health', (req, res) => {
-  console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT ACTUALLY HIT ***');
-  console.log('🟢 CLEAN SERVER: Request method:', req.method);
-  console.log('🟢 CLEAN SERVER: Request path:', req.path);
-  console.log('🟢 CLEAN SERVER: Request originalUrl:', req.originalUrl);
-
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
-
-  const response = {
-    stripeConfigured: !!stripe,
-    secretKeyExists: !!stripeSecretKey,
-    secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
-    secretKeyType: stripeSecretKey?.startsWith('sk_live_') ? 'live' : stripeSecretKey?.startsWith('sk_test_') ? 'test' : 'invalid',
-    publishableKeyExists: !!stripePublishableKey,
-    publishableKeyValid: stripePublishableKey && (stripePublishableKey.startsWith('pk_test_') || stripePublishableKey.startsWith('pk_live_')),
-    endpoints: [
-      'POST /api/stripe/create-checkout-session (auth required)',
-      'POST /api/stripe/create-payment-intent (auth required)'
-    ],
-    testMode: !stripe,
-    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
-    keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
-    timestamp: new Date().toISOString()
-  };
-
-  console.log('🟢 CLEAN SERVER: Sending health check response:', response);
-  res.json(response);
-});
-
-// Stripe checkout session endpoint
-app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
-  try {
-    const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
-    console.log('🟢 CLEAN SERVER: Creating Stripe checkout session for:', subscriptionTier);
-
-    // Check if Stripe is properly configured
-    if (!stripe) {
-      console.log('🟡 CLEAN SERVER: Using test mode - Stripe not configured');
-      // Return a test response for development
-      return res.json({
-        success: true,
-        url: successUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?session_id=test_session_123&tier=${subscriptionTier}&newUser=true`,
-        sessionId: 'test_session_123'
-      });
-    }
-
-    // Create actual Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
-          description: `MerchTech QR ${subscriptionTier} subscription`
-          },
-          unit_amount: amount,
-          recurring: {
-            interval: 'month'
-          }
-        },
-        quantity: 1,
-      }],
-      mode: 'subscription',
-      success_url: successUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?session_id={CHECKOUT_SESSION_ID}&tier=${subscriptionTier}&newUser=true`,
-      cancel_url: cancelUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/checkout?tier=${subscriptionTier}`,
-      customer_email: req.user.email,
-      metadata: {
-        userId: req.user.id.toString(),
-        subscriptionTier: subscriptionTier
-      }
-    });
-
-    console.log('🟢 CLEAN SERVER: Stripe checkout session created:', session.id);
-    res.json({
-      success: true,
-      url: session.url,
-      sessionId: session.id
-    });
-  } catch (error) {
-    console.error('🟢 CLEAN SERVER: Stripe checkout session error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: 'Failed to create checkout session',
-      details: error.message
-    });
-  }
-});
-
-// Stripe payment intent endpoint
-app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
-  try {
-    const { subscriptionTier, amount } = req.body;
-    console.log('🟢 CLEAN SERVER: Creating payment intent for:', subscriptionTier);
-
-    // Check if Stripe is properly configured
-    if (!stripe) {
-      console.log('🟡 CLEAN SERVER: Using test mode - Stripe not configured');
-      // Return a test response for development
-      return res.json({
-        clientSecret: 'test_client_secret_123',
-        customerId: 'test_customer_123'
-      });
-    }
-
-    // Create or retrieve customer
-    let customer;
-    const existingCustomers = await stripe.customers.list({
-      email: req.user.email,
-      limit: 1
-    });
-
-    if (existingCustomers.data.length > 0) {
-      customer = existingCustomers.data[0];
-    } else {
-      customer = await stripe.customers.create({
-        email: req.user.email,
-        name: req.user.username,
-        metadata: {
-          userId: req.user.id.toString()
-        }
-      });
-    }
-
-    // Create payment intent
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount,
-      currency: 'usd',
-      customer: customer.id,
-      setup_future_usage: 'off_session',
-      metadata: {
-        subscriptionTier,
-        userId: req.user.id.toString()
-      }
-    });
-
-    console.log('🟢 CLEAN SERVER: Payment intent created:', paymentIntent.id);
-    res.json({
-      clientSecret: paymentIntent.client_secret,
-      customerId: customer.id
-    });
-  } catch (error) {
-    console.error('🟢 CLEAN SERVER: Payment intent error:', error);
-    res.status(500).json({ 
-      message: 'Failed to create payment intent',
-      details: error.message
-    });
-  }
-});
-
-console.log('🟢 CLEAN SERVER: Stripe routes registered successfully');
-console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
-console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
-console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
-console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
-
-console.log('🟢 CLEAN SERVER: Stripe routes registered successfully');
-
-// ==================== USER ROUTES ====================
-console.log('🟢 CLEAN SERVER: Registering User routes...');
-
-// User subscription update endpoint  
-app.put('/api/user/subscription', authenticateToken, async (req, res) => {
-  try {
-    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
-    const userId = req.user.id;
-
-    console.log('Updating user subscription:', {
-      userId,
-      subscriptionTier,
-      isNewUser,
-      stripeCustomerId,
-      stripeSubscriptionId
-    });
-
-    // Build update query dynamically
-    const updates = [];
-    const values = [];
-    let paramCount = 0;
-
-    if (subscriptionTier !== undefined) {
-      updates.push(`subscription_tier = $${++paramCount}`);
-      values.push(subscriptionTier);
-    }
-
-    if (isNewUser !== undefined) {
-      updates.push(`is_new_user = $${++paramCount}`);
-      values.push(isNewUser);
-    }
-
-    if (stripeCustomerId !== undefined) {
-      updates.push(`stripe_customer_id = $${++paramCount}`);
-      values.push(stripeCustomerId);
-    }
-
-    if (stripeSubscriptionId !== undefined) {
-      updates.push(`stripe_subscription_id = $${++paramCount}`);
-      values.push(stripeSubscriptionId);
-    }
-
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-
-    values.push(userId);
-    let query;
-    if(values.length > 0){
-      query = `
-        UPDATE users 
-        SET ${updates.join(', ')}
-        WHERE id = $${++paramCount}
-        RETURNING *
-      `;
-    } else {
-      query = `
-        SELECT * FROM users WHERE id = $${++paramCount}
-      `;
-    }
-
-    console.log('Executing query:', query);
-    console.log('With values:', values);
-
-    const result = await pool.query(query, values);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const updatedUser = result.rows[0];
-    console.log('User subscription updated successfully:', updatedUser);
-
-    res.json({
-      success: true,
-      user: {
-        id: updatedUser.id,
-        email: updatedUser.email,
-        username: updatedUser.username,
-        subscriptionTier: updatedUser.subscription_tier,
-        isNewUser: updatedUser.is_new_user,
-        stripeCustomerId: updatedUser.stripe_customer_id,
-        stripeSubscriptionId: updatedUser.stripe_subscription_id
-      }
-    });
-
-  } catch (error) {
-    console.error('Error updating user subscription:', error);
-    res.status(500).json({ 
-      error: 'Failed to update subscription',
-      details: error.message 
-    });
-  }
-});
-
-console.log('🟢 CLEAN SERVER: User routes registered successfully');
-console.log('🟢 CLEAN SERVER: All routes registered successfully');
 
 // ==================== AUTH ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Auth routes...');
@@ -559,7 +303,255 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Error handling middleware
+// ==================== STRIPE ROUTES ====================
+console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
+
+// Stripe health check endpoint
+app.get('/api/stripe/health', (req, res) => {
+  console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
+  console.log('🟢 CLEAN SERVER: Request method:', req.method);
+  console.log('🟢 CLEAN SERVER: Request path:', req.path);
+  console.log('🟢 CLEAN SERVER: Request originalUrl:', req.originalUrl);
+
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+  const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
+
+  const response = {
+    stripeConfigured: !!stripe,
+    secretKeyExists: !!stripeSecretKey,
+    secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
+    secretKeyType: stripeSecretKey?.startsWith('sk_live_') ? 'live' : stripeSecretKey?.startsWith('sk_test_') ? 'test' : 'invalid',
+    publishableKeyExists: !!stripePublishableKey,
+    publishableKeyValid: stripePublishableKey && (stripePublishableKey.startsWith('pk_test_') || stripePublishableKey.startsWith('pk_live_')),
+    endpoints: [
+      'POST /api/stripe/create-checkout-session (auth required)',
+      'POST /api/stripe/create-payment-intent (auth required)'
+    ],
+    testMode: !stripe,
+    message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
+    keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
+    timestamp: new Date().toISOString()
+  };
+
+  console.log('🟢 CLEAN SERVER: Sending health check response:', response);
+  res.json(response);
+});
+
+// Stripe checkout session endpoint
+app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
+    console.log('🟢 CLEAN SERVER: Creating Stripe checkout session for:', subscriptionTier);
+
+    // Check if Stripe is properly configured
+    if (!stripe) {
+      console.log('🟡 CLEAN SERVER: Using test mode - Stripe not configured');
+      // Return a test response for development
+      return res.json({
+        success: true,
+        url: successUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?session_id=test_session_123&tier=${subscriptionTier}&newUser=true`,
+        sessionId: 'test_session_123'
+      });
+    }
+
+    // Create actual Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
+          description: `MerchTech QR ${subscriptionTier} subscription`
+          },
+          unit_amount: amount,
+          recurring: {
+            interval: 'month'
+          }
+        },
+        quantity: 1,
+      }],
+      mode: 'subscription',
+      success_url: successUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?session_id={CHECKOUT_SESSION_ID}&tier=${subscriptionTier}&newUser=true`,
+      cancel_url: cancelUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/checkout?tier=${subscriptionTier}`,
+      customer_email: req.user.email,
+      metadata: {
+        userId: req.user.id.toString(),
+        subscriptionTier: subscriptionTier
+      }
+    });
+
+    console.log('🟢 CLEAN SERVER: Stripe checkout session created:', session.id);
+    res.json({
+      success: true,
+      url: session.url,
+      sessionId: session.id
+    });
+  } catch (error) {
+    console.error('🟢 CLEAN SERVER: Stripe checkout session error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to create checkout session',
+      details: error.message
+    });
+  }
+});
+
+// Stripe payment intent endpoint
+app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, amount } = req.body;
+    console.log('🟢 CLEAN SERVER: Creating payment intent for:', subscriptionTier);
+
+    // Check if Stripe is properly configured
+    if (!stripe) {
+      console.log('🟡 CLEAN SERVER: Using test mode - Stripe not configured');
+      // Return a test response for development
+      return res.json({
+        clientSecret: 'test_client_secret_123',
+        customerId: 'test_customer_123'
+      });
+    }
+
+    // Create or retrieve customer
+    let customer;
+    const existingCustomers = await stripe.customers.list({
+      email: req.user.email,
+      limit: 1
+    });
+
+    if (existingCustomers.data.length > 0) {
+      customer = existingCustomers.data[0];
+    } else {
+      customer = await stripe.customers.create({
+        email: req.user.email,
+        name: req.user.username,
+        metadata: {
+          userId: req.user.id.toString()
+        }
+      });
+    }
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'usd',
+      customer: customer.id,
+      setup_future_usage: 'off_session',
+      metadata: {
+        subscriptionTier,
+        userId: req.user.id.toString()
+      }
+    });
+
+    console.log('🟢 CLEAN SERVER: Payment intent created:', paymentIntent.id);
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      customerId: customer.id
+    });
+  } catch (error) {
+    console.error('🟢 CLEAN SERVER: Payment intent error:', error);
+    res.status(500).json({ 
+      message: 'Failed to create payment intent',
+      details: error.message
+    });
+  }
+});
+
+// ==================== USER ROUTES ====================
+console.log('🟢 CLEAN SERVER: Registering User routes...');
+
+// User subscription update endpoint  
+app.put('/api/user/subscription', authenticateToken, async (req, res) => {
+  try {
+    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const userId = req.user.id;
+
+    console.log('Updating user subscription:', {
+      userId,
+      subscriptionTier,
+      isNewUser,
+      stripeCustomerId,
+      stripeSubscriptionId
+    });
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (subscriptionTier !== undefined) {
+      updates.push(`subscription_tier = $${++paramCount}`);
+      values.push(subscriptionTier);
+    }
+
+    if (isNewUser !== undefined) {
+      updates.push(`is_new_user = $${++paramCount}`);
+      values.push(isNewUser);
+    }
+
+    if (stripeCustomerId !== undefined) {
+      updates.push(`stripe_customer_id = $${++paramCount}`);
+      values.push(stripeCustomerId);
+    }
+
+    if (stripeSubscriptionId !== undefined) {
+      updates.push(`stripe_subscription_id = $${++paramCount}`);
+      values.push(stripeSubscriptionId);
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+
+    values.push(userId);
+    let query;
+    if(values.length > 0){
+      query = `
+        UPDATE users 
+        SET ${updates.join(', ')}
+        WHERE id = $${++paramCount}
+        RETURNING *
+      `;
+    } else {
+      query = `
+        SELECT * FROM users WHERE id = $${++paramCount}
+      `;
+    }
+
+    console.log('Executing query:', query);
+    console.log('With values:', values);
+
+    const result = await pool.query(query, values);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const updatedUser = result.rows[0];
+    console.log('User subscription updated successfully:', updatedUser);
+
+    res.json({
+      success: true,
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        username: updatedUser.username,
+        subscriptionTier: updatedUser.subscription_tier,
+        isNewUser: updatedUser.is_new_user,
+        stripeCustomerId: updatedUser.stripe_customer_id,
+        stripeSubscriptionId: updatedUser.stripe_subscription_id
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating user subscription:', error);
+    res.status(500).json({ 
+      error: 'Failed to update subscription',
+      details: error.message 
+    });
+  }
+});
+
+// ERROR HANDLING MIDDLEWARE - MUST BE AFTER ALL ROUTES
 app.use((err, req, res, next) => {
   console.error('🟢 CLEAN SERVER: Unhandled error:', err);
   res.status(500).json({ 
@@ -570,7 +562,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler - MUST be last
+// 404 HANDLER - MUST BE LAST
 app.use((req, res) => {
   console.log(`🔴 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
   console.log(`🔴 CLEAN SERVER: Full URL breakdown:`);
@@ -602,14 +594,22 @@ app.use((req, res) => {
   });
 });
 
-
-
-// Start server
+// START SERVER
 app.listen(PORT, HOST, () => {
   console.log(`🟢 CLEAN SERVER: Running on ${HOST}:${PORT}`);
   console.log(`🟢 CLEAN SERVER: Health: http://${HOST}:${PORT}/api/stripe/health`);
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
   console.log(`🟢 CLEAN SERVER: Server startup complete - all routes should be accessible`);
+  
+  // Log available routes
+  console.log('🟢 CLEAN SERVER: Available routes:');
+  console.log('🟢 CLEAN SERVER:   GET /');
+  console.log('🟢 CLEAN SERVER:   POST /api/auth/register');
+  console.log('🟢 CLEAN SERVER:   POST /api/auth/login');
+  console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
+  console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
+  console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
+  console.log('🟢 CLEAN SERVER:   PUT /api/user/subscription');
 });
 
 // Graceful shutdown
