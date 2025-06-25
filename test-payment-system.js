@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-const API_BASE_URL = 'https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api';
+const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api';
 
 class PaymentSystemTester {
   constructor() {
