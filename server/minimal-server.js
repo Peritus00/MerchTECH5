@@ -8,6 +8,12 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
+
+console.log('🔴 SERVER: Starting minimal server...');
+console.log('🔴 SERVER: Environment:', process.env.NODE_ENV);
+console.log('🔴 SERVER: PORT:', PORT);
+console.log('🔴 SERVER: HOST:', HOST);
 
 // CORS configuration
 app.use(cors({
@@ -19,40 +25,59 @@ app.use(cors({
 
 app.use(express.json());
 
-// Database configuration
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+// Database configuration with better error handling
+let pool;
+try {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  });
+  console.log('🔴 SERVER: Database pool created');
+} catch (error) {
+  console.error('🔴 SERVER: Database pool creation failed:', error);
+  process.exit(1);
+}
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
 
 // Root route
 app.get('/', (req, res) => {
+  console.log('🔴 SERVER: Root route hit');
   res.json({ 
-    message: 'MerchTech QR API Server', 
+    message: 'MerchTech QR API Server - MINIMAL VERSION', 
     status: 'running',
     version: '1.0.0',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      'GET /',
+      'GET /api/health',
+      'POST /api/auth/register',
+      'POST /api/auth/login'
+    ]
   });
 });
 
 // Health check
 app.get('/api/health', async (req, res) => {
+  console.log('🔴 SERVER: Health check endpoint hit');
   try {
     await pool.query('SELECT 1');
+    console.log('🔴 SERVER: Database connection successful');
     res.json({ 
       status: 'ok', 
       database: 'connected',
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
+      server: 'minimal-server.js'
     });
   } catch (error) {
-    console.error('Health check database error:', error);
+    console.error('🔴 SERVER: Health check database error:', error);
     res.status(503).json({ 
       status: 'error', 
       database: 'disconnected',
-      timestamp: new Date().toISOString() 
+      timestamp: new Date().toISOString(),
+      server: 'minimal-server.js',
+      error: error.message
     });
   }
 });
@@ -134,6 +159,7 @@ app.post('/api/auth/register', async (req, res) => {
 
 // Login endpoint
 app.post('/api/auth/login', async (req, res) => {
+  console.log('🔴 SERVER: Login endpoint hit');
   try {
     const { email, password } = req.body;
 
@@ -171,7 +197,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '24h' }
     );
 
-    console.log('Login successful:', { userId: user.id, email: user.email });
+    console.log('🔴 SERVER: Login successful:', { userId: user.id, email: user.email });
 
     res.json({
       user: {
@@ -191,7 +217,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('🔴 SERVER: Login error:', error);
     res.status(500).json({ error: 'Internal server error during login' });
   }
 });
@@ -199,7 +225,7 @@ app.post('/api/auth/login', async (req, res) => {
 // Database initialization
 async function initializeDatabase() {
   try {
-    console.log('Initializing database...');
+    console.log('🔴 SERVER: Initializing database...');
     
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -217,21 +243,77 @@ async function initializeDatabase() {
       )
     `);
 
-    console.log('Database connected and tables initialized');
+    console.log('🔴 SERVER: Database connected and tables initialized');
   } catch (error) {
-    console.error('Database initialization error:', error);
+    console.error('🔴 SERVER: Database initialization error:', error);
+    // Don't exit, just log the error
   }
 }
 
-// Start server
-app.listen(PORT, '0.0.0.0', async () => {
-  console.log(`=== MINIMAL SERVER RUNNING ===`);
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at: http://0.0.0.0:${PORT}/api`);
-  console.log(`Health check: /api/health`);
-  console.log(`Registration: /api/auth/register`);
-  console.log(`Login: /api/auth/login`);
-  console.log(`===============================`);
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('🔴 SERVER: Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  console.log(`🔴 SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
+  res.status(404).json({ 
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+    timestamp: new Date().toISOString(),
+    server: 'minimal-server.js'
+  });
+});
+
+// Start server with better error handling
+app.listen(PORT, HOST, async (error) => {
+  if (error) {
+    console.error('🔴 SERVER: Failed to start server:', error);
+    process.exit(1);
+  }
+  
+  console.log(`🔴 SERVER: =================================`);
+  console.log(`🔴 SERVER: MINIMAL SERVER RUNNING`);
+  console.log(`🔴 SERVER: Server running on ${HOST}:${PORT}`);
+  console.log(`🔴 SERVER: API available at: http://${HOST}:${PORT}/api`);
+  console.log(`🔴 SERVER: Health check: /api/health`);
+  console.log(`🔴 SERVER: Registration: /api/auth/register`);
+  console.log(`🔴 SERVER: Login: /api/auth/login`);
+  console.log(`🔴 SERVER: =================================`);
   
   await initializeDatabase();
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🔴 SERVER: SIGTERM received, shutting down gracefully');
+  if (pool) {
+    pool.end();
+  }
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  console.log('🔴 SERVER: SIGINT received, shutting down gracefully');
+  if (pool) {
+    pool.end();
+  }
+  process.exit(0);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('🔴 SERVER: Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔴 SERVER: Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
