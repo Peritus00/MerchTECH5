@@ -212,9 +212,7 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-
-
-// Stripe routes - Must be defined BEFORE auth routes to avoid conflicts
+// ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
 // Stripe health check endpoint
@@ -374,6 +372,10 @@ console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
 console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
+
+
+
+
 
 // User subscription update endpoint  
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
