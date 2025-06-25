@@ -65,131 +65,133 @@ app.get('/api/health', async (req, res) => {
 
 // Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
-  console.log('=== REGISTRATION ENDPOINT HIT ===');
-  console.log('Registration request:', { email: req.body.email, username: req.body.username });
-
   try {
-    const { email, password, username, firstName, lastName } = req.body;
+    const { email, password, username } = req.body;
 
-    if (!email || !password || !username) {
-      return res.status(400).json({ error: 'Email, password, and username are required' });
-    }
+    console.log('Registration attempt:', { email, username });
 
     // Check if user already exists
     const existingUser = await pool.query(
-      'SELECT email, username FROM users WHERE email = $1 OR username = $2',
+      'SELECT id FROM users WHERE email = $1 OR username = $2',
       [email, username]
     );
 
     if (existingUser.rows.length > 0) {
-      const user = existingUser.rows[0];
-      if (user.email === email) {
-        return res.status(400).json({ error: 'Email already registered' });
-      }
-      if (user.username === username) {
-        return res.status(400).json({ error: 'Username already taken' });
-      }
+      return res.status(400).json({ 
+        error: 'Email or username already exists' 
+      });
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-    // Create user
-    const newUser = await pool.query(
-      `INSERT INTO users (email, username, password_hash, first_name, last_name, is_email_verified, subscription_tier, is_new_user) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
-       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, is_new_user, created_at`,
-      [email, username, passwordHash, firstName, lastName, false, 'free', true]
+    // Insert new user
+    const result = await pool.query(
+      `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user, created_at, updated_at)
+       VALUES ($1, $2, $3, false, 'free', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, email, username, is_email_verified, subscription_tier, is_new_user, created_at, updated_at`,
+      [email, username, hashedPassword]
     );
 
-    console.log('User created:', newUser.rows[0]);
+    const user = result.rows[0];
 
     // Generate JWT token
+    const jwt = require('jsonwebtoken');
     const token = jwt.sign(
       { 
-        id: newUser.rows[0].id, 
-        email: newUser.rows[0].email, 
-        username: newUser.rows[0].username,
-        isAdmin: false
-      },
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.status(201).json({
-      user: {
-        id: newUser.rows[0].id,
-        email: newUser.rows[0].email,
-        username: newUser.rows[0].username,
-        firstName: newUser.rows[0].first_name,
-        lastName: newUser.rows[0].last_name,
-        isEmailVerified: newUser.rows[0].is_email_verified,
-        isAdmin: false,
-        subscriptionTier: newUser.rows[0].subscription_tier,
-        isNewUser: newUser.rows[0].is_new_user,
-        createdAt: newUser.rows[0].created_at,
-        updatedAt: newUser.rows[0].created_at
-      },
-      token,
-      success: true
-    });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ error: 'Internal server error during registration' });
-  }
-});
-
-// Login endpoint
-app.post('/api/auth/login', async (req, res) => {
-  console.log('=== LOGIN ENDPOINT HIT ===');
-  const { email, password } = req.body;
-  console.log('Login request:', { email });
-
-  try {
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
-    }
-
-    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-
-    if (user.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const foundUser = user.rows[0];
-    const passwordMatch = await bcrypt.compare(password, foundUser.password_hash);
-
-    if (!passwordMatch) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign(
-      { 
-        id: foundUser.id, 
-        email: foundUser.email,
-        username: foundUser.username,
-        isAdmin: foundUser.is_admin || false
+        userId: user.id, 
+        email: user.email,
+        username: user.username 
       },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
 
-    console.log('Login successful for user:', foundUser.email);
+    console.log('Registration successful:', { userId: user.id, email: user.email, username: user.username });
+
+    res.status(201).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: null,
+        lastName: null,
+        isEmailVerified: user.is_email_verified,
+        subscriptionTier: user.subscription_tier,
+        isNewUser: user.is_new_user,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      },
+      token,
+      refreshToken: `refresh_${token}`
+    });
+
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ 
+      error: 'Internal server error during registration' 
+    });
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    console.log('Login attempt:', { email });
+
+    // Get user from database
+    const result = await pool.query(
+      'SELECT * FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const user = result.rows[0];
+
+    // Verify password
+    const bcrypt = require('bcrypt');
+    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Generate JWT token
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email,
+        username: user.username 
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('Login successful:', { userId: user.id, email: user.email });
 
     res.json({
       user: {
-        id: foundUser.id,
-        email: foundUser.email,
-        username: foundUser.username,
-        firstName: foundUser.first_name,
-        lastName: foundUser.last_name,
-        isEmailVerified: foundUser.is_email_verified,
-        isAdmin: foundUser.is_admin || false,
-        subscriptionTier: foundUser.subscription_tier,
-        createdAt: foundUser.created_at,
-        updatedAt: foundUser.updated_at
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isEmailVerified: user.is_email_verified,
+        subscriptionTier: user.subscription_tier,
+        isNewUser: user.is_new_user,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
       },
-      token
+      token,
+      refreshToken: `refresh_${token}`
     });
 
   } catch (error) {
@@ -197,31 +199,6 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ error: 'Internal server error during login' });
   }
 });
-
-// Initialize database tables
-async function initializeDatabase() {
-  try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        username VARCHAR(100),
-        password_hash VARCHAR(255) NOT NULL,
-        first_name VARCHAR(100),
-        last_name VARCHAR(100),
-        is_email_verified BOOLEAN DEFAULT FALSE,
-        is_admin BOOLEAN DEFAULT FALSE,
-        subscription_tier VARCHAR(50) DEFAULT 'free',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        is_new_user BOOLEAN DEFAULT TRUE
-      );
-    `);
-    console.log('Database connected and tables initialized');
-  } catch (error) {
-    console.error('Database initialization error:', error);
-  }
-}
 
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
