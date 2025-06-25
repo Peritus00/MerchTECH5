@@ -167,6 +167,7 @@ app.get('/api/routes', (req, res) => {
 
   // Add manually documented Stripe routes since they might not show up in stack
   const stripeRoutes = [
+    { method: 'GET', path: '/api/stripe/health', type: 'stripe', auth: 'none' },
     { method: 'POST', path: '/api/stripe/create-checkout-session', type: 'stripe', auth: 'required' },
     { method: 'POST', path: '/api/stripe/create-payment-intent', type: 'stripe', auth: 'required' }
   ];
@@ -205,6 +206,11 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+
+
+// Stripe routes - Must be defined BEFORE auth routes to avoid conflicts
+console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
+
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
@@ -229,7 +235,7 @@ app.get('/api/stripe/health', (req, res) => {
   });
 });
 
-// Stripe payment endpoints
+// Stripe checkout session endpoint
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
@@ -289,6 +295,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
+// Stripe payment intent endpoint
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
@@ -348,6 +355,8 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
     });
   }
 });
+
+console.log('🟢 CLEAN SERVER: Stripe routes registered successfully');
 
 // User subscription update endpoint
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
