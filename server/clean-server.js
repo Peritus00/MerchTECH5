@@ -219,11 +219,15 @@ console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
-  console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
+  console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
+  console.log('🟢 CLEAN SERVER: Request method:', req.method);
+  console.log('🟢 CLEAN SERVER: Request path:', req.path);
+  console.log('🟢 CLEAN SERVER: Request originalUrl:', req.originalUrl);
+  
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
 
-  res.json({
+  const response = {
     stripeConfigured: !!stripe,
     secretKeyExists: !!stripeSecretKey,
     secretKeyValid: stripeSecretKey && (stripeSecretKey.startsWith('sk_test_') || stripeSecretKey.startsWith('sk_live_')),
@@ -238,7 +242,10 @@ app.get('/api/stripe/health', (req, res) => {
     message: stripe ? 'Stripe is configured and ready' : 'Stripe running in test mode - check your API keys in secrets',
     keyPreview: stripeSecretKey ? stripeSecretKey.substring(0, 12) + '...' : 'not found',
     timestamp: new Date().toISOString()
-  });
+  };
+
+  console.log('🟢 CLEAN SERVER: Sending health check response:', response);
+  res.json(response);
 });
 
 // Stripe checkout session endpoint
@@ -363,6 +370,10 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 });
 
 console.log('🟢 CLEAN SERVER: Stripe routes registered successfully');
+console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
+console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
+console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
+console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
 
 // User subscription update endpoint  
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
