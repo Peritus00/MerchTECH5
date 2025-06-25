@@ -150,20 +150,21 @@ app.get('/', (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes immediately...');
 
-// Route hit logging middleware for Stripe routes
-app.use('/api/stripe', (req, res, next) => {
-  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE HIT ***`);
+// Route hit logging middleware for ALL Stripe routes
+app.use('/api/stripe*', (req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE HIT ***`);
   console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
   console.log(`🟢 CLEAN SERVER: URL: ${req.originalUrl}`);
   console.log(`🟢 CLEAN SERVER: Path: ${req.path}`);
   console.log(`🟢 CLEAN SERVER: Time: ${new Date().toISOString()}`);
+  console.log(`🟢 CLEAN SERVER: Router stack length: ${app._router?.stack?.length || 'undefined'}`);
   console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE PASSED ***`);
   next();
 });
 
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
-  console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
+  console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT ACTUALLY HIT ***');
   console.log('🟢 CLEAN SERVER: Request method:', req.method);
   console.log('🟢 CLEAN SERVER: Request path:', req.path);
   console.log('🟢 CLEAN SERVER: Request originalUrl:', req.originalUrl);
@@ -318,6 +319,31 @@ console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
 console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
+
+// Immediate route verification after registration
+console.log('🟢 CLEAN SERVER: *** IMMEDIATE ROUTE TEST AFTER REGISTRATION ***');
+console.log('🟢 CLEAN SERVER: Express app exists:', !!app);
+console.log('🟢 CLEAN SERVER: app._router exists:', !!app._router);
+console.log('🟢 CLEAN SERVER: Router stack length:', app._router?.stack?.length || 'undefined');
+
+// Test route matching manually
+const testReq = { method: 'GET', url: '/api/stripe/health', originalUrl: '/api/stripe/health', path: '/api/stripe/health' };
+console.log('🟢 CLEAN SERVER: Testing route matching for:', testReq.url);
+
+if (app._router && app._router.stack) {
+  app._router.stack.forEach((layer, index) => {
+    if (layer.route) {
+      console.log(`🟢 CLEAN SERVER: Route ${index}: ${Object.keys(layer.route.methods)[0].toUpperCase()} ${layer.route.path}`);
+    } else if (layer.name === 'router' && layer.regexp) {
+      console.log(`🟢 CLEAN SERVER: Router middleware ${index}: ${layer.regexp}`);
+    } else {
+      console.log(`🟢 CLEAN SERVER: Middleware ${index}: ${layer.name || 'anonymous'}`);
+    }
+  });
+} else {
+  console.log('🟡 CLEAN SERVER: No router stack available yet');
+}
+console.log('🟢 CLEAN SERVER: *** END IMMEDIATE ROUTE TEST ***');
 
 // ==================== USER ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering User routes...');
@@ -577,13 +603,33 @@ app.use((err, req, res, next) => {
 
 // 404 handler - MUST be last
 app.use((req, res) => {
-  console.log(`🟢 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`🔴 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
+  console.log(`🔴 CLEAN SERVER: Full URL breakdown:`);
+  console.log(`🔴 CLEAN SERVER:   - originalUrl: ${req.originalUrl}`);
+  console.log(`🔴 CLEAN SERVER:   - path: ${req.path}`);
+  console.log(`🔴 CLEAN SERVER:   - baseUrl: ${req.baseUrl}`);
+  console.log(`🔴 CLEAN SERVER:   - url: ${req.url}`);
+  console.log(`🔴 CLEAN SERVER: Router stack length: ${app._router?.stack?.length || 'undefined'}`);
+  
+  if (app._router && app._router.stack) {
+    console.log(`🔴 CLEAN SERVER: Available routes:`);
+    app._router.stack.forEach((layer, index) => {
+      if (layer.route) {
+        console.log(`🔴 CLEAN SERVER:   ${Object.keys(layer.route.methods)[0].toUpperCase()} ${layer.route.path}`);
+      }
+    });
+  }
+  
   res.status(404).json({ 
     error: 'Route not found',
     method: req.method,
     path: req.originalUrl,
     server: 'clean-server.js',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    debug: {
+      routerExists: !!app._router,
+      stackLength: app._router?.stack?.length || 0
+    }
   });
 });
 
@@ -714,7 +760,23 @@ app.listen(PORT, HOST, () => {
   setTimeout(() => {
     listRegisteredRoutes();
     verifyRoutesWorking();
-  }, 500);
+    
+    // Test a real HTTP request to our own server
+    console.log('🟢 CLEAN SERVER: *** TESTING SELF-REQUEST ***');
+    const http = require('http');
+    const testUrl = `http://localhost:5000/api/stripe/health`;
+    
+    http.get(testUrl, (res) => {
+      console.log(`🟢 CLEAN SERVER: Self-test response status: ${res.statusCode}`);
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        console.log(`🟢 CLEAN SERVER: Self-test response: ${data.substring(0, 100)}...`);
+      });
+    }).on('error', (err) => {
+      console.log(`🔴 CLEAN SERVER: Self-test error: ${err.message}`);
+    });
+  }, 1000);
 });
 
 // Graceful shutdown
