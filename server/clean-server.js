@@ -221,6 +221,15 @@ app.get('/api/health', async (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
+// Add Stripe route debugging middleware BEFORE route definitions
+app.use('/api/stripe*', (req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: *** STRIPE MIDDLEWARE HIT ***`);
+  console.log(`🟢 CLEAN SERVER: Stripe route accessed: ${req.method} ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: Stripe route path: ${req.path}`);
+  console.log(`🟢 CLEAN SERVER: *** END STRIPE MIDDLEWARE ***`);
+  next();
+});
+
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
@@ -378,15 +387,6 @@ console.log('🟢 CLEAN SERVER: Available Stripe endpoints:');
 console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
-
-// Add route verification middleware
-app.use('/api/stripe/*', (req, res, next) => {
-  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE HIT ***`);
-  console.log(`🟢 CLEAN SERVER: Stripe route accessed: ${req.method} ${req.originalUrl}`);
-  console.log(`🟢 CLEAN SERVER: Stripe route path: ${req.path}`);
-  console.log(`🟢 CLEAN SERVER: *** END STRIPE ROUTE MIDDLEWARE ***`);
-  next();
-});
 
 
 
