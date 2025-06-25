@@ -42,10 +42,17 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Trust proxy for rate limiting in production
+if (process.env.NODE_ENV === 'production') {
+  app.set('trust proxy', 1);
+}
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false
 });
 app.use('/api/', limiter);
 
@@ -132,24 +139,40 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, password, username } = req.body;
 
+    console.log('Registration attempt for:', email, 'username:', username);
+
+    // Validate input
+    if (!email || !password || !username) {
+      return res.status(400).json({ error: 'Email, password, and username are required' });
+    }
+
     // Check if user exists
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
     // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(password, 12);
+    console.log('Password hashed successfully');
 
-    // Create user
+    // Create user with proper column names
     const newUser = await pool.query(
-      'INSERT INTO users (email, password, username) VALUES ($1, $2, $3) RETURNING id, email, username',
-      [email, hashedPassword, username]
+      `INSERT INTO users (email, password, username, subscription_tier, is_new_user, "isEmailVerified") 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING id, email, username, subscription_tier, is_new_user, "isEmailVerified"`,
+      [email, hashedPassword, username, 'free', true, false]
     );
+
+    console.log('User created successfully:', newUser.rows[0]);
 
     // Generate token
     const token = jwt.sign(
-      { id: newUser.rows[0].id, email: newUser.rows[0].email },
+      { 
+        id: newUser.rows[0].id, 
+        email: newUser.rows[0].email,
+        userId: newUser.rows[0].id 
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
@@ -157,10 +180,27 @@ app.post('/api/auth/register', async (req, res) => {
     res.status(201).json({
       message: 'User registered successfully',
       token,
-      user: newUser.rows[0]
+      user: {
+        id: newUser.rows[0].id,
+        email: newUser.rows[0].email,
+        username: newUser.rows[0].username,
+        subscriptionTier: newUser.rows[0].subscription_tier,
+        isNewUser: newUser.rows[0].is_new_user,
+        isEmailVerified: newUser.rows[0].isEmailVerified
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // Provide more specific error messages
+    if (error.code === '23505') { // Unique violation
+      if (error.constraint && error.constraint.includes('email')) {
+        return res.status(400).json({ error: 'Email already registered' });
+      } else if (error.constraint && error.constraint.includes('username')) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+    }
+    
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -169,34 +209,68 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    // Find user
-    const user = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    console.log('Login attempt for:', email);
+    console.log('Password provided:', !!password);
+
+    // Validate input
+    if (!email || !password) {
+      console.log('Missing email or password');
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    // Find user - make sure to select password field
+    const user = await pool.query(
+      'SELECT id, email, username, password, subscription_tier, is_new_user, "isEmailVerified" FROM users WHERE email = $1', 
+      [email]
+    );
+    
     if (user.rows.length === 0) {
+      console.log('User not found:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
+    const userData = user.rows[0];
+    console.log('User found:', userData.email);
+    console.log('Stored password hash exists:', !!userData.password);
+
+    // Check if password hash exists
+    if (!userData.password) {
+      console.log('No password hash found for user');
+      return res.status(400).json({ error: 'Invalid account configuration' });
+    }
+
     // Check password
-    const validPassword = await bcrypt.compare(password, user.rows[0].password);
+    const validPassword = await bcrypt.compare(password, userData.password);
+    console.log('Password valid:', validPassword);
+    
     if (!validPassword) {
+      console.log('Invalid password for:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
     }
 
     // Generate token
     const token = jwt.sign(
-      { id: user.rows[0].id, email: user.rows[0].email },
+      { 
+        id: userData.id, 
+        email: userData.email,
+        userId: userData.id 
+      },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
+
+    console.log('Login successful for:', email);
 
     res.json({
       message: 'Login successful',
       token,
       user: {
-        id: user.rows[0].id,
-        email: user.rows[0].email,
-        username: user.rows[0].username,
-        subscriptionTier: user.rows[0].subscriptionTier,
-        isNewUser: user.rows[0].isNewUser
+        id: userData.id,
+        email: userData.email,
+        username: userData.username,
+        subscriptionTier: userData.subscription_tier,
+        isNewUser: userData.is_new_user,
+        isEmailVerified: userData.isEmailVerified
       }
     });
   } catch (error) {
