@@ -306,8 +306,11 @@ app.post('/api/auth/login', async (req, res) => {
 // ==================== STRIPE ROUTES ====================
 console.log('🟢 CLEAN SERVER: Registering Stripe routes...');
 
+// Try Express Router pattern as alternative
+const stripeRouter = express.Router();
+
 // Stripe health check endpoint
-app.get('/api/stripe/health', (req, res) => {
+stripeRouter.get('/health', (req, res) => {
   console.log('🟢 CLEAN SERVER: *** STRIPE HEALTH CHECK ENDPOINT HIT ***');
   console.log('🟢 CLEAN SERVER: Request method:', req.method);
   console.log('🟢 CLEAN SERVER: Request path:', req.path);
@@ -397,7 +400,11 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
-// Stripe payment intent endpoint
+// Mount the Stripe router
+app.use('/api/stripe', stripeRouter);
+console.log('🟢 CLEAN SERVER: Stripe router mounted on /api/stripe');
+
+// Stripe payment intent endpoint (keeping original pattern too)
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, amount } = req.body;
@@ -601,15 +608,45 @@ app.listen(PORT, HOST, () => {
   console.log(`🟢 CLEAN SERVER: Register: http://${HOST}:${PORT}/api/auth/register`);
   console.log(`🟢 CLEAN SERVER: Server startup complete - all routes should be accessible`);
   
-  // Log available routes
-  console.log('🟢 CLEAN SERVER: Available routes:');
-  console.log('🟢 CLEAN SERVER:   GET /');
-  console.log('🟢 CLEAN SERVER:   POST /api/auth/register');
-  console.log('🟢 CLEAN SERVER:   POST /api/auth/login');
-  console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
-  console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
-  console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
-  console.log('🟢 CLEAN SERVER:   PUT /api/user/subscription');
+  // COMPREHENSIVE ROUTE DEBUGGING
+  console.log('🔍 CLEAN SERVER: *** ROUTE REGISTRATION DEBUG ***');
+  console.log('🔍 CLEAN SERVER: Express app exists:', !!app);
+  console.log('🔍 CLEAN SERVER: Express router exists:', !!app._router);
+  console.log('🔍 CLEAN SERVER: Router stack length:', app._router?.stack?.length || 'undefined');
+  
+  if (app._router && app._router.stack) {
+    console.log('🔍 CLEAN SERVER: Registered routes in Express stack:');
+    app._router.stack.forEach((layer, index) => {
+      if (layer.route) {
+        const methods = Object.keys(layer.route.methods).join(', ').toUpperCase();
+        console.log(`🔍 CLEAN SERVER:   [${index}] ${methods} ${layer.route.path}`);
+      } else if (layer.name === 'router') {
+        console.log(`🔍 CLEAN SERVER:   [${index}] MIDDLEWARE: ${layer.regexp}`);
+      } else {
+        console.log(`🔍 CLEAN SERVER:   [${index}] OTHER: ${layer.name || 'anonymous'}`);
+      }
+    });
+  } else {
+    console.log('🔴 CLEAN SERVER: NO ROUTER STACK FOUND - THIS IS THE PROBLEM!');
+  }
+  
+  console.log('🔍 CLEAN SERVER: *** END ROUTE DEBUG ***');
+  
+  // Test a route immediately
+  console.log('🔍 CLEAN SERVER: Testing health endpoint immediately...');
+  const http = require('http');
+  const testReq = http.request({
+    hostname: '127.0.0.1',
+    port: PORT,
+    path: '/api/stripe/health',
+    method: 'GET'
+  }, (res) => {
+    console.log(`🔍 CLEAN SERVER: Health test status: ${res.statusCode}`);
+  });
+  testReq.on('error', (err) => {
+    console.log(`🔍 CLEAN SERVER: Health test error: ${err.message}`);
+  });
+  testReq.end();
 });
 
 // Graceful shutdown
