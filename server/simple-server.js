@@ -44,22 +44,148 @@ app.get('/', (req, res) => {
   });
 });
 
+// Load and configure Stripe
+console.log('🔴 SERVER: Checking Stripe configuration...');
+console.log('🔴 SERVER: STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
+console.log('🔴 SERVER: STRIPE_SECRET_KEY length:', process.env.STRIPE_SECRET_KEY?.length || 0);
+
+const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
+
+if (!stripe) {
+  console.log('⚠️ SERVER: Stripe not configured - STRIPE_SECRET_KEY missing');
+} else {
+  console.log('✅ SERVER: Stripe configured successfully');
+  console.log('✅ SERVER: Using key type:', process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST');
+}
+
 // Health check
 app.get('/api/health', async (req, res) => {
+  console.log('🔴 SERVER: Health check requested');
   try {
-    await pool.query('SELECT 1');
+    await pool.query('SELECT NOW()');
     res.json({ 
-      status: 'ok', 
-      database: 'connected',
-      timestamp: new Date().toISOString() 
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      server: 'simple-server.js'
     });
   } catch (error) {
-    console.error('Health check database error:', error);
-    res.status(503).json({ 
-      status: 'error', 
-      database: 'disconnected',
-      timestamp: new Date().toISOString() 
+    console.error('🔴 SERVER: Health check failed:', error);
+    res.status(500).json({ error: 'Database connection failed' });
+  }
+});
+
+// Stripe health check
+app.get('/api/stripe/health', (req, res) => {
+  console.log('🔴 SERVER: Stripe health check requested');
+  res.json({
+    stripeConfigured: !!stripe,
+    keyType: stripe ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST') : 'NONE',
+    timestamp: new Date().toISOString(),
+    server: 'simple-server.js'
+  });
+});
+
+// Create Payment Intent
+app.post('/api/stripe/create-payment-intent', async (req, res) => {
+  console.log('🔴 SERVER: Create payment intent requested');
+
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+
+  try {
+    const { amount, currency = 'usd' } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({ error: 'Amount is required' });
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: currency,
+      automatic_payment_methods: {
+        enabled: true,
+      },
     });
+
+    console.log('✅ SERVER: Payment intent created:', paymentIntent.id);
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      id: paymentIntent.id
+    });
+  } catch (error) {
+    console.error('❌ SERVER: Create payment intent error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create Checkout Session
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  console.log('🔴 SERVER: Create checkout session requested');
+
+  if (!stripe) {
+    return res.status(500).json({ error: 'Stripe not configured' });
+  }
+
+  try {
+    const { priceId, tier } = req.body;
+
+    if (!priceId) {
+      return res.status(400).json({ error: 'Price ID is required' });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      success_url: `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${req.headers.origin}/subscription`,
+    });
+
+    console.log('✅ SERVER: Checkout session created:', session.id);
+    res.json({
+      sessionId: session.id,
+      url: session.url
+    });
+  } catch (error) {
+    console.error('❌ SERVER: Create checkout session error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user subscription
+app.put('/api/user/subscription', async (req, res) => {
+  console.log('🔴 SERVER: Update user subscription requested');
+
+  try {
+    const { userId, subscriptionTier } = req.body;
+
+    if (!userId || !subscriptionTier) {
+      return res.status(400).json({ error: 'User ID and subscription tier are required' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
+      [subscriptionTier, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('✅ SERVER: User subscription updated:', userId, subscriptionTier);
+    res.json({
+      success: true,
+      user: result.rows[0]
+    });
+  } catch (error) {
+    console.error('❌ SERVER: Update subscription error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -71,7 +197,7 @@ app.post('/api/auth/register', async (req, res) => {
   console.log('🔴 SERVER: Request URL:', req.url);
   console.log('🔴 SERVER: Request headers:', req.headers);
   console.log('🔴 SERVER: Request body:', req.body);
-  
+
   try {
     const { email, password, username } = req.body;
 
@@ -189,7 +315,7 @@ app.post('/api/auth/register', async (req, res) => {
     console.error('🔴 SERVER: Error message:', error.message);
     console.error('🔴 SERVER: Error stack:', error.stack);
     console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG END ============');
-    
+
     res.status(500).json({ 
       error: 'Internal server error during registration',
       details: error.message
@@ -265,7 +391,7 @@ app.post('/api/auth/login', async (req, res) => {
 async function initializeDatabase() {
   try {
     console.log('Initializing database...');
-    
+
     // Create users table if it doesn't exist
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
