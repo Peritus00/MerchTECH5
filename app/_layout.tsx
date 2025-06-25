@@ -35,6 +35,7 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
+    const inTabsGroup = segments[0] === '(tabs)';
 
     // Add a small delay to prevent rapid navigation changes
     const navigationTimeout = setTimeout(() => {
@@ -43,8 +44,9 @@ function RootLayoutNav() {
         if (inAuthGroup) {
           // Redirect away from sign-in if already authenticated
           router.replace('/(tabs)/');
-        } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup) {
-          // Skip subscription flow for dev user
+        } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup && !inTabsGroup) {
+          // Only redirect new users to subscription if they're not already in tabs or subscription
+          // Dev user bypass - skip subscription flow
           if (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel') {
             console.log('🔴 Dev user detected, redirecting to dashboard');
             router.replace('/(tabs)/');
