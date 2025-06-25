@@ -614,8 +614,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 404 handler - MUST be last (Express v5 compatible)
-app.use('*', (req, res) => {
+// 404 handler - MUST be last
+app.use((req, res) => {
   console.log(`🟢 CLEAN SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     error: 'Route not found',
