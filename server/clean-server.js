@@ -63,7 +63,13 @@ console.log('🟢 CLEAN SERVER: Starting...');
 
 // Debug middleware to log all requests - must be before route definitions
 app.use((req, res, next) => {
-  console.log(`🟢 CLEAN SERVER: Incoming request: ${req.method} ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: *** INCOMING REQUEST DEBUG ***`);
+  console.log(`🟢 CLEAN SERVER: Method: ${req.method}`);
+  console.log(`🟢 CLEAN SERVER: Original URL: ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: Path: ${req.path}`);
+  console.log(`🟢 CLEAN SERVER: Query: ${JSON.stringify(req.query)}`);
+  console.log(`🟢 CLEAN SERVER: Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  console.log(`🟢 CLEAN SERVER: *** END REQUEST DEBUG ***`);
   next();
 });
 
@@ -373,6 +379,15 @@ console.log('🟢 CLEAN SERVER:   GET /api/stripe/health');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-checkout-session');
 console.log('🟢 CLEAN SERVER:   POST /api/stripe/create-payment-intent');
 
+// Add route verification middleware
+app.use('/api/stripe/*', (req, res, next) => {
+  console.log(`🟢 CLEAN SERVER: *** STRIPE ROUTE MIDDLEWARE HIT ***`);
+  console.log(`🟢 CLEAN SERVER: Stripe route accessed: ${req.method} ${req.originalUrl}`);
+  console.log(`🟢 CLEAN SERVER: Stripe route path: ${req.path}`);
+  console.log(`🟢 CLEAN SERVER: *** END STRIPE ROUTE MIDDLEWARE ***`);
+  next();
+});
+
 
 
 
@@ -638,6 +653,54 @@ app.use((req, res) => {
   });
 });
 
+// Function to list all registered routes
+function listRegisteredRoutes() {
+  console.log('🟢 CLEAN SERVER: *** REGISTERED ROUTES DEBUG ***');
+  
+  const routes = [];
+  app._router.stack.forEach((middleware, index) => {
+    if (middleware.route) {
+      // Direct route
+      routes.push({
+        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+        path: middleware.route.path,
+        type: 'direct',
+        index: index
+      });
+    } else if (middleware.name === 'router') {
+      // Router middleware
+      middleware.handle.stack.forEach((handler, subIndex) => {
+        if (handler.route) {
+          routes.push({
+            method: Object.keys(handler.route.methods)[0].toUpperCase(), 
+            path: handler.route.path,
+            type: 'router',
+            index: index,
+            subIndex: subIndex
+          });
+        }
+      });
+    } else {
+      // Other middleware
+      routes.push({
+        name: middleware.name || 'anonymous',
+        type: 'middleware',
+        index: index
+      });
+    }
+  });
+
+  console.log('🟢 CLEAN SERVER: Total middleware/routes registered:', routes.length);
+  routes.forEach((route) => {
+    if (route.method && route.path) {
+      console.log(`🟢 CLEAN SERVER: ${route.method} ${route.path} (${route.type})`);
+    } else {
+      console.log(`🟢 CLEAN SERVER: Middleware: ${route.name} (${route.type})`);
+    }
+  });
+  console.log('🟢 CLEAN SERVER: *** END REGISTERED ROUTES DEBUG ***');
+}
+
 // Start server
 app.listen(PORT, HOST, async () => {
   console.log(`🟢 CLEAN SERVER: Running on ${HOST}:${PORT}`);
@@ -646,6 +709,9 @@ app.listen(PORT, HOST, async () => {
   console.log(`🟢 CLEAN SERVER: Database initialized`);
 
   await initializeDatabase();
+  
+  // List all registered routes for debugging
+  listRegisteredRoutes();
 });
 
 // Graceful shutdown
