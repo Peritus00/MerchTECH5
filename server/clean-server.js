@@ -206,31 +206,6 @@ app.post('/api/auth/login', async (req, res) => {
 
 // ==================== STRIPE ROUTES ====================
 
-// Stripe health check
-app.get('/api/stripe/health', (req, res) => {
-  try {
-    const stripeConfigured = !!process.env.STRIPE_SECRET_KEY;
-    const secretKeyValid = process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY.startsWith('sk_');
-    const secretKeyType = process.env.STRIPE_SECRET_KEY ? 
-      (process.env.STRIPE_SECRET_KEY.startsWith('sk_test_') ? 'test' : 
-       process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'live' : 'unknown') : 
-      'none';
-
-    res.json({
-      stripeConfigured,
-      secretKeyValid,
-      secretKeyType,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Stripe health check error:', error);
-    res.status(503).json({ 
-      error: 'Stripe health check failed',
-      timestamp: new Date().toISOString() 
-    });
-  }
-});
-
 // Create payment intent
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
