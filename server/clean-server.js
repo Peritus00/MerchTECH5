@@ -5,17 +5,24 @@ const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 require('dotenv').config();
 
-// Initialize Stripe
-let stripe;
-try {
-  if (process.env.STRIPE_SECRET_KEY) {
-    stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-    console.log('✅ Stripe initialized successfully');
-  } else {
-    console.log('⚠️  Stripe secret key not found in environment variables');
-  }
-} catch (error) {
-  console.error('❌ Failed to initialize Stripe:', error);
+// Load environment variables
+require('dotenv').config();
+
+// Stripe configuration with detailed logging
+console.log('🔍 Checking Stripe configuration...');
+console.log('🔍 STRIPE_SECRET_KEY exists:', !!process.env.STRIPE_SECRET_KEY);
+console.log('🔍 STRIPE_SECRET_KEY length:', process.env.STRIPE_SECRET_KEY?.length || 0);
+console.log('🔍 STRIPE_SECRET_KEY starts with sk_:', process.env.STRIPE_SECRET_KEY?.startsWith('sk_') || false);
+
+const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
+
+if (!stripe) {
+  console.log('⚠️  Stripe secret key not found in environment variables');
+  console.log('⚠️ Stripe not configured - STRIPE_SECRET_KEY missing');
+  console.log('⚠️ Available env vars:', Object.keys(process.env).filter(key => key.includes('STRIPE')));
+} else {
+  console.log('✅ Stripe configured successfully');
+  console.log('✅ Using key type:', process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST');
 }
 
 // Initialize Express app
