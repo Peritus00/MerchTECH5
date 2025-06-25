@@ -48,7 +48,7 @@ export default function SubscriptionCheckoutScreen() {
       console.log('🔥 Starting secure checkout for tier:', tier);
 
       const token = await AsyncStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+      const response = await fetch(`${API_BASE_URL}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ export default function SubscriptionCheckoutScreen() {
         const token = await AsyncStorage.getItem('authToken');
 
       // Create payment intent on the backend
-      const response = await fetch(`${API_BASE_URL}/stripe/create-payment-intent`, {
+      const response = await fetch(`${API_BASE_URL}/api/stripe/create-payment-intent`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

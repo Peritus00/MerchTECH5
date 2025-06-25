@@ -327,6 +327,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 // Stripe health check endpoint
 app.get('/api/stripe/health', (req, res) => {
+  console.log('🟢 CLEAN SERVER: Stripe health check endpoint hit');
   const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
   const stripePublishableKey = process.env.STRIPE_PUBLISHABLE_KEY;
   
