@@ -1,10 +1,9 @@
-
 const express = require('express');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
-const rateLimit = require('express-rate-limit');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
 // Initialize Express app
@@ -12,9 +11,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize Stripe
-let stripe;
+//let stripe;
 if (process.env.STRIPE_SECRET_KEY) {
-  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+  //stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
   console.log('✅ Stripe initialized successfully');
 } else {
   console.warn('⚠️ Stripe not configured - STRIPE_SECRET_KEY missing');
@@ -216,7 +215,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
-    
+
     // Provide more specific error messages
     if (error.code === '23505') { // Unique violation
       if (error.constraint && error.constraint.includes('email')) {
@@ -225,7 +224,7 @@ app.post('/api/auth/register', async (req, res) => {
         return res.status(400).json({ error: 'Username already taken' });
       }
     }
-    
+
     res.status(500).json({ error: 'Registration failed' });
   }
 });
@@ -248,7 +247,7 @@ app.post('/api/auth/login', async (req, res) => {
       'SELECT id, email, username, password, subscription_tier, is_new_user, "isEmailVerified" FROM users WHERE email = $1', 
       [email]
     );
-    
+
     if (user.rows.length === 0) {
       console.log('User not found:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
@@ -267,7 +266,7 @@ app.post('/api/auth/login', async (req, res) => {
     // Check password
     const validPassword = await bcrypt.compare(password, userData.password);
     console.log('Password valid:', validPassword);
-    
+
     if (!validPassword) {
       console.log('Invalid password for:', email);
       return res.status(400).json({ error: 'Invalid credentials' });
@@ -451,46 +450,80 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
 // Update user subscription
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
-    const { subscriptionTier, stripeCustomerId, stripeSubscriptionId, isNewUser } = req.body;
+    const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
+    const userId = req.user.id;
 
-    if (!subscriptionTier) {
-      return res.status(400).json({ error: 'Subscription tier is required' });
+    console.log('Updating user subscription:', {
+      userId,
+      subscriptionTier,
+      isNewUser,
+      stripeCustomerId,
+      stripeSubscriptionId
+    });
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 0;
+
+    if (subscriptionTier !== undefined) {
+      updates.push(`subscription_tier = $${++paramCount}`);
+      values.push(subscriptionTier);
     }
 
-    const userId = req.user.userId || req.user.id;
+    if (isNewUser !== undefined) {
+      updates.push(`is_new_user = $${++paramCount}`);
+      values.push(isNewUser);
+    }
 
-    // Update user in database
-    const result = await pool.query(
-      `UPDATE users 
-       SET subscription_tier = $1, 
-           is_new_user = $2,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3
-       RETURNING id, email, username, subscription_tier, is_new_user`,
-      [subscriptionTier, isNewUser !== undefined ? isNewUser : false, userId]
-    );
+    if (stripeCustomerId !== undefined) {
+      updates.push(`stripe_customer_id = $${++paramCount}`);
+      values.push(stripeCustomerId);
+    }
+
+    if (stripeSubscriptionId !== undefined) {
+      updates.push(`stripe_subscription_id = $${++paramCount}`);
+      values.push(stripeSubscriptionId);
+    }
+
+    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(userId);
+
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')}
+      WHERE id = $${++paramCount}
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, values);
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const updatedUser = result.rows[0];
+    console.log('User subscription updated successfully:', updatedUser);
 
     res.json({
       success: true,
-      message: 'Subscription updated successfully',
       user: {
         id: updatedUser.id,
         email: updatedUser.email,
         username: updatedUser.username,
         subscriptionTier: updatedUser.subscription_tier,
-        isNewUser: updatedUser.is_new_user
+        isNewUser: updatedUser.is_new_user,
+        stripeCustomerId: updatedUser.stripe_customer_id,
+        stripeSubscriptionId: updatedUser.stripe_subscription_id
       }
     });
 
   } catch (error) {
-    console.error('Update subscription error:', error);
-    res.status(500).json({ error: 'Failed to update subscription', details: error.message });
+    console.error('Error updating user subscription:', error);
+    res.status(500).json({ 
+      error: 'Failed to update subscription',
+      details: error.message 
+    });
   }
 });
 
