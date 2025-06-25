@@ -3,6 +3,7 @@ const cors = require('cors');
 const { Pool } = require('pg');
 const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
 const app = express();
@@ -100,21 +101,45 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
     const { subscriptionTier, amount, successUrl, cancelUrl } = req.body;
     console.log('Creating Stripe checkout session for:', subscriptionTier);
 
-    // For now, simulate successful checkout session creation
-    // In production, you would integrate with actual Stripe
-    const mockSession = {
-      success: true,
-      url: `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?tier=${subscriptionTier}&newUser=true&customerId=mock_customer&subscriptionId=mock_subscription`,
-      sessionId: 'mock_session_' + Date.now()
-    };
+    // Create actual Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
+            description: `MerchTech QR ${subscriptionTier} subscription`
+          },
+          unit_amount: amount,
+          recurring: {
+            interval: 'month'
+          }
+        },
+        quantity: 1,
+      }],
+      mode: 'subscription',
+      success_url: successUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/success?session_id={CHECKOUT_SESSION_ID}&tier=${subscriptionTier}&newUser=true`,
+      cancel_url: cancelUrl || `${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/subscription/checkout?tier=${subscriptionTier}`,
+      customer_email: req.user.email,
+      metadata: {
+        userId: req.user.id.toString(),
+        subscriptionTier: subscriptionTier
+      }
+    });
 
-    console.log('Mock checkout session created:', mockSession);
-    res.json(mockSession);
+    console.log('Stripe checkout session created:', session.id);
+    res.json({
+      success: true,
+      url: session.url,
+      sessionId: session.id
+    });
   } catch (error) {
     console.error('Stripe checkout session error:', error);
     res.status(500).json({ 
       success: false, 
-      error: 'Failed to create checkout session' 
+      error: 'Failed to create checkout session',
+      details: error.message
     });
   }
 });
@@ -124,17 +149,48 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
     const { subscriptionTier, amount } = req.body;
     console.log('Creating payment intent for:', subscriptionTier);
 
-    // Mock payment intent for development
-    const mockPaymentIntent = {
-      clientSecret: 'pi_mock_' + Date.now() + '_secret_mock',
-      customerId: 'cus_mock_' + req.user.id
-    };
+    // Create or retrieve customer
+    let customer;
+    const existingCustomers = await stripe.customers.list({
+      email: req.user.email,
+      limit: 1
+    });
 
-    console.log('Mock payment intent created');
-    res.json(mockPaymentIntent);
+    if (existingCustomers.data.length > 0) {
+      customer = existingCustomers.data[0];
+    } else {
+      customer = await stripe.customers.create({
+        email: req.user.email,
+        name: req.user.username,
+        metadata: {
+          userId: req.user.id.toString()
+        }
+      });
+    }
+
+    // Create payment intent
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'usd',
+      customer: customer.id,
+      setup_future_usage: 'off_session',
+      metadata: {
+        subscriptionTier,
+        userId: req.user.id.toString()
+      }
+    });
+
+    console.log('Payment intent created:', paymentIntent.id);
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      customerId: customer.id
+    });
   } catch (error) {
     console.error('Payment intent error:', error);
-    res.status(500).json({ message: 'Failed to create payment intent' });
+    res.status(500).json({ 
+      message: 'Failed to create payment intent',
+      details: error.message
+    });
   }
 });
 
