@@ -5,6 +5,28 @@ const bcryptjs = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization']
+  const token = authHeader && authHeader.split(' ')[1]
+
+  if (token == null) {
+    console.log('No token provided for authentication');
+    return res.sendStatus(401);
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.log('Token authentication failed:', err);
+      return res.sendStatus(403);
+    }
+    req.user = user
+    next()
+  })
+}
+
 // Initialize Stripe with validation
 let stripe;
 if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_live_your_stripe_secret_key_here') {
@@ -37,8 +59,7 @@ const pool = new Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 });
 
-// JWT Secret
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
+
 
 // Database initialization
 async function initializeDatabase() {
@@ -495,22 +516,3 @@ process.on('SIGINT', () => {
   if (pool) pool.end();
   process.exit(0);
 });
-
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization']
-  const token = authHeader && authHeader.split(' ')[1]
-
-  if (token == null) {
-    console.log('No token provided for authentication');
-    return res.sendStatus(401);
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      console.log('Token authentication failed:', err);
-      return res.sendStatus(403);
-    }
-    req.user = user
-    next()
-  })
-}
