@@ -364,7 +364,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 
 console.log('🟢 CLEAN SERVER: Stripe routes registered successfully');
 
-// User subscription update endpoint
+// User subscription update endpoint  
 app.put('/api/user/subscription', authenticateToken, async (req, res) => {
   try {
     const { subscriptionTier, isNewUser, stripeCustomerId, stripeSubscriptionId } = req.body;
@@ -405,7 +405,6 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
 
     updates.push(`updated_at = CURRENT_TIMESTAMP`);
 
-
     values.push(userId);
     let query;
     if(values.length > 0){
@@ -420,8 +419,6 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
         SELECT * FROM users WHERE id = $${++paramCount}
       `;
     }
-
-
 
     console.log('Executing query:', query);
     console.log('With values:', values);
@@ -456,6 +453,8 @@ app.put('/api/user/subscription', authenticateToken, async (req, res) => {
     });
   }
 });
+
+console.log('🟢 CLEAN SERVER: All routes registered successfully');
 
 // Registration endpoint
 app.post('/api/auth/register', async (req, res) => {
