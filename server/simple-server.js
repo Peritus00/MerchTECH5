@@ -567,8 +567,8 @@ async function initializeDatabase() {
 app.listen(PORT, '0.0.0.0', async () => {
   console.log(`Simple server running on port ${PORT}`);
   console.log(`API available at: http://0.0.0.0:${PORT}/api`);
-  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}/api`);
-  console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
+  console.log(`External API URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api`);
+  console.log(`Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
   await initializeDatabase();
 });
 
