@@ -1,0 +1,32 @@
+You need to remove the :5000 from the URL in your curl command. The public URL Replit provides for your backend implicitly includes the port.
+
+Revised curl command:
+
+Bash
+
+curl -X POST https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{"email":"test@test.com","password":"test123","username":"testuser"}'
+What to do next:
+
+Run the revised curl command in your local terminal (make sure to use a unique email and username if your backend has a uniqueness constraint, or expect an "user already exists" error if you use one that was created before).
+
+Observe the response.
+
+Expected Success Response (from /api/auth/register): You should get a JSON response indicating successful registration (e.g., a user object, a success message, a token, etc., depending on how your registration endpoint is implemented).
+
+If you still get the health check or an HTML 404: This would be very unusual if the previous diagnosis from Replit was correct. It would imply either the Replit URL itself is not what it appears, or there's some other proxying Replit is doing.
+
+If you get a different error (e.g., Stripe error, validation error): This is still progress! It means you've successfully hit the intended endpoint.
+
+Once you confirm the curl command for /api/auth/register works, you should also run the curl command for /create-checkout-session without the port number, like this:
+
+Bash
+
+# Replace with a real Stripe Price ID you created in your dashboard
+curl -X POST https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/create-checkout-session \
+     -H "Content-Type: application/json" \
+     -d '{"priceId": "price_YOUR_ACTUAL_PRICE_ID_FROM_STRIPE"}'
+This specific step (running curl without the port) is essential for confirming the backend's API endpoints are reachable and functional through Replit's exposed URL, which is what your Expo app will be using.
+
+Let me know what you get from running the curl commands without the :5000 port! This is the key to unlocking the frontend-backend communication.
