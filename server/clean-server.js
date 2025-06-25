@@ -85,6 +85,20 @@ async function initializeDatabase() {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS pending_users (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        username VARCHAR(50) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        verification_token VARCHAR(255) UNIQUE NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        expires_at TIMESTAMP NOT NULL
+      )
+    `);
+
     console.log('🟢 CLEAN SERVER: Database initialized');
   } catch (error) {
     console.error('🟢 CLEAN SERVER: Database error:', error);
@@ -97,6 +111,24 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'MerchTech QR API Server - CLEAN VERSION', 
     status: 'running',
+    server: 'clean-server.js',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Debug routes endpoint
+app.get('/api/routes', (req, res) => {
+  const routes = [];
+  app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+      routes.push({
+        method: Object.keys(middleware.route.methods)[0].toUpperCase(),
+        path: middleware.route.path
+      });
+    }
+  });
+  res.json({ 
+    routes: routes,
     server: 'clean-server.js',
     timestamp: new Date().toISOString()
   });
