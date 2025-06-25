@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -86,7 +85,7 @@ app.get('/api/health', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   console.log('🔴 SERVER: Registration endpoint hit');
   console.log('🔴 SERVER: Request body:', req.body);
-  
+
   try {
     const { email, password, username } = req.body;
 
@@ -226,7 +225,7 @@ app.post('/api/auth/login', async (req, res) => {
 async function initializeDatabase() {
   try {
     console.log('🔴 SERVER: Initializing database...');
-    
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -261,7 +260,7 @@ app.use((err, req, res, next) => {
 });
 
 // 404 handler
-app.use('*', (req, res) => {
+app.use('/*splat', (req, res) => {
   console.log(`🔴 SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     error: 'Route not found',
@@ -278,7 +277,7 @@ app.listen(PORT, HOST, async (error) => {
     console.error('🔴 SERVER: Failed to start server:', error);
     process.exit(1);
   }
-  
+
   console.log(`🔴 SERVER: =================================`);
   console.log(`🔴 SERVER: MINIMAL SERVER RUNNING`);
   console.log(`🔴 SERVER: Server running on ${HOST}:${PORT}`);
@@ -287,7 +286,7 @@ app.listen(PORT, HOST, async (error) => {
   console.log(`🔴 SERVER: Registration: /api/auth/register`);
   console.log(`🔴 SERVER: Login: /api/auth/login`);
   console.log(`🔴 SERVER: =================================`);
-  
+
   await initializeDatabase();
 });
 
