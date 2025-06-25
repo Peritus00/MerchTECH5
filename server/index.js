@@ -647,7 +647,7 @@ app.post('/api/auth/refresh', async (req, res) => {
 });
 
 // Add explicit route logging middleware
-app.use('/api/auth/*', (req, res, next) => {
+app.use('/api/auth/*splat', (req, res, next) => {
   console.log(`🟢 AUTH ROUTE HIT: ${req.method} ${req.originalUrl}`);
   console.log('Request body keys:', Object.keys(req.body || {}));
   next();
