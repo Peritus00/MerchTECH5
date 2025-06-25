@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -50,7 +49,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
         <ThemedText style={styles.productName} numberOfLines={2}>
           {product.name}
         </ThemedText>
-        
+
         <ThemedText style={styles.description} numberOfLines={2}>
           {product.description}
         </ThemedText>
@@ -94,14 +93,10 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
 
 const styles = StyleSheet.create({
   card: {
-    width: cardWidth,
     backgroundColor: '#fff',
     borderRadius: 12,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
     overflow: 'hidden',
   },

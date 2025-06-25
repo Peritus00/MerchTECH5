@@ -113,7 +113,7 @@ args = "cd server && node simple-server.js"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "EXPO_PUBLIC_API_URL=https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --clear"
+args = "EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --clear"
 
 [[workflows.workflow]]
 name = "Quick Backend"

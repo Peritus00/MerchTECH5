@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -9,7 +8,8 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { Audio } from 'expo-av';
+import { VideoView } from 'expo-video';
+import { useAudioPlayer } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 
