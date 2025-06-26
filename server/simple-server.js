@@ -64,7 +64,7 @@ app.get('/api/health', async (req, res) => {
   try {
     const dbResult = await pool.query('SELECT NOW()');
     const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
-    
+
     res.json({ 
       status: 'healthy',
       database: 'connected',
@@ -531,6 +531,81 @@ app.post('/api/auth/login', async (req, res) => {
       error: 'Internal server error during login',
       details: error.message 
     });
+  }
+});
+
+// ==================== ADMIN ENDPOINTS ====================
+
+// Get all users (admin only)
+app.get('/api/admin/all-users', async (req, res) => {
+  console.log('🔴 SERVER: Get all users endpoint hit');
+
+  try {
+    const result = await pool.query(
+      `SELECT id, email, username, first_name, last_name, 
+              is_email_verified, subscription_tier, is_new_user, 
+              created_at, updated_at 
+       FROM users 
+       ORDER BY created_at DESC`
+    );
+
+    console.log('🔴 SERVER: Found users:', result.rows.length);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('🔴 SERVER: Get all users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update user permissions (admin only)
+app.put('/api/admin/users/:id', async (req, res) => {
+  console.log('🔴 SERVER: Update user permissions endpoint hit');
+
+  try {
+    const { id } = req.params;
+    const { subscription_tier, is_email_verified } = req.body;
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET subscription_tier = $1, is_email_verified = $2, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 
+       RETURNING *`,
+      [subscription_tier, is_email_verified, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('🔴 SERVER: User updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Update user error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete user (admin only)
+app.delete('/api/admin/users/:id', async (req, res) => {
+  console.log('🔴 SERVER: Delete user endpoint hit');
+
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM users WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('🔴 SERVER: User deleted:', result.rows[0]);
+    res.json({ success: true, deletedUser: result.rows[0] });
+  } catch (error) {
+    console.error('🔴 SERVER: Delete user error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
