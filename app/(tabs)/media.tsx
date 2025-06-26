@@ -62,8 +62,6 @@ export default function MediaScreen() {
       console.error('🔴 MEDIA: Upload error:', error);
       Alert.alert('Upload Failed', 'Please try again');
     }
-  };gain');
-    }
   };
 
   const handleDelete = async (id: number) => {
