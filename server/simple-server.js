@@ -1289,8 +1289,8 @@ async function smartPortCleanup() {
         const execAsync = util.promisify(exec);
 
         // Clean up both current port and common conflicting ports
-        // Keep 5000 in this array as a common port to check for cleanup
-        const portsToCheck = [PORT, 5000, 5001].filter((port, index, arr) => arr.indexOf(port) === index);
+        // Check current port and 5001 for cleanup
+        const portsToCheck = [PORT, 5001].filter((port, index, arr) => arr.indexOf(port) === index);
 
         for (const port of portsToCheck) {
             try {

@@ -173,7 +173,7 @@ class ProcessMonitor {
 
   async makeHealthRequest() {
     const fetch = (await import('node-fetch')).default;
-    return fetch('http://localhost:5000/api/health', {
+    return fetch('http://0.0.0.0:5001/api/health', {
       method: 'GET',
       timeout: 5000
     });
@@ -226,9 +226,9 @@ class ProcessMonitor {
       
       const commands = [
         'pkill -f "node.*simple-server" || true',
-        'pkill -f "node.*5000" || true',
-        'lsof -ti:5000 | xargs kill -9 2>/dev/null || true',
-        'fuser -k 5000/tcp 2>/dev/null || true'
+        'pkill -f "node.*5001" || true',
+        'lsof -ti:5001 | xargs kill -9 2>/dev/null || true',
+        'fuser -k 5001/tcp 2>/dev/null || true'
       ];
 
       for (const command of commands) {

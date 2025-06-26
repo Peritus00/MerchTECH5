@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Fixed Backend Server"
+runButton = "Production Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -302,6 +302,39 @@ args = "sleep 3"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo \"🚀 Starting fixed backend server on port 5001...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && PORT=5001 node simple-server.js"
+
+[[workflows.workflow]]
+name = "Production Server"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🧹 Cleaning up any existing processes...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"node.*simple-server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"node.*5001\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 3"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🚀 Starting production server on port 5001...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
