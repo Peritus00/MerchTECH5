@@ -126,7 +126,15 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
+args = "pkill -f \"node.*5001\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
 args = "pkill -f \"node.*5000\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -138,7 +146,7 @@ args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server...\""
+args = "echo \"🚀 Starting backend server on port 5001...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -232,6 +240,10 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
+args = "pkill -f \"node.*5001\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
 args = "pkill -f \"node.*5000\" || true"
 
 [[workflows.workflow.tasks]]
@@ -240,7 +252,15 @@ args = "pkill -f \"node.*server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
 args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "fuser -k 5001/tcp 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -252,7 +272,7 @@ args = "sleep 5"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server on port 5000...\""
+args = "echo \"🚀 Starting backend server on port 5001...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
