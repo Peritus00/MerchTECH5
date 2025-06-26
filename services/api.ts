@@ -1,26 +1,20 @@
+
 import axios from 'axios';
 
-// Use the current Replit domain - port 5001 maps to external port 80
+// FORCE PORT 5001 - NO EXCEPTIONS
+const FORCED_PORT = '5001';
+
 const getCurrentDomain = (): string => {
   if (typeof window !== 'undefined') {
-    // Use current browser hostname for web
     return window.location.hostname;
   }
-  
-  // Use current domain from environment
   return process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
 };
 
-const getApiBaseUrl = (): string => {
-  const domain = getCurrentDomain();
-  
-  // ALWAYS use port 5001 for API requests
-  const baseUrl = `https://${domain}:5001/api`;
-  console.log('🔵 API Base URL (FORCED 5001):', baseUrl);
-  return baseUrl;
-};
+// HARDCODED to port 5001 - this should override any caching issues
+const API_BASE_URL = `https://${getCurrentDomain()}:${FORCED_PORT}/api`;
 
-const API_BASE_URL = getApiBaseUrl();
+console.log('🔵 FORCED API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
