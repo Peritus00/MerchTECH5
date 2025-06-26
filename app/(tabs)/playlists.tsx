@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -35,43 +34,20 @@ export default function PlaylistsScreen() {
   const fetchData = async () => {
     try {
       console.log('🔴 PLAYLISTS: Fetching real data from database...');
-      
-      // Fetch real media files from the database
-      const { mediaAPI } = await import('@/services/api');
+
+      // Fetch real playlists and media files from the database
+      const { playlistAPI, mediaAPI } = await import('@/services/api');
+
+      console.log('🔴 PLAYLISTS: About to call playlistAPI.getAll()...');
+      const realPlaylists = await playlistAPI.getAll();
+      console.log('🔴 PLAYLISTS: Playlists API call successful! Loaded playlists:', realPlaylists?.length || 0, realPlaylists);
+
       console.log('🔴 PLAYLISTS: About to call mediaAPI.getAll()...');
-      
       const realMediaFiles = await mediaAPI.getAll();
-      console.log('🔴 PLAYLISTS: API call successful! Loaded media files:', realMediaFiles?.length || 0, realMediaFiles);
-      
-      // For now, create some example playlists with real media files
-      // Later this will be replaced with actual playlist API calls
-      const examplePlaylists: Playlist[] = [
-        {
-          id: '1',
-          userId: 1,
-          name: 'My Audio Collection',
-          requiresActivationCode: false,
-          isPublic: false,
-          createdAt: new Date().toISOString(),
-          mediaFiles: realMediaFiles.filter(file => 
-            file.contentType?.startsWith('audio/') || file.fileType === 'audio'
-          ),
-        },
-        {
-          id: '2',
-          userId: 1,
-          name: 'My Video Collection',
-          requiresActivationCode: false,
-          isPublic: true,
-          createdAt: new Date().toISOString(),
-          mediaFiles: realMediaFiles.filter(file => 
-            file.contentType?.startsWith('video/') || file.fileType === 'video'
-          ),
-        },
-      ].filter(playlist => playlist.mediaFiles.length > 0); // Only show playlists that have files
-      
-      setPlaylists(examplePlaylists);
-      setMediaFiles(realMediaFiles);
+      console.log('🔴 PLAYLISTS: Media API call successful! Loaded media files:', realMediaFiles?.length || 0, realMediaFiles);
+
+      setPlaylists(realPlaylists || []);
+      setMediaFiles(realMediaFiles || []);
     } catch (error: any) {
       console.error('🔴 PLAYLISTS: Error fetching data:', error);
       console.error('🔴 PLAYLISTS: Error details:', {
@@ -81,11 +57,11 @@ export default function PlaylistsScreen() {
         data: error.response?.data,
         stack: error.stack
       });
-      
-      // For now, create empty playlists if API fails
+
+      // Set empty arrays if API fails
       setPlaylists([]);
       setMediaFiles([]);
-      
+
       Alert.alert('Error', `Failed to load playlists: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);

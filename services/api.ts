@@ -472,6 +472,45 @@ export const analyticsAPI = {
   }
 };
 
+// Playlist endpoints
+export const playlistAPI = {
+  getAll: async () => {
+    const response = await api.get('/playlists');
+    return response.data;
+  },
+
+  getById: async (id: string) => {
+    const response = await api.get(`/playlists/${id}`);
+    return response.data;
+  },
+
+  create: async (playlistData: {
+    name: string;
+    description?: string;
+    mediaFileIds?: number[];
+    requiresActivationCode?: boolean;
+    isPublic?: boolean;
+  }) => {
+    const response = await api.post('/playlists', playlistData);
+    return response.data;
+  },
+
+  update: async (id: string, updates: {
+    name?: string;
+    description?: string;
+    requiresActivationCode?: boolean;
+    isPublic?: boolean;
+  }) => {
+    const response = await api.put(`/playlists/${id}`, updates);
+    return response.data;
+  },
+
+  delete: async (id: string) => {
+    const response = await api.delete(`/playlists/${id}`);
+    return response.data;
+  }
+};
+
 // Media endpoints
 export const mediaAPI = {
   getAll: async () => {

@@ -153,294 +153,255 @@ if (!stripe) {
   console.log('✅ SERVER: Using key type:', process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST');
 }
 
-// Health check
-app.get('/api/health', async (req, res) => {
-  console.log('🔴 SERVER: Health check requested');
-  try {
-    const dbResult = await pool.query('SELECT NOW()');
-    const userCountResult = await pool.query('SELECT COUNT(*) as count FROM users');
+// Add health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'healthy', timestamp: new Date().toISOString() });
+});
 
-    res.json({ 
-      status: 'healthy',
-      database: 'connected',
-      users: parseInt(userCountResult.rows[0].count),
-      timestamp: new Date().toISOString(),
-      server: 'simple-server.js'
-    });
+// Playlist endpoints
+app.get('/api/playlists', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔴 SERVER: Get playlists endpoint hit for user:', req.user?.id);
+
+    const query = `
+      SELECT 
+        p.*,
+        COALESCE(
+          JSON_AGG(
+            CASE WHEN m.id IS NOT NULL THEN
+              JSON_BUILD_OBJECT(
+                'id', m.id,
+                'title', m.title,
+                'fileName', m.filename,
+                'fileType', m.file_type,
+                'filePath', m.file_path,
+                'contentType', m.content_type,
+                'fileSize', m.filesize,
+                'timestamp', m.created_at
+              )
+            END
+          ) FILTER (WHERE m.id IS NOT NULL),
+          '[]'::json
+        ) as media_files
+      FROM playlists p
+      LEFT JOIN playlist_media pm ON p.id = pm.playlist_id
+      LEFT JOIN media_files m ON pm.media_id = m.id
+      WHERE p.user_id = $1
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `;
+
+    const result = await pool.query(query, [req.user.id]);
+
+    const playlists = result.rows.map(row => ({
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      description: row.description,
+      requiresActivationCode: row.requires_activation_code,
+      isPublic: row.is_public,
+      instagramUrl: row.instagram_url,
+      twitterUrl: row.twitter_url,
+      facebookUrl: row.facebook_url,
+      youtubeUrl: row.youtube_url,
+      websiteUrl: row.website_url,
+      productLink: row.product_link,
+      productLinkTitle: row.product_link_title,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      mediaFiles: row.media_files || []
+    }));
+
+    console.log('🔴 SERVER: Found playlists:', playlists.length);
+    res.json(playlists);
   } catch (error) {
-    console.error('🔴 SERVER: Health check failed:', error);
-    res.status(500).json({ error: 'Database connection failed' });
+    console.error('🔴 SERVER: Error fetching playlists:', error);
+    res.status(500).json({ error: 'Failed to fetch playlists' });
   }
 });
 
-// CORS debug endpoint
-app.get('/api/cors-test', (req, res) => {
-  console.log('🔴 SERVER: CORS test requested from origin:', req.headers.origin);
-  res.json({
-    message: 'CORS test successful',
-    origin: req.headers.origin,
-    headers: req.headers,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Stripe health check
-app.get('/api/stripe/health', (req, res) => {
-  console.log('🔴 SERVER: Stripe health check requested');
-  res.json({
-    stripeConfigured: !!stripe,
-    secretKeyValid: !!stripe,
-    keyType: stripe ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST') : 'NONE',
-    secretKeyType: stripe ? (process.env.STRIPE_SECRET_KEY.startsWith('sk_live_') ? 'LIVE' : 'TEST') : 'NONE',
-    timestamp: new Date().toISOString(),
-    server: 'simple-server.js'
-  });
-});
-
-// Create Payment Intent
-app.post('/api/stripe/create-payment-intent', async (req, res) => {
-  console.log('🔴 SERVER: Create payment intent requested');
-  console.log('🔴 SERVER: Request body:', req.body);
-
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe not configured' });
-  }
-
+app.get('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
-    const { amount, currency = 'usd', subscriptionTier } = req.body;
+    const playlistId = req.params.id;
+    console.log('🔴 SERVER: Get playlist by ID:', playlistId);
 
-    if (!amount) {
-      return res.status(400).json({ error: 'Amount is required' });
+    const query = `
+      SELECT 
+        p.*,
+        COALESCE(
+          JSON_AGG(
+            CASE WHEN m.id IS NOT NULL THEN
+              JSON_BUILD_OBJECT(
+                'id', m.id,
+                'title', m.title,
+                'fileName', m.filename,
+                'fileType', m.file_type,
+                'filePath', m.file_path,
+                'contentType', m.content_type,
+                'fileSize', m.filesize,
+                'timestamp', m.created_at
+              )
+            END
+          ) FILTER (WHERE m.id IS NOT NULL),
+          '[]'::json
+        ) as media_files
+      FROM playlists p
+      LEFT JOIN playlist_media pm ON p.id = pm.playlist_id
+      LEFT JOIN media_files m ON pm.media_id = m.id
+      WHERE p.id = $1 AND p.user_id = $2
+      GROUP BY p.id
+    `;
+
+    const result = await pool.query(query, [playlistId, req.user.id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    // Create a customer for this payment
-    const customer = await stripe.customers.create({
-      metadata: {
-        subscriptionTier: subscriptionTier || 'unknown'
-      }
-    });
+    const row = result.rows[0];
+    const playlist = {
+      id: row.id,
+      userId: row.user_id,
+      name: row.name,
+      description: row.description,
+      requiresActivationCode: row.requires_activation_code,
+      isPublic: row.is_public,
+      instagramUrl: row.instagram_url,
+      twitterUrl: row.twitter_url,
+      facebookUrl: row.facebook_url,
+      youtubeUrl: row.youtube_url,
+      websiteUrl: row.website_url,
+      productLink: row.product_link,
+      productLinkTitle: row.product_link_title,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      mediaFiles: row.media_files || []
+    };
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert dollars to cents
-      currency: currency,
-      customer: customer.id,
-      automatic_payment_methods: {
-        enabled: true,
-      },
-      metadata: {
-        subscriptionTier: subscriptionTier || 'unknown'
-      }
-    });
+    console.log('🔴 SERVER: Found playlist:', playlist.name, 'with', playlist.mediaFiles.length, 'media files');
+    res.json(playlist);
+  } catch (error) {
+    console.error('🔴 SERVER: Error fetching playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
 
-    console.log('✅ SERVER: Payment intent created:', paymentIntent.id);
+app.post('/api/playlists', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, mediaFileIds, requiresActivationCode, isPublic } = req.body;
+    console.log('🔴 SERVER: Creating playlist:', { name, mediaFileIds: mediaFileIds?.length });
+
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    // Create playlist
+    const playlistQuery = `
+      INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `;
+
+    const playlistResult = await pool.query(playlistQuery, [
+      req.user.id,
+      name,
+      description || null,
+      requiresActivationCode || false,
+      isPublic || false
+    ]);
+
+    const playlist = playlistResult.rows[0];
+
+    // Add media files to playlist if provided
+    if (mediaFileIds && mediaFileIds.length > 0) {
+      const mediaQuery = `
+        INSERT INTO playlist_media (playlist_id, media_id)
+        VALUES ${mediaFileIds.map((_, i) => `($1, $${i + 2})`).join(', ')}
+      `;
+
+      await pool.query(mediaQuery, [playlist.id, ...mediaFileIds]);
+    }
+
+    console.log('🔴 SERVER: Created playlist with ID:', playlist.id);
+    res.status(201).json({
+      id: playlist.id,
+      userId: playlist.user_id,
+      name: playlist.name,
+      description: playlist.description,
+      requiresActivationCode: playlist.requires_activation_code,
+      isPublic: playlist.is_public,
+      createdAt: playlist.created_at,
+      mediaFiles: []
+    });
+  } catch (error) {
+    console.error('🔴 SERVER: Error creating playlist:', error);
+    res.status(500).json({ error: 'Failed to create playlist' });
+  }
+});
+
+app.put('/api/playlists/:id', authenticateToken, async (req, res) => {
+  try {
+    const playlistId = req.params.id;
+    const { name, description, requiresActivationCode, isPublic } = req.body;
+    console.log('🔴 SERVER: Updating playlist:', playlistId);
+
+    const query = `
+      UPDATE playlists 
+      SET name = $1, description = $2, requires_activation_code = $3, is_public = $4, updated_at = NOW()
+      WHERE id = $5 AND user_id = $6
+      RETURNING *
+    `;
+
+    const result = await pool.query(query, [
+      name,
+      description,
+      requiresActivationCode,
+      isPublic,
+      playlistId,
+      req.user.id
+    ]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlist = result.rows[0];
     res.json({
-      clientSecret: paymentIntent.client_secret,
-      customerId: customer.id,
-      id: paymentIntent.id
+      id: playlist.id,
+      userId: playlist.user_id,
+      name: playlist.name,
+      description: playlist.description,
+      requiresActivationCode: playlist.requires_activation_code,
+      isPublic: playlist.is_public,
+      createdAt: playlist.created_at,
+      updatedAt: playlist.updated_at
     });
   } catch (error) {
-    console.error('❌ SERVER: Create payment intent error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('🔴 SERVER: Error updating playlist:', error);
+    res.status(500).json({ error: 'Failed to update playlist' });
   }
 });
 
-// Get all Stripe products with prices
-app.get('/api/stripe/products', async (req, res) => {
-  console.log('🔴 SERVER: Get Stripe products requested');
-
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe not configured' });
-  }
-
+app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
-    const products = await stripe.products.list({
-      limit: 100,
-      active: true
-    });
+    const playlistId = req.params.id;
+    console.log('🔴 SERVER: Deleting playlist:', playlistId);
 
-    // For each product, fetch its associated prices
-    const productsWithPrices = await Promise.all(
-      products.data.map(async (product) => {
-        const prices = await stripe.prices.list({
-          product: product.id,
-          active: true,
-        });
-        return {
-          id: product.id, // Stripe Product ID (prod_...)
-          name: product.name,
-          description: product.description,
-          images: product.images,
-          metadata: product.metadata,
-          prices: prices.data.map(price => ({
-            id: price.id, // Stripe Price ID (price_...)
-            unit_amount: price.unit_amount, // Amount in cents
-            currency: price.currency,
-            type: price.type, // 'one_time' or 'recurring'
-            recurring: price.recurring,
-          })),
-        };
-      })
-    );
-
-    console.log('✅ SERVER: Products fetched:', productsWithPrices.length);
-    res.json(productsWithPrices);
-  } catch (error) {
-    console.error('❌ SERVER: Get products error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Create Checkout Session
-app.post('/api/stripe/create-checkout-session', async (req, res) => {
-  console.log('🔴 SERVER: Create checkout session requested');
-  console.log('🔴 SERVER: Request body:', req.body);
-
-  if (!stripe) {
-    return res.status(500).json({ error: 'Stripe not configured' });
-  }
-
-  try {
-    const { priceId, quantity = 1, subscriptionTier, amount, successUrl, cancelUrl } = req.body;
-
-    // Handle both app format (subscriptionTier + amount) and test format (priceId)
-    if (subscriptionTier && amount) {
-      // App format - create subscription with dynamic pricing
-      const lineItems = [{
-        price_data: {
-          currency: 'usd',
-          product_data: {
-            name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
-            description: `Monthly subscription to ${subscriptionTier} plan`,
-          },
-          unit_amount: Math.round(amount * 100), // Convert dollars to cents
-          recurring: {
-            interval: 'month',
-          },
-        },
-        quantity: 1,
-      }];
-
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        payment_method_types: ['card'],
-        line_items: lineItems,
-        success_url: successUrl || `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${req.headers.origin}/subscription`,
-        metadata: {
-          subscriptionTier: subscriptionTier
-        }
-      });
-
-      console.log('✅ SERVER: Checkout session created (app format):', session.id);
-      res.json({
-        success: true,
-        sessionId: session.id,
-        url: session.url
-      });
-
-    } else if (priceId) {
-      // Test format - use existing price ID
-      const price = await stripe.prices.retrieve(priceId);
-      const mode = price.type === 'recurring' ? 'subscription' : 'payment';
-
-      const session = await stripe.checkout.sessions.create({
-        mode: mode,
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            price: priceId,
-            quantity: quantity,
-          },
-        ],
-        success_url: successUrl || `${req.headers.origin}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${req.headers.origin}/subscription`,
-      });
-
-      console.log('✅ SERVER: Checkout session created (test format):', session.id);
-      res.json({
-        success: true,
-        sessionId: session.id,
-        url: session.url
-      });
-
-    } else {
-      return res.status(400).json({ error: 'Either priceId or (subscriptionTier + amount) is required' });
-    }
-
-  } catch (error) {
-    console.error('❌ SERVER: Create checkout session error:', error);
-    res.status(500).json({ 
-      success: false,
-      error: error.message 
-    });
-  }
-});
-
-// Update user subscription
-app.put('/api/user/subscription', async (req, res) => {
-  console.log('🔴 SERVER: Update user subscription requested');
-
-  try {
-    const { userId, subscriptionTier } = req.body;
-
-    if (!userId || !subscriptionTier) {
-      return res.status(400).json({ error: 'User ID and subscription tier are required' });
-    }
-
+    // Delete playlist (cascade will handle playlist_media)
     const result = await pool.query(
-      'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *',
-      [subscriptionTier, userId]
+      'DELETE FROM playlists WHERE id = $1 AND user_id = $2 RETURNING *',
+      [playlistId, req.user.id]
     );
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    console.log('✅ SERVER: User subscription updated:', userId, subscriptionTier);
-
-    // Send subscription confirmation email
-    try {
-      const user = result.rows[0];
-      const subscriptionEmailHtml = `
-        <h2>Subscription Confirmed!</h2>
-        <p>Hello ${user.username},</p>
-        <p>Your subscription to the <strong>${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan</strong> has been successfully activated!</p>
-        <p>You now have access to all the features included in your plan:</p>
-        <ul>
-          <li>✅ QR Code Generation</li>
-          <li>✅ Media Management</li>
-          <li>✅ Analytics Dashboard</li>
-          <li>✅ Store Integration</li>
-          ${subscriptionTier === 'premium' ? '<li>✅ Advanced Features</li>' : ''}
-        </ul>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/dashboard" 
-             style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Go to Dashboard
-          </a>
-        </div>
-        <p>Thank you for choosing MerchTech QR Platform!</p>
-      `;
-
-      if (brevoConfig.apiKey) {
-        await sendBrevoEmail(
-          user.email,
-          'Subscription Activated - MerchTech QR Platform',
-          subscriptionEmailHtml
-        );
-        console.log('✅ SERVER: Subscription confirmation email sent to:', user.email);
-      }
-    } catch (emailError) {
-      console.error('❌ SERVER: Failed to send subscription email:', emailError);
-    }
-
-    res.json({
-      success: true,
-      user: result.rows[0]
-    });
+    console.log('🔴 SERVER: Deleted playlist:', result.rows[0].name);
+    res.json({ message: 'Playlist deleted successfully' });
   } catch (error) {
-    console.error('❌ SERVER: Update subscription error:', error);
-    res.status(500).json({ error: error.message });
+    console.error('🔴 SERVER: Error deleting playlist:', error);
+    res.status(500).json({ error: 'Failed to delete playlist' });
   }
 });
 
@@ -1797,6 +1758,36 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         verification_token VARCHAR(255)
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS playlists (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        requires_activation_code BOOLEAN DEFAULT FALSE,
+        is_public BOOLEAN DEFAULT FALSE,
+        instagram_url VARCHAR(500),
+        twitter_url VARCHAR(500),
+        facebook_url VARCHAR(500),
+        youtube_url VARCHAR(500),
+        website_url VARCHAR(500),
+        product_link VARCHAR(500),
+        product_link_title VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS playlist_media (
+        id SERIAL PRIMARY KEY,
+        playlist_id INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+        media_id INTEGER REFERENCES media_files(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE(playlist_id, media_id)
       )
     `);
 

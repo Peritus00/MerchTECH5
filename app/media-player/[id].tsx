@@ -27,18 +27,12 @@ export default function MediaPlayerScreen() {
 
   const loadPlaylistData = async () => {
     try {
-      // Fetch actual playlist data from API
-      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load playlist: ${response.statusText}`);
-      }
-
-      const playlist = await response.json();
+      console.log('🔴 MEDIA_PLAYER: Loading playlist with ID:', id);
+      
+      const { playlistAPI } = await import('@/services/api');
+      const playlist = await playlistAPI.getById(id);
+      
+      console.log('🔴 MEDIA_PLAYER: Loaded playlist:', playlist);
       
       // Convert to format expected by MediaPlayer
       const formattedFiles = playlist.mediaFiles?.map((file: any) => ({

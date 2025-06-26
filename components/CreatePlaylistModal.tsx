@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -32,13 +31,56 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const [selectedMediaIds, setSelectedMediaIds] = useState<number[]>([]);
   const [step, setStep] = useState<'details' | 'media'>('details');
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a playlist name');
       return;
     }
-    onCreatePlaylist(name, description, selectedMediaIds);
-    resetForm();
+
+    setIsCreating(true);
+    try {
+      console.log('🔴 CreatePlaylistModal: Creating playlist with API...');
+
+      const { playlistAPI } = await import('@/services/api');
+
+      const playlistData = {
+        name: name.trim(),
+        description: description.trim() || undefined,
+        mediaFileIds: selectedMediaIds.length > 0 ? selectedMediaIds : undefined,
+        requiresActivationCode,
+        isPublic,
+      };
+
+      console.log('🔴 CreatePlaylistModal: Playlist data:', playlistData);
+
+      const newPlaylist = await playlistAPI.create(playlistData);
+      console.log('🔴 CreatePlaylistModal: API response:', newPlaylist);
+
+      // Add the selected media files to the playlist object for immediate UI update
+      const playlistWithMedia: Playlist = {
+        ...newPlaylist,
+        mediaFiles: selectedMediaIds.length > 0 
+          ? mediaFiles.filter(file => selectedMediaIds.includes(file.id))
+          : [],
+      };
+
+      console.log('🔴 CreatePlaylistModal: Created playlist:', playlistWithMedia);
+      onPlaylistCreated(playlistWithMedia);
+      onClose();
+
+      // Reset form
+      setName('');
+      setDescription('');
+      setRequiresActivationCode(false);
+      setIsPublic(false);
+      setSelectedMediaIds([]);
+    } catch (error: any) {
+      console.error('🔴 CreatePlaylistModal: Error creating playlist:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create playlist';
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const resetForm = () => {

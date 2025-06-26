@@ -34,31 +34,28 @@ export default function PlaylistAccessScreen() {
 
   const fetchPlaylist = async () => {
     try {
-      // Fetch actual playlist data from API
-      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load playlist: ${response.statusText}`);
-      }
-
-      const mockPlaylist = await response.json();
+      console.log('🔴 PLAYLIST_ACCESS: Fetching playlist with ID:', id);
+      
+      const { playlistAPI } = await import('@/services/api');
+      const playlistData = await playlistAPI.getById(id);
+      
+      console.log('🔴 PLAYLIST_ACCESS: Loaded playlist:', playlistData);
 
       // Ensure mediaFiles have full URLs
-      if (mockPlaylist.mediaFiles) {
-        mockPlaylist.mediaFiles = mockPlaylist.mediaFiles.map((file: any) => ({
+      if (playlistData.mediaFiles) {
+        playlistData.mediaFiles = playlistData.mediaFiles.map((file: any) => ({
           ...file,
-          filePath: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
+          filePath: file.filePath.startsWith('http') 
+            ? file.filePath 
+            : `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
         }));
       }
 
-      setPlaylist(mockPlaylist);
-    } catch (error) {
-      console.error('Error fetching playlist:', error);
-      Alert.alert('Error', 'Failed to load playlist');
+      setPlaylist(playlistData);
+    } catch (error: any) {
+      console.error('🔴 PLAYLIST_ACCESS: Error fetching playlist:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to load playlist';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
