@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -98,13 +97,13 @@ async function smartPortCleanup() {
       if (stdout.trim()) {
         const pids = stdout.trim().split('\n').filter(pid => pid.trim());
         console.log('🧹 Found processes on port', PORT, ':', pids);
-        
+
         for (const pid of pids) {
           try {
             await execAsync(`kill -TERM ${pid}`);
             console.log('🧹 Gracefully terminated process', pid);
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             // Check if process is still running
             try {
               await execAsync(`kill -0 ${pid}`);
@@ -150,7 +149,7 @@ async function smartPortCleanup() {
 
     // Wait for cleanup to take effect
     await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
     // Verify port is now free
     const stillInUse = await checkPortInUse(PORT);
     if (stillInUse) {
@@ -165,7 +164,7 @@ async function smartPortCleanup() {
     } else {
       console.log('✅ Port cleanup successful');
     }
-    
+
     return PORT;
   } catch (error) {
     console.log('🧹 Port cleanup completed with warnings:', error.message);
@@ -179,7 +178,7 @@ async function checkPortInUse(port) {
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
-    
+
     const { stdout } = await execAsync(`lsof -ti:${port} || true`);
     return stdout.trim().length > 0;
   } catch (error) {
@@ -244,7 +243,7 @@ async function attemptServerRestart() {
     if (serverInstance) {
       serverInstance.close();
     }
-    
+
     // Clear health monitoring
     if (healthCheckTimer) {
       clearInterval(healthCheckTimer);
@@ -260,7 +259,7 @@ async function attemptServerRestart() {
     await startServer();
   } catch (error) {
     console.error(`❌ Restart attempt ${restartAttempts} failed:`, error);
-    
+
     // Try again after delay
     setTimeout(() => attemptServerRestart(), RESTART_DELAY * 2);
   }
@@ -269,7 +268,7 @@ async function attemptServerRestart() {
 // Enhanced graceful shutdown handlers
 const gracefulShutdown = async (signal) => {
   console.log(`🛑 ${signal} received, starting graceful shutdown...`);
-  
+
   // Clear health monitoring
   if (healthCheckTimer) {
     clearInterval(healthCheckTimer);
@@ -361,7 +360,7 @@ app.get('/api/health', async (req, res) => {
   try {
     // Test database connection
     await pool.query('SELECT 1');
-    
+
     res.json({ 
       status: 'healthy', 
       timestamp: new Date().toISOString(),
@@ -966,7 +965,10 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
   }
 });
 
+console.log('✅ Playlist endpoints registered');
+
 // ==================== QR CODE ENDPOINTS ====================
+console.log('🔧 Registering QR code endpoints...');
 
 // Get all QR codes for user
 app.get('/api/qr-codes', authenticateToken, async (req, res) => {
@@ -1252,7 +1254,7 @@ app.post('/api/admin/restart', authenticateToken, async (req, res) => {
     }
 
     console.log('🔄 Admin restart request received from:', req.user.username);
-    
+
     res.json({ 
       message: 'Server restart initiated', 
       timestamp: new Date().toISOString() 
@@ -1468,7 +1470,7 @@ async function initializeDatabase() {
 async function startServer() {
   try {
     console.log(`🚀 Starting server (attempt ${restartAttempts + 1})`);
-    
+
     // Clean up any existing processes on this port
     const actualPort = await smartPortCleanup();
     if (actualPort !== PORT) {
@@ -1479,21 +1481,53 @@ async function startServer() {
     await initializeDatabase();
 
     // Log all registered routes for debugging
-    console.log('🔧 Registered routes:');
+    // Force router initialization by creating a simple test route first
+    app.get('/api/test-router', (req, res) => {
+      res.json({ message: 'Router initialized' });
+    });
+
+    // Wait a moment for Express to process the route
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Comprehensive route verification
+    console.log('🔧 Final route verification:');
+    const routes = [];
+
     if (app._router && app._router.stack) {
       app._router.stack.forEach((middleware) => {
         if (middleware.route) {
-          console.log(`   ${Object.keys(middleware.route.methods).join(',').toUpperCase()} ${middleware.route.path}`);
+          const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
+          const path = middleware.route.path;
+          routes.push(`${methods} ${path}`);
+          console.log(`   ✅ ${methods} ${path}`);
         } else if (middleware.name === 'router') {
           middleware.handle.stack.forEach((handler) => {
             if (handler.route) {
-              console.log(`   ${Object.keys(handler.route.methods).join(',').toUpperCase()} ${handler.route.path}`);
+              const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
+              const path = handler.route.path;
+              routes.push(`${methods} ${path}`);
+              console.log(`   ✅ ${methods} ${path}`);
             }
           });
         }
       });
     } else {
-      console.log('   Router not yet initialized');
+      console.error('❌ Router stack not found!');
+      throw new Error('Express router not properly initialized');
+    }
+
+    // Verify critical routes are registered
+    const criticalRoutes = ['/api/playlists', '/api/auth/login', '/api/auth/register', '/api/health'];
+    const missingRoutes = criticalRoutes.filter(route => 
+      !routes.some(r => r.includes(route))
+    );
+
+    if (missingRoutes.length > 0) {
+      console.error('❌ Missing critical routes:', missingRoutes);
+      console.error('❌ Available routes:', routes);
+      throw new Error(`Critical routes not registered: ${missingRoutes.join(', ')}`);
+    } else {
+      console.log('✅ All critical routes verified');
     }
 
     // Start the server with enhanced error handling
@@ -1505,10 +1539,10 @@ async function startServer() {
       console.log(`🔒 Process ID: ${process.pid}`);
       console.log(`🔄 Restart attempts: ${restartAttempts}`);
       console.log(`🛡️ Self-healing enabled`);
-      
+
       // Reset restart count on successful start
       restartAttempts = 0;
-      
+
       // Start health monitoring
       startHealthMonitoring();
     });
@@ -1516,7 +1550,7 @@ async function startServer() {
     // Enhanced error handling with self-healing
     serverInstance.on('error', async (error) => {
       console.error('❌ Server error:', error);
-      
+
       if (error.code === 'EADDRINUSE') {
         console.error('❌ Port', PORT, 'is already in use');
         await attemptServerRestart();
@@ -1537,20 +1571,20 @@ async function startServer() {
 async function validateAndStart() {
   try {
     console.log('🔍 Starting server validation...');
-    
+
     // Validate environment
     console.log('🔍 Checking environment variables...');
     console.log('  - PORT:', PORT);
     console.log('  - REPLIT_DEV_DOMAIN:', process.env.REPLIT_DEV_DOMAIN || 'Not set');
     console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
     console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Using fallback');
-    
+
     // Check if port is available
     console.log(`🔍 Checking if port ${PORT} is available...`);
     const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
-    
+
     try {
       const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
       if (stdout.trim()) {
@@ -1562,7 +1596,7 @@ async function validateAndStart() {
     } catch (error) {
       console.log('🔍 Port check completed (lsof not available)');
     }
-    
+
     // Test database connection early
     console.log('🔍 Testing database connection...');
     try {
@@ -1572,10 +1606,10 @@ async function validateAndStart() {
       console.warn('⚠️ Database connection test failed:', error.message);
       console.log('🔄 Server will continue and retry database connection...');
     }
-    
+
     console.log('✅ Validation complete. Starting production server...');
     await startServer();
-    
+
   } catch (error) {
     console.error('❌ Validation failed:', error);
     console.log('🔄 Attempting to start server anyway...');
