@@ -1,37 +1,39 @@
 import axios from 'axios';
 
-// API Configuration with dynamic port handling
+// API Configuration - Fixed for port 5001
 const getApiBaseUrl = (): string => {
+  // Force port 5001 for all environments
   if (typeof window !== 'undefined') {
-    // Web environment
+    // Web environment - extract the base domain and force port 5001
     const currentUrl = window.location;
-    const protocol = currentUrl.protocol;
     const hostname = currentUrl.hostname;
 
-    // For Replit, use the current domain with port 5001
+    // For Replit domains
     if (hostname.includes('replit.dev') || hostname.includes('replit.co')) {
-      return `${protocol}//${hostname.replace(/:\d+$/, '')}:5001/api`;
+      return `https://${hostname}:5001/api`;
     }
 
     // For localhost development
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `${protocol}//${hostname}:5001/api`;
+      return `http://${hostname}:5001/api`;
     }
 
-    // Default fallback
-    return `${protocol}//${hostname}:5001/api`;
+    // Default fallback with port 5001
+    return `https://${hostname}:5001/api`;
   }
 
   // Server-side or React Native environment
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.EXPO_PUBLIC_API_URL;
-
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN;
+  
   if (replitDomain) {
-    // Handle full URL
-    if (replitDomain.startsWith('http')) {
-      return replitDomain.endsWith('/api') ? replitDomain : `${replitDomain}/api`;
-    }
-    // Handle domain only
+    // Always use port 5001 for Replit
     return `https://${replitDomain}:5001/api`;
+  }
+
+  // Environment variable override
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (apiUrl) {
+    return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
   }
 
   // Local development fallback
