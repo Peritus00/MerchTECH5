@@ -88,24 +88,62 @@ process.on('SIGINT', () => {
   }
 });
 
-// Port cleanup function
+// Enhanced port cleanup function with multiple strategies
 async function cleanupPort() {
   try {
-    console.log('🧹 Cleaning up any existing processes on port', PORT);
-    const { spawn } = require('child_process');
+    console.log('🧹 Starting comprehensive port cleanup for port', PORT);
+    const { spawn, exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
 
-    // Kill any existing node processes on this port
-    const cleanup = spawn('pkill', ['-f', `node.*${PORT}`], { stdio: 'inherit' });
+    // Strategy 1: Kill specific node processes
+    try {
+      const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
+      if (stdout.trim()) {
+        const pids = stdout.trim().split('\n');
+        console.log('🧹 Found processes on port', PORT, ':', pids);
+        
+        for (const pid of pids) {
+          if (pid) {
+            try {
+              await execAsync(`kill -9 ${pid}`);
+              console.log('🧹 Killed process', pid);
+            } catch (err) {
+              console.log('🧹 Could not kill process', pid, '(may already be dead)');
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.log('🧹 lsof method failed, trying alternative...');
+    }
 
-    cleanup.on('close', (code) => {
-      console.log('🧹 Port cleanup completed with code:', code);
-    });
+    // Strategy 2: Kill by pattern
+    try {
+      await execAsync(`pkill -f "node.*simple-server" || true`);
+      await execAsync(`pkill -f "node.*${PORT}" || true`);
+      console.log('🧹 Pattern-based cleanup completed');
+    } catch (error) {
+      console.log('🧹 Pattern cleanup warning:', error.message);
+    }
 
-    // Wait a moment for cleanup
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Strategy 3: Wait and verify
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Verify port is free
+    try {
+      const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
+      if (stdout.trim()) {
+        console.log('⚠️ Port', PORT, 'still has processes, but continuing...');
+      } else {
+        console.log('✅ Port', PORT, 'is now clean');
+      }
+    } catch (error) {
+      console.log('🧹 Port verification completed');
+    }
   } catch (error) {
-    console.log('🧹 Port cleanup warning:', error.message);
-    // Don't fail if cleanup fails
+    console.log('🧹 Port cleanup completed with warnings:', error.message);
+    // Don't fail startup if cleanup fails
   }
 }
 
@@ -1217,46 +1255,149 @@ async function initializeDatabase() {
   }
 }
 
-// Start server with cleanup and improved process management
+// Self-healing server with automatic restart and health monitoring
+let restartCount = 0;
+const MAX_RESTARTS = 5;
+const RESTART_DELAY = 3000;
+
 async function startServer() {
   try {
+    console.log(`🚀 Starting server (attempt ${restartCount + 1}/${MAX_RESTARTS + 1})`);
+    
     // Clean up any existing processes on this port
     await cleanupPort();
 
     // Initialize database
     await initializeDatabase();
 
-    // Start the server
+    // Start the server with enhanced error handling
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`✅ Simple server running on port ${PORT}`);
       console.log(`📍 API available at: http://0.0.0.0:${PORT}/api`);
       console.log(`🌐 External API URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api`);
       console.log(`❤️ Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
       console.log(`🔒 Process ID: ${process.pid}`);
+      console.log(`🔄 Restart count: ${restartCount}`);
+      
+      // Reset restart count on successful start
+      restartCount = 0;
     });
 
-    // Handle server errors
-    server.on('error', (error) => {
+    // Enhanced error handling with self-healing
+    server.on('error', async (error) => {
       console.error('❌ Server error:', error);
+      
       if (error.code === 'EADDRINUSE') {
         console.error('❌ Port', PORT, 'is already in use');
-        console.log('🧹 Attempting to clean up and restart...');
-        setTimeout(() => {
-          server.close(() => {
-            cleanupPort().then(() => {
-              startServer();
-            });
+        
+        if (restartCount < MAX_RESTARTS) {
+          console.log(`🔄 Attempting self-healing restart ${restartCount + 1}/${MAX_RESTARTS}...`);
+          restartCount++;
+          
+          server.close(async () => {
+            await new Promise(resolve => setTimeout(resolve, RESTART_DELAY));
+            await cleanupPort();
+            startServer();
           });
-        }, 2000);
+        } else {
+          console.error(`❌ Maximum restart attempts (${MAX_RESTARTS}) reached. Exiting.`);
+          process.exit(1);
+        }
+      } else {
+        console.error('❌ Unhandled server error:', error);
+        if (restartCount < MAX_RESTARTS) {
+          console.log('🔄 Attempting restart due to error...');
+          restartCount++;
+          setTimeout(() => startServer(), RESTART_DELAY);
+        } else {
+          process.exit(1);
+        }
       }
     });
+
+    // Add periodic health check
+    setInterval(() => {
+      try {
+        // Simple health check - verify server is responding
+        if (server.listening) {
+          console.log('💚 Server health check: OK');
+        } else {
+          console.log('⚠️ Server health check: Server not listening');
+          if (restartCount < MAX_RESTARTS) {
+            console.log('🔄 Restarting unhealthy server...');
+            restartCount++;
+            startServer();
+          }
+        }
+      } catch (error) {
+        console.error('❌ Health check error:', error);
+      }
+    }, 30000); // Check every 30 seconds
 
     return server;
   } catch (error) {
     console.error('❌ Failed to start server:', error);
-    process.exit(1);
+    
+    if (restartCount < MAX_RESTARTS) {
+      console.log(`🔄 Retrying server start in ${RESTART_DELAY}ms...`);
+      restartCount++;
+      setTimeout(() => startServer(), RESTART_DELAY);
+    } else {
+      console.error(`❌ Maximum restart attempts reached. Exiting.`);
+      process.exit(1);
+    }
   }
 }
 
-// Start the server
-startServer();
+// Startup validation and initialization
+async function validateAndStart() {
+  try {
+    console.log('🔍 Starting server validation...');
+    
+    // Validate environment
+    console.log('🔍 Checking environment variables...');
+    console.log('  - PORT:', PORT);
+    console.log('  - REPLIT_DEV_DOMAIN:', process.env.REPLIT_DEV_DOMAIN || 'Not set');
+    console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+    console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Using fallback');
+    
+    // Check if port is available
+    console.log(`🔍 Checking if port ${PORT} is available...`);
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    
+    try {
+      const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
+      if (stdout.trim()) {
+        console.log(`⚠️ Port ${PORT} is in use. Cleaning up...`);
+        await cleanupPort();
+      } else {
+        console.log(`✅ Port ${PORT} is available`);
+      }
+    } catch (error) {
+      console.log('🔍 Port check completed (lsof not available)');
+    }
+    
+    // Test database connection early
+    console.log('🔍 Testing database connection...');
+    try {
+      await pool.query('SELECT 1');
+      console.log('✅ Database connection test passed');
+    } catch (error) {
+      console.warn('⚠️ Database connection test failed:', error.message);
+      console.log('🔄 Server will continue and retry database connection...');
+    }
+    
+    console.log('✅ Validation complete. Starting server...');
+    await startServer();
+    
+  } catch (error) {
+    console.error('❌ Validation failed:', error);
+    console.log('🔄 Attempting to start server anyway...');
+    await startServer();
+  }
+}
+
+// Start the server with validation
+validateAndStart();
