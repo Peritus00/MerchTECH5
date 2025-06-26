@@ -15,7 +15,7 @@ console.log('Environment variables:', {
 console.log('Final API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
