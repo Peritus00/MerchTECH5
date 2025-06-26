@@ -37,7 +37,8 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Database configuration
 const pool = new Pool({
@@ -868,6 +869,106 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     res.json({ message: 'QR code deleted successfully' });
   } catch (error) {
     console.error('🔴 SERVER: Delete QR code error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==================== MEDIA ENDPOINTS ====================
+
+// Get all media files for user
+app.get('/api/media', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Get media files endpoint hit');
+  try {
+    const result = await pool.query(
+      'SELECT * FROM media_files WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.userId]
+    );
+
+    console.log('🔴 SERVER: Found media files:', result.rows.length);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('🔴 SERVER: Get media files error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Upload media file
+app.post('/api/media', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Upload media file endpoint hit');
+  try {
+    const { 
+      title, 
+      filePath, 
+      url, 
+      filename, 
+      fileType, 
+      contentType, 
+      filesize, 
+      duration, 
+      uniqueId 
+    } = req.body;
+
+    if (!title || !filePath || !fileType) {
+      return res.status(400).json({ error: 'Title, file path, and file type are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO media_files (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [req.user.userId, title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId]
+    );
+
+    console.log('🔴 SERVER: Media file uploaded:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Upload media file error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get media file by ID
+app.get('/api/media/:id', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Get media file by ID endpoint hit');
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'SELECT * FROM media_files WHERE id = $1 AND user_id = $2',
+      [id, req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+
+    console.log('🔴 SERVER: Found media file:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Get media file by ID error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete media file
+app.delete('/api/media/:id', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Delete media file endpoint hit');
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM media_files WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+
+    console.log('🔴 SERVER: Media file deleted:', id);
+    res.json({ message: 'Media file deleted successfully' });
+  } catch (error) {
+    console.error('🔴 SERVER: Delete media file error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
