@@ -245,11 +245,27 @@ args = "echo \"🚀 Starting Self-Healing Production Server...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🔧 Initializing process monitoring...\""
+args = "echo \"🧹 Cleaning up any orphaned processes...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && node process-monitor.js"
+args = "pkill -f \"node.*simple-server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"node.*5000\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 3"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🚀 Starting backend server with self-healing...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node simple-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
