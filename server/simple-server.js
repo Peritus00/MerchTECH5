@@ -85,7 +85,7 @@ async function sendBrevoEmail(to, subject, htmlContent, templateId = null) {
   try {
     const emailData = {
       sender: {
-        email: 'noreply@merchtech.io',
+        email: 'help@mertech.net',
         name: 'MerchTech QR Platform'
       },
       to: [{ email: to }],
@@ -109,6 +109,40 @@ async function sendBrevoEmail(to, subject, htmlContent, templateId = null) {
     console.error('❌ SERVER: Brevo email error:', error.response?.data || error.message);
     throw error;
   }
+}
+
+// Simplified email function using Brevo
+async function sendEmail(to, subject, htmlContent) {
+    if (!process.env.BREVO_API_KEY) {
+        console.warn('⚠️ SERVER: Brevo API key not configured.  No emails will be sent.');
+        return;
+    }
+    try {
+        const response = await axios.post(
+            'https://api.brevo.com/v3/smtp/email',
+            {
+                sender: {
+                    email: 'help@mertech.net', // Use the verified sender email
+                    name: 'MerchTech QR Platform'
+                },
+                to: [{ email: to }],
+                subject: subject,
+                htmlContent: htmlContent
+            },
+            {
+                headers: {
+                    'accept': 'application/json',
+                    'api-key': process.env.BREVO_API_KEY,
+                    'content-type': 'application/json'
+                }
+            }
+        );
+        console.log('✅ SERVER: Email sent successfully via Brevo');
+        return response.data;
+    } catch (error) {
+        console.error('❌ SERVER: Error sending email via Brevo:', error.response ? error.response.data : error.message);
+        throw error;
+    }
 }
 
 if (!stripe) {
@@ -502,7 +536,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
 
-    // Send verification email automatically via Brevo
+    // Send verification email automatically
     try {
       const verificationToken = jwt.sign(
         { email: user.email, type: 'email_verification' },
@@ -519,38 +553,44 @@ app.post('/api/auth/register', async (req, res) => {
         `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
-      // Send welcome email with verification link via Brevo
+      // Send welcome and verification email via Brevo
       const emailHtml = `
-        <h2>Welcome to MerchTech QR Platform!</h2>
-        <p>Hello ${user.username},</p>
-        <p>Thank you for registering with MerchTech QR Platform. To complete your registration, please verify your email address by clicking the button below:</p>
-        <div style="text-align: center; margin: 30px 0;">
-          <a href="${verificationLink}" 
-             style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-            Verify Email Address
-          </a>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #3b82f6; text-align: center;">Welcome to MerchTech QR!</h2>
+          <p>Hi ${user.username},</p>
+          <p>Thank you for creating your MerchTech QR account! We're excited to help you create and manage QR codes for your business.</p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verificationLink}" 
+               style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+              Verify Your Email Address
+            </a>
+          </div>
+
+          <p>This verification link will expire in 24 hours.</p>
+          <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${verificationLink}</p>
+
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 14px;">
+            If you didn't create this account, please ignore this email.
+          </p>
+          <p style="color: #666; font-size: 14px;">
+            Best regards,<br>
+            The MerchTech QR Team
+          </p>
         </div>
-        <p>Or copy and paste this link into your browser:</p>
-        <p><a href="${verificationLink}">${verificationLink}</a></p>
-        <p>This verification link will expire in 24 hours.</p>
-        <hr>
-        <p style="color: #666; font-size: 12px;">
-          If you didn't create an account with us, please ignore this email.
-        </p>
       `;
 
-      if (brevoConfig.apiKey) {
-        await sendBrevoEmail(
-          user.email,
-          'Verify Your Email - MerchTech QR Platform',
-          emailHtml
-        );
-        console.log('✅ SERVER: Verification email sent via Brevo to:', user.email);
-      } else {
-        console.log('🔴 SERVER: Brevo not configured, verification link:', verificationLink);
-      }
+      await sendEmail(
+        user.email,
+        'Welcome to MerchTech QR - Please verify your email',
+        emailHtml
+      );
+
+      console.log('✅ SERVER: Welcome and verification email sent to:', user.email);
     } catch (emailError) {
-      console.error('🔴 SERVER: Failed to send verification email:', emailError);
+      console.error('❌ SERVER: Failed to send verification email:', emailError);
       // Don't fail registration if email fails
     }
 
