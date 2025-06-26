@@ -2,12 +2,19 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// API Configuration - ALWAYS use port 5000
+// API Configuration - Use environment variable first, then fallback with port 5000
 const getApiBaseUrl = (): string => {
+  // First try to use the environment variable that includes the full URL with port
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    console.log('API Base URL (from env):', process.env.EXPO_PUBLIC_API_URL);
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // Fallback to constructing URL with port 5000
   const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
   const baseUrl = `https://${domain}:5000/api`;
 
-  console.log('API Base URL (with port 5000):', baseUrl);
+  console.log('API Base URL (fallback with port 5000):', baseUrl);
   return baseUrl;
 };
 
