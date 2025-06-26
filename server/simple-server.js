@@ -492,7 +492,8 @@ app.post('/api/auth/login', async (req, res) => {
       { 
         userId: user.id, 
         email: user.email,
-        username: user.username 
+        username: user.username,
+        isAdmin: user.is_admin || false
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -508,6 +509,7 @@ app.post('/api/auth/login', async (req, res) => {
         isEmailVerified: user.is_email_verified,
         subscriptionTier: user.subscription_tier,
         isNewUser: user.is_new_user,
+        isAdmin: user.is_admin || false,
         createdAt: user.created_at,
         updatedAt: user.updated_at
       },
@@ -546,6 +548,7 @@ const authenticateToken = (req, res, next) => {
   // Handle developer fallback token
   if (token === 'dev_jwt_token_djjetfuel_12345') {
     req.user = {
+      userId: 1,
       id: 1,
       email: 'djjetfuel@gmail.com',
       username: 'djjetfuel',
@@ -554,11 +557,26 @@ const authenticateToken = (req, res, next) => {
     return next();
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
       console.error('JWT verification error:', err);
       return res.status(403).json({ error: 'Invalid token' });
     }
+    
+    // Check if user is admin in database
+    try {
+      const dbUser = await pool.query(
+        'SELECT is_admin FROM users WHERE id = $1',
+        [user.userId]
+      );
+      
+      if (dbUser.rows.length > 0) {
+        user.isAdmin = dbUser.rows[0].is_admin;
+      }
+    } catch (dbError) {
+      console.error('Error checking admin status:', dbError);
+    }
+    
     req.user = user;
     next();
   });
@@ -839,9 +857,16 @@ async function initializeDatabase() {
         is_email_verified BOOLEAN DEFAULT false,
         subscription_tier VARCHAR(20) DEFAULT 'free',
         is_new_user BOOLEAN DEFAULT true,
+        is_admin BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
+    `);
+
+    // Add is_admin column if it doesn't exist (for existing databases)
+    await pool.query(`
+      ALTER TABLE users 
+      ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false
     `);
 
     // Create qr_codes table if it doesn't exist
@@ -859,6 +884,37 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Create admin user if it doesn't exist
+    console.log('Checking for admin user...');
+    const adminUser = await pool.query(
+      'SELECT id FROM users WHERE email = $1',
+      ['djjetfuel@gmail.com']
+    );
+
+    if (adminUser.rows.length === 0) {
+      console.log('Creating admin user...');
+      const bcrypt = require('bcrypt');
+      const adminPassword = await bcrypt.hash('admin123!', 12);
+      
+      await pool.query(
+        `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_admin, is_new_user, created_at, updated_at)
+         VALUES ($1, $2, $3, true, 'premium', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        ['djjetfuel@gmail.com', 'djjetfuel', adminPassword]
+      );
+      console.log('✅ Admin user created: djjetfuel@gmail.com / admin123!');
+    } else {
+      console.log('✅ Admin user already exists');
+      
+      // Ensure admin user has proper permissions
+      await pool.query(
+        `UPDATE users 
+         SET is_admin = true, subscription_tier = 'premium', is_email_verified = true
+         WHERE email = $1`,
+        ['djjetfuel@gmail.com']
+      );
+      console.log('✅ Admin user permissions updated');
+    }
 
     console.log('Database connected and tables initialized');
   } catch (error) {
