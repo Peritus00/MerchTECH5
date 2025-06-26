@@ -12,6 +12,7 @@ import {
   Linking,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import { Video, ResizeMode } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -102,26 +103,31 @@ export default function MediaPlayer({
 
       console.log('Loading track:', track.url);
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: track.url },
-        {
-          shouldPlay: autoplay,
-          volume: volume,
-          isLooping: false,
+      if (track.fileType === 'audio') {
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: track.url },
+          {
+            shouldPlay: autoplay,
+            volume: volume,
+            isLooping: false,
+          }
+        );
+
+        // Set up status update listener
+        newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
+
+        setSound(newSound);
+        setCurrentTrackIndex(trackIndex);
+
+        if (autoplay) {
+          setIsPlaying(true);
+          if (onSetPlaybackState) {
+            onSetPlaybackState(true, trackIndex);
+          }
         }
-      );
-
-      // Set up status update listener
-      newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-
-      setSound(newSound);
-      setCurrentTrackIndex(trackIndex);
-
-      if (autoplay) {
-        setIsPlaying(true);
-        if (onSetPlaybackState) {
-          onSetPlaybackState(true, trackIndex);
-        }
+      } else if (track.fileType === 'video') {
+        // Handle video loading here. This is a placeholder.
+        console.log('Video loading not yet implemented');
       }
     } catch (error) {
       console.error('Error loading track:', error);

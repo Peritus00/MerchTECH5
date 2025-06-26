@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native';
 import { Audio } from 'expo-audio';
+import { Video, ResizeMode } from 'expo-video';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
@@ -43,6 +44,7 @@ export default function PreviewPlayer({
 }: PreviewPlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const videoRef = useRef<Video>(null);
   const [currentTrack, setCurrentTrack] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [timeLeft, setTimeLeft] = useState(previewDuration);
@@ -120,8 +122,13 @@ export default function PreviewPlayer({
     if (!media) return;
 
     try {
-      // For demo purposes, we'll create a silent sound to prevent errors
-      // In production, you'd use the actual media.url
+      // Handle video files differently from audio
+      if (media.fileType === 'video' || media.contentType?.startsWith('video/')) {
+        // Video will be handled by the Video component directly
+        return;
+      }
+
+      // For audio files, create a demo audio for preview
       const demoAudio = Audio.Sound.createAsync(
         { uri: 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=' },
         {
@@ -137,14 +144,13 @@ export default function PreviewPlayer({
 
       // Set up status update listener with instance check
       newSound.setOnPlaybackStatusUpdate((status) => {
-        if (!isInstanceActive || activePlayerId !== playerId) return; // Prevent updates from inactive instances
+        if (!isInstanceActive || activePlayerId !== playerId) return;
 
         if (status.isLoaded && status.positionMillis !== undefined) {
           const currentTimeSeconds = Math.floor(status.positionMillis / 1000);
           setCurrentTime(currentTimeSeconds);
           setTimeLeft(Math.max(0, previewDuration - currentTimeSeconds));
 
-          // Stop at preview duration
           if (currentTimeSeconds >= previewDuration) {
             newSound.pauseAsync();
             setIsPlaying(false);
@@ -192,10 +198,16 @@ export default function PreviewPlayer({
 
   // Handle play
   const handlePlay = async () => {
-    if (!sound || previewEnded) return;
+    if (previewEnded) return;
 
     try {
-      await sound.playAsync();
+      const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/');
+      
+      if (isVideo && videoRef.current) {
+        await videoRef.current.playAsync();
+      } else if (sound) {
+        await sound.playAsync();
+      }
       setIsPlaying(true);
     } catch (error) {
       console.error('Error playing:', error);
@@ -204,10 +216,14 @@ export default function PreviewPlayer({
 
   // Handle pause
   const handlePause = async () => {
-    if (!sound) return;
-
     try {
-      await sound.pauseAsync();
+      const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/');
+      
+      if (isVideo && videoRef.current) {
+        await videoRef.current.pauseAsync();
+      } else if (sound) {
+        await sound.pauseAsync();
+      }
       setIsPlaying(false);
     } catch (error) {
       console.error('Error pausing:', error);
@@ -278,6 +294,36 @@ export default function PreviewPlayer({
         style={styles.playerContainer}
       >
         <View style={styles.content}>
+        {/* Video Player */}
+        {(currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/')) && (
+          <View style={styles.videoContainer}>
+            <Video
+              ref={videoRef}
+              style={styles.video}
+              source={{ uri: currentMedia.url }}
+              useNativeControls={false}
+              resizeMode={ResizeMode.CONTAIN}
+              shouldPlay={isPlaying}
+              isLooping={false}
+              volume={isMuted ? 0 : volume}
+              onPlaybackStatusUpdate={(status) => {
+                if (!isInstanceActive || activePlayerId !== playerId) return;
+                
+                if (status.isLoaded && status.positionMillis !== undefined) {
+                  const currentTimeSeconds = Math.floor(status.positionMillis / 1000);
+                  setCurrentTime(currentTimeSeconds);
+                  setTimeLeft(Math.max(0, previewDuration - currentTimeSeconds));
+
+                  if (currentTimeSeconds >= previewDuration) {
+                    handlePause();
+                    setPreviewEnded(true);
+                  }
+                }
+              }}
+            />
+          </View>
+        )}
+
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.playlistName}>{playlistName}</Text>
@@ -427,6 +473,18 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: 'center',
+  },
+  videoContainer: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 24,
+    height: 200,
+  },
+  video: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
   },
   emptyContainer: {
     flex: 1,
