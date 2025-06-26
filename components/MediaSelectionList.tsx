@@ -26,7 +26,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
   const [filterType, setFilterType] = useState<'all' | 'audio' | 'video'>('all');
 
   const filteredMediaFiles = mediaFiles.filter(file => {
-    const matchesSearch = file.title.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = file.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
     
     if (filterType === 'all') return matchesSearch;
     if (filterType === 'audio') {
@@ -90,7 +90,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
             </Text>
             <View style={styles.mediaMetadata}>
               <Text style={styles.fileType}>
-                {item.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || item.fileType.toUpperCase()}
+                {item.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || item.fileType?.toUpperCase() || 'UNKNOWN'}
               </Text>
               {item.filesize && (
                 <>
