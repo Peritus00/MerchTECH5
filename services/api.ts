@@ -1,7 +1,25 @@
+
 import axios from 'axios';
 
-// Always use port 5001 - this is the ONLY API base URL in the entire file
-const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
+// Get API base URL from environment variable with proper fallback
+const getApiBaseUrl = () => {
+  // Try multiple environment variable names
+  const envUrl = process.env.EXPO_PUBLIC_API_URL || 
+                 process.env.API_BASE_URL || 
+                 process.env.REACT_NATIVE_API_URL;
+  
+  if (envUrl) {
+    console.log('Using environment API URL:', envUrl);
+    return envUrl;
+  }
+  
+  // Fallback to hardcoded URL with correct port
+  const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
+  console.log('Using fallback API URL:', fallbackUrl);
+  return fallbackUrl;
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 console.log('Final API Base URL:', API_BASE_URL);
 
