@@ -1,17 +1,46 @@
 
 import axios from 'axios';
 
+// Get the current Replit domain
 const getCurrentDomain = (): string => {
   if (typeof window !== 'undefined') {
     return window.location.hostname;
   }
-  return process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
+  return process.env.REPLIT_DEV_DOMAIN || 'localhost';
 };
 
-// Use Replit's external domain without port - this is how Replit works
-const API_BASE_URL = `https://${getCurrentDomain()}/api`;
+// Smart API URL detection - try multiple endpoints until one works
+const getWorkingApiUrl = async (): Promise<string> => {
+  const domain = getCurrentDomain();
+  
+  // Possible API endpoints to try
+  const possibleUrls = [
+    `https://${domain}/api`,           // Standard Replit external
+    `http://localhost:5001/api`,       // Local development
+    `http://0.0.0.0:5001/api`,        // Replit internal
+    `https://${domain}:5001/api`,     // With port
+  ];
 
-console.log('🔵 API Base URL:', API_BASE_URL);
+  // Try each URL until one responds
+  for (const url of possibleUrls) {
+    try {
+      const response = await axios.get(`${url}/health`, { timeout: 3000 });
+      if (response.status === 200) {
+        console.log('✅ Found working API at:', url);
+        return url;
+      }
+    } catch (error) {
+      console.log('❌ Failed to reach:', url);
+    }
+  }
+
+  // Fallback to first option if none work
+  console.log('⚠️ No working API found, using fallback:', possibleUrls[0]);
+  return possibleUrls[0];
+};
+
+// Initialize API with dynamic URL detection
+let API_BASE_URL = `https://${getCurrentDomain()}/api`;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -21,9 +50,19 @@ export const api = axios.create({
   },
 });
 
-// Add request interceptor
+// Auto-detect working API on first request
+let urlDetected = false;
+
 api.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    // Only detect URL once
+    if (!urlDetected) {
+      API_BASE_URL = await getWorkingApiUrl();
+      config.baseURL = API_BASE_URL;
+      api.defaults.baseURL = API_BASE_URL;
+      urlDetected = true;
+    }
+    
     console.log('🔵 API Request:', {
       method: config.method?.toUpperCase(),
       url: config.url,
@@ -38,7 +77,6 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor
 api.interceptors.response.use(
   (response) => {
     console.log('🟢 API Response Success:', {
@@ -50,7 +88,6 @@ api.interceptors.response.use(
   (error) => {
     console.error('🔴 API Response Error:', {
       url: error.config?.url,
-      fullURL: `${error.config?.baseURL}${error.config?.url}`,
       status: error.response?.status,
       message: error.message
     });
