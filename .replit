@@ -10,7 +10,7 @@ localPort = 5000
 externalPort = 5000
 
 [workflows]
-runButton = "Fixed Preview Server"
+runButton = "Stable Backend Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
