@@ -445,6 +445,29 @@ export const analyticsAPI = {
   }
 };
 
+// Media endpoints
+export const mediaAPI = {
+  getAll: async () => {
+    const response = await api.get('/media');
+    return response.data;
+  },
+
+  upload: async (mediaData: any) => {
+    const response = await api.post('/media', mediaData);
+    return response.data;
+  },
+
+  getById: async (id: number) => {
+    const response = await api.get(`/media/${id}`);
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    const response = await api.delete(`/media/${id}`);
+    return response.data;
+  }
+};
+
 // Admin endpoints
 export const adminAPI = {
   getUsers: async () => {

@@ -872,6 +872,7 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   }
 });
 
+The code is modified to update the media_files table creation with new columns and rename existing ones.```text
 // ==================== ANALYTICS ENDPOINTS ====================
 
 // Get analytics summary
@@ -1716,6 +1717,50 @@ async function initializeDatabase() {
       );
       console.log('✅ Admin user password reset to: admin123! and permissions updated');
     }
+
+    // Create media_files table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS media_files (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        title VARCHAR(255) NOT NULL,
+        file_path TEXT NOT NULL,
+        url TEXT,
+        filename VARCHAR(255),
+        file_type VARCHAR(50) NOT NULL,
+        content_type VARCHAR(100),
+        filesize INTEGER,
+        duration INTEGER,
+        unique_id VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Add missing columns if they don't exist (for existing databases)
+    await pool.query(`
+      ALTER TABLE media_files 
+      ADD COLUMN IF NOT EXISTS title VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS url TEXT,
+      ADD COLUMN IF NOT EXISTS filename VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS content_type VARCHAR(100),
+      ADD COLUMN IF NOT EXISTS filesize INTEGER,
+      ADD COLUMN IF NOT EXISTS unique_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    `);
+
+    // Rename old columns if they exist
+    await pool.query(`
+      DO $$ 
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'media_files' AND column_name = 'name') THEN
+          ALTER TABLE media_files RENAME COLUMN name TO title;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'media_files' AND column_name = 'file_size') THEN
+          ALTER TABLE media_files RENAME COLUMN file_size TO filesize;
+        END IF;
+      END $$;
+    `);
 
     console.log('Database connected and tables initialized');
   } catch (error) {

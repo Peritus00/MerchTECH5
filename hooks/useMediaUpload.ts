@@ -1,7 +1,9 @@
+
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { MediaFile } from '@/shared/media-schema';
+import { mediaAPI } from '@/services/api';
 
 interface UploadProgress {
   loaded: number;
@@ -33,22 +35,8 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     setUploadProgress({ loaded: 0, total: asset.size || 0, percentage: 0 });
 
     try {
-      // Mock upload - replace with actual API call
-      const mockFile: MediaFile = {
-        id: Math.floor(Math.random() * 1000),
-        uniqueId: `media-${Date.now()}`,
-        title: asset.name || 'Untitled',
-        fileType: getFileType(asset.mimeType || ''),
-        filePath: asset.uri,
-        url: asset.uri,
-        filename: asset.name,
-        filesize: asset.size,
-        contentType: asset.mimeType,
-        createdAt: new Date().toISOString(),
-      };
-
       // Simulate upload progress
-      for (let i = 0; i <= 100; i += 10) {
+      for (let i = 0; i <= 90; i += 10) {
         setUploadProgress({
           loaded: (asset.size || 0) * (i / 100),
           total: asset.size || 0,
@@ -57,7 +45,39 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      return mockFile;
+      // Prepare media data for API
+      const mediaData = {
+        title: asset.name || 'Untitled',
+        filePath: asset.uri,
+        url: asset.uri,
+        filename: asset.name,
+        fileType: getFileType(asset.mimeType || ''),
+        contentType: asset.mimeType,
+        filesize: asset.size,
+        duration: null, // Could be extracted for audio/video files if needed
+        uniqueId: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      };
+
+      console.log('🔴 UPLOAD: Uploading media to database:', mediaData);
+
+      // Upload to database via API
+      const uploadedFile = await mediaAPI.upload(mediaData);
+
+      console.log('🔴 UPLOAD: Upload successful:', uploadedFile);
+
+      // Complete progress
+      setUploadProgress({
+        loaded: asset.size || 0,
+        total: asset.size || 0,
+        percentage: 100,
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      return uploadedFile;
+    } catch (error) {
+      console.error('🔴 UPLOAD: Upload failed:', error);
+      throw error;
     } finally {
       setIsUploading(false);
       setUploadProgress(null);

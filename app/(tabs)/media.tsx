@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { MediaFile } from '@/shared/media-schema';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
+import { mediaAPI } from '@/services/api';
 import MediaFileCard from '@/components/MediaFileCard';
 import UploadProgressModal from '@/components/UploadProgressModal';
 
@@ -33,33 +34,12 @@ export default function MediaScreen() {
 
   const fetchMediaFiles = async () => {
     try {
-      // Mock data - replace with actual API call
-      const mockFiles: MediaFile[] = [
-        {
-          id: 1,
-          uniqueId: 'audio-1',
-          title: 'Sample Audio Track.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/audio.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 5242880,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          uniqueId: 'video-1',
-          title: 'Sample Video.mp4',
-          fileType: 'video',
-          filePath: '/path/to/video.mp4',
-          contentType: 'video/mp4',
-          filesize: 15728640,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-      
-      setMediaFiles(mockFiles);
+      console.log('🔴 MEDIA: Fetching media files from database...');
+      const files = await mediaAPI.getAll();
+      console.log('🔴 MEDIA: Loaded media files:', files.length);
+      setMediaFiles(files);
     } catch (error) {
-      console.error('Error fetching media files:', error);
+      console.error('🔴 MEDIA: Error fetching media files:', error);
       Alert.alert('Error', 'Failed to load media files');
     } finally {
       setIsLoading(false);
@@ -69,13 +49,15 @@ export default function MediaScreen() {
 
   const handleUpload = async () => {
     try {
+      console.log('🔴 MEDIA: Starting file upload...');
       const uploadedFile = await selectAndUploadFile();
       if (uploadedFile) {
+        console.log('🔴 MEDIA: File uploaded successfully:', uploadedFile);
         setMediaFiles(prev => [uploadedFile, ...prev]);
         Alert.alert('Success', 'File uploaded successfully');
       }
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('🔴 MEDIA: Upload error:', error);
       Alert.alert('Upload Failed', 'Please try again');
     }
   };
@@ -89,8 +71,16 @@ export default function MediaScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            setMediaFiles(prev => prev.filter(file => file.id !== id));
+          onPress: async () => {
+            try {
+              console.log('🔴 MEDIA: Deleting file:', id);
+              await mediaAPI.delete(id);
+              setMediaFiles(prev => prev.filter(file => file.id !== id));
+              Alert.alert('Success', 'File deleted successfully');
+            } catch (error) {
+              console.error('🔴 MEDIA: Delete error:', error);
+              Alert.alert('Error', 'Failed to delete file');
+            }
           },
         },
       ]
