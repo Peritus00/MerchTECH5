@@ -564,6 +564,134 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// ==================== QR CODE ENDPOINTS ====================
+
+// Get all QR codes for user
+app.get('/api/qr-codes', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Get QR codes endpoint hit');
+  try {
+    const result = await pool.query(
+      'SELECT * FROM qr_codes WHERE user_id = $1 ORDER BY created_at DESC',
+      [req.user.userId]
+    );
+
+    console.log('🔴 SERVER: Found QR codes:', result.rows.length);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('🔴 SERVER: Get QR codes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create QR code
+app.post('/api/qr-codes', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Create QR code endpoint hit');
+  try {
+    const { name, url, options = {} } = req.body;
+
+    if (!name || !url) {
+      return res.status(400).json({ error: 'Name and URL are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO qr_codes (user_id, name, url, options, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING *`,
+      [req.user.userId, name, url, JSON.stringify(options)]
+    );
+
+    console.log('🔴 SERVER: QR code created:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Create QR code error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update QR code
+app.put('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Update QR code endpoint hit');
+  try {
+    const { id } = req.params;
+    const { name, url, options, is_active } = req.body;
+
+    const result = await pool.query(
+      `UPDATE qr_codes 
+       SET name = COALESCE($1, name), 
+           url = COALESCE($2, url),
+           options = COALESCE($3, options),
+           is_active = COALESCE($4, is_active),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5 AND user_id = $6
+       RETURNING *`,
+      [name, url, options ? JSON.stringify(options) : null, is_active, id, req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    console.log('🔴 SERVER: QR code updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Update QR code error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Delete QR code
+app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Delete QR code endpoint hit');
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      'DELETE FROM qr_codes WHERE id = $1 AND user_id = $2 RETURNING id',
+      [id, req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    console.log('🔴 SERVER: QR code deleted:', id);
+    res.json({ message: 'QR code deleted successfully' });
+  } catch (error) {
+    console.error('🔴 SERVER: Delete QR code error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ==================== ANALYTICS ENDPOINTS ====================
+
+// Get analytics summary
+app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Analytics summary endpoint hit');
+  try {
+    const qrCodeCount = await pool.query(
+      'SELECT COUNT(*) as count FROM qr_codes WHERE user_id = $1',
+      [req.user.userId]
+    );
+
+    const totalScans = await pool.query(
+      'SELECT SUM(scan_count) as total FROM qr_codes WHERE user_id = $1',
+      [req.user.userId]
+    );
+
+    const analytics = {
+      qrCodes: parseInt(qrCodeCount.rows[0].count),
+      totalScans: parseInt(totalScans.rows[0].total || 0),
+      activeQRs: parseInt(qrCodeCount.rows[0].count)
+    };
+
+    console.log('🔴 SERVER: Analytics summary:', analytics);
+    res.json(analytics);
+  } catch (error) {
+    console.error('🔴 SERVER: Analytics summary error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ==================== ADMIN ENDPOINTS ====================
 
 // Get all users (admin only)
@@ -711,6 +839,22 @@ async function initializeDatabase() {
         is_email_verified BOOLEAN DEFAULT false,
         subscription_tier VARCHAR(20) DEFAULT 'free',
         is_new_user BOOLEAN DEFAULT true,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // Create qr_codes table if it doesn't exist
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS qr_codes (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        url TEXT NOT NULL,
+        short_url VARCHAR(255),
+        is_active BOOLEAN DEFAULT true,
+        scan_count INTEGER DEFAULT 0,
+        options JSONB DEFAULT '{}',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
