@@ -1,0 +1,54 @@
+🔴 AuthService: Attempting login for: djjetfuel@gmail.com
+Console.js:61 🔴 AuthService: Login error: TypeError: Cannot read properties of undefined (reading 'login')
+    at AuthService.login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82314:45)
+    at login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167:57)
+    at handleLogin (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154265:30)
+    at onClick (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066:15)
+    at processDispatchQueue (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191989:15)
+    at entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192286:9
+    at batchedUpdates$1 (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185657:40)
+    at dispatchEventForPluginEventSystem (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192069:7)
+    at dispatchEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194151:33)
+    at dispatchDiscreteEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194133:60)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+Console.js:61 🔴 Route navigation check: Object
+Console.js:61 🔴 Route navigation check: Object
+Console.js:61 Login error: Error: Cannot read properties of undefined (reading 'login')
+    at AuthService.login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82327:15)
+    at login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167:57)
+    at handleLogin (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154265:30)
+    at onClick (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066:15)
+    at processDispatchQueue (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191989:15)
+    at entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192286:9
+    at batchedUpdates$1 (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185657:40)
+    at dispatchEventForPluginEventSystem (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192069:7)
+    at dispatchEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194151:33)
+    at dispatchDiscreteEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194133:60)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+Console.js:61 🔴 AuthService: Attempting login for: djjetfuel@gmail.com
+Console.js:61 🔴 AuthService: Login error: TypeError: Cannot read properties of undefined (reading 'login')
+    at AuthService.login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82314:45)
+    at login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167:57)
+    at handleLogin (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154265:30)
+    at onClick (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066:15)
+    at processDispatchQueue (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191989:15)
+    at entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192286:9
+    at batchedUpdates$1 (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185657:40)
+    at dispatchEventForPluginEventSystem (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192069:7)
+    at dispatchEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194151:33)
+    at dispatchDiscreteEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194133:60)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
+Console.js:61 🔴 Route navigation check: Object
+Console.js:61 🔴 Route navigation check: Object
+Console.js:61 Login error: Error: Cannot read properties of undefined (reading 'login')
+    at AuthService.login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82327:15)
+    at login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167:57)
+    at handleLogin (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154265:30)
+    at onClick (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066:15)
+    at processDispatchQueue (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191989:15)
+    at entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192286:9
+    at batchedUpdates$1 (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185657:40)
+    at dispatchEventForPluginEventSystem (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192069:7)
+    at dispatchEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194151:33)
+    at dispatchDiscreteEvent (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194133:60)
+Mt.forEach.n.<computed> @ Console.js:61Understand this error
