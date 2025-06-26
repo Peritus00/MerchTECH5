@@ -1200,7 +1200,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
     } catch (err) {
       console.log('🔴 SERVER: Token verification failed:', err.message);
       const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?error=invalid_token`;
       return res.redirect(redirectUrl);
     }
@@ -1209,7 +1209,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     if (decoded.type !== 'email_verification') {
       const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?error=invalid_token`;
       return res.redirect(redirectUrl);
     }
@@ -1219,7 +1219,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     if (userResult.rows.length === 0) {
       const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?error=user_not_found`;
       return res.redirect(redirectUrl);
     }
@@ -1230,7 +1230,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
     if (user.is_email_verified) {
       console.log('🔴 SERVER: Email already verified for:', email);
       const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?already_verified=true`;
       return res.redirect(redirectUrl);
     }
@@ -1253,7 +1253,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     if (updatedUser.rows.length === 0) {
       const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?error=update_failed`;
       return res.redirect(redirectUrl);
     }
@@ -1283,7 +1283,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
             <div style="text-align: center; margin: 30px 0;">
               <a href="${process.env.REPLIT_DEV_DOMAIN ? 
-                `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+                `https://${process.env.REPLIT_DEV_DOMAIN}` : 
                 'http://localhost:8081'}/dashboard" 
                  style="display: inline-block; padding: 15px 30px; background-color: #22c55e; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
                 Start Using MerchTech QR
@@ -1316,7 +1316,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 
     // Redirect to success page
     const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-      `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
       'http://localhost:8081'}/auth/verify-email?verified=true`;
 
     res.redirect(redirectUrl);
@@ -1324,7 +1324,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
   } catch (error) {
     console.error('🔴 SERVER: Email verification error:', error);
     const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-      `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
       'http://localhost:8081'}/auth/verify-email?error=server_error`;
     res.redirect(redirectUrl);
   }
