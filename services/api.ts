@@ -7,13 +7,13 @@ const getApiBaseUrl = (): string => {
   const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
   const baseUrl = `https://${domain}:5000/api`;
 
-  console.log('API Base URL (fixed port 5000):', baseUrl);
+  console.log('API Base URL (with port 5000):', baseUrl);
   return baseUrl;
 };
 
 const API_BASE_URL = getApiBaseUrl();
 
-console.log('API Base URL (NO PORT):', API_BASE_URL);
+console.log('Final API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
