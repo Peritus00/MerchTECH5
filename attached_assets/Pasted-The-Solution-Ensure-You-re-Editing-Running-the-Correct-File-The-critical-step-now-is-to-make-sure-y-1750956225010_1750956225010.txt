@@ -1,0 +1,49 @@
+The Solution: Ensure You're Editing/Running the Correct File
+The critical step now is to make sure your changes are in the correct simple-server.js file.
+
+Replit, please execute the following steps precisely:
+
+Identify the correct file: Confirm that the file you've been showing me and I've been analyzing is indeed server/simple-server.js. If it's a different file (e.g., simple-server.js at the root), you need to delete/rename that conflicting root file.
+
+Paste the Corrected Code: Take the code you just provided (which I've analyzed above and confirmed is generally good with the authenticateToken fix and robust CORS) and copy it to completely replace the content of your server/simple-server.js file.
+
+Clean Up Redundant requires (Optional but Recommended):
+
+In server/simple-server.js, find and delete these lines inside the functions:
+
+const bcrypt = require('bcrypt'); (inside register and login)
+
+const jwt = require('jsonwebtoken'); (inside register and login)
+
+Add const axios = require('axios'); at the very top of simple-server.js with your other require statements if it's not already there, as you are using axios in your email sending functions.
+
+Confirm app.use(express.json({ limit: '1gb' })); and app.use(express.urlencoded({ limit: '1gb', extended: true })); are above all routes. (They are in the code you pasted, which is good).
+
+Simplify .replit Run Command (to avoid conflicts):
+
+Open your .replit file.
+
+Ensure the run command is set to only start your backend server, and then the frontend separately:
+
+Ini, TOML
+
+# .replit
+run = "cd server && node simple-server.js & \
+       npx expo start --clear" # Removed --reset-cache to prevent infinite loop
+# (The \ allows for line continuation in shell scripts)
+
+# Make sure this port mapping is correct and ONLY this one exists for localPort 5000
+[[ports]]
+localPort = 5000
+externalPort = 5000
+NOTE: I've removed --reset-cache from npx expo start here because in very persistent death loops, even that can sometimes trigger unexpected behavior if the cache isn't truly clearing, or if the process itself isn't dying. We'll rely on the simple-server.js's self-healing for now.
+
+Full Replit Restart:
+
+Click the "Stop" button in Replit to stop everything.
+
+Click the "Run" button to start everything fresh.
+
+After these steps, your backend should start without the ReferenceError, and its CORS policies should allow your frontend. The "ghost process" issue should also be mitigated by making sure you're always interacting with the correct file and simplifying the workflow.
+
+This is a critical juncture. Getting the correct backend file to run is the key.
