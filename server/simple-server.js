@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5001; // Ensure PORT is consistently 5001
+const PORT = process.env.PORT || 5000; // Use port 5000 to match frontend
 
 // Self-healing configuration
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
@@ -1280,90 +1280,27 @@ async function initializeDatabase() {
 // These functions were declared before, but might need to be moved for scope or clarity.
 // I'll keep them here for now, as their content is self-contained.
 
-// Enhanced port cleanup with automatic port detection
+// Simplified port cleanup to avoid SIGTERM issues
 async function smartPortCleanup() {
     try {
-        console.log('🧹 Starting smart port cleanup for port', PORT);
+        console.log('🧹 Simple port cleanup for port', PORT);
         const { exec } = require('child_process');
         const util = require('util');
         const execAsync = util.promisify(exec);
 
-        // Clean up both current port and common conflicting ports
-        // Check current port and 5001 for cleanup
-        const portsToCheck = [PORT, 5001].filter((port, index, arr) => arr.indexOf(port) === index);
-
-        for (const port of portsToCheck) {
-            try {
-                const { stdout } = await execAsync(`lsof -ti:${port} || true`);
-                if (stdout.trim()) {
-                    const pids = stdout.trim().split('\n').filter(pid => pid.trim());
-                    console.log(`🧹 Found processes on port ${port}:`, pids);
-
-                    for (const pid of pids) {
-                        try {
-                            await execAsync(`kill -TERM ${pid}`);
-                            console.log(`🧹 Gracefully terminated process ${pid} on port ${port}`);
-                            await new Promise(resolve => setTimeout(resolve, 1000));
-
-                            // Check if process is still running
-                            try {
-                                await execAsync(`kill -0 ${pid}`);
-                                // Still running, force kill
-                                await execAsync(`kill -9 ${pid}`);
-                                console.log(`🧹 Force killed process ${pid}`);
-                            } catch {
-                                // Process already terminated
-                                console.log(`🧹 Process ${pid} terminated gracefully`);
-                            }
-                        } catch (err) {
-                            console.log(`🧹 Could not terminate process ${pid}:`, err.message);
-                        }
-                    }
-                }
-            } catch (error) {
-                // Ignore lsof errors
-            }
-        }
-
-        // Strategy 2: Kill by pattern (clean up any server processes)
-        const patterns = [
-            'node.*simple-server',
-            'node.*stable-server',
-            'node.*index.js',
-            'node.*server',
-        ];
-
-        for (const pattern of patterns) {
-            try {
-                await execAsync(`pkill -f "${pattern}" || true`);
-                console.log('🧹 Cleaned up processes matching:', pattern);
-            } catch (error) {
-                // Ignore errors
-            }
-        }
-
-        // Wait for cleanup to take effect
-        await new Promise(resolve => setTimeout(resolve, 2000));
-
-        // Verify target port is now free
-        const isPortInUse = await checkPortInUse(PORT);
-        if (isPortInUse) {
-            console.warn('⚠️ Port', PORT, 'is still in use after cleanup');
-            // Try alternative port (original logic, will reuse if needed)
-            const alternativePort = await findAvailablePort(PORT + 1);
-            if (alternativePort) {
-                console.log('🔄 Switching to alternative port:', alternativePort);
-                process.env.PORT = alternativePort.toString(); // Ensure it's a string for process.env
-                return alternativePort;
+        // Only check if port is in use, don't aggressively kill
+        try {
+            const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
+            if (stdout.trim()) {
+                console.log(`⚠️ Port ${PORT} appears to be in use, but continuing anyway`);
             } else {
-                // If no alternative port found, stick to original PORT
-                return PORT;
+                console.log(`✅ Port ${PORT} is available`);
             }
-        } else {
-            console.log('✅ Port', PORT, 'is now available');
+        } catch (error) {
+            console.log('🧹 Port check completed');
         }
 
-        return PORT; // Return the current PORT if no alternative needed
+        return PORT;
     } catch (error) {
         console.log('🧹 Port cleanup completed with warnings:', error.message);
         return PORT;

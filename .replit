@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Production Server"
+runButton = "Simple Server Start"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -126,15 +126,7 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5001\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
 args = "pkill -f \"node.*5000\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -146,7 +138,7 @@ args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server on port 5001...\""
+args = "echo \"🚀 Starting backend server...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -240,10 +232,6 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5001\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
 args = "pkill -f \"node.*5000\" || true"
 
 [[workflows.workflow.tasks]]
@@ -252,15 +240,7 @@ args = "pkill -f \"node.*server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
 args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "fuser -k 5001/tcp 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -272,7 +252,7 @@ args = "sleep 5"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server on port 5001...\""
+args = "echo \"🚀 Starting backend server on port 5000...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -287,78 +267,17 @@ task = "shell.exec"
 args = "npx expo start --web --port 8081"
 
 [[workflows.workflow]]
-name = "Fixed Backend Server"
+name = "Simple Server Start"
 author = 42127692
 mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🧹 Aggressive cleanup of conflicting processes...\""
+args = "echo \"🚀 Starting MerchTech server on port 5000...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*simple-server\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*5001\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 3"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🚀 Starting fixed backend server on port 5001...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && PORT=5001 node simple-server.js"
-
-[[workflows.workflow]]
-name = "Production Server"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🧹 Cleaning up any existing processes...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*simple-server\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*5001\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 3"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🚀 Starting production server on port 5001...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && PORT=5001 node simple-server.js"
+args = "cd server && node simple-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]

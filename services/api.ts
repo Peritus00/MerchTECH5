@@ -426,5 +426,5 @@ const getApiBaseUrl = (): string => {
   }
 
   // Fallback for local development  
-  return 'http://localhost:5001/api';
+  return 'http://localhost:5000/api';
 };
