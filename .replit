@@ -124,11 +124,11 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
+args = "pkill -f \"node.*5001\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -201,7 +201,7 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
+args = "pkill -f \"node.*5001\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -230,7 +230,7 @@ args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
+args = "pkill -f \"node.*5001\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -238,11 +238,11 @@ args = "pkill -f \"node.*server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "fuser -k 5000/tcp 2>/dev/null || true"
+args = "fuser -k 5001/tcp 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"

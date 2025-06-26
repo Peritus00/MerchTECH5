@@ -49,7 +49,7 @@ class HealthMonitor {
   async performHealthCheck() {
     try {
       const startTime = Date.now();
-      const response = await axios.get('http://localhost:5000/api/health', {
+      const response = await axios.get('http://localhost:5001/api/health', {
         timeout: 5000,
         validateStatus: (status) => status < 500 // Accept 4xx as "healthy" but not 5xx
       });
