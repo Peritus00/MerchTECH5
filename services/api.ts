@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Hardcoded API Base URL for consistency
+// Hardcoded API Base URL for consistency - using port 5001
 const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
 
 // Log environment variables for debugging (don't modify read-only properties)
@@ -422,9 +422,9 @@ const getApiBaseUrl = (): string => {
   const replitDomain = process.env.REPLIT_DEV_DOMAIN;
 
   if (replitDomain) {
-    return `https://${replitDomain}/api`;
+    return `https://${replitDomain}:5001/api`;
   }
 
   // Fallback for local development  
-  return 'http://localhost:5000/api';
+  return 'http://localhost:5001/api';
 };
