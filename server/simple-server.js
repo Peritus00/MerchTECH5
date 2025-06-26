@@ -712,7 +712,67 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
 // ==================== ADMIN ENDPOINTS ====================
 
-// Get all users (admin only)
+// Get all users (admin only) - legacy endpoint
+app.get('/api/admin/users', authenticateToken, async (req, res) => {
+  console.log('🔴 SERVER: Get admin users endpoint hit (legacy)');
+  console.log('🔴 SERVER: User requesting:', req.user);
+
+  try {
+    if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const result = await pool.query(
+      `SELECT id, email, username, first_name, last_name, 
+              is_email_verified, subscription_tier, is_new_user, 
+              is_admin,
+              created_at, updated_at 
+       FROM users 
+       ORDER BY created_at DESC`
+    );
+
+    // Transform to match frontend expectations
+    const users = result.rows.map(user => ({
+      id: user.id,
+      email: user.email,
+      username: user.username || user.email?.split('@')[0] || 'Unknown',
+      firstName: user.first_name,
+      lastName: user.last_name,
+      isAdmin: user.is_admin || false,
+      subscriptionTier: user.subscription_tier || 'free',
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      status: 'confirmed',
+      isPending: false,
+      isSuspended: false,
+      // Add required permissions fields
+      canViewAnalytics: true,
+      canManagePlaylists: true,
+      canEditPlaylists: true,
+      canUploadMedia: true,
+      canGenerateCodes: true,
+      canAccessStore: true,
+      canViewFanmail: true,
+      canManageQRCodes: true,
+      maxPlaylists: 50,
+      maxVideos: 100,
+      maxAudioFiles: 100,
+      maxActivationCodes: 50,
+      maxProducts: 25,
+      maxQrCodes: 50,
+      maxSlideshows: 10,
+      lastActive: user.updated_at
+    }));
+
+    console.log('🔴 SERVER: Found users:', users.length);
+    res.json(users);
+  } catch (error) {
+    console.error('🔴 SERVER: Get admin users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all users (admin only) - new endpoint
 app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
   console.log('🔴 SERVER: Get all users endpoint hit');
   console.log('🔴 SERVER: User requesting:', req.user);
@@ -906,14 +966,22 @@ async function initializeDatabase() {
     } else {
       console.log('✅ Admin user already exists');
       
-      // Ensure admin user has proper permissions
+      // Reset admin password and ensure proper permissions
+      const bcrypt = require('bcrypt');
+      const adminPassword = await bcrypt.hash('admin123!', 12);
+      
       await pool.query(
         `UPDATE users 
-         SET is_admin = true, subscription_tier = 'premium', is_email_verified = true
-         WHERE email = $1`,
-        ['djjetfuel@gmail.com']
+         SET is_admin = true, 
+             subscription_tier = 'premium', 
+             is_email_verified = true,
+             password_hash = $1,
+             is_new_user = false,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE email = $2`,
+        [adminPassword, 'djjetfuel@gmail.com']
       );
-      console.log('✅ Admin user permissions updated');
+      console.log('✅ Admin user permissions updated and password reset to: admin123!');
     }
 
     console.log('Database connected and tables initialized');
