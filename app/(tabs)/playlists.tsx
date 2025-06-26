@@ -34,85 +34,42 @@ export default function PlaylistsScreen() {
 
   const fetchData = async () => {
     try {
-      // Mock data - replace with actual API calls
-      const mockPlaylists: Playlist[] = [
+      console.log('🔴 PLAYLISTS: Fetching real data from database...');
+      
+      // Fetch real media files from the database
+      const { mediaAPI } = await import('@/services/api');
+      const realMediaFiles = await mediaAPI.getAll();
+      console.log('🔴 PLAYLISTS: Loaded media files:', realMediaFiles.length, realMediaFiles);
+      
+      // For now, create some example playlists with real media files
+      // Later this will be replaced with actual playlist API calls
+      const examplePlaylists: Playlist[] = [
         {
           id: '1',
           userId: 1,
-          name: 'My Favorite Tracks',
+          name: 'My Audio Collection',
           requiresActivationCode: false,
           isPublic: false,
           createdAt: new Date().toISOString(),
-          mediaFiles: [
-            {
-              id: 1,
-              uniqueId: 'audio-1',
-              title: 'Sample Audio Track.mp3',
-              fileType: 'audio',
-              filePath: '/path/to/audio.mp3',
-              contentType: 'audio/mpeg',
-              filesize: 5242880,
-              createdAt: new Date().toISOString(),
-            },
-            {
-              id: 2,
-              uniqueId: 'audio-2',
-              title: 'Another Track.mp3',
-              fileType: 'audio',
-              filePath: '/path/to/audio2.mp3',
-              contentType: 'audio/mpeg',
-              filesize: 3242880,
-              createdAt: new Date().toISOString(),
-            },
-          ],
+          mediaFiles: realMediaFiles.filter(file => 
+            file.contentType?.startsWith('audio/') || file.fileType === 'audio'
+          ),
         },
         {
           id: '2',
           userId: 1,
-          name: 'Video Collection',
+          name: 'My Video Collection',
           requiresActivationCode: false,
           isPublic: true,
           createdAt: new Date().toISOString(),
-          mediaFiles: [
-            {
-              id: 3,
-              uniqueId: 'video-1',
-              title: 'Sample Video.mp4',
-              fileType: 'video',
-              filePath: '/path/to/video.mp4',
-              contentType: 'video/mp4',
-              filesize: 15728640,
-              createdAt: new Date().toISOString(),
-            },
-          ],
+          mediaFiles: realMediaFiles.filter(file => 
+            file.contentType?.startsWith('video/') || file.fileType === 'video'
+          ),
         },
-      ];
-
-      const mockMediaFiles: MediaFile[] = [
-        {
-          id: 1,
-          uniqueId: 'audio-1',
-          title: 'Sample Audio Track.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/audio.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 5242880,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          uniqueId: 'video-1',
-          title: 'Sample Video.mp4',
-          fileType: 'video',
-          filePath: '/path/to/video.mp4',
-          contentType: 'video/mp4',
-          filesize: 15728640,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      ].filter(playlist => playlist.mediaFiles.length > 0); // Only show playlists that have files
       
-      setPlaylists(mockPlaylists);
-      setMediaFiles(mockMediaFiles);
+      setPlaylists(examplePlaylists);
+      setMediaFiles(realMediaFiles);
     } catch (error) {
       console.error('Error fetching data:', error);
       Alert.alert('Error', 'Failed to load playlists');
