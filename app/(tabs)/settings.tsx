@@ -232,13 +232,15 @@ export default function Settings() {
           ))}
         </ThemedView>
 
-         {/* Test Email Button (for debugging) */}
-         <TouchableOpacity style={[styles.optionCard, { padding: 16 }]} onPress={testEmailDelivery}>
-            <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <MaterialIcons name="email" size={24} color="#28a745" style={{ marginRight: 16 }} />
-              <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>Test Email Delivery</ThemedText>
-            </ThemedView>
-          </TouchableOpacity>
+         {/* Test Email Button (for debugging - dev only) */}
+         {user?.email === 'djjetfuel@gmail.com' && (
+           <TouchableOpacity style={[styles.optionCard, { padding: 16 }]} onPress={testEmailDelivery}>
+              <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialIcons name="email" size={24} color="#28a745" style={{ marginRight: 16 }} />
+                <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>Test Email Delivery</ThemedText>
+              </ThemedView>
+            </TouchableOpacity>
+         )}
       </ScrollView>
     </ThemedView>
   );
