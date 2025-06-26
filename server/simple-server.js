@@ -537,62 +537,62 @@ app.post('/api/auth/register', async (req, res) => {
     console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
 
     // Send verification email automatically
-    try {
-      const verificationToken = jwt.sign(
-        { email: user.email, type: 'email_verification' },
-        JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+    // try {
+    //   const verificationToken = jwt.sign(
+    //     { email: user.email, type: 'email_verification' },
+    //     JWT_SECRET,
+    //     { expiresIn: '24h' }
+    //   );
 
-      await pool.query(
-        'UPDATE users SET verification_token = $1 WHERE id = $2',
-        [verificationToken, user.id]
-      );
+    //   await pool.query(
+    //     'UPDATE users SET verification_token = $1 WHERE id = $2',
+    //     [verificationToken, user.id]
+    //   );
 
-      const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
-        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
-        'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+    //   const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
+    //     `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+    //     'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
-      // Send welcome and verification email via Brevo
-      const emailHtml = `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h2 style="color: #3b82f6; text-align: center;">Welcome to MerchTech QR!</h2>
-          <p>Hi ${user.username},</p>
-          <p>Thank you for creating your MerchTech QR account! We're excited to help you create and manage QR codes for your business.</p>
+    //   // Send welcome and verification email via Brevo
+    //   const emailHtml = `
+    //     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    //       <h2 style="color: #3b82f6; text-align: center;">Welcome to MerchTech QR!</h2>
+    //       <p>Hi ${user.username},</p>
+    //       <p>Thank you for creating your MerchTech QR account! We're excited to help you create and manage QR codes for your business.</p>
 
-          <div style="text-align: center; margin: 30px 0;">
-            <a href="${verificationLink}" 
-               style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Verify Your Email Address
-            </a>
-          </div>
+    //       <div style="text-align: center; margin: 30px 0;">
+    //         <a href="${verificationLink}" 
+    //            style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+    //           Verify Your Email Address
+    //         </a>
+    //       </div>
 
-          <p>This verification link will expire in 24 hours.</p>
-          <p>If the button doesn't work, copy and paste this URL into your browser:</p>
-          <p style="word-break: break-all; color: #666;">${verificationLink}</p>
+    //       <p>This verification link will expire in 24 hours.</p>
+    //       <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+    //       <p style="word-break: break-all; color: #666;">${verificationLink}</p>
 
-          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-          <p style="color: #666; font-size: 14px;">
-            If you didn't create this account, please ignore this email.
-          </p>
-          <p style="color: #666; font-size: 14px;">
-            Best regards,<br>
-            The MerchTech QR Team
-          </p>
-        </div>
-      `;
+    //       <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+    //       <p style="color: #666; font-size: 14px;">
+    //         If you didn't create this account, please ignore this email.
+    //       </p>
+    //       <p style="color: #666; font-size: 14px;">
+    //         Best regards,<br>
+    //         The MerchTech QR Team
+    //       </p>
+    //     </div>
+    //   `;
 
-      await sendEmail(
-        user.email,
-        'Welcome to MerchTech QR - Please verify your email',
-        emailHtml
-      );
+    //   await sendEmail(
+    //     user.email,
+    //     'Welcome to MerchTech QR - Please verify your email',
+    //     emailHtml
+    //   );
 
-      console.log('✅ SERVER: Welcome and verification email sent to:', user.email);
-    } catch (emailError) {
-      console.error('❌ SERVER: Failed to send verification email:', emailError);
-      // Don't fail registration if email fails
-    }
+    //   console.log('✅ SERVER: Welcome and verification email sent to:', user.email);
+    // } catch (emailError) {
+    //   console.error('❌ SERVER: Failed to send verification email:', emailError);
+    //   // Don't fail registration if email fails
+    // }
 
     console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
 
@@ -1154,19 +1154,36 @@ app.get('/api/auth/verify-email', async (req, res) => {
 
     // Verify the token
     const decoded = jwt.verify(token, JWT_SECRET);
+    const { email } = decoded;
 
     if (decoded.type !== 'email_verification') {
       return res.status(400).json({ error: 'Invalid verification token' });
     }
 
-    // Update user as verified
-    const result = await pool.query(
-      `UPDATE users SET is_email_verified = true, verification_token = null 
-       WHERE email = $1 RETURNING id, email, username`,
-      [decoded.email]
-    );
+    // Get user from the database
+    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
 
-    if (result.rows.length === 0) {
+    if (userResult.rows.length === 0) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+    // Update user to verified status and reactivate if suspended
+    const updatedUser = await pool.query(
+      `UPDATE users 
+       SET is_email_verified = true, 
+           verification_token = null, 
+           is_new_user = false,
+           subscription_tier = CASE 
+             WHEN subscription_tier = 'suspended' THEN 'basic'
+             ELSE subscription_tier
+           END,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 
+       RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at, is_new_user`,
+      [user.id]
+    );
+    if (updatedUser.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
@@ -1184,6 +1201,104 @@ app.get('/api/auth/verify-email', async (req, res) => {
     res.status(400).json({ error: 'Invalid or expired verification token' });
   }
 });
+
+// Handle account verification and suspensions
+async function handleAccountVerification() {
+  try {
+    console.log('Checking for accounts needing verification suspension...');
+
+    // Find unverified accounts that are 24 hours old since subscription (suspend immediately)
+    const suspensionUsers = await pool.query(`
+      SELECT id, email, username, created_at, updated_at
+      FROM users 
+      WHERE is_email_verified = FALSE 
+      AND is_new_user = FALSE 
+      AND subscription_tier != 'suspended'
+      AND subscription_tier != 'free'
+      AND updated_at <= NOW() - INTERVAL '24 hours'
+    `);
+
+    // Suspend accounts and send suspension notification
+    for (const user of suspensionUsers.rows) {
+      try {
+        console.log(`Suspending account for user: ${user.email}`);
+
+        // Update user to suspended status
+        await pool.query(
+          'UPDATE users SET subscription_tier = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+          ['suspended', user.id]
+        );
+
+        // Send suspension notification with verification link
+        const verificationToken = jwt.sign(
+          { email: user.email, type: 'email_verification' },
+          JWT_SECRET,
+          { expiresIn: '7d' } // Give them 7 days to verify after suspension
+        );
+
+        await pool.query(
+          'UPDATE users SET verification_token = $1 WHERE id = $2',
+          [verificationToken, user.id]
+        );
+
+        const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
+          `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+          'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+
+        const suspensionEmailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #d63031; text-align: center;">Account Temporarily Suspended</h2>
+            <p>Hello ${user.username || 'User'},</p>
+            <p>Your MerchTech QR account has been temporarily suspended because you didn't verify your email address within 24 hours of selecting your subscription.</p>
+
+            <div style="background-color: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h3 style="color: #d63031; margin-top: 0;">🔒 Account Suspended</h3>
+              <p><strong>Don't worry!</strong> You can reactivate your account immediately by verifying your email address.</p>
+              <p>No data has been lost, and your subscription is still active.</p>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${verificationLink}" 
+                 style="display: inline-block; padding: 15px 30px; background-color: #28a745; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                Verify Email & Reactivate Account
+              </a>
+            </div>
+
+            <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+            <p style="word-break: break-all; color: #666; font-size: 12px;">${verificationLink}</p>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 14px;">
+              This verification link will expire in 7 days.
+            </p>
+            <p style="color: #666; font-size: 14px;">
+              Best regards,<br>
+              The MerchTech QR Team
+            </p>
+          </div>
+        `;
+
+        if (brevoConfig.apiKey) {
+          await sendBrevoEmail(
+            user.email,
+            'Account Suspended - Verify Email to Reactivate',
+            suspensionEmailHtml
+          );
+        }
+
+        console.log(`Account suspended and notification sent to: ${user.email}`);
+      } catch (error) {
+        console.error(`Failed to suspend account for ${user.email}:`, error);
+      }
+    }
+
+    if (suspensionUsers.rowCount > 0) {
+      console.log(`Processed ${suspensionUsers.rowCount} account suspensions`);
+    }
+  } catch (error) {
+    console.error('Error in account verification handling:', error);
+  }
+}
 
 // ==================== STRIPE ROUTES ====================
 
@@ -1284,6 +1399,9 @@ async function initializeDatabase() {
     // Don't exit the process, just log the error
   }
 }
+
+// Set interval for account verification check (adjust as needed)
+setInterval(handleAccountVerification, 60 * 60 * 1000); // Every hour
 
 // Start server
 app.listen(PORT, '0.0.0.0', async () => {
