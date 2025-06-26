@@ -17,7 +17,7 @@ const getApiBaseUrl = () => {
 };
 
 // Get the API base URL from environment variable
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
 
 console.log('API Base URL:', API_BASE_URL);
 
