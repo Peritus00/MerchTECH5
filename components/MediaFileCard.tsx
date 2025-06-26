@@ -73,7 +73,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
           
           <View style={styles.metadata}>
             <Text style={styles.fileType}>
-              {file.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || file.fileType.toUpperCase()}
+              {file.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN'}
             </Text>
             <Text style={styles.separator}>•</Text>
             <Text style={styles.fileSize}>

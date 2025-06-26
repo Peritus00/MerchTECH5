@@ -940,9 +940,6 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-      `INSERT INTO media_files (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-       RETURNING *`,
       [req.user.userId, title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId]
     );
 
