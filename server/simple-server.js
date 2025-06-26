@@ -8,12 +8,33 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration - Allow all origins for development
+// CORS configuration - Dynamic origin handling for Replit development
 app.use(cors({
-  origin: '*',
-  credentials: false, // Must be false when origin is '*'
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Allow all Replit development URLs
+    if (origin.includes('.replit.dev') || origin.includes('.repl.co')) {
+      return callback(null, true);
+    }
+    
+    // Allow localhost for local development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Log the origin for debugging
+    console.log('🔴 SERVER: CORS request from origin:', origin);
+    
+    // Allow all origins in development (fallback)
+    return callback(null, true);
+  },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 }));
 
 app.use(express.json());
@@ -69,6 +90,17 @@ app.get('/api/health', async (req, res) => {
     console.error('🔴 SERVER: Health check failed:', error);
     res.status(500).json({ error: 'Database connection failed' });
   }
+});
+
+// CORS debug endpoint
+app.get('/api/cors-test', (req, res) => {
+  console.log('🔴 SERVER: CORS test requested from origin:', req.headers.origin);
+  res.json({
+    message: 'CORS test successful',
+    origin: req.headers.origin,
+    headers: req.headers,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Stripe health check
