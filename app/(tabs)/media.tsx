@@ -55,10 +55,14 @@ export default function MediaScreen() {
         console.log('🔴 MEDIA: File uploaded successfully:', uploadedFile);
         setMediaFiles(prev => [uploadedFile, ...prev]);
         Alert.alert('Success', 'File uploaded successfully');
+        // Refresh the media list to ensure consistency
+        await fetchMediaFiles();
       }
     } catch (error) {
       console.error('🔴 MEDIA: Upload error:', error);
       Alert.alert('Upload Failed', 'Please try again');
+    }
+  };gain');
     }
   };
 
