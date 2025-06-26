@@ -1,44 +1,26 @@
-// FORCE PORT 5001 - CLEAR ALL CACHES
-delete process.env.EXPO_PUBLIC_API_URL;
-delete process.env.API_BASE_URL;
-
 import axios from 'axios';
 
-// ABSOLUTELY FORCE PORT 5001 - NO EXCEPTIONS
-const FORCED_PORT = '5001';
-
-const getApiBaseUrl = (): string => {
+// Use the current Replit domain - port 5001 maps to external port 80
+const getCurrentDomain = (): string => {
   if (typeof window !== 'undefined') {
-    // Web environment - ALWAYS use current hostname with port 5001
-    const hostname = window.location.hostname;
-    const baseUrl = `https://${hostname}:${FORCED_PORT}/api`;
-    console.log('🔵 FORCED API URL (web):', baseUrl);
-    return baseUrl;
+    // Use current browser hostname
+    return window.location.hostname;
   }
-
-  // Server-side - use environment domain with forced port
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN;
-  if (replitDomain) {
-    const baseUrl = `https://${replitDomain}:${FORCED_PORT}/api`;
-    console.log('🔵 FORCED API URL (server):', baseUrl);
-    return baseUrl;
-  }
-
-  // Fallback - but still force port 5001
-  const fallbackUrl = `http://localhost:${FORCED_PORT}/api`;
-  console.log('🔵 FORCED API URL (fallback):', fallbackUrl);
-  return fallbackUrl;
+  
+  // Server-side - use environment or fallback to current domain
+  return process.env.REPLIT_DEV_DOMAIN || '80458d8e-cde7-42e0-8b77-c3faea44c843-00-12w0lql5apse6.kirk.replit.dev';
 };
 
-// Force regeneration on every import
-const API_BASE_URL = getApiBaseUrl();
-console.log('🔴 FINAL FORCED API BASE URL:', API_BASE_URL);
+const getApiBaseUrl = (): string => {
+  const domain = getCurrentDomain();
+  
+  // Since port 5001 is mapped to external port 80, we can use the domain directly
+  const baseUrl = `https://${domain}/api`;
+  console.log('🔵 API Base URL:', baseUrl);
+  return baseUrl;
+};
 
-// Override any environment variables that might interfere
-if (typeof process !== 'undefined' && process.env) {
-  process.env.EXPO_PUBLIC_API_URL = API_BASE_URL;
-  process.env.API_BASE_URL = API_BASE_URL;
-}
+const API_BASE_URL = getApiBaseUrl();
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
