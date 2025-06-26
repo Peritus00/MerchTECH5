@@ -25,7 +25,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Clean Port Fix"
+runButton = "Fixed Backend Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -341,6 +341,31 @@ args = "export EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo \"📍 Step 5: Start backend on correct port 5001\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && PORT=5001 node simple-server.js"
+
+[[workflows.workflow]]
+name = "Fixed Backend Server"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🧹 Quick cleanup...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"simple-server\" 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 2"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🚀 Starting backend on port 5001...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
