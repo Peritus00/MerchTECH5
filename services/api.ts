@@ -4,9 +4,7 @@ import { Platform } from 'react-native';
 
 // --- IMPORTANT: HARDCODED API BASE URL FOR DEBUGGING AND CONSISTENCY ---
 // This bypasses environment variables to ensure the correct URL is ALWAYS used.
-// Once confirmed working, you can decide to re-introduce environment variable logic
-// (e.g., using EXPO_PUBLIC_API_URL) but ensure your Replit workflow or build process
-// consistently sets that variable to this exact value.
+// The backend is running on port 5000, so we must include :5000 in the URL
 const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
 // -----------------------------------------------------------------------
 
