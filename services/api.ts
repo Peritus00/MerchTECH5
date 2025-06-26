@@ -5,7 +5,7 @@ const getCurrentDomain = (): string => {
   if (typeof window !== 'undefined') {
     return window.location.hostname;
   }
-  return process.env.REPLIT_DEV_DOMAIN || 'localhost';
+  return '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
 };
 
 // FORCE PORT 5001 - NO EXCEPTIONS, NO DETECTION
