@@ -216,11 +216,11 @@ args = "pkill -f \"node.*5000\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "sleep 2"
+args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server...\""
+args = "echo \"🚀 Starting backend server on port 5000...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -232,7 +232,7 @@ args = "echo \"🌐 Starting frontend development server...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --web"
+args = "npx expo start --web --port 8081"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
