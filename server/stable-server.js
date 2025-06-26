@@ -429,6 +429,6 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('🛑 SIGINT received');
   process.exit(0);
-);
+});
 
 startServer();
