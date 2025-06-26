@@ -1331,7 +1331,6 @@ async function smartPortCleanup() {
             'node.*stable-server',
             'node.*index.js',
             'node.*server',
-            'node.*5000'
         ];
 
         for (const pattern of patterns) {

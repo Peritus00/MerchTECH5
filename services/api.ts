@@ -416,3 +416,15 @@ export const adminAPI = {
     return response.data;
   }
 };
+
+const getApiBaseUrl = (): string => {
+  // For development, we need to use the Replit domain with the correct port
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN;
+
+  if (replitDomain) {
+    return `https://${replitDomain}/api`;
+  }
+
+  // Fallback for local development  
+  return 'http://localhost:5001/api';
+};

@@ -397,10 +397,12 @@ async function startServer() {
   try {
     await initializeDatabase();
     
-    const server = app.listen(PORT, '0.0.0.0', () => {
+    const HOST = '0.0.0.0';
+    const server = app.listen(PORT, HOST, () => {
       console.log('🚀 ================================');
       console.log(`🚀 Stable server running on port ${PORT}`);
-      console.log(`📍 Health check: http://0.0.0.0:${PORT}/api/health`);
+      console.log(`✅ Server is live and listening on http://${HOST}:${PORT}`);
+      console.log(`📍 Health check: http://${HOST}:${PORT}/api/health`);
       console.log(`🔐 Dev login: djjetfuel@gmail.com / Kerrie321`);
       console.log('🚀 ================================');
     });
