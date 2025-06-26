@@ -1476,29 +1476,37 @@ async function initializeDatabase() {
 
     console.log('Database tables initialized successfully');
 
-    // Create dev account if it doesn't exist
+    // Create dev account if it doesn't exist OR reset password if it does
     try {
       const existingDev = await pool.query(
         'SELECT id FROM users WHERE email = $1',
         ['djjetfuel@gmail.com']
       );
 
-      if (existingDev.rows.length === 0) {
-        const saltRounds = 12;
-        const hashedPassword = await bcrypt.hash('Kerrie321', saltRounds);
+      const saltRounds = 12;
+      const hashedPassword = await bcrypt.hash('Kerrie321', saltRounds);
 
+      if (existingDev.rows.length === 0) {
         await pool.query(
           `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user, is_admin, created_at, updated_at)
            VALUES ($1, $2, $3, true, 'premium', false, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
           ['djjetfuel@gmail.com', 'djjetfuel', hashedPassword]
         );
 
-        console.log('✅ Dev account created for djjetfuel@gmail.com');
+        console.log('✅ Dev account created for djjetfuel@gmail.com with password Kerrie321');
       } else {
-        console.log('✅ Dev account already exists for djjetfuel@gmail.com');
+        // Update existing account with correct password
+        await pool.query(
+          `UPDATE users 
+           SET password_hash = $1, is_email_verified = true, subscription_tier = 'premium', is_admin = true, updated_at = CURRENT_TIMESTAMP
+           WHERE email = $2`,
+          [hashedPassword, 'djjetfuel@gmail.com']
+        );
+
+        console.log('✅ Dev account password reset for djjetfuel@gmail.com to Kerrie321');
       }
     } catch (devError) {
-      console.error('Dev account creation error:', devError);
+      console.error('Dev account creation/update error:', devError);
     }
   } catch (error) {
     console.error('Database initialization error:', error);
