@@ -5,6 +5,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { useAuth } from '@/contexts/AuthContext';
 import { useState } from 'react';
+import { MaterialIcons } from '@expo/vector-icons'; // Import MaterialIcons
 
 export default function Settings() {
   const router = useRouter();
@@ -30,19 +31,19 @@ export default function Settings() {
       console.log('Settings: Logout button pressed - starting logout process');
       console.log('Settings: Current user before logout:', user);
       console.log('Settings: Current isAuthenticated before logout:', isAuthenticated);
-      
+
       setIsLoggingOut(true);
-      
+
       // Call logout function
       console.log('Settings: Calling logout function...');
       await logout();
       console.log('Settings: Logout function completed successfully');
-      
+
       // Force navigation to login page
       console.log('Settings: Navigating to login page...');
       router.replace('/auth/login');
       console.log('Settings: Navigation to login completed');
-      
+
     } catch (error) {
       console.error('Settings: Logout failed:', error);
       Alert.alert('Error', 'Failed to logout. Please try again.');
@@ -50,6 +51,43 @@ export default function Settings() {
       // Always reset loading state
       console.log('Settings: Resetting loading state');
       setIsLoggingOut(false);
+    }
+  };
+
+  const testEmailDelivery = async () => {
+    try {
+      const testEmail = 'djkingcake@gmail.com';
+      console.log('Testing email delivery to:', testEmail);
+
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api'}/test/send-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: testEmail,
+          testType: 'verification'
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        Alert.alert(
+          'Test Email Sent!',
+          `A test email has been sent to ${testEmail}. Please check your inbox (and spam folder).`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Email Test Failed',
+          result.message || 'Failed to send test email',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Email test error:', error);
+      Alert.alert('Error', 'Failed to test email delivery');
     }
   };
 
@@ -193,6 +231,14 @@ export default function Settings() {
             </TouchableOpacity>
           ))}
         </ThemedView>
+
+         {/* Test Email Button (for debugging) */}
+         <TouchableOpacity style={[styles.optionCard, { padding: 16 }]} onPress={testEmailDelivery}>
+            <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <MaterialIcons name="email" size={24} color="#28a745" style={{ marginRight: 16 }} />
+              <ThemedText style={{ fontSize: 16, fontWeight: '600' }}>Test Email Delivery</ThemedText>
+            </ThemedView>
+          </TouchableOpacity>
       </ScrollView>
     </ThemedView>
   );
@@ -296,5 +342,19 @@ const styles = StyleSheet.create({
   },
   logoutButtonDisabled: {
     opacity: 0.6,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  menuText: {
+    fontSize: 16,
+    color: '#333',
+    marginLeft: 10,
+    flex: 1,
   },
 });

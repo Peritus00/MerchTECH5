@@ -1443,6 +1443,98 @@ async function handleAccountVerification() {
   }
 }
 
+// ==================== EMAIL TEST ENDPOINT ====================
+
+// Test email sending endpoint
+app.post('/api/test/send-email', async (req, res) => {
+  try {
+    const { email, testType = 'verification' } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    console.log('🔴 SERVER: Testing email send to:', email);
+    console.log('🔴 SERVER: Brevo API key configured:', !!process.env.BREVO_API_KEY);
+
+    if (testType === 'verification') {
+      // Generate a test verification token
+      const testToken = jwt.sign(
+        { email, type: 'email_verification', test: true },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:5000` : 
+        'http://localhost:8081'}/api/auth/verify-email/${testToken}`;
+
+      const testEmailHtml = `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <h2 style="color: #3b82f6; text-align: center;">🧪 Test Email - MerchTech QR</h2>
+          <p>Hello!</p>
+          <p>This is a test verification email to ensure our email system is working correctly.</p>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${verificationLink}" 
+               style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+              Test Verification Link
+            </a>
+          </div>
+
+          <p><strong>Test Details:</strong></p>
+          <ul>
+            <li>Sent to: ${email}</li>
+            <li>Timestamp: ${new Date().toISOString()}</li>
+            <li>Environment: ${process.env.NODE_ENV || 'development'}</li>
+          </ul>
+
+          <p>If you received this email, our email system is working correctly!</p>
+
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 14px;">
+            This is a test email from MerchTech QR Platform
+          </p>
+        </div>
+      `;
+
+      if (brevoConfig.apiKey) {
+        const result = await sendBrevoEmail(
+          email,
+          '🧪 Test Email - MerchTech QR Platform',
+          testEmailHtml
+        );
+        
+        console.log('✅ SERVER: Test email sent successfully:', result);
+        res.json({
+          success: true,
+          message: 'Test email sent successfully',
+          emailService: 'Brevo',
+          messageId: result.messageId,
+          verificationLink: verificationLink
+        });
+      } else {
+        console.log('⚠️ SERVER: No Brevo API key - email not sent');
+        res.json({
+          success: false,
+          message: 'Email service not configured (missing Brevo API key)',
+          verificationLink: verificationLink
+        });
+      }
+    } else {
+      res.status(400).json({ error: 'Invalid test type' });
+    }
+
+  } catch (error) {
+    console.error('🔴 SERVER: Test email error:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to send test email',
+      details: error.message 
+    });
+  }
+});
+
 // ==================== STRIPE ROUTES ====================
 
 // Database initialization function
