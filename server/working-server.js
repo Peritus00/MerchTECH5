@@ -48,10 +48,25 @@ const authenticateToken = (req, res, next) => {
     return next();
   }
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
       return res.status(403).json({ error: 'Invalid token' });
     }
+
+    // Check if user is admin in database
+    try {
+      const dbUser = await pool.query(
+        'SELECT is_admin FROM users WHERE id = $1',
+        [user.userId]
+      );
+
+      if (dbUser.rows.length > 0) {
+        user.isAdmin = dbUser.rows[0].is_admin;
+      }
+    } catch (dbError) {
+      console.error('Error checking admin status:', dbError);
+    }
+
     req.user = user;
     next();
   });
@@ -62,21 +77,32 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'MerchTech QR API Server', 
     status: 'running',
-    port: PORT
+    port: PORT,
+    timestamp: new Date().toISOString()
   });
 });
 
 app.get('/api/health', async (req, res) => {
   try {
     await pool.query('SELECT 1');
-    res.json({ status: 'healthy', database: 'connected' });
+    res.json({ 
+      status: 'healthy', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
   } catch (error) {
-    res.status(503).json({ status: 'unhealthy', database: 'disconnected' });
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      database: 'disconnected',
+      error: error.message
+    });
   }
 });
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
+  console.log('🔵 LOGIN REQUEST:', req.body);
+  
   try {
     const { email, password } = req.body;
 
@@ -84,17 +110,23 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
+    console.log('🔵 Attempting login for:', email);
+
     const result = await pool.query(
       'SELECT * FROM users WHERE email = $1',
       [email]
     );
 
     if (result.rows.length === 0) {
+      console.log('🔴 User not found');
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     const user = result.rows[0];
+    console.log('🔵 Found user:', user.username);
+
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    console.log('🔵 Password valid:', isValidPassword);
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -104,25 +136,35 @@ app.post('/api/auth/login', async (req, res) => {
       { 
         userId: user.id, 
         email: user.email,
-        username: user.username
+        username: user.username,
+        isAdmin: user.is_admin || false
       },
       JWT_SECRET,
       { expiresIn: '24h' }
     );
+
+    console.log('🟢 Login successful for:', email);
 
     res.json({
       user: {
         id: user.id,
         email: user.email,
         username: user.username,
+        firstName: user.first_name,
+        lastName: user.last_name,
+        isEmailVerified: user.is_email_verified,
         subscriptionTier: user.subscription_tier,
-        isNewUser: user.is_new_user
+        isNewUser: user.is_new_user,
+        isAdmin: user.is_admin || false,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
       },
-      token
+      token,
+      refreshToken: `refresh_${token}`
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('🔴 Login error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -150,9 +192,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Create user
     const result = await pool.query(
-      `INSERT INTO users (email, username, password_hash, subscription_tier, is_new_user, is_email_verified)
-       VALUES ($1, $2, $3, 'free', true, false)
-       RETURNING id, email, username, subscription_tier, is_new_user, is_email_verified`,
+      `INSERT INTO users (email, username, password_hash, subscription_tier, is_new_user, is_email_verified, is_admin)
+       VALUES ($1, $2, $3, 'free', true, false, false)
+       RETURNING id, email, username, subscription_tier, is_new_user, is_email_verified, is_admin`,
       [email, username, hashedPassword]
     );
 
@@ -163,7 +205,8 @@ app.post('/api/auth/register', async (req, res) => {
       {
         userId: user.id,
         email: user.email,
-        username: user.username
+        username: user.username,
+        isAdmin: user.is_admin
       },
       JWT_SECRET,
       { expiresIn: '24h' }
@@ -176,9 +219,11 @@ app.post('/api/auth/register', async (req, res) => {
         username: user.username,
         subscriptionTier: user.subscription_tier,
         isNewUser: user.is_new_user,
-        isEmailVerified: user.is_email_verified
+        isEmailVerified: user.is_email_verified,
+        isAdmin: user.is_admin
       },
-      token
+      token,
+      refreshToken: `refresh_${token}`
     });
 
   } catch (error) {
@@ -240,6 +285,8 @@ app.get('/api/media', authenticateToken, async (req, res) => {
 // Initialize database
 async function initializeDatabase() {
   try {
+    console.log('🔧 Initializing database...');
+
     // Create users table
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -247,10 +294,14 @@ async function initializeDatabase() {
         email VARCHAR(255) UNIQUE NOT NULL,
         username VARCHAR(50) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL,
+        first_name VARCHAR(100),
+        last_name VARCHAR(100),
+        is_email_verified BOOLEAN DEFAULT false,
         subscription_tier VARCHAR(20) DEFAULT 'free',
         is_new_user BOOLEAN DEFAULT true,
-        is_email_verified BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        is_admin BOOLEAN DEFAULT false,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
@@ -261,6 +312,8 @@ async function initializeDatabase() {
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         name VARCHAR(255) NOT NULL,
         description TEXT,
+        requires_activation_code BOOLEAN DEFAULT FALSE,
+        is_public BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
@@ -277,25 +330,35 @@ async function initializeDatabase() {
       )
     `);
 
-    // Create dev user
+    // Create/update dev user with correct password
+    console.log('🔧 Setting up dev user...');
     const existingUser = await pool.query(
       'SELECT id FROM users WHERE email = $1',
       ['djjetfuel@gmail.com']
     );
 
+    const hashedPassword = await bcrypt.hash('Kerrie321', 12);
+
     if (existingUser.rows.length === 0) {
-      const hashedPassword = await bcrypt.hash('Kerrie321', 12);
       await pool.query(
-        `INSERT INTO users (email, username, password_hash, is_email_verified)
-         VALUES ($1, $2, $3, true)`,
+        `INSERT INTO users (email, username, password_hash, is_email_verified, is_admin, subscription_tier)
+         VALUES ($1, $2, $3, true, true, 'premium')`,
         ['djjetfuel@gmail.com', 'djjetfuel', hashedPassword]
       );
       console.log('✅ Dev user created: djjetfuel@gmail.com / Kerrie321');
+    } else {
+      await pool.query(
+        `UPDATE users 
+         SET password_hash = $1, is_email_verified = true, is_admin = true, subscription_tier = 'premium'
+         WHERE email = $2`,
+        [hashedPassword, 'djjetfuel@gmail.com']
+      );
+      console.log('✅ Dev user password updated: djjetfuel@gmail.com / Kerrie321');
     }
 
     console.log('✅ Database initialized');
   } catch (error) {
-    console.error('Database init error:', error);
+    console.error('❌ Database init error:', error);
   }
 }
 
@@ -305,11 +368,14 @@ async function startServer() {
     await initializeDatabase();
     
     app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Server running on port ${PORT}`);
+      console.log('🚀 ================================');
+      console.log(`🚀 Working server running on port ${PORT}`);
       console.log(`📍 Health check: http://0.0.0.0:${PORT}/api/health`);
+      console.log(`🔐 Dev login: djjetfuel@gmail.com / Kerrie321`);
+      console.log('🚀 ================================');
     });
   } catch (error) {
-    console.error('Server start error:', error);
+    console.error('❌ Server start error:', error);
     process.exit(1);
   }
 }
