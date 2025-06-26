@@ -2,18 +2,29 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-const getApiBaseUrl = () => {
-  // Use environment variable first
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
-
-  if (envUrl) {
-    console.log('API Base URL (from env):', envUrl);
-    return envUrl;
+const getApiBaseUrl = (): string => {
+  // In production/Replit, use the environment variable
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    console.log('🔵 API: Using EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // If no env var, throw an error to make it obvious
-  console.error('❌ EXPO_PUBLIC_API_URL environment variable not set!');
-  throw new Error('API URL not configured - EXPO_PUBLIC_API_URL environment variable is required');
+  // For development, try to detect the current domain
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+
+    if (hostname.includes('replit.dev')) {
+      // For Replit, use the current hostname with HTTPS and port 5000
+      const replitUrl = `https://${hostname}:5000/api`;
+      console.log('🔵 API: Detected Replit environment, using:', replitUrl);
+      return replitUrl;
+    }
+  }
+
+  // Fallback to the specific Replit URL with correct port
+  const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+  console.log('🔵 API: Using fallback URL:', fallbackUrl);
+  return fallbackUrl;
 };
 
 // Get the API base URL from environment variable

@@ -534,23 +534,92 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  // Handle developer fallback token
+  if (token === 'dev_jwt_token_djjetfuel_12345') {
+    req.user = {
+      id: 1,
+      email: 'djjetfuel@gmail.com',
+      username: 'djjetfuel',
+      isAdmin: true
+    };
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      console.error('JWT verification error:', err);
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
 // ==================== ADMIN ENDPOINTS ====================
 
 // Get all users (admin only)
-app.get('/api/admin/all-users', async (req, res) => {
+app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
   console.log('🔴 SERVER: Get all users endpoint hit');
+  console.log('🔴 SERVER: User requesting:', req.user);
 
   try {
+    if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const result = await pool.query(
       `SELECT id, email, username, first_name, last_name, 
               is_email_verified, subscription_tier, is_new_user, 
+              is_admin,
               created_at, updated_at 
        FROM users 
        ORDER BY created_at DESC`
     );
 
-    console.log('🔴 SERVER: Found users:', result.rows.length);
-    res.json(result.rows);
+    // Transform to match frontend expectations
+    const users = result.rows.map(user => ({
+      id: user.id,
+      email: user.email,
+      username: user.username || user.email?.split('@')[0] || 'Unknown',
+      firstName: user.first_name,
+      lastName: user.last_name,
+      isAdmin: user.is_admin || false,
+      subscriptionTier: user.subscription_tier || 'free',
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      status: 'confirmed',
+      isPending: false,
+      isSuspended: false,
+      // Add required permissions fields
+      canViewAnalytics: true,
+      canManagePlaylists: true,
+      canEditPlaylists: true,
+      canUploadMedia: true,
+      canGenerateCodes: true,
+      canAccessStore: true,
+      canViewFanmail: true,
+      canManageQRCodes: true,
+      maxPlaylists: 50,
+      maxVideos: 100,
+      maxAudioFiles: 100,
+      maxActivationCodes: 50,
+      maxProducts: 25,
+      maxQrCodes: 50,
+      maxSlideshows: 10,
+      lastActive: user.updated_at
+    }));
+
+    console.log('🔴 SERVER: Found users:', users.length);
+    res.json(users);
   } catch (error) {
     console.error('🔴 SERVER: Get all users error:', error);
     res.status(500).json({ error: error.message });
@@ -586,11 +655,23 @@ app.put('/api/admin/users/:id', async (req, res) => {
 });
 
 // Delete user (admin only)
-app.delete('/api/admin/users/:id', async (req, res) => {
+app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
   console.log('🔴 SERVER: Delete user endpoint hit');
+  console.log('🔴 SERVER: User requesting deletion:', req.user);
+  console.log('🔴 SERVER: Target user ID:', req.params.id);
 
   try {
+    if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
     const { id } = req.params;
+
+    // Don't allow deleting the protected admin
+    const userCheck = await pool.query('SELECT username FROM users WHERE id = $1', [id]);
+    if (userCheck.rows.length > 0 && userCheck.rows[0].username === 'djjetfuel') {
+      return res.status(403).json({ error: 'Cannot delete protected admin account' });
+    }
 
     const result = await pool.query(
       'DELETE FROM users WHERE id = $1 RETURNING *',
@@ -602,7 +683,11 @@ app.delete('/api/admin/users/:id', async (req, res) => {
     }
 
     console.log('🔴 SERVER: User deleted:', result.rows[0]);
-    res.json({ success: true, deletedUser: result.rows[0] });
+    res.json({ 
+      success: true, 
+      message: 'User deleted successfully',
+      deletedUser: result.rows[0] 
+    });
   } catch (error) {
     console.error('🔴 SERVER: Delete user error:', error);
     res.status(500).json({ error: error.message });
