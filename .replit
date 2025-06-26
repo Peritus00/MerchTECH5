@@ -1,4 +1,3 @@
-
 entrypoint = "README.md"
 modules = ["nodejs-20", "postgresql-16"]
 
@@ -26,7 +25,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Stable Backend Server"
+runButton = "Clean Port Fix"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -122,15 +121,15 @@ args = "echo \"🧹 Cleaning up any existing processes...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*server\" || true"
+args = "pkill -f \"node.*simple-server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5001\" || true"
+args = "pkill -f \"node.*5000\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
+args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -138,11 +137,11 @@ args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting stable backend server...\""
+args = "echo \"🚀 Starting backend server...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && node stable-server.js"
+args = "cd server && node simple-server.js"
 
 [[workflows.workflow]]
 name = "Quick Backend"
@@ -266,5 +265,86 @@ args = "echo \"🌐 Starting frontend development server...\""
 task = "shell.exec"
 args = "npx expo start --web --port 8081"
 
+[[workflows.workflow]]
+name = "Clean Port Fix"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🧹 COMPREHENSIVE PORT 5000 CLEANUP...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📍 Step 1: Kill ALL processes using port 5000\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"5000\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \":5000\" || true  "
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "fuser -k 5000/tcp 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📍 Step 2: Kill ALL node server processes\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"node.*server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"simple-server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"stable-server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📍 Step 3: Clear frontend cache completely\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "rm -rf .expo/* 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "rm -rf node_modules/.cache/* 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "rm -rf .next/* 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📍 Step 4: Set correct environment variables\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "export PORT=5001"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "export EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"📍 Step 5: Start backend on correct port 5001\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && PORT=5001 node simple-server.js"
+
 [deployment]
-run = ["sh", "-c", "cd server && node monitor.js"]
+run = ["sh", "-c", "cd server && PORT=5001 node simple-server.js"]
