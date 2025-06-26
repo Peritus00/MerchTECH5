@@ -999,6 +999,33 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       isSuspended: false,
 
 
+// Add required permissions fields
+      canViewAnalytics: true,
+      canManagePlaylists: true,
+      canEditPlaylists: true,
+      canUploadMedia: true,
+      canGenerateCodes: true,
+      canAccessStore: true,
+      canViewFanmail: true,
+      canManageQRCodes: true,
+      maxPlaylists: 50,
+      maxVideos: 100,
+      maxAudioFiles: 100,
+      maxActivationCodes: 50,
+      maxProducts: 25,
+      maxQrCodes: 50,
+      maxSlideshows: 10,
+      lastActive: user.updated_at
+    }));
+
+    console.log('🔴 SERVER: Found users:', users.length);
+    res.json(users);
+  } catch (error) {
+    console.error('🔴 SERVER: Get all users error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Check Brevo senders endpoint
 app.get('/api/test/brevo-senders', async (req, res) => {
   try {
@@ -1036,33 +1063,6 @@ app.get('/api/test/brevo-senders', async (req, res) => {
       error: 'Failed to check Brevo senders',
       details: error.response?.data || error.message 
     });
-  }
-});
-
-      // Add required permissions fields
-      canViewAnalytics: true,
-      canManagePlaylists: true,
-      canEditPlaylists: true,
-      canUploadMedia: true,
-      canGenerateCodes: true,
-      canAccessStore: true,
-      canViewFanmail: true,
-      canManageQRCodes: true,
-      maxPlaylists: 50,
-      maxVideos: 100,
-      maxAudioFiles: 100,
-      maxActivationCodes: 50,
-      maxProducts: 25,
-      maxQrCodes: 50,
-      maxSlideshows: 10,
-      lastActive: user.updated_at
-    }));
-
-    console.log('🔴 SERVER: Found users:', users.length);
-    res.json(users);
-  } catch (error) {
-    console.error('🔴 SERVER: Get all users error:', error);
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -1699,7 +1699,7 @@ async function initializeDatabase() {
     } else {
       console.log('✅ Admin user already exists');
 
-      // Reset admin password and ensure proper permissions
+      // Always reset admin password and ensure proper permissions on startup
       const bcrypt = require('bcrypt');
       const adminPassword = await bcrypt.hash('admin123!', 12);
 
@@ -1714,7 +1714,7 @@ async function initializeDatabase() {
          WHERE email = $2`,
         [adminPassword, 'djjetfuel@gmail.com']
       );
-      console.log('✅ Admin user permissions updated and password reset to: admin123!');
+      console.log('✅ Admin user password reset to: admin123! and permissions updated');
     }
 
     console.log('Database connected and tables initialized');
