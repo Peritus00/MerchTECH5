@@ -940,16 +940,6 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-      [req.user.userId, title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId]
-    );
-
-    console.log('🔴 SERVER: Media file uploaded:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
-  } catch (error) {
-    console.error('🔴 SERVER: Upload media file error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
 
 // Get media file by ID
 app.get('/api/media/:id', authenticateToken, async (req, res) => {
