@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Simple Server Start"
+runButton = "Stable Backend Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -122,15 +122,15 @@ args = "echo \"🧹 Cleaning up any existing processes...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*simple-server\" || true"
+args = "pkill -f \"node.*server\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
+args = "pkill -f \"node.*5001\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -138,11 +138,11 @@ args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend server...\""
+args = "echo \"🚀 Starting stable backend server...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && node simple-server.js"
+args = "cd server && node stable-server.js"
 
 [[workflows.workflow]]
 name = "Quick Backend"
@@ -265,19 +265,6 @@ args = "echo \"🌐 Starting frontend development server...\""
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npx expo start --web --port 8081"
-
-[[workflows.workflow]]
-name = "Simple Server Start"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🚀 Starting MerchTech server on port 5000...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
