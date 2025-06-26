@@ -418,13 +418,6 @@ export const adminAPI = {
 };
 
 const getApiBaseUrl = (): string => {
-  // For development, we need to use the Replit domain with the correct port
-  const replitDomain = process.env.REPLIT_DEV_DOMAIN;
-
-  if (replitDomain) {
-    return `https://${replitDomain}:5001/api`;
-  }
-
-  // Fallback for local development  
-  return 'http://localhost:5001/api';
+  // Always use the hardcoded URL with port 5001 for consistency
+  return 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
 };
