@@ -9,8 +9,12 @@ const getApiBaseUrl = (): string => {
   // Check environment variable first, but ensure it has port 5000
   if (process.env.EXPO_PUBLIC_API_URL) {
     baseUrl = process.env.EXPO_PUBLIC_API_URL;
-    // If the env var doesn't include :5000, add it
-    if (!baseUrl.includes(':5000') && baseUrl.includes('replit.dev')) {
+    
+    // Comprehensive port correction - remove any wrong ports and ensure 5000
+    if (baseUrl.includes('replit.dev')) {
+      // Remove any existing port numbers (like :8000, :80, :443)
+      baseUrl = baseUrl.replace(/:\d+\/api$/, '/api');
+      // Add the correct port 5000
       baseUrl = baseUrl.replace('/api', ':5000/api');
     }
     console.log('API Base URL (from env, corrected):', baseUrl);
