@@ -22,15 +22,6 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'QR',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'qr-code' : 'qr-code-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="media"
         options={{
           title: 'Media',
@@ -54,6 +45,24 @@ export default function TabLayout() {
           title: 'Slideshows',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="explore"
+        options={{
+          title: 'QR',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'qr-code' : 'qr-code-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="activation-codes"
+        options={{
+          title: 'Access',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'key' : 'key-outline'} color={color} />
           ),
         }}
       />
@@ -99,15 +108,6 @@ export default function TabLayout() {
           title: 'Settings',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'settings' : 'settings-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="activation-codes"
-        options={{
-          title: 'Access',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'key' : 'key-outline'} color={color} />
           ),
         }}
       />
