@@ -1,0 +1,74 @@
+Replit, please execute the following steps to ensure the backend API is publicly accessible for the account creation system:
+
+Identify the definitive public URL for the backend server:
+
+The simple-server.js is confirmed to be running on local port 5000.
+
+We need to determine what external port Replit is actually exposing localPort = 5000 on. This is usually either 80 (no port shown in URL), 443 (for HTTPS, no port shown in URL), or sometimes it explicitly uses the localPort as the external port (:5000).
+
+Explicitly Configure .replit for Backend Port Forwarding:
+
+Open the .replit file.
+
+Remove ALL other [[ports]] sections in the .replit file. Conflicting port mappings are causing chaos.
+
+Add (or ensure) the following exact [[ports]] configuration for your backend service:
+
+Ini, TOML
+
+[[ports]]
+localPort = 5000
+externalPort = 5000  # Explicitly map local 5000 to external 5000
+This is the most direct mapping and will result in https://<your-repl-url>:5000/api. This will help us get one consistent working URL.
+
+Verify the Server Start Command:
+
+Ensure the run command in your .replit file (or the primary workflow command) correctly starts your backend:
+
+Ini, TOML
+
+run = "cd server && node simple-server.js"
+(Make sure this is the correct path and file name for your backend server.)
+
+Confirm the Frontend EXPO_PUBLIC_API_URL within the Workflow/Run Command:
+
+The run command also needs to start your frontend and pass the correct EXPO_PUBLIC_API_URL.
+
+The full run command should be configured as follows:
+
+Bash
+
+cd server && node simple-server.js & \
+EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api \
+EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN \
+npx expo start --clear --reset-cache
+Crucial: Note the & \ which runs the backend in the background.
+
+Crucial: The EXPO_PUBLIC_API_URL here must include :5000 to match the externalPort set in step 2.
+
+Confirm the Frontend Code Fallback (services/api.ts):
+
+Open services/api.ts.
+
+Ensure the fallback URL also matches https://...:5000/api.
+
+TypeScript
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+Perform a Full Restart:
+
+Stop the Repl if it's running.
+
+Click the "Run" button. This will re-read the .replit file and execute the combined run command, ensuring consistent port exposure and environment variable passing.
+
+Test After Fixes:
+After the Repl restarts, please immediately run the following curl command from your local machine's terminal (not Replit's shell) and report the exact output:
+
+Bash
+
+curl -X POST https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register \
+     -H "Content-Type: application/json" \
+     -d '{"email":"newuser_20250625@example.com","password":"securepassword","username":"newuser_20250625"}'
+(Please use a new, unique email and username each time to avoid "user already exists" errors).
+
+This curl test must return a JSON response (like a user object or success message), not an HTML "not found" page. Once this works, your backend is truly accessible, and account creation from the frontend should follow.
