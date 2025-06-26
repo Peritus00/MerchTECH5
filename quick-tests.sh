@@ -1,7 +1,7 @@
 
 #!/bin/bash
 
-BASE_URL="https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/api"
+BASE_URL="https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5001/api"
 
 echo "🧪 QUICK PAYMENT SYSTEM TESTS"
 echo "=============================="
@@ -29,7 +29,7 @@ curl -X GET "$BASE_URL/routes" \
 
 echo ""
 echo "4. Testing Root Endpoint..."
-curl -X GET "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5000/" \
+curl -X GET "https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev:5001/" \
   -H "Content-Type: application/json" \
   -w "\nStatus: %{http_code}\n" \
   -s | jq '.' 2>/dev/null || echo "Response received"

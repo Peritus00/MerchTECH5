@@ -185,7 +185,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       return true;
 
       // Uncomment for real API integration:
-      // const response = await fetch(`http://0.0.0.0:5000/api/admin/users/${userId}/permissions`, {
+      // const response = await fetch(`http://0.0.0.0:5001/api/admin/users/${userId}/permissions`, {
       //   method: 'PATCH',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify(permissions),
