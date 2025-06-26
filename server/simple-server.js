@@ -8,9 +8,16 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// CORS configuration - ALLOW ALL ORIGINS for development
+// CORS configuration
 app.use(cors({
-  origin: true,
+  origin: [
+    'http://localhost:8081', 
+    'http://localhost:8080',
+    'https://*.repl.co', 
+    'https://*.replit.dev',
+    /^https:\/\/.*\.replit\.dev$/,
+    /^http:\/\/.*\.replit\.dev$/
+  ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']

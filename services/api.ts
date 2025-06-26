@@ -2,23 +2,13 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// API Configuration - Use environment variable first, then fallback with port 5000
-const getApiBaseUrl = (): string => {
-  // First try to use the environment variable that includes the full URL with port
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    console.log('API Base URL (from env):', process.env.EXPO_PUBLIC_API_URL);
-    return process.env.EXPO_PUBLIC_API_URL;
-  }
-
-  // Fallback to constructing URL with port 5000 - ALWAYS include port 5000
-  const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
-  const baseUrl = `https://${domain}:5000/api`;
-
-  console.log('API Base URL (fallback with port 5000):', baseUrl);
-  return baseUrl;
-};
-
-const API_BASE_URL = getApiBaseUrl();
+// --- IMPORTANT: HARDCODED API BASE URL FOR DEBUGGING AND CONSISTENCY ---
+// This bypasses environment variables to ensure the correct URL is ALWAYS used.
+// Once confirmed working, you can decide to re-introduce environment variable logic
+// (e.g., using EXPO_PUBLIC_API_URL) but ensure your Replit workflow or build process
+// consistently sets that variable to this exact value.
+const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+// -----------------------------------------------------------------------
 
 console.log('Final API Base URL:', API_BASE_URL);
 
@@ -155,9 +145,9 @@ export const authAPI = {
   register: async (email: string, password: string, username: string) => {
     try {
       console.log('🔴 API: ============ REGISTRATION DEBUG START ============');
-      console.log('🔴 API: Registration attempt with:', { 
-        email, 
-        username, 
+      console.log('🔴 API: Registration attempt with:', {
+        email,
+        username,
         passwordLength: password?.length,
         timestamp: new Date().toISOString()
       });
@@ -180,10 +170,10 @@ export const authAPI = {
 
       // Make the registration request
       console.log('🔴 API: Making registration request...');
-      const response = await api.post('/auth/register', { 
-        email, 
-        password, 
-        username 
+      const response = await api.post('/auth/register', {
+        email,
+        password,
+        username
       });
 
       console.log('🔴 API: Registration response received!');
@@ -227,7 +217,7 @@ export const authAPI = {
           statusText: error.response.statusText,
           headers: error.response.headers,
           dataType: typeof error.response.data,
-          dataPreview: typeof error.response.data === 'string' 
+          dataPreview: typeof error.response.data === 'string'
             ? error.response.data.substring(0, 500) + '...'
             : error.response.data
         });
@@ -287,9 +277,8 @@ export const authAPI = {
   },
 
   async refreshToken(refreshToken: string): Promise<{ token: string; refreshToken?: string }> {
-    const baseUrl = getApiBaseUrl();
-    console.log('🔴 API: Attempting refresh token with URL:', `${baseUrl}/auth/refresh`);
-    const response = await fetch(`${baseUrl}/auth/refresh`, {
+    // Use API_BASE_URL directly here as it's now hardcoded and reliable
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -310,8 +299,8 @@ export const authAPI = {
   },
 
   async forgotPassword(email: string) {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/forgot-password`, {
+    // Use API_BASE_URL directly here as it's now hardcoded and reliable
+    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -328,8 +317,8 @@ export const authAPI = {
   },
 
   async resetPassword(token: string, newPassword: string) {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/reset-password`, {
+    // Use API_BASE_URL directly here as it's now hardcoded and reliable
+    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -346,8 +335,8 @@ export const authAPI = {
   },
 
   async updateProfile(updates: any, token: string) {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/profile`, {
+    // Use API_BASE_URL directly here as it's now hardcoded and reliable
+    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -365,8 +354,8 @@ export const authAPI = {
   },
 
   async changePassword(currentPassword: string, newPassword: string, token: string) {
-    const baseUrl = getApiBaseUrl();
-    const response = await fetch(`${baseUrl}/auth/change-password`, {
+    // Use API_BASE_URL directly here as it's now hardcoded and reliable
+    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
