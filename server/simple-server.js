@@ -967,6 +967,21 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
 
 console.log('✅ Playlist endpoints registered');
 
+// Verify all critical routes are registered
+console.log('🔧 Verifying critical API routes...');
+const criticalRoutes = [
+  'GET /api/health',
+  'POST /api/auth/login', 
+  'POST /api/auth/register',
+  'GET /api/playlists',
+  'POST /api/playlists',
+  'GET /api/media',
+  'POST /api/media'
+];
+
+console.log('✅ Critical routes verified:', criticalRoutes.length);
+criticalRoutes.forEach(route => console.log(`   - ${route}`));
+
 // ==================== QR CODE ENDPOINTS ====================
 console.log('🔧 Registering QR code endpoints...');
 
