@@ -242,10 +242,8 @@ export const authAPI = {
         throw new Error('Registration endpoint not found. Server may not be running correctly.');
       } else if (error.response?.status === 400) {
         const errorMsg = error.response?.data?.error || error.message;
-        if (errorMsg.includes('Email already registered')) {
-          throw new Error('This email is already registered. Please use a different email or try logging in.');
-        } else if (errorMsg.includes('Username already taken')) {
-          throw new Error('This username is already taken. Please choose a different username.');
+        if (errorMsg.includes('Email or username already exists') || errorMsg.includes('already registered') || errorMsg.includes('already taken')) {
+          throw new Error('This email or username is already registered. Please try logging in instead, or use different credentials.');
         } else {
           throw new Error(errorMsg || 'Invalid registration data. Please check your information.');
         }

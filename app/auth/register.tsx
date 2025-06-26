@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -45,13 +44,13 @@ export default function RegisterScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [agreeToPrivacy, setAgreeToPrivacy] = useState(false);
-  
+
   const { register, isLoading } = useAuth();
   const router = useRouter();
 
   const updateFormData = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    
+
     // Clear errors for the field being updated
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: undefined }));
@@ -160,7 +159,7 @@ export default function RegisterScreen() {
         formData.password,
         formData.username.trim()
       );
-      
+
       if (result.success) {
         // User is automatically logged in, redirect to subscription selection
         console.log('🔴 Registration: Success, redirecting to subscription');
@@ -173,16 +172,16 @@ export default function RegisterScreen() {
       }
     } catch (error: any) {
       console.error('🔴 Registration: Exception caught:', error);
-      
+
       // Provide user-friendly error messages
       let errorMessage = 'An unexpected error occurred during registration.';
-      
+
       if (error.message) {
         errorMessage = error.message;
       } else if (typeof error === 'string') {
         errorMessage = error;
       }
-      
+
       // Show specific field errors if possible
       if (errorMessage.includes('email')) {
         setErrors({ email: errorMessage });
@@ -282,7 +281,7 @@ export default function RegisterScreen() {
                   />
                 </TouchableOpacity>
               </View>
-              
+
               {formData.password && (
                 <View style={styles.passwordStrength}>
                   <View style={styles.strengthHeader}>
@@ -313,7 +312,7 @@ export default function RegisterScreen() {
                   )}
                 </View>
               )}
-              
+
               {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
             </View>
 
@@ -356,7 +355,7 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
+                  <ThemedText style={styles.checkboxText}>I agree to the{' '}</ThemedText>
                   <TouchableOpacity
                     onPress={() => router.push('/legal/terms')}
                     style={styles.linkButton}
@@ -376,7 +375,7 @@ export default function RegisterScreen() {
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
-                  <ThemedText style={styles.checkboxText}>I agree to the </ThemedText>
+                  <ThemedText style={styles.checkboxText}>I agree to the{' '}</ThemedText>
                   <TouchableOpacity
                     onPress={() => router.push('/legal/privacy')}
                     style={styles.linkButton}
