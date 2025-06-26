@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -51,22 +50,18 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
       title: file.title,
       timestamp: new Date().toISOString()
     });
-    
-    Alert.alert(
-      'Delete File',
-      `Are you sure you want to delete "${file.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
-          style: 'destructive', 
-          onPress: () => {
-            console.log('🔴 MediaFileCard: User confirmed delete for file:', file.id);
-            onDelete();
-          }
-        },
-      ]
-    );
+
+    console.log('🔴 MediaFileCard: Calling onDelete prop for file:', file.id);
+    console.log('🔴 MediaFileCard: onDelete prop type:', typeof onDelete);
+    console.log('🔴 MediaFileCard: onDelete prop exists:', !!onDelete);
+
+    if (onDelete && typeof onDelete === 'function') {
+      console.log('🔴 MediaFileCard: Executing onDelete callback...');
+      onDelete();
+      console.log('🔴 MediaFileCard: onDelete callback executed successfully');
+    } else {
+      console.error('🔴 MediaFileCard: onDelete prop is not a valid function!');
+    }
   };
 
   return (
@@ -83,7 +78,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
           <Text style={styles.fileName} numberOfLines={2}>
             {file.title}
           </Text>
-          
+
           <View style={styles.metadata}>
             <Text style={styles.fileType}>
               {file.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN'}
