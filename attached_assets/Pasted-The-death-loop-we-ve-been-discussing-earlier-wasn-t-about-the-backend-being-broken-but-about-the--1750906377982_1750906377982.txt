@@ -1,0 +1,44 @@
+The "death loop" we've been discussing earlier wasn't about the backend being broken, but about the frontend having an inconsistent or incorrect API URL, often due to caching.
+
+Here are the definitive steps you need to take to fix this on your frontend:
+
+Strictly Verify Your Frontend's API URL:
+
+In your Replit project's run command/workflow script: Make absolutely certain that the EXPO_PUBLIC_API_URL environment variable is set to the exact correct backend URL, including :5000 and /api. For example:
+
+Bash
+
+EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api
+(Make sure there are no typos, extra spaces, or missing parts).
+
+In your services/api.ts file (or wherever your API_BASE_URL is defined): Double-check the fallback URL. It should also match the exact working URL:
+
+TypeScript
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+This ensures consistency.
+
+Perform a Hard Cache Clear and Restart of Your Expo Development Server:
+
+This is often the final piece of the puzzle when environment variables or network configurations are stubborn.
+
+Go to your local terminal where your Expo app is running (where you executed npm start or expo start).
+
+Stop the running server (Ctrl+C or Cmd+C).
+
+Then, execute the command with the --clear flag:
+
+Bash
+
+npx expo start --clear
+Let the Metro Bundler completely restart and rebuild.
+
+Crucially, once the new QR code appears, re-scan it with your Expo Go app on your phone/emulator, or refresh your web browser tab if you're testing in the browser. Do not just resume from a paused state; force a fresh load.
+
+Test Account Creation from Your Frontend UI:
+
+Now, try to create a new user account directly through your React Native Expo app's user interface.
+
+Monitor the output in your local Expo development terminal for any network errors. If you see successful 200 or 201 status codes there, you've done it!
+
+You're at the very last mile of this specific problem. The backend is solid. It's just a matter of ensuring the frontend is correctly pointed at it and fully refreshed
