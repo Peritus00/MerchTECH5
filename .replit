@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Clean Working Server"
+runButton = "Stable Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -259,6 +259,35 @@ args = "echo \"🚀 Starting working server...\""
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node working-server.js"
+
+[[workflows.workflow]]
+name = "Stable Server"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🧹 Killing any existing processes...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "pkill -f \"node.*server\" || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "sleep 2"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🚀 Starting stable server...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node stable-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
