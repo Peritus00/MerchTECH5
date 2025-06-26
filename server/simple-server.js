@@ -75,46 +75,72 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Self-healing port cleanup with multiple strategies
-async function aggressivePortCleanup() {
+// Enhanced port cleanup with automatic port detection
+async function smartPortCleanup() {
   try {
-    console.log('🧹 Starting aggressive port cleanup for port', PORT);
-    const { spawn, exec } = require('child_process');
+    console.log('🧹 Starting smart port cleanup for port', PORT);
+    const { exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
+
+    // Check if port is actually in use
+    const isPortInUse = await checkPortInUse(PORT);
+    if (!isPortInUse) {
+      console.log('✅ Port', PORT, 'is already free');
+      return;
+    }
+
+    console.log('🔍 Port', PORT, 'is in use, attempting cleanup...');
 
     // Strategy 1: Kill by port
     try {
       const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
       if (stdout.trim()) {
-        const pids = stdout.trim().split('\n');
+        const pids = stdout.trim().split('\n').filter(pid => pid.trim());
         console.log('🧹 Found processes on port', PORT, ':', pids);
         
         for (const pid of pids) {
-          if (pid) {
+          try {
+            await execAsync(`kill -TERM ${pid}`);
+            console.log('🧹 Gracefully terminated process', pid);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Check if process is still running
             try {
+              await execAsync(`kill -0 ${pid}`);
+              // Still running, force kill
               await execAsync(`kill -9 ${pid}`);
-              console.log('🧹 Killed process', pid);
-            } catch (err) {
-              console.log('🧹 Process', pid, 'already terminated');
+              console.log('🧹 Force killed process', pid);
+            } catch {
+              // Process already terminated
+              console.log('🧹 Process', pid, 'terminated gracefully');
             }
+          } catch (err) {
+            console.log('🧹 Could not terminate process', pid, ':', err.message);
           }
         }
       }
     } catch (error) {
-      console.log('🧹 lsof method completed');
+      console.log('🧹 Port-based cleanup completed');
     }
 
     // Strategy 2: Kill by pattern
-    try {
-      await execAsync(`pkill -9 -f "node.*simple-server" || true`);
-      await execAsync(`pkill -9 -f "node.*${PORT}" || true`);
-      console.log('🧹 Pattern-based cleanup completed');
-    } catch (error) {
-      console.log('🧹 Pattern cleanup completed');
+    const patterns = [
+      'node.*simple-server',
+      `node.*${PORT}`,
+      'node.*server'
+    ];
+
+    for (const pattern of patterns) {
+      try {
+        await execAsync(`pkill -f "${pattern}" || true`);
+        console.log('🧹 Cleaned up processes matching:', pattern);
+      } catch (error) {
+        // Ignore errors
+      }
     }
 
-    // Strategy 3: Force cleanup
+    // Strategy 3: Force cleanup using fuser
     try {
       await execAsync(`fuser -k ${PORT}/tcp || true`);
       console.log('🧹 Force cleanup completed');
@@ -125,10 +151,51 @@ async function aggressivePortCleanup() {
     // Wait for cleanup to take effect
     await new Promise(resolve => setTimeout(resolve, 3000));
     
-    console.log('✅ Port cleanup completed');
+    // Verify port is now free
+    const stillInUse = await checkPortInUse(PORT);
+    if (stillInUse) {
+      console.warn('⚠️ Port', PORT, 'is still in use after cleanup');
+      // Try alternative port
+      const alternativePort = await findAvailablePort(PORT + 1);
+      if (alternativePort) {
+        console.log('🔄 Switching to alternative port:', alternativePort);
+        process.env.PORT = alternativePort;
+        return alternativePort;
+      }
+    } else {
+      console.log('✅ Port cleanup successful');
+    }
+    
+    return PORT;
   } catch (error) {
     console.log('🧹 Port cleanup completed with warnings:', error.message);
+    return PORT;
   }
+}
+
+// Check if a port is in use
+async function checkPortInUse(port) {
+  try {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+    
+    const { stdout } = await execAsync(`lsof -ti:${port} || true`);
+    return stdout.trim().length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Find an available port starting from a given port
+async function findAvailablePort(startPort) {
+  for (let port = startPort; port <= startPort + 10; port++) {
+    const inUse = await checkPortInUse(port);
+    if (!inUse) {
+      return port;
+    }
+  }
+  return null;
 }
 
 // Self-healing server health check
@@ -187,7 +254,7 @@ async function attemptServerRestart() {
     await new Promise(resolve => setTimeout(resolve, RESTART_DELAY));
 
     // Cleanup port
-    await aggressivePortCleanup();
+    const actualPort = await smartPortCleanup();
 
     // Restart server
     await startServer();
@@ -1177,6 +1244,32 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
 // ==================== ADMIN ENDPOINTS ====================
 
+// Server restart endpoint for health monitoring
+app.post('/api/admin/restart', authenticateToken, async (req, res) => {
+  try {
+    if (!req.user.isAdmin && req.user.username !== 'djjetfuel') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    console.log('🔄 Admin restart request received from:', req.user.username);
+    
+    res.json({ 
+      message: 'Server restart initiated', 
+      timestamp: new Date().toISOString() 
+    });
+
+    // Graceful restart after response
+    setTimeout(() => {
+      console.log('🔄 Performing graceful restart...');
+      process.kill(process.pid, 'SIGTERM');
+    }, 1000);
+
+  } catch (error) {
+    console.error('❌ Admin restart error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get all users (admin only) - legacy endpoint
 app.get('/api/admin/users', authenticateToken, async (req, res) => {
   console.log('🔴 SERVER: Get admin users endpoint hit (legacy)');
@@ -1377,7 +1470,10 @@ async function startServer() {
     console.log(`🚀 Starting server (attempt ${restartAttempts + 1})`);
     
     // Clean up any existing processes on this port
-    await aggressivePortCleanup();
+    const actualPort = await smartPortCleanup();
+    if (actualPort !== PORT) {
+      console.log('🔄 Using alternative port:', actualPort);
+    }
 
     // Initialize database
     await initializeDatabase();

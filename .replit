@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Production Server"
+runButton = "Self-Healing Production Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -233,6 +233,23 @@ args = "echo \"🔍 Starting server with automatic restart capability...\""
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node simple-server.js"
+
+[[workflows.workflow]]
+name = "Self-Healing Production Server"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🚀 Starting Self-Healing Production Server...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "echo \"🔧 Initializing process monitoring...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node process-monitor.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
