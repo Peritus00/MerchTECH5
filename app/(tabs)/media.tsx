@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -27,6 +28,8 @@ export default function MediaScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video'>('all');
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [fileToDelete, setFileToDelete] = useState<{ id: number; name: string } | null>(null);
 
   useEffect(() => {
     fetchMediaFiles();
@@ -68,67 +71,74 @@ export default function MediaScreen() {
     console.log('🔴 MEDIA: handleDelete called with ID:', id);
     console.log('🔴 MEDIA: Current media files count:', mediaFiles.length);
     
-    const fileToDelete = mediaFiles.find(file => file.id === id);
-    const fileName = fileToDelete?.title || 'this file';
+    const fileToDeleteItem = mediaFiles.find(file => file.id === id);
+    const fileName = fileToDeleteItem?.title || 'this file';
     
     console.log('🔴 MEDIA: File to delete:', {
       id,
       fileName,
-      fileExists: !!fileToDelete,
+      fileExists: !!fileToDeleteItem,
       timestamp: new Date().toISOString()
     });
+
+    // Set the file to delete and show dialog
+    setFileToDelete({ id, name: fileName });
+    setShowDeleteDialog(true);
+    console.log('🔴 MEDIA: Showing delete confirmation dialog for:', fileName);
+  };
+
+  const confirmDelete = async () => {
+    if (!fileToDelete) return;
     
-    Alert.alert(
-      'Delete File',
-      `Are you sure you want to delete "${fileName}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🔴 MEDIA: Starting delete for file:', { id, fileName });
-              
-              // Call the delete API
-              const response = await mediaAPI.delete(id);
-              console.log('🔴 MEDIA: Delete API response:', response);
-              
-              // Remove from local state immediately for better UX
-              setMediaFiles(prev => {
-                const newFiles = prev.filter(file => file.id !== id);
-                console.log('🔴 MEDIA: Updated media files list, removed file:', id);
-                console.log('🔴 MEDIA: Remaining files count:', newFiles.length);
-                return newFiles;
-              });
-              
-              Alert.alert('Success', `"${fileName}" has been deleted successfully`);
-              
-              // Optionally refresh the media list to ensure consistency
-              setTimeout(() => {
-                fetchMediaFiles();
-              }, 1000);
-              
-            } catch (error: any) {
-              console.error('🔴 MEDIA: Delete error:', error);
-              
-              let errorMessage = 'Failed to delete file';
-              if (error.response?.status === 404) {
-                errorMessage = 'File not found or already deleted';
-              } else if (error.response?.status === 403) {
-                errorMessage = 'You do not have permission to delete this file';
-              } else if (error.response?.data?.error) {
-                errorMessage = error.response.data.error;
-              } else if (error.message) {
-                errorMessage = error.message;
-              }
-              
-              Alert.alert('Delete Failed', errorMessage);
-            }
-          },
-        },
-      ]
-    );
+    console.log('🔴 MEDIA: User confirmed delete for file:', fileToDelete);
+    setShowDeleteDialog(false);
+
+    try {
+      console.log('🔴 MEDIA: Starting delete for file:', fileToDelete);
+      
+      // Call the delete API
+      const response = await mediaAPI.delete(fileToDelete.id);
+      console.log('🔴 MEDIA: Delete API response:', response);
+      
+      // Remove from local state immediately for better UX
+      setMediaFiles(prev => {
+        const newFiles = prev.filter(file => file.id !== fileToDelete.id);
+        console.log('🔴 MEDIA: Updated media files list, removed file:', fileToDelete.id);
+        console.log('🔴 MEDIA: Remaining files count:', newFiles.length);
+        return newFiles;
+      });
+      
+      Alert.alert('Success', `"${fileToDelete.name}" has been deleted successfully`);
+      
+      // Optionally refresh the media list to ensure consistency
+      setTimeout(() => {
+        fetchMediaFiles();
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error('🔴 MEDIA: Delete error:', error);
+      
+      let errorMessage = 'Failed to delete file';
+      if (error.response?.status === 404) {
+        errorMessage = 'File not found or already deleted';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'You do not have permission to delete this file';
+      } else if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Delete Failed', errorMessage);
+    } finally {
+      setFileToDelete(null);
+    }
+  };
+
+  const cancelDelete = () => {
+    console.log('🔴 MEDIA: User cancelled delete operation');
+    setShowDeleteDialog(false);
+    setFileToDelete(null);
   };
 
   const handlePlay = (file: MediaFile) => {
@@ -229,6 +239,44 @@ export default function MediaScreen() {
         visible={isUploading}
         progress={uploadProgress}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <Modal
+        visible={showDeleteDialog}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelDelete}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.dialogContainer}>
+            <View style={styles.dialogHeader}>
+              <MaterialIcons name="delete-forever" size={32} color="#ef4444" />
+              <Text style={styles.dialogTitle}>Delete File</Text>
+            </View>
+            
+            <Text style={styles.dialogMessage}>
+              Are you sure you want to delete "{fileToDelete?.name}"?{'\n'}
+              This action cannot be undone.
+            </Text>
+            
+            <View style={styles.dialogButtons}>
+              <TouchableOpacity
+                style={[styles.dialogButton, styles.cancelButton]}
+                onPress={cancelDelete}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.dialogButton, styles.deleteButton]}
+                onPress={confirmDelete}
+              >
+                <Text style={styles.deleteButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ThemedView>
   );
 }
@@ -332,5 +380,70 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  dialogContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  dialogHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  dialogTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
+    marginTop: 8,
+  },
+  dialogMessage: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  dialogButtons: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  dialogButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  deleteButton: {
+    backgroundColor: '#ef4444',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  deleteButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
   },
 });
