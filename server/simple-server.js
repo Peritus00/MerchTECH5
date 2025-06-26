@@ -37,8 +37,8 @@ app.use(cors({
   optionsSuccessStatus: 200
 }));
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '1gb' }));
+app.use(express.urlencoded({ limit: '1gb', extended: true }));
 
 // Database configuration
 const pool = new Pool({
@@ -910,6 +910,15 @@ app.post('/api/media', authenticateToken, async (req, res) => {
 
     if (!title || !filePath || !fileType) {
       return res.status(400).json({ error: 'Title, file path, and file type are required' });
+    }
+
+    // Check file size limit (1GB)
+    const maxSize = 1024 * 1024 * 1024; // 1GB
+    if (filesize && filesize > maxSize) {
+      return res.status(413).json({ 
+        error: 'File too large', 
+        message: `File size ${Math.round((filesize / 1024 / 1024) * 100) / 100}MB exceeds the 1GB limit` 
+      });
     }
 
     const result = await pool.query(

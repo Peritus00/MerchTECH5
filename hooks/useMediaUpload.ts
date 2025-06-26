@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
@@ -33,6 +32,12 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     const asset = file.assets[0];
     setIsUploading(true);
     setUploadProgress({ loaded: 0, total: asset.size || 0, percentage: 0 });
+
+    // Check file size (limit to 1GB)
+    const maxSize = 1024 * 1024 * 1024; // 1GB
+    if (asset.size && asset.size > maxSize) {
+      throw new Error(`File too large. Maximum size is 1GB, but your file is ${Math.round((asset.size / 1024 / 1024) * 100) / 100}MB`);
+    }
 
     try {
       // Simulate upload progress
