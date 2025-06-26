@@ -20,7 +20,7 @@ const getApiBaseUrl = (): string => {
     }
   }
 
-  // Fallback with explicit port
+  // Fallback with explicit port 5000
   const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
   console.log('API Base URL (fallback):', fallbackUrl);
   return fallbackUrl;
@@ -295,8 +295,9 @@ export const authAPI = {
   },
 
   async refreshToken(refreshToken: string): Promise<{ token: string; refreshToken?: string }> {
-    console.log('🔴 API: Attempting refresh token with URL:', `${API_BASE_URL}/auth/refresh`);
-    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    const baseUrl = getApiBaseUrl();
+    console.log('🔴 API: Attempting refresh token with URL:', `${baseUrl}/auth/refresh`);
+    const response = await fetch(`${baseUrl}/auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -317,7 +318,8 @@ export const authAPI = {
   },
 
   async forgotPassword(email: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/forgot-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -334,7 +336,8 @@ export const authAPI = {
   },
 
   async resetPassword(token: string, newPassword: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/reset-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -351,7 +354,8 @@ export const authAPI = {
   },
 
   async updateProfile(updates: any, token: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/profile`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -369,7 +373,8 @@ export const authAPI = {
   },
 
   async changePassword(currentPassword: string, newPassword: string, token: string) {
-    const response = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    const baseUrl = getApiBaseUrl();
+    const response = await fetch(`${baseUrl}/auth/change-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
