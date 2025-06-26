@@ -2,44 +2,32 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Get the API base URL
+// Get the API base URL - simplified version
 const getApiBaseUrl = (): string => {
-  // In development, use environment variable or construct from current URL
+  // Check environment variable first
   if (process.env.EXPO_PUBLIC_API_URL) {
     console.log('API Base URL (from env):', process.env.EXPO_PUBLIC_API_URL);
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Fallback for web environment - always use port 5000
+  // For web environment in Replit
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
-      const baseUrl = `https://${hostname}:5000/api`;
-      console.log('API Base URL (web fallback):', baseUrl);
+      // Use the current hostname without port - Replit routes internally
+      const baseUrl = `https://${hostname}/api`;
+      console.log('API Base URL (web):', baseUrl);
       return baseUrl;
     }
   }
 
-  // Final fallback
+  // Local development fallback
   const fallbackUrl = 'http://localhost:5000/api';
-  console.log('API Base URL (final fallback):', fallbackUrl);
+  console.log('API Base URL (fallback):', fallbackUrl);
   return fallbackUrl;
 };
 
-// Force correct API URL for Replit environment
-const getCorrectApiUrl = () => {
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
-      // Don't include port in external URL - Replit handles this automatically
-      return `https://${hostname}/api`;
-    }
-  }
-  // For development fallback, also remove port
-  return 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api';
-};
-
-const API_BASE_URL = getCorrectApiUrl();
+const API_BASE_URL = getApiBaseUrl();
 
 console.log('API Base URL (NO PORT):', API_BASE_URL);
 
