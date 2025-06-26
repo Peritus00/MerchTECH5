@@ -2,38 +2,20 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Get the API base URL - guaranteed port 5000
+// API Configuration
 const getApiBaseUrl = (): string => {
-  let baseUrl = '';
-  
-  // Check environment variable first, but ensure it has port 5000
-  if (process.env.EXPO_PUBLIC_API_URL) {
-    baseUrl = process.env.EXPO_PUBLIC_API_URL;
-    
-    // Comprehensive port correction - remove any wrong ports and ensure 5000
-    if (baseUrl.includes('replit.dev')) {
-      // Remove any existing port numbers (like :8000, :80, :443)
-      baseUrl = baseUrl.replace(/:\d+\/api$/, '/api');
-      // Add the correct port 5000
-      baseUrl = baseUrl.replace('/api', ':5000/api');
-    }
-    console.log('API Base URL (from env, corrected):', baseUrl);
-    return baseUrl;
+  // Try environment variable first
+  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  if (envUrl) {
+    console.log('API Base URL (from env):', envUrl);
+    return envUrl;
   }
 
-  // For web environment in Replit - use explicit port 5000
-  if (typeof window !== 'undefined') {
-    const hostname = window.location.hostname;
-    if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
-      baseUrl = `https://${hostname}:5000/api`;
-      console.log('API Base URL (web with port):', baseUrl);
-      return baseUrl;
-    }
-  }
+  // Fallback to constructed URL with fixed port 5000
+  const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
+  const baseUrl = `https://${domain}:5000/api`;
 
-  // Fallback with explicit port 5000
-  baseUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
-  console.log('API Base URL (fallback):', baseUrl);
+  console.log('API Base URL (constructed):', baseUrl);
   return baseUrl;
 };
 
