@@ -562,21 +562,21 @@ const authenticateToken = (req, res, next) => {
       console.error('JWT verification error:', err);
       return res.status(403).json({ error: 'Invalid token' });
     }
-    
+
     // Check if user is admin in database
     try {
       const dbUser = await pool.query(
         'SELECT is_admin FROM users WHERE id = $1',
         [user.userId]
       );
-      
+
       if (dbUser.rows.length > 0) {
         user.isAdmin = dbUser.rows[0].is_admin;
       }
     } catch (dbError) {
       console.error('Error checking admin status:', dbError);
     }
-    
+
     req.user = user;
     next();
   });
@@ -876,6 +876,7 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
     // Don't allow deleting the protected admin
     const userCheck = await pool.query('SELECT username FROM users WHERE id = $1', [id]);
     if (userCheck.rows.length > 0 && userCheck.rows[0].username === 'djjetfuel') {
+      ```text
       return res.status(403).json({ error: 'Cannot delete protected admin account' });
     }
 
@@ -956,7 +957,7 @@ async function initializeDatabase() {
       console.log('Creating admin user...');
       const bcrypt = require('bcrypt');
       const adminPassword = await bcrypt.hash('admin123!', 12);
-      
+
       await pool.query(
         `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_admin, is_new_user, created_at, updated_at)
          VALUES ($1, $2, $3, true, 'premium', true, false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
@@ -965,11 +966,11 @@ async function initializeDatabase() {
       console.log('✅ Admin user created: djjetfuel@gmail.com / admin123!');
     } else {
       console.log('✅ Admin user already exists');
-      
+
       // Reset admin password and ensure proper permissions
       const bcrypt = require('bcrypt');
       const adminPassword = await bcrypt.hash('admin123!', 12);
-      
+
       await pool.query(
         `UPDATE users 
          SET is_admin = true, 
