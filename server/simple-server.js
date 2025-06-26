@@ -1445,7 +1445,7 @@ async function handleAccountVerification() {
 
 // ==================== EMAIL TEST ENDPOINT ====================
 
-// Test email sending endpoint
+// Test email sending endpoint  
 app.post('/api/test/send-email', async (req, res) => {
   try {
     const { email, testType = 'verification' } = req.body;
