@@ -88,8 +88,8 @@ export default function SubscriptionCheckoutScreen() {
 
       if (result.success && result.url) {
         if (Platform.OS === 'web') {
-          // Web: Direct redirect
-          window.location.href = result.url;
+          // Web: Open in new tab to avoid iframe restrictions
+          window.open(result.url, '_blank', 'noopener,noreferrer');
         } else {
           // Mobile: Use Expo WebBrowser for in-app browser
           const { WebBrowser } = require('expo-web-browser');
