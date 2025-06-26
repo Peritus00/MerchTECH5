@@ -65,9 +65,12 @@ export default function MediaScreen() {
   };
 
   const handleDelete = async (id: number) => {
+    const fileToDelete = mediaFiles.find(file => file.id === id);
+    const fileName = fileToDelete?.title || 'this file';
+    
     Alert.alert(
       'Delete File',
-      'Are you sure you want to delete this file?',
+      `Are you sure you want to delete "${fileName}"? This action cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -75,13 +78,42 @@ export default function MediaScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🔴 MEDIA: Deleting file:', id);
-              await mediaAPI.delete(id);
-              setMediaFiles(prev => prev.filter(file => file.id !== id));
-              Alert.alert('Success', 'File deleted successfully');
-            } catch (error) {
+              console.log('🔴 MEDIA: Starting delete for file:', { id, fileName });
+              
+              // Call the delete API
+              const response = await mediaAPI.delete(id);
+              console.log('🔴 MEDIA: Delete API response:', response);
+              
+              // Remove from local state immediately for better UX
+              setMediaFiles(prev => {
+                const newFiles = prev.filter(file => file.id !== id);
+                console.log('🔴 MEDIA: Updated media files list, removed file:', id);
+                console.log('🔴 MEDIA: Remaining files count:', newFiles.length);
+                return newFiles;
+              });
+              
+              Alert.alert('Success', `"${fileName}" has been deleted successfully`);
+              
+              // Optionally refresh the media list to ensure consistency
+              setTimeout(() => {
+                fetchMediaFiles();
+              }, 1000);
+              
+            } catch (error: any) {
               console.error('🔴 MEDIA: Delete error:', error);
-              Alert.alert('Error', 'Failed to delete file');
+              
+              let errorMessage = 'Failed to delete file';
+              if (error.response?.status === 404) {
+                errorMessage = 'File not found or already deleted';
+              } else if (error.response?.status === 403) {
+                errorMessage = 'You do not have permission to delete this file';
+              } else if (error.response?.data?.error) {
+                errorMessage = error.response.data.error;
+              } else if (error.message) {
+                errorMessage = error.message;
+              }
+              
+              Alert.alert('Delete Failed', errorMessage);
             }
           },
         },

@@ -463,8 +463,20 @@ export const mediaAPI = {
   },
 
   delete: async (id: number) => {
-    const response = await api.delete(`/media/${id}`);
-    return response.data;
+    console.log('🔴 API: Deleting media file with ID:', id);
+    try {
+      const response = await api.delete(`/media/${id}`);
+      console.log('🔴 API: Delete response:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('🔴 API: Delete error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      throw error;
+    }
   }
 };
 

@@ -970,20 +970,55 @@ app.delete('/api/media/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    const result = await pool.query(
-      'DELETE FROM media_files WHERE id = $1 AND user_id = $2 RETURNING id',
+    console.log('🔴 SERVER: Attempting to delete media file:', {
+      id: id,
+      userId: req.user.userId,
+      userDetails: req.user
+    });
+
+    // First check if the file exists and belongs to the user
+    const checkResult = await pool.query(
+      'SELECT id, title FROM media_files WHERE id = $1 AND user_id = $2',
       [id, req.user.userId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Media file not found' });
+    if (checkResult.rows.length === 0) {
+      console.log('🔴 SERVER: Media file not found or does not belong to user:', id);
+      return res.status(404).json({ error: 'Media file not found or access denied' });
     }
 
-    console.log('🔴 SERVER: Media file deleted:', id);
-    res.json({ message: 'Media file deleted successfully' });
+    const fileToDelete = checkResult.rows[0];
+    console.log('🔴 SERVER: Found file to delete:', fileToDelete);
+
+    // Now delete the file
+    const deleteResult = await pool.query(
+      'DELETE FROM media_files WHERE id = $1 AND user_id = $2 RETURNING *',
+      [id, req.user.userId]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      console.log('🔴 SERVER: Delete operation failed for file:', id);
+      return res.status(500).json({ error: 'Failed to delete media file' });
+    }
+
+    const deletedFile = deleteResult.rows[0];
+    console.log('🔴 SERVER: Media file deleted successfully:', {
+      id: deletedFile.id,
+      title: deletedFile.title,
+      user_id: deletedFile.user_id
+    });
+
+    res.json({ 
+      success: true,
+      message: 'Media file deleted successfully',
+      deletedFile: {
+        id: deletedFile.id,
+        title: deletedFile.title
+      }
+    });
   } catch (error) {
     console.error('🔴 SERVER: Delete media file error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 
