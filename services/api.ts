@@ -1,48 +1,44 @@
+// FORCE PORT 5001 - CLEAR ALL CACHES
+delete process.env.EXPO_PUBLIC_API_URL;
+delete process.env.API_BASE_URL;
+
 import axios from 'axios';
 
-// API Configuration - Fixed for port 5001
+// ABSOLUTELY FORCE PORT 5001 - NO EXCEPTIONS
+const FORCED_PORT = '5001';
+
 const getApiBaseUrl = (): string => {
-  // Force port 5001 for all environments
   if (typeof window !== 'undefined') {
-    // Web environment - extract the base domain and force port 5001
-    const currentUrl = window.location;
-    const hostname = currentUrl.hostname;
-
-    // For Replit domains
-    if (hostname.includes('replit.dev') || hostname.includes('replit.co')) {
-      return `https://${hostname}:5001/api`;
-    }
-
-    // For localhost development
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return `http://${hostname}:5001/api`;
-    }
-
-    // Default fallback with port 5001
-    return `https://${hostname}:5001/api`;
+    // Web environment - ALWAYS use current hostname with port 5001
+    const hostname = window.location.hostname;
+    const baseUrl = `https://${hostname}:${FORCED_PORT}/api`;
+    console.log('🔵 FORCED API URL (web):', baseUrl);
+    return baseUrl;
   }
 
-  // Server-side or React Native environment
+  // Server-side - use environment domain with forced port
   const replitDomain = process.env.REPLIT_DEV_DOMAIN;
-  
   if (replitDomain) {
-    // Always use port 5001 for Replit
-    return `https://${replitDomain}:5001/api`;
+    const baseUrl = `https://${replitDomain}:${FORCED_PORT}/api`;
+    console.log('🔵 FORCED API URL (server):', baseUrl);
+    return baseUrl;
   }
 
-  // Environment variable override
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-  if (apiUrl) {
-    return apiUrl.endsWith('/api') ? apiUrl : `${apiUrl}/api`;
-  }
-
-  // Local development fallback
-  return 'http://localhost:5001/api';
+  // Fallback - but still force port 5001
+  const fallbackUrl = `http://localhost:${FORCED_PORT}/api`;
+  console.log('🔵 FORCED API URL (fallback):', fallbackUrl);
+  return fallbackUrl;
 };
 
+// Force regeneration on every import
 const API_BASE_URL = getApiBaseUrl();
+console.log('🔴 FINAL FORCED API BASE URL:', API_BASE_URL);
 
-console.log('Final API Base URL:', API_BASE_URL);
+// Override any environment variables that might interfere
+if (typeof process !== 'undefined' && process.env) {
+  process.env.EXPO_PUBLIC_API_URL = API_BASE_URL;
+  process.env.API_BASE_URL = API_BASE_URL;
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
@@ -52,22 +48,15 @@ export const api = axios.create({
   },
 });
 
-// Add request interceptor for auth token
+// Add request interceptor
 api.interceptors.request.use(
   (config) => {
-    // Get token from storage or context
-    const token = null; // This will be handled by your auth service
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-
     console.log('🔵 API Request:', {
       method: config.method?.toUpperCase(),
       url: config.url,
       baseURL: config.baseURL,
       fullURL: `${config.baseURL}${config.url}`
     });
-
     return config;
   },
   (error) => {
@@ -76,13 +65,12 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor for error handling
+// Add response interceptor
 api.interceptors.response.use(
   (response) => {
     console.log('🟢 API Response Success:', {
       url: response.config.url,
-      status: response.status,
-      data: response.data
+      status: response.status
     });
     return response;
   },
