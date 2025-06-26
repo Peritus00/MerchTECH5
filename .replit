@@ -99,19 +99,6 @@ task = "shell.exec"
 args = "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --tunnel"
 
 [[workflows.workflow]]
-name = "Working Backend"
-author = 42127692
-mode = "parallel"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --tunnel"
-
-[[workflows.workflow]]
 name = "Stable Backend Server"
 author = 42127692
 mode = "parallel"
@@ -145,24 +132,6 @@ task = "shell.exec"
 args = "cd server && node simple-server.js"
 
 [[workflows.workflow]]
-name = "Quick Backend"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
-
-[[workflows.workflow]]
-name = "Test Server"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
-
-[[workflows.workflow]]
 name = "Backend Only"
 author = 42127692
 mode = "sequential"
@@ -170,19 +139,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node clean-server.js"
-
-[[workflows.workflow]]
-name = "Clean Dev Server"
-author = 42127692
-mode = "parallel"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node clean-server.js"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "EXPO_PUBLIC_API_URL=https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/api EXPO_PACKAGER_PROXY_URL=https://$REPLIT_DEV_DOMAIN REACT_NATIVE_PACKAGER_HOSTNAME=$REPLIT_DEV_DOMAIN npx expo start --clear"
 
 [[workflows.workflow]]
 name = "Stable Server with Self-Healing"
@@ -265,35 +221,6 @@ args = "echo \"🌐 Starting frontend development server...\""
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "npx expo start --web --port 8081"
-
-[[workflows.workflow]]
-name = "Start Clean Server"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🧹 Cleaning up processes...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*simple-server\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*5000\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 3"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🚀 Starting server...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && node simple-server.js"
 
 [[workflows.workflow]]
 name = "Clean Start"
