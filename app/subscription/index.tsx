@@ -65,10 +65,19 @@ export default function SubscriptionScreen() {
             [
               {
                 text: 'Go to Dashboard',
-                onPress: () => router.replace('/(tabs)/')
+                onPress: () => {
+                  console.log('🎯 Navigating to dashboard after free account setup');
+                  router.replace('/(tabs)/');
+                }
               }
             ]
           );
+
+          // Automatic navigation fallback after 3 seconds
+          setTimeout(() => {
+            console.log('🎯 Auto-navigating to dashboard (timeout fallback)');
+            router.replace('/(tabs)/');
+          }, 3000);
         } else {
           console.error('❌ Failed to send verification email:', verificationResult.message);
 
@@ -81,7 +90,10 @@ export default function SubscriptionScreen() {
             [
               {
                 text: 'Go to Dashboard',
-                onPress: () => router.replace('/(tabs)/')
+                onPress: () => {
+                  console.log('🎯 Navigating to dashboard after free account setup (fallback)');
+                  router.replace('/(tabs)/');
+                }
               }
             ]
           );
