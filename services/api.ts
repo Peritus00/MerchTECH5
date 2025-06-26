@@ -2,18 +2,13 @@ import axios from 'axios';
 
 // Use the current Replit domain - port 5001 maps to external port 80
 const getCurrentDomain = (): string => {
-  // Always use the current domain from environment
-  const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
-  
   if (typeof window !== 'undefined') {
-    // On web, use the window hostname but ensure it matches our expected domain
-    const windowDomain = window.location.hostname;
-    if (windowDomain.includes('kirk.replit.dev')) {
-      return windowDomain;
-    }
+    // Use current browser hostname for web
+    return window.location.hostname;
   }
   
-  return domain;
+  // Use current domain from environment
+  return process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
 };
 
 const getApiBaseUrl = (): string => {

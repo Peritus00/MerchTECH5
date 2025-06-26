@@ -5,7 +5,9 @@ require('dotenv').config();
 
 class FullSystemTester {
   constructor() {
-    this.baseUrl = `https://${process.env.REPLIT_DEV_DOMAIN}:5001`;
+    // Use the correct current domain
+    const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
+    this.baseUrl = `https://${domain}:5001`;
     this.apiUrl = `${this.baseUrl}/api`;
     this.testResults = [];
     this.authToken = null;
