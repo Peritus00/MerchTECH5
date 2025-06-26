@@ -10,7 +10,7 @@ const getApiBaseUrl = (): string => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // Fallback to constructing URL with port 5000
+  // Fallback to constructing URL with port 5000 - ALWAYS include port 5000
   const domain = process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
   const baseUrl = `https://${domain}:5000/api`;
 
