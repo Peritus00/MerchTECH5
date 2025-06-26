@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 // Self-healing configuration
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
