@@ -46,12 +46,25 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
   };
 
   const handleDelete = () => {
+    console.log('🔴 MediaFileCard: Delete button pressed for file:', {
+      id: file.id,
+      title: file.title,
+      timestamp: new Date().toISOString()
+    });
+    
     Alert.alert(
       'Delete File',
       `Are you sure you want to delete "${file.title}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: onDelete },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => {
+            console.log('🔴 MediaFileCard: User confirmed delete for file:', file.id);
+            onDelete();
+          }
+        },
       ]
     );
   };
@@ -97,6 +110,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
           <TouchableOpacity
             style={styles.actionButton}
             onPress={(e) => {
+              console.log('🔴 MediaFileCard: Delete button touched for file:', file.id);
               e.stopPropagation();
               handleDelete();
             }}

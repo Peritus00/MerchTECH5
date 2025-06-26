@@ -65,8 +65,18 @@ export default function MediaScreen() {
   };
 
   const handleDelete = async (id: number) => {
+    console.log('🔴 MEDIA: handleDelete called with ID:', id);
+    console.log('🔴 MEDIA: Current media files count:', mediaFiles.length);
+    
     const fileToDelete = mediaFiles.find(file => file.id === id);
     const fileName = fileToDelete?.title || 'this file';
+    
+    console.log('🔴 MEDIA: File to delete:', {
+      id,
+      fileName,
+      fileExists: !!fileToDelete,
+      timestamp: new Date().toISOString()
+    });
     
     Alert.alert(
       'Delete File',
