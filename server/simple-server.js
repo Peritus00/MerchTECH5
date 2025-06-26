@@ -922,6 +922,24 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     }
 
     const result = await pool.query(
+      `INSERT INTO media_files (
+        user_id, title, file_path, url, filename, file_type, 
+        content_type, filesize, duration, unique_id, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW()) 
+      RETURNING *`,
+      [
+        req.user.userId, title, filePath, url || filePath, filename, 
+        fileType, contentType, filesize, duration, uniqueId
+      ]
+    );
+
+    console.log('🔴 SERVER: Media file uploaded:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 SERVER: Upload media file error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
       `INSERT INTO media_files (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING *`,

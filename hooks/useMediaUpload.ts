@@ -50,11 +50,22 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
+      // Read file as base64 for storage
+      let fileBase64 = '';
+      try {
+        fileBase64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      } catch (error) {
+        console.warn('Could not read file as base64, using URI:', error);
+        fileBase64 = asset.uri;
+      }
+
       // Prepare media data for API
       const mediaData = {
         title: asset.name || 'Untitled',
-        filePath: asset.uri,
-        url: asset.uri,
+        filePath: `data:${asset.mimeType || 'application/octet-stream'};base64,${fileBase64}`,
+        url: `data:${asset.mimeType || 'application/octet-stream'};base64,${fileBase64}`,
         filename: asset.name,
         fileType: getFileType(asset.mimeType || ''),
         contentType: asset.mimeType,
