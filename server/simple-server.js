@@ -85,7 +85,7 @@ async function sendBrevoEmail(to, subject, htmlContent, templateId = null) {
   try {
     const emailData = {
       sender: {
-        email: 'help@mertech.net',
+        email: '8e773a002@smtp-brevo.com',
         name: 'MerchTech QR Platform'
       },
       to: [{ email: to }],
@@ -122,7 +122,7 @@ async function sendEmail(to, subject, htmlContent) {
             'https://api.brevo.com/v3/smtp/email',
             {
                 sender: {
-                    email: 'help@mertech.net', // Use the verified sender email
+                    email: '8e773a002@smtp-brevo.com', // Use the verified sender email
                     name: 'MerchTech QR Platform'
                 },
                 to: [{ email: to }],
