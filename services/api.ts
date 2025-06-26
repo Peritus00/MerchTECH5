@@ -14,8 +14,8 @@ const getCurrentDomain = (): string => {
 const getApiBaseUrl = (): string => {
   const domain = getCurrentDomain();
   
-  // Since port 5001 is mapped to external port 80, we can use the domain directly
-  const baseUrl = `https://${domain}/api`;
+  // Use port 5001 for API requests
+  const baseUrl = `https://${domain}:5001/api`;
   console.log('🔵 API Base URL:', baseUrl);
   return baseUrl;
 };
