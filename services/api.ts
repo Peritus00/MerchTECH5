@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 
 // Get API base URL from environment variable with proper fallback
@@ -7,12 +6,12 @@ const getApiBaseUrl = () => {
   const envUrl = process.env.EXPO_PUBLIC_API_URL || 
                  process.env.API_BASE_URL || 
                  process.env.REACT_NATIVE_API_URL;
-  
+
   if (envUrl) {
     console.log('Using environment API URL:', envUrl);
     return envUrl;
   }
-  
+
   // Fallback to hardcoded URL with correct port
   const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
   console.log('Using fallback API URL:', fallbackUrl);
