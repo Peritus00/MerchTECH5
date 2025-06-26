@@ -225,15 +225,11 @@ args = "npx expo start --web --port 8081"
 [[workflows.workflow]]
 name = "Clean Start"
 author = 42127692
-mode = "parallel"
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node working-server.js"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Backend Only"
 
 [[workflows.workflow]]
 name = "Clean Working Server"
