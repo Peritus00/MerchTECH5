@@ -38,8 +38,10 @@ export default function PlaylistsScreen() {
       
       // Fetch real media files from the database
       const { mediaAPI } = await import('@/services/api');
+      console.log('🔴 PLAYLISTS: About to call mediaAPI.getAll()...');
+      
       const realMediaFiles = await mediaAPI.getAll();
-      console.log('🔴 PLAYLISTS: Loaded media files:', realMediaFiles.length, realMediaFiles);
+      console.log('🔴 PLAYLISTS: API call successful! Loaded media files:', realMediaFiles?.length || 0, realMediaFiles);
       
       // For now, create some example playlists with real media files
       // Later this will be replaced with actual playlist API calls
@@ -70,9 +72,21 @@ export default function PlaylistsScreen() {
       
       setPlaylists(examplePlaylists);
       setMediaFiles(realMediaFiles);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      Alert.alert('Error', 'Failed to load playlists');
+    } catch (error: any) {
+      console.error('🔴 PLAYLISTS: Error fetching data:', error);
+      console.error('🔴 PLAYLISTS: Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        stack: error.stack
+      });
+      
+      // For now, create empty playlists if API fails
+      setPlaylists([]);
+      setMediaFiles([]);
+      
+      Alert.alert('Error', `Failed to load playlists: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
       setRefreshing(false);

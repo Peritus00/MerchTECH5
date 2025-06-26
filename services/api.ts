@@ -26,13 +26,29 @@ export const api = axios.create({
 // Force the baseURL to be correct in case it gets overridden
 api.defaults.baseURL = API_BASE_URL;
 
+// Double-check that the URL includes port 5000
+if (!API_BASE_URL.includes(':5000')) {
+  console.error('🔴 API: ERROR - API_BASE_URL missing port 5000!', API_BASE_URL);
+  // Force it to have the correct port
+  const correctedUrl = API_BASE_URL.replace('/api', ':5000/api');
+  api.defaults.baseURL = correctedUrl;
+  console.log('🔴 API: Corrected URL to:', correctedUrl);
+} else {
+  console.log('✅ API: Base URL correctly includes port 5000:', API_BASE_URL);
+}
+
 // Request interceptor to add auth token and debug logging
 api.interceptors.request.use(
   async (config) => {
-    // Ensure baseURL is always correct
+    // Ensure baseURL is always correct and includes port 5000
     if (!config.baseURL || !config.baseURL.includes(':5000')) {
       console.warn('🔴 API: Correcting baseURL to include port 5000');
-      config.baseURL = API_BASE_URL;
+      console.warn('🔴 API: Old baseURL was:', config.baseURL);
+      
+      // Force the correct URL with port 5000
+      const correctUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+      config.baseURL = correctUrl;
+      console.warn('🔴 API: New baseURL is:', config.baseURL);
     }
     
     console.log('🔵 API Request:', {
