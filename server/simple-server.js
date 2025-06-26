@@ -539,53 +539,53 @@ app.post('/api/auth/register', async (req, res) => {
     // Send verification email automatically
     // try {
     //   const verificationToken = jwt.sign(
-    //     { email: user.email, type: 'email_verification' },
-    //     JWT_SECRET,
-    //     { expiresIn: '24h' }
+    //   { email: user.email, type: 'email_verification' },
+    //   JWT_SECRET,
+    //   { expiresIn: '24h' }
     //   );
 
     //   await pool.query(
-    //     'UPDATE users SET verification_token = $1 WHERE id = $2',
-    //     [verificationToken, user.id]
+    //   'UPDATE users SET verification_token = $1 WHERE id = $2',
+    //   [verificationToken, user.id]
     //   );
 
     //   const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
-    //     `https://${process.env.REPLIT_DEV_DOMAIN}` : 
-    //     'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+    //   `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+    //   'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
     //   // Send welcome and verification email via Brevo
     //   const emailHtml = `
-    //     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-    //       <h2 style="color: #3b82f6; text-align: center;">Welcome to MerchTech QR!</h2>
-    //       <p>Hi ${user.username},</p>
-    //       <p>Thank you for creating your MerchTech QR account! We're excited to help you create and manage QR codes for your business.</p>
+    //   <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+    //   <h2 style="color: #3b82f6; text-align: center;">Welcome to MerchTech QR!</h2>
+    //   <p>Hi ${user.username},</p>
+    //   <p>Thank you for creating your MerchTech QR account! We're excited to help you create and manage QR codes for your business.</p>
 
-    //       <div style="text-align: center; margin: 30px 0;">
-    //         <a href="${verificationLink}" 
-    //            style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
-    //           Verify Your Email Address
-    //         </a>
-    //       </div>
+    //   <div style="text-align: center; margin: 30px 0;">
+    //   <a href="${verificationLink}" 
+    //   style="display: inline-block; padding: 15px 30px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+    //   Verify Your Email Address
+    //   </a>
+    //   </div>
 
-    //       <p>This verification link will expire in 24 hours.</p>
-    //       <p>If the button doesn't work, copy and paste this URL into your browser:</p>
-    //       <p style="word-break: break-all; color: #666;">${verificationLink}</p>
+    //   <p>This verification link will expire in 24 hours.</p>
+    //   <p>If the button doesn't work, copy and paste this URL into your browser:</p>
+    //   <p style="word-break: break-all; color: #666;">${verificationLink}</p>
 
-    //       <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
-    //       <p style="color: #666; font-size: 14px;">
-    //         If you didn't create this account, please ignore this email.
-    //       </p>
-    //       <p style="color: #666; font-size: 14px;">
-    //         Best regards,<br>
-    //         The MerchTech QR Team
-    //       </p>
-    //     </div>
+    //   <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+    //   <p style="color: #666; font-size: 14px;">
+    //   If you didn't create this account, please ignore this email.
+    //   </p>
+    //   <p style="color: #666; font-size: 14px;">
+    //   Best regards,<br>
+    //   The MerchTech QR Team
+    //   </p>
+    //   </div>
     //   `;
 
     //   await sendEmail(
-    //     user.email,
-    //     'Welcome to MerchTech QR - Please verify your email',
-    //     emailHtml
+    //   user.email,
+    //   'Welcome to MerchTech QR - Please verify your email',
+    //   emailHtml
     //   );
 
     //   console.log('✅ SERVER: Welcome and verification email sent to:', user.email);
@@ -1122,8 +1122,8 @@ app.post('/api/auth/send-verification', async (req, res) => {
     // In a real implementation, you would send an actual email here
     // For now, we'll just log the verification link
     const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
-      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
-      'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+      `https://${process.env.REPLIT_DEV_DOMAIN}:5000` : 
+      'http://localhost:8081'}/api/auth/verify-email/${verificationToken}`;
 
     console.log('🔴 SERVER: Verification email would be sent with link:', verificationLink);
     console.log('🔴 SERVER: (Email service not configured - this is just a simulation)');
@@ -1141,33 +1141,58 @@ app.post('/api/auth/send-verification', async (req, res) => {
   }
 });
 
-// Verify email endpoint
-app.get('/api/auth/verify-email', async (req, res) => {
+// Email verification endpoint via URL (GET request)
+app.get('/api/auth/verify-email/:token', async (req, res) => {
   try {
-    const { token } = req.query;
+    const { token } = req.params;
+    console.log('🔴 SERVER: Email verification requested with token');
 
     if (!token) {
       return res.status(400).json({ error: 'Verification token is required' });
     }
 
-    console.log('🔴 SERVER: Email verification requested with token');
-
     // Verify the token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      console.log('🔴 SERVER: Token verification failed:', err.message);
+      const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        'http://localhost:8081'}/auth/verify-email?error=invalid_token`;
+      return res.redirect(redirectUrl);
+    }
+
     const { email } = decoded;
 
     if (decoded.type !== 'email_verification') {
-      return res.status(400).json({ error: 'Invalid verification token' });
+      const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        'http://localhost:8081'}/auth/verify-email?error=invalid_token`;
+      return res.redirect(redirectUrl);
     }
 
     // Get user from the database
-    const userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
     if (userResult.rows.length === 0) {
-        return res.status(404).json({ error: 'User not found' });
+      const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        'http://localhost:8081'}/auth/verify-email?error=user_not_found`;
+      return res.redirect(redirectUrl);
     }
 
     const user = userResult.rows[0];
+
+    // Check if already verified
+    if (user.is_email_verified) {
+      console.log('🔴 SERVER: Email already verified for:', email);
+      const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        'http://localhost:8081'}/auth/verify-email?already_verified=true`;
+      return res.redirect(redirectUrl);
+    }
+
     // Update user to verified status and reactivate if suspended
     const updatedUser = await pool.query(
       `UPDATE users 
@@ -1175,7 +1200,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
            verification_token = null, 
            is_new_user = false,
            subscription_tier = CASE 
-             WHEN subscription_tier = 'suspended' THEN 'basic'
+             WHEN subscription_tier = 'suspended' THEN 'free'
              ELSE subscription_tier
            END,
            updated_at = CURRENT_TIMESTAMP
@@ -1183,22 +1208,83 @@ app.get('/api/auth/verify-email', async (req, res) => {
        RETURNING id, email, username, first_name, last_name, is_email_verified, subscription_tier, created_at, is_new_user`,
       [user.id]
     );
+
     if (updatedUser.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+        'http://localhost:8081'}/auth/verify-email?error=update_failed`;
+      return res.redirect(redirectUrl);
     }
 
-    console.log('🔴 SERVER: Email verified successfully for:', decoded.email);
+    console.log('🔴 SERVER: Email verified successfully for:', email);
+
+    // Send success notification email
+    if (brevoConfig.apiKey) {
+      try {
+        const welcomeEmailHtml = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #22c55e; text-align: center;">🎉 Email Verified Successfully!</h2>
+            <p>Hello ${user.username || 'User'},</p>
+            <p>Congratulations! Your email address has been successfully verified and your MerchTech QR account is now fully activated.</p>
+
+            <div style="background-color: #f0fdf4; border: 1px solid #22c55e; border-radius: 8px; padding: 20px; margin: 20px 0;">
+              <h3 style="color: #22c55e; margin-top: 0;">✅ Account Status: Verified & Active</h3>
+              <p>You now have full access to all MerchTech QR features:</p>
+              <ul>
+                <li>✅ QR Code Generation & Management</li>
+                <li>✅ Analytics Dashboard</li>
+                <li>✅ Media Upload & Management</li>
+                <li>✅ Store Integration</li>
+                <li>✅ Premium Features (if subscribed)</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${process.env.REPLIT_DEV_DOMAIN ? 
+                `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+                'http://localhost:8081'}/dashboard" 
+                 style="display: inline-block; padding: 15px 30px; background-color: #22c55e; color: white; text-decoration: none; border-radius: 8px; font-weight: bold;">
+                Start Using MerchTech QR
+              </a>
+            </div>
+
+            <p>Thank you for choosing MerchTech QR Platform!</p>
+
+            <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+            <p style="color: #666; font-size: 14px;">
+              If you have any questions, feel free to contact our support team.
+            </p>
+            <p style="color: #666; font-size: 14px;">
+              Best regards,<br>
+              The MerchTech QR Team
+            </p>
+          </div>
+        `;
+
+        await sendBrevoEmail(
+          user.email,
+          'Welcome! Your MerchTech QR Account is Now Active',
+          welcomeEmailHtml
+        );
+        console.log('✅ SERVER: Welcome email sent to verified user:', user.email);
+      } catch (emailError) {
+        console.error('❌ SERVER: Failed to send welcome email:', emailError);
+      }
+    }
 
     // Redirect to success page
     const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
-      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+      `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
       'http://localhost:8081'}/auth/verify-email?verified=true`;
 
     res.redirect(redirectUrl);
 
   } catch (error) {
     console.error('🔴 SERVER: Email verification error:', error);
-    res.status(400).json({ error: 'Invalid or expired verification token' });
+    const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+      `https://${process.env.REPLIT_DEV_DOMAIN}:8081` : 
+      'http://localhost:8081'}/auth/verify-email?error=server_error`;
+    res.redirect(redirectUrl);
   }
 });
 
@@ -1242,8 +1328,8 @@ async function handleAccountVerification() {
         );
 
         const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
-          `https://${process.env.REPLIT_DEV_DOMAIN}` : 
-          'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+          `https://${process.env.REPLIT_DEV_DOMAIN}:5000` : 
+          'http://localhost:8081'}/api/auth/verify-email/${verificationToken}`;
 
         const suspensionEmailHtml = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
