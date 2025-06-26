@@ -1,9 +1,6 @@
 
 import axios from 'axios';
 
-// FORCE PORT 5001 - NO EXCEPTIONS
-const FORCED_PORT = '5001';
-
 const getCurrentDomain = (): string => {
   if (typeof window !== 'undefined') {
     return window.location.hostname;
@@ -11,10 +8,10 @@ const getCurrentDomain = (): string => {
   return process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
 };
 
-// For Replit, we need to use the domain without the port in the URL
+// Use Replit's external domain without port - this is how Replit works
 const API_BASE_URL = `https://${getCurrentDomain()}/api`;
 
-console.log('🔵 FORCED API Base URL:', API_BASE_URL);
+console.log('🔵 API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

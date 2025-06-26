@@ -24,7 +24,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Backend Port 5001"
+runButton = "Fresh Start Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -265,58 +265,29 @@ task = "shell.exec"
 args = "npx expo start --web --port 8081"
 
 [[workflows.workflow]]
-name = "Fixed Backend Server 5001"
+name = "Fresh Start Server"
 author = 42127692
 mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🧹 Cleaning up processes on port 5001...\""
+args = "echo \"🔥 FRESH START - Breaking the death loop!\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "pkill -f \"simple-server\" 2>/dev/null || true"
+args = "pkill -f \"node\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "sleep 2"
+args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting backend on port 5001...\""
+args = "echo \"🚀 Starting server properly...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd server && PORT=5001 node simple-server.js"
-
-[[workflows.workflow]]
-name = "Backend Port 5001"
-author = 42127692
-mode = "sequential"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🧹 Cleaning up processes on port 5001...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "pkill -f \"node.*simple-server\" || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "lsof -ti:5001 | xargs kill -9 2>/dev/null || true"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "sleep 2"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🚀 Starting backend server on port 5001...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd server && PORT=5001 node simple-server.js"
+args = "cd server && node simple-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && PORT=5001 node simple-server.js"]
