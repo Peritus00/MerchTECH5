@@ -16,6 +16,7 @@ import { ThemedView } from './ThemedView';
 import { QRCodeGenerator } from './QRCodeGenerator';
 import { qrCodeService } from '../services/qrCodeService';
 import { CreateQRCodeData } from '../types';
+import { useEffect } from 'react';
 
 interface CreateQRModalProps {
   visible: boolean;
@@ -23,13 +24,43 @@ interface CreateQRModalProps {
   onQRCreated: () => void;
 }
 
-type ContentType = 'url' | 'email' | 'phone' | 'sms' | 'wifi' | 'vcard' | 'text';
+type ContentType = 'url' | 'email' | 'phone' | 'sms' | 'wifi' | 'vcard' | 'text' | 'playlist' | 'slideshow';
 
 export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalProps) {
   const [activeTab, setActiveTab] = useState<'content' | 'style' | 'logo'>('content');
+
+  useEffect(() => {
+    if (visible && (contentType === 'playlist' || contentType === 'slideshow')) {
+      loadContentData();
+    }
+  }, [visible, contentType]);
+
+  const loadContentData = async () => {
+    try {
+      // Mock data for now - replace with actual API calls
+      if (contentType === 'playlist') {
+        setPlaylists([
+          { id: '1', name: 'My Playlist 1', description: 'Sample playlist' },
+          { id: '2', name: 'My Playlist 2', description: 'Another playlist' }
+        ]);
+      } else if (contentType === 'slideshow') {
+        setSlideshows([
+          { id: '1', title: 'My Slideshow 1', description: 'Sample slideshow' },
+          { id: '2', title: 'My Slideshow 2', description: 'Another slideshow' }
+        ]);
+      }
+    } catch (error) {
+      console.error('Failed to load content:', error);
+    }
+  };
   const [contentType, setContentType] = useState<ContentType>('url');
   const [creating, setCreating] = useState(false);
   const [previewMode, setPreviewMode] = useState(true);
+  const [selectedPlaylistId, setSelectedPlaylistId] = useState<string>('');
+  const [selectedSlideshowId, setSelectedSlideshowId] = useState<string>('');
+  const [requiresActivationCode, setRequiresActivationCode] = useState(false);
+  const [playlists, setPlaylists] = useState<any[]>([]);
+  const [slideshows, setSlideshows] = useState<any[]>([]);
 
   const [formData, setFormData] = useState<CreateQRCodeData>({
     name: '',
@@ -57,19 +88,40 @@ export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalPr
       case 'wifi': return 'WIFI:T:WPA;S:NetworkName;P:Password;;';
       case 'vcard': return 'BEGIN:VCARD\nVERSION:3.0\nFN:John Doe\nORG:Company\nTEL:+1234567890\nEMAIL:john@example.com\nEND:VCARD';
       case 'text': return 'Enter your text here';
+      case 'playlist': return 'Select a playlist from the dropdown below';
+      case 'slideshow': return 'Select a slideshow from the dropdown below';
       default: return '';
     }
   };
 
   const handleContentTypeChange = (type: ContentType) => {
     setContentType(type);
-    setFormData({
-      ...formData,
-      url: getContentPlaceholder(type)
-    });
+    setSelectedPlaylistId('');
+    setSelectedSlideshowId('');
+    setRequiresActivationCode(false);
+    
+    if (type === 'playlist' || type === 'slideshow') {
+      setFormData({
+        ...formData,
+        url: ''
+      });
+    } else {
+      setFormData({
+        ...formData,
+        url: getContentPlaceholder(type)
+      });
+    }
   };
 
   const validateContent = (): boolean => {
+    if (contentType === 'playlist') {
+      return selectedPlaylistId.trim() !== '';
+    }
+    
+    if (contentType === 'slideshow') {
+      return selectedSlideshowId.trim() !== '';
+    }
+    
     if (!formData.url.trim()) return false;
     
     if (contentType === 'url') {
@@ -89,19 +141,52 @@ export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalPr
   };
 
   const handleCreate = async () => {
-    if (!formData.name.trim() || !formData.url.trim()) {
-      Alert.alert('Error', 'Please fill in name and content fields');
+    if (!formData.name.trim()) {
+      Alert.alert('Error', 'Please fill in the QR code name');
       return;
     }
 
     if (!validateContent()) {
-      Alert.alert('Error', 'Please enter valid content for the selected type');
+      if (contentType === 'playlist') {
+        Alert.alert('Error', 'Please select a playlist');
+      } else if (contentType === 'slideshow') {
+        Alert.alert('Error', 'Please select a slideshow');
+      } else {
+        Alert.alert('Error', 'Please enter valid content for the selected type');
+      }
       return;
     }
 
     setCreating(true);
     try {
-      await qrCodeService.createQRCode(formData);
+      let finalUrl = formData.url;
+      
+      // Generate URLs for playlist and slideshow content
+      if (contentType === 'playlist') {
+        const selectedPlaylist = playlists.find(p => p.id === selectedPlaylistId);
+        if (requiresActivationCode) {
+          finalUrl = `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/playlist-access/${selectedPlaylistId}`;
+        } else {
+          finalUrl = `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/media-player/${selectedPlaylistId}`;
+        }
+      } else if (contentType === 'slideshow') {
+        const selectedSlideshow = slideshows.find(s => s.id === selectedSlideshowId);
+        if (requiresActivationCode) {
+          finalUrl = `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/slideshow-access/${selectedSlideshowId}`;
+        } else {
+          finalUrl = `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/slideshow-player/${selectedSlideshowId}`;
+        }
+      }
+
+      const qrData = {
+        ...formData,
+        url: finalUrl,
+        contentType,
+        contentId: contentType === 'playlist' ? selectedPlaylistId : contentType === 'slideshow' ? selectedSlideshowId : null,
+        requiresActivationCode: (contentType === 'playlist' || contentType === 'slideshow') ? requiresActivationCode : false
+      };
+
+      await qrCodeService.createQRCode(qrData);
       Alert.alert('Success', 'QR Code created successfully!');
       onQRCreated();
       resetForm();
@@ -132,6 +217,11 @@ export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalPr
     setContentType('url');
     setActiveTab('content');
     setPreviewMode(true);
+    setSelectedPlaylistId('');
+    setSelectedSlideshowId('');
+    setRequiresActivationCode(false);
+    setPlaylists([]);
+    setSlideshows([]);
   };
 
   const handleClose = () => {
@@ -178,22 +268,109 @@ export function CreateQRModal({ visible, onClose, onQRCreated }: CreateQRModalPr
             <Picker.Item label="WiFi Network" value="wifi" />
             <Picker.Item label="Contact Card" value="vcard" />
             <Picker.Item label="Plain Text" value="text" />
+            <Picker.Item label="Playlist" value="playlist" />
+            <Picker.Item label="Slideshow" value="slideshow" />
           </Picker>
         </View>
       </View>
 
-      <View style={styles.inputGroup}>
-        <ThemedText style={styles.label}>Content *</ThemedText>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={formData.url}
-          onChangeText={(text) => setFormData({ ...formData, url: text })}
-          placeholder={getContentPlaceholder(contentType)}
-          placeholderTextColor="#999"
-          multiline
-          numberOfLines={4}
-        />
-      </View>
+      {/* Playlist Selection */}
+      {contentType === 'playlist' && (
+        <>
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.label}>Select Playlist *</ThemedText>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedPlaylistId}
+                onValueChange={(value) => setSelectedPlaylistId(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Choose a playlist..." value="" />
+                {playlists.map((playlist) => (
+                  <Picker.Item 
+                    key={playlist.id} 
+                    label={playlist.name} 
+                    value={playlist.id} 
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <View style={styles.switchRow}>
+              <ThemedText style={styles.label}>Requires Activation Code</ThemedText>
+              <Switch
+                value={requiresActivationCode}
+                onValueChange={setRequiresActivationCode}
+              />
+            </View>
+            <ThemedText style={styles.helperText}>
+              {requiresActivationCode 
+                ? 'Viewers will need an activation code or can preview for 30 seconds' 
+                : 'Playlist will play immediately when QR code is scanned'
+              }
+            </ThemedText>
+          </View>
+        </>
+      )}
+
+      {/* Slideshow Selection */}
+      {contentType === 'slideshow' && (
+        <>
+          <View style={styles.inputGroup}>
+            <ThemedText style={styles.label}>Select Slideshow *</ThemedText>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedSlideshowId}
+                onValueChange={(value) => setSelectedSlideshowId(value)}
+                style={styles.picker}
+              >
+                <Picker.Item label="Choose a slideshow..." value="" />
+                {slideshows.map((slideshow) => (
+                  <Picker.Item 
+                    key={slideshow.id} 
+                    label={slideshow.title} 
+                    value={slideshow.id} 
+                  />
+                ))}
+              </Picker>
+            </View>
+          </View>
+          
+          <View style={styles.inputGroup}>
+            <View style={styles.switchRow}>
+              <ThemedText style={styles.label}>Requires Activation Code</ThemedText>
+              <Switch
+                value={requiresActivationCode}
+                onValueChange={setRequiresActivationCode}
+              />
+            </View>
+            <ThemedText style={styles.helperText}>
+              {requiresActivationCode 
+                ? 'Viewers will need an activation code or can preview for 30 seconds' 
+                : 'Slideshow will start immediately when QR code is scanned'
+              }
+            </ThemedText>
+          </View>
+        </>
+      )}
+
+      {/* Regular Content Input for other types */}
+      {contentType !== 'playlist' && contentType !== 'slideshow' && (
+        <View style={styles.inputGroup}>
+          <ThemedText style={styles.label}>Content *</ThemedText>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={formData.url}
+            onChangeText={(text) => setFormData({ ...formData, url: text })}
+            placeholder={getContentPlaceholder(contentType)}
+            placeholderTextColor="#999"
+            multiline
+            numberOfLines={4}
+          />
+        </View>
+      )}
 
       <View style={styles.inputGroup}>
         <ThemedText style={styles.label}>Description</ThemedText>
@@ -620,5 +797,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     lineHeight: 18,
+  },
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#666',
+    fontStyle: 'italic',
   },
 });
