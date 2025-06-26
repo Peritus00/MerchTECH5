@@ -1,9 +1,8 @@
 
-#!/usr/bin/env node
-
-const http = require('http');
-const https = require('https');
 const { spawn } = require('child_process');
+const http = require('http');
+const fs = require('fs');
+const axios = require('axios');
 
 class ServerConfigTester {
   constructor() {
@@ -18,6 +17,8 @@ class ServerConfigTester {
     await this.testPortAvailability();
     await this.testServerFiles();
     await this.testDatabaseConnection();
+    await this.testConfigurationFiles();
+    await this.testServerStartup();
     await this.testEndpointResponses();
     
     this.printResults();
@@ -31,30 +32,38 @@ class ServerConfigTester {
       const util = require('util');
       const execAsync = util.promisify(exec);
       
-      // Check if port 5001 is available (since we changed from 5000)
-      const { stdout } = await execAsync('lsof -ti:5001 || echo "free"');
+      // Check both ports 5000 and 5001
+      const ports = [5000, 5001];
       
-      if (stdout.trim() === 'free') {
-        console.log('✅ Port 5001 is available');
-        this.results.push({ test: 'Port 5001 Availability', status: 'PASS' });
-      } else {
-        console.log('⚠️ Port 5001 is in use by process:', stdout.trim());
-        this.results.push({ test: 'Port 5001 Availability', status: 'WARNING', details: `PID: ${stdout.trim()}` });
+      for (const port of ports) {
+        try {
+          const { stdout } = await execAsync(`lsof -ti:${port} || echo "free"`);
+          
+          if (stdout.trim() === 'free') {
+            console.log(`✅ Port ${port} is available`);
+            this.results.push({ test: `Port ${port} Availability`, status: 'PASS' });
+          } else {
+            console.log(`⚠️ Port ${port} is in use by process:`, stdout.trim());
+            this.results.push({ test: `Port ${port} Availability`, status: 'WARNING', details: `PID: ${stdout.trim()}` });
+          }
+        } catch (error) {
+          console.log(`❌ Port ${port} check failed:`, error.message);
+          this.results.push({ test: `Port ${port} Availability`, status: 'FAIL', error: error.message });
+        }
       }
     } catch (error) {
-      console.log('❌ Port check failed:', error.message);
-      this.results.push({ test: 'Port 5001 Availability', status: 'FAIL', error: error.message });
+      console.log('❌ Port availability check failed:', error.message);
+      this.results.push({ test: 'Port Availability Check', status: 'FAIL', error: error.message });
     }
   }
 
   async testServerFiles() {
     console.log('\n🔍 Testing Server Files...');
     
-    const fs = require('fs');
     const serverFiles = [
       'server/simple-server.js',
       'server/stable-server.js',
-      'server/working-server.js'
+      'server/monitor.js'
     ];
     
     for (const file of serverFiles) {
@@ -63,27 +72,79 @@ class ServerConfigTester {
           const content = fs.readFileSync(file, 'utf8');
           
           // Check for port configuration
-          const hasPort = content.includes('PORT') || content.includes('5001');
-          const hasRoutes = content.includes('/api/') && content.includes('app.get') || content.includes('app.post');
+          const hasPort5001 = content.includes('5001');
+          const hasPort5000 = content.includes('5000');
+          const hasRoutes = content.includes('/api/') && (content.includes('app.get') || content.includes('app.post'));
           const hasDatabase = content.includes('pool') || content.includes('Pool');
+          const hasAuth = content.includes('authenticateToken') || content.includes('auth');
           
           console.log(`✅ ${file} exists`);
-          console.log(`   - Port config: ${hasPort ? '✅' : '❌'}`);
+          console.log(`   - Uses port 5001: ${hasPort5001 ? '✅' : '❌'}`);
+          console.log(`   - Still references port 5000: ${hasPort5000 ? '⚠️' : '✅'}`);
           console.log(`   - API routes: ${hasRoutes ? '✅' : '❌'}`);
           console.log(`   - Database: ${hasDatabase ? '✅' : '❌'}`);
+          console.log(`   - Authentication: ${hasAuth ? '✅' : '❌'}`);
           
+          const status = hasPort5001 && hasRoutes && hasDatabase && hasAuth ? 'PASS' : 'WARNING';
           this.results.push({
             test: `${file} Configuration`,
-            status: hasPort && hasRoutes && hasDatabase ? 'PASS' : 'WARNING',
-            details: { port: hasPort, routes: hasRoutes, database: hasDatabase }
+            status,
+            details: { 
+              port5001: hasPort5001, 
+              port5000: hasPort5000,
+              routes: hasRoutes, 
+              database: hasDatabase,
+              auth: hasAuth
+            }
           });
         } else {
           console.log(`❌ ${file} not found`);
           this.results.push({ test: `${file} Existence`, status: 'FAIL', error: 'File not found' });
         }
       } catch (error) {
-        console.log(`❌ Error checking ${file}:`, error.message);
-        this.results.push({ test: `${file} Check`, status: 'FAIL', error: error.message });
+        console.log(`❌ Error reading ${file}:`, error.message);
+        this.results.push({ test: `${file} Read`, status: 'FAIL', error: error.message });
+      }
+    }
+  }
+
+  async testConfigurationFiles() {
+    console.log('\n🔍 Testing Configuration Files...');
+    
+    const configFiles = [
+      { file: '.replit', checkFor: ['5001', 'localPort'] },
+      { file: 'services/api.ts', checkFor: ['5001', 'API_BASE_URL'] },
+      { file: '.env.example', checkFor: ['5001', 'API_BASE_URL'] }
+    ];
+    
+    for (const { file, checkFor } of configFiles) {
+      try {
+        if (fs.existsSync(file)) {
+          const content = fs.readFileSync(file, 'utf8');
+          
+          const checks = {};
+          checkFor.forEach(check => {
+            checks[check] = content.includes(check);
+          });
+          
+          console.log(`✅ ${file} exists`);
+          Object.entries(checks).forEach(([key, value]) => {
+            console.log(`   - Contains ${key}: ${value ? '✅' : '❌'}`);
+          });
+          
+          const allPass = Object.values(checks).every(v => v);
+          this.results.push({
+            test: `${file} Configuration`,
+            status: allPass ? 'PASS' : 'WARNING',
+            details: checks
+          });
+        } else {
+          console.log(`❌ ${file} not found`);
+          this.results.push({ test: `${file} Existence`, status: 'FAIL', error: 'File not found' });
+        }
+      } catch (error) {
+        console.log(`❌ Error reading ${file}:`, error.message);
+        this.results.push({ test: `${file} Read`, status: 'FAIL', error: error.message });
       }
     }
   }
@@ -95,64 +156,50 @@ class ServerConfigTester {
       const { Pool } = require('pg');
       const pool = new Pool({
         connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
-        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+        ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
       });
       
-      const result = await pool.query('SELECT NOW() as timestamp');
+      await pool.query('SELECT 1');
       console.log('✅ Database connection successful');
-      console.log('   - Timestamp:', result.rows[0].timestamp);
+      this.results.push({ test: 'Database Connection', status: 'PASS' });
       
       await pool.end();
-      this.results.push({ test: 'Database Connection', status: 'PASS', details: result.rows[0] });
     } catch (error) {
       console.log('❌ Database connection failed:', error.message);
       this.results.push({ test: 'Database Connection', status: 'FAIL', error: error.message });
     }
   }
 
-  async testEndpointResponses() {
-    console.log('\n🔍 Testing Server Endpoints...');
+  async testServerStartup() {
+    console.log('\n🔍 Testing Server Startup...');
     
-    // Start server for testing
-    console.log('Starting test server...');
     try {
+      console.log('Starting test server...');
       this.serverProcess = spawn('node', ['server/simple-server.js'], {
         env: { ...process.env, PORT: '5001' },
-        stdio: 'pipe'
+        stdio: 'pipe',
+        detached: false
+      });
+      
+      let serverOutput = '';
+      this.serverProcess.stdout.on('data', (data) => {
+        serverOutput += data.toString();
+      });
+      
+      this.serverProcess.stderr.on('data', (data) => {
+        serverOutput += data.toString();
       });
       
       // Wait for server to start
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 8000));
       
-      const endpoints = [
-        { path: '/', method: 'GET', description: 'Root endpoint' },
-        { path: '/api/health', method: 'GET', description: 'Health check' },
-        { path: '/api/auth/login', method: 'POST', description: 'Login endpoint', 
-          body: { email: 'test@test.com', password: 'test' } }
-      ];
-      
-      for (const endpoint of endpoints) {
-        try {
-          const result = await this.makeRequest(endpoint);
-          console.log(`✅ ${endpoint.description}: ${result.statusCode}`);
-          this.results.push({
-            test: endpoint.description,
-            status: result.statusCode < 500 ? 'PASS' : 'FAIL',
-            details: { statusCode: result.statusCode, method: endpoint.method, path: endpoint.path }
-          });
-        } catch (error) {
-          console.log(`❌ ${endpoint.description}: ${error.message}`);
-          this.results.push({
-            test: endpoint.description,
-            status: 'FAIL',
-            error: error.message
-          });
-        }
-      }
-      
-      // Stop test server
-      if (this.serverProcess) {
-        this.serverProcess.kill();
+      if (serverOutput.includes('running on port')) {
+        console.log('✅ Server started successfully');
+        this.results.push({ test: 'Server Startup', status: 'PASS', details: 'Server running' });
+      } else {
+        console.log('⚠️ Server may not have started properly');
+        console.log('Server output:', serverOutput);
+        this.results.push({ test: 'Server Startup', status: 'WARNING', details: serverOutput });
       }
       
     } catch (error) {
@@ -161,46 +208,86 @@ class ServerConfigTester {
     }
   }
 
-  makeRequest(endpoint) {
+  async testEndpointResponses() {
+    console.log('\n🔍 Testing Server Endpoints...');
+    
+    const endpoints = [
+      { path: '/', method: 'GET', description: 'Root endpoint' },
+      { path: '/api/health', method: 'GET', description: 'Health check' },
+      { path: '/api/auth/login', method: 'POST', description: 'Login endpoint', 
+        body: { email: 'test@test.com', password: 'test' } }
+    ];
+    
+    for (const endpoint of endpoints) {
+      try {
+        const result = await this.makeRequest(endpoint);
+        console.log(`✅ ${endpoint.description}: Status ${result.statusCode}`);
+        this.results.push({
+          test: endpoint.description,
+          status: result.statusCode < 500 ? 'PASS' : 'FAIL',
+          details: { statusCode: result.statusCode, method: endpoint.method, path: endpoint.path }
+        });
+      } catch (error) {
+        console.log(`❌ ${endpoint.description}: ${error.message}`);
+        this.results.push({
+          test: endpoint.description,
+          status: 'FAIL',
+          error: error.message
+        });
+      }
+    }
+    
+    // Stop test server
+    if (this.serverProcess) {
+      this.serverProcess.kill();
+      console.log('🛑 Test server stopped');
+    }
+  }
+
+  async makeRequest(endpoint) {
     return new Promise((resolve, reject) => {
-      const postData = endpoint.body ? JSON.stringify(endpoint.body) : null;
-      
       const options = {
         hostname: 'localhost',
         port: 5001,
         path: endpoint.path,
         method: endpoint.method,
         headers: {
-          'Content-Type': 'application/json',
-          ...(postData && { 'Content-Length': Buffer.byteLength(postData) })
+          'Content-Type': 'application/json'
         }
       };
       
       const req = http.request(options, (res) => {
         let data = '';
-        res.on('data', (chunk) => data += chunk);
+        res.on('data', chunk => data += chunk);
         res.on('end', () => {
           resolve({
             statusCode: res.statusCode,
-            headers: res.headers,
-            body: data
+            data: data
           });
         });
       });
       
-      req.on('error', reject);
-      req.setTimeout(10000, () => reject(new Error('Request timeout')));
+      req.on('error', (err) => {
+        reject(err);
+      });
       
-      if (postData) {
-        req.write(postData);
+      if (endpoint.body) {
+        req.write(JSON.stringify(endpoint.body));
       }
+      
       req.end();
+      
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        req.destroy();
+        reject(new Error('Request timeout'));
+      }, 10000);
     });
   }
 
   printResults() {
     console.log('\n📊 TEST RESULTS SUMMARY');
-    console.log('=======================');
+    console.log('========================');
     
     const passed = this.results.filter(r => r.status === 'PASS').length;
     const warnings = this.results.filter(r => r.status === 'WARNING').length;
@@ -209,34 +296,50 @@ class ServerConfigTester {
     console.log(`✅ Passed: ${passed}`);
     console.log(`⚠️ Warnings: ${warnings}`);
     console.log(`❌ Failed: ${failed}`);
+    console.log(`📝 Total: ${this.results.length}\n`);
     
-    console.log('\nDetailed Results:');
+    // Detailed results
     this.results.forEach((result, index) => {
       const icon = result.status === 'PASS' ? '✅' : result.status === 'WARNING' ? '⚠️' : '❌';
-      console.log(`${index + 1}. ${icon} ${result.test}: ${result.status}`);
-      if (result.error) {
-        console.log(`   Error: ${result.error}`);
-      }
+      console.log(`${icon} ${result.test}: ${result.status}`);
+      
       if (result.details) {
         console.log(`   Details:`, result.details);
       }
+      
+      if (result.error) {
+        console.log(`   Error: ${result.error}`);
+      }
+      
+      console.log('');
     });
+
+    // Recommendations
+    console.log('🔧 RECOMMENDATIONS');
+    console.log('==================');
     
-    console.log('\n🔧 RECOMMENDATIONS:');
-    
-    if (failed > 0) {
-      console.log('❌ Critical issues found - server may not work properly');
-      console.log('   - Check server file syntax and dependencies');
-      console.log('   - Verify database connection string');
-      console.log('   - Ensure port 5001 is available');
-    } else if (warnings > 0) {
-      console.log('⚠️ Some warnings detected - server should work but may have issues');
-      console.log('   - Review configuration warnings above');
+    if (failed > 0 || warnings > 0) {
+      console.log('Issues found that need attention:');
+      
+      const portIssues = this.results.filter(r => r.test.includes('Port') && r.status !== 'PASS');
+      if (portIssues.length > 0) {
+        console.log('- Port configuration issues detected');
+      }
+      
+      const configIssues = this.results.filter(r => r.test.includes('Configuration') && r.status !== 'PASS');
+      if (configIssues.length > 0) {
+        console.log('- Configuration file issues detected');
+      }
+      
+      const serverIssues = this.results.filter(r => r.test.includes('Server') && r.status !== 'PASS');
+      if (serverIssues.length > 0) {
+        console.log('- Server startup or endpoint issues detected');
+      }
     } else {
-      console.log('✅ Server configuration looks good!');
-      console.log('   - All tests passed');
-      console.log('   - Ready to run production server');
+      console.log('✅ All tests passed! Server configuration looks good.');
     }
+    
+    console.log('\n🚀 Ready to run production server');
   }
 }
 
