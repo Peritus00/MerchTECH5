@@ -1,0 +1,40 @@
+Action Plan to Address the Current Errors:
+The primary focus must be on the "Express router not properly initialized" error.
+
+Locate the "Router stack not found!" and "Express router not properly initialized" error in server/simple-server.js (line 1564, 1659):
+
+Open server/simple-server.js and go directly to these lines.
+
+This error usually indicates a problem with how express.Router() is being used or how middleware/routes are being app.use()'d or mounted.
+
+Common causes for "Express router not properly initialized":
+
+Typos or misordering of app.use() calls: Ensure express.json() (and express.urlencoded() if you handle form data) are used before your route definitions.
+
+Incorrect module.exports or require: If your routes are in separate files, ensure they are properly exported as express.Router() instances and correctly required and app.use()'d in your main server file.
+
+Missing app.use(router): You might be defining a router but not actually attaching it to your main Express app.
+
+Errors within a route definition: An uncaught synchronous error in a middleware or route handler that's run during server startup (e.g., if you have app.use('/some-setup', someFunction()) and someFunction() throws an error before app.listen() is called).
+
+Circular Dependencies: Less common, but if modules import each other in a loop, it can lead to uninitialized objects.
+
+Conditional Routing/Initialization: If parts of your router setup are behind conditions that aren't met during startup.
+
+Address ⚠️ Still references port 5000 in server/simple-server.js and server/monitor.js:
+
+Even if the primary port is 5001, any lingering hardcoded references to 5000 in these files are potential sources of bugs or confusion.
+
+Manually search these files for 5000 and change them to 5001 if they are meant to refer to your server's listening port. Be careful not to change Stripe amounts or other non-port related 5000s!
+
+Review server/stable-server.js:
+
+The test report claims it "still references port 5000: ✅". This ✅ is wrong. It should be ⚠️ if it still references 5000 and is meant to use 5001. You need to fix this file if it's meant to be used.
+
+monitor.js API routes: ❌ Database: ❌ Authentication: ❌:
+
+This isn't the primary issue, but it suggests monitor.js isn't fully configured to verify routes/database/auth properly. It might not be critical for getting the payment system running, but note it for later.
+
+Re-Run and Observe: After making changes in simple-server.js related to the router initialization, restart your Replit and re-run your test.
+
+Your current situation: The ports are free, the client-side config is good, database is connected. The problem has shifted from network routing to an internal Express server startup error, specifically around how the router is initialized and attached to the Express app. Focus on that simple-server.js file, especially the startServer and validateAndStart functions, and how app.use() and express.Router() are being utilized.
