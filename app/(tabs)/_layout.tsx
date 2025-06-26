@@ -22,36 +22,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="slideshows"
-        options={{
-          title: 'Slidesh...',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="activation-codes"
-        options={{
-          title: 'Access...',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'key' : 'key-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="store"
-        options={{
-          title: 'Store',
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'storefront' : 'storefront-outline'} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="explore"
         options={{
-          title: 'QR Co...',
+          title: 'QR',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'qr-code' : 'qr-code-outline'} color={color} />
           ),
@@ -76,11 +49,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="analytics"
+        name="slideshows"
         options={{
-          title: 'Analytc...',
+          title: 'Slideshows',
           tabBarIcon: ({ color, focused }) => (
-            <TabBarIcon name={focused ? 'bar-chart' : 'bar-chart-outline'} color={color} />
+            <TabBarIcon name={focused ? 'images' : 'images-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="store"
+        options={{
+          title: 'Store',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'storefront' : 'storefront-outline'} color={color} />
           ),
         }}
       />
@@ -94,9 +76,18 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="analytics"
+        options={{
+          title: 'Analytics',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'bar-chart' : 'bar-chart-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="resources"
         options={{
-          title: 'Resour...',
+          title: 'Resources',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'library' : 'library-outline'} color={color} />
           ),
@@ -108,6 +99,15 @@ export default function TabLayout() {
           title: 'Settings',
           tabBarIcon: ({ color, focused }) => (
             <TabBarIcon name={focused ? 'settings' : 'settings-outline'} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="activation-codes"
+        options={{
+          title: 'Access',
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIcon name={focused ? 'key' : 'key-outline'} color={color} />
           ),
         }}
       />
