@@ -876,7 +876,6 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
     // Don't allow deleting the protected admin
     const userCheck = await pool.query('SELECT username FROM users WHERE id = $1', [id]);
     if (userCheck.rows.length > 0 && userCheck.rows[0].username === 'djjetfuel') {
-      ```text
       return res.status(403).json({ error: 'Cannot delete protected admin account' });
     }
 
