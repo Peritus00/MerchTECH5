@@ -197,10 +197,6 @@ export default function SubscriptionCheckoutScreen() {
   };
 
   useEffect(() => {
-    if (selectedTier) {
-      setTier(selectedTier);
-    }
-
     // Listen for messages from Stripe success page (when opened in new tab)
     const handleMessage = (event) => {
       if (event.data?.type === 'SUBSCRIPTION_SUCCESS') {
@@ -214,7 +210,7 @@ export default function SubscriptionCheckoutScreen() {
       window.addEventListener('message', handleMessage);
       return () => window.removeEventListener('message', handleMessage);
     }
-  }, [selectedTier, router]);
+  }, [router]);
 
   if (!tierInfo) {
     return (
