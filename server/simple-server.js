@@ -1474,7 +1474,32 @@ async function initializeDatabase() {
       console.log('✅ Admin user password reset to: admin123! and permissions updated');
     }
 
-    console.log('Database connected and tables initialized');
+    console.log('Database tables initialized successfully');
+
+    // Create dev account if it doesn't exist
+    try {
+      const existingDev = await pool.query(
+        'SELECT id FROM users WHERE email = $1',
+        ['djjetfuel@gmail.com']
+      );
+
+      if (existingDev.rows.length === 0) {
+        const saltRounds = 12;
+        const hashedPassword = await bcrypt.hash('Kerrie321', saltRounds);
+
+        await pool.query(
+          `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user, is_admin, created_at, updated_at)
+           VALUES ($1, $2, $3, true, 'premium', false, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+          ['djjetfuel@gmail.com', 'djjetfuel', hashedPassword]
+        );
+
+        console.log('✅ Dev account created for djjetfuel@gmail.com');
+      } else {
+        console.log('✅ Dev account already exists for djjetfuel@gmail.com');
+      }
+    } catch (devError) {
+      console.error('Dev account creation error:', devError);
+    }
   } catch (error) {
     console.error('Database initialization error:', error);
     // Don't exit the process, just log the error
