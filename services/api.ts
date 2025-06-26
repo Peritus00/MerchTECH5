@@ -10,6 +10,8 @@ const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6a
 
 // Force override any environment variables that might interfere  
 process.env.EXPO_PUBLIC_API_URL = API_BASE_URL;
+process.env.API_BASE_URL = API_BASE_URL;
+process.env.REACT_NATIVE_API_URL = API_BASE_URL;
 
 console.log('Final API Base URL:', API_BASE_URL);
 
@@ -21,9 +23,18 @@ export const api = axios.create({
   },
 });
 
+// Force the baseURL to be correct in case it gets overridden
+api.defaults.baseURL = API_BASE_URL;
+
 // Request interceptor to add auth token and debug logging
 api.interceptors.request.use(
   async (config) => {
+    // Ensure baseURL is always correct
+    if (!config.baseURL || !config.baseURL.includes(':5000')) {
+      console.warn('🔴 API: Correcting baseURL to include port 5000');
+      config.baseURL = API_BASE_URL;
+    }
+    
     console.log('🔵 API Request:', {
       method: config.method?.toUpperCase(),
       url: config.url,
@@ -464,6 +475,7 @@ export const mediaAPI = {
 
   delete: async (id: number) => {
     console.log('🔴 API: Deleting media file with ID:', id);
+    console.log('🔴 API: Using base URL:', api.defaults.baseURL);
     try {
       const response = await api.delete(`/media/${id}`);
       console.log('🔴 API: Delete response:', response.data);
@@ -473,8 +485,19 @@ export const mediaAPI = {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
-        message: error.message
+        message: error.message,
+        fullURL: error.config ? `${error.config.baseURL}${error.config.url}` : 'Unknown'
       });
+      
+      // Provide user-friendly error messages
+      if (error.response?.status === 404) {
+        throw new Error('Media file not found or already deleted');
+      } else if (error.response?.status === 403) {
+        throw new Error('You do not have permission to delete this file');
+      } else if (!error.response) {
+        throw new Error('Unable to connect to server. Please check your internet connection.');
+      }
+      
       throw error;
     }
   }
