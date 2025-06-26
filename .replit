@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Start Clean Server"
+runButton = "Clean Start"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -294,6 +294,15 @@ args = "echo \"🚀 Starting server...\""
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "cd server && node simple-server.js"
+
+[[workflows.workflow]]
+name = "Clean Start"
+author = 42127692
+mode = "sequential"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node working-server.js"
 
 [deployment]
 run = ["sh", "-c", "cd server && node monitor.js"]
