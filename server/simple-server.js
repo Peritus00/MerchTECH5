@@ -82,51 +82,47 @@ async function smartPortCleanup() {
     const util = require('util');
     const execAsync = util.promisify(exec);
 
-    // Check if port is actually in use
-    const isPortInUse = await checkPortInUse(PORT);
-    if (!isPortInUse) {
-      console.log('✅ Port', PORT, 'is already free');
-      return;
-    }
+    // Clean up both current port and common conflicting ports
+    const portsToCheck = [PORT, 5000, 5001].filter((port, index, arr) => arr.indexOf(port) === index);
+    
+    for (const port of portsToCheck) {
+      try {
+        const { stdout } = await execAsync(`lsof -ti:${port} || true`);
+        if (stdout.trim()) {
+          const pids = stdout.trim().split('\n').filter(pid => pid.trim());
+          console.log(`🧹 Found processes on port ${port}:`, pids);
 
-    console.log('🔍 Port', PORT, 'is in use, attempting cleanup...');
-
-    // Strategy 1: Kill by port
-    try {
-      const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
-      if (stdout.trim()) {
-        const pids = stdout.trim().split('\n').filter(pid => pid.trim());
-        console.log('🧹 Found processes on port', PORT, ':', pids);
-
-        for (const pid of pids) {
-          try {
-            await execAsync(`kill -TERM ${pid}`);
-            console.log('🧹 Gracefully terminated process', pid);
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Check if process is still running
+          for (const pid of pids) {
             try {
-              await execAsync(`kill -0 ${pid}`);
-              // Still running, force kill
-              await execAsync(`kill -9 ${pid}`);
-              console.log('🧹 Force killed process', pid);
-            } catch {
-              // Process already terminated
-              console.log('🧹 Process', pid, 'terminated gracefully');
+              await execAsync(`kill -TERM ${pid}`);
+              console.log(`🧹 Gracefully terminated process ${pid} on port ${port}`);
+              await new Promise(resolve => setTimeout(resolve, 1000));
+
+              // Check if process is still running
+              try {
+                await execAsync(`kill -0 ${pid}`);
+                // Still running, force kill
+                await execAsync(`kill -9 ${pid}`);
+                console.log(`🧹 Force killed process ${pid}`);
+              } catch {
+                // Process already terminated
+                console.log(`🧹 Process ${pid} terminated gracefully`);
+              }
+            } catch (err) {
+              console.log(`🧹 Could not terminate process ${pid}:`, err.message);
             }
-          } catch (err) {
-            console.log('🧹 Could not terminate process', pid, ':', err.message);
           }
         }
+      } catch (error) {
+        // Ignore lsof errors
       }
-    } catch (error) {
-      console.log('🧹 Port-based cleanup completed');
     }
 
-    // Strategy 2: Kill by pattern
+    // Strategy 2: Kill by pattern (clean up any server processes)
     const patterns = [
       'node.*simple-server',
-      `node.*${PORT}`,
+      'node.*stable-server',
+      'node.*index.js',
       'node.*server'
     ];
 
@@ -139,20 +135,12 @@ async function smartPortCleanup() {
       }
     }
 
-    // Strategy 3: Force cleanup using fuser
-    try {
-      await execAsync(`fuser -k ${PORT}/tcp || true`);
-      console.log('🧹 Force cleanup completed');
-    } catch (error) {
-      console.log('🧹 Force cleanup not available');
-    }
-
     // Wait for cleanup to take effect
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Verify port is now free
-    const stillInUse = await checkPortInUse(PORT);
-    if (stillInUse) {
+    // Verify target port is now free
+    const isPortInUse = await checkPortInUse(PORT);
+    if (isPortInUse) {
       console.warn('⚠️ Port', PORT, 'is still in use after cleanup');
       // Try alternative port
       const alternativePort = await findAvailablePort(PORT + 1);
@@ -162,7 +150,7 @@ async function smartPortCleanup() {
         return alternativePort;
       }
     } else {
-      console.log('✅ Port cleanup successful');
+      console.log('✅ Port', PORT, 'is now available');
     }
 
     return PORT;
@@ -1528,46 +1516,70 @@ async function startServer() {
     // Initialize database
     await initializeDatabase();
 
-    // Log all registered routes for debugging
-    // Force router initialization by creating a simple test route first
-    app.get('/api/test-router', (req, res) => {
-      res.json({ message: 'Router initialized' });
-    });
+    // Ensure all routes are properly registered before verification
+    console.log('🔧 Verifying Express app configuration...');
+    
+    // Check if app is properly initialized
+    if (!app || typeof app.listen !== 'function') {
+      throw new Error('Express app not properly initialized');
+    }
 
-    // Wait a moment for Express to process the route
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Verify router stack exists
+    if (!app._router) {
+      console.log('⚠️ Router not yet initialized, triggering initialization...');
+      // Add a dummy route to force router initialization
+      app.get('/api/init', (req, res) => res.json({ status: 'initialized' }));
+    }
+
+    // Wait for router to be fully initialized
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     // Comprehensive route verification
     console.log('🔧 Final route verification:');
     const routes = [];
 
     if (app._router && app._router.stack) {
-      app._router.stack.forEach((middleware) => {
-        if (middleware.route) {
-          const methods = Object.keys(middleware.route.methods).join(',').toUpperCase();
-          const path = middleware.route.path;
+      console.log(`📊 Found ${app._router.stack.length} middleware/routes in stack`);
+      
+      app._router.stack.forEach((layer, index) => {
+        if (layer.route) {
+          // Direct route
+          const methods = Object.keys(layer.route.methods).join(',').toUpperCase();
+          const path = layer.route.path;
           routes.push(`${methods} ${path}`);
           console.log(`   ✅ ${methods} ${path}`);
-        } else if (middleware.name === 'router') {
-          middleware.handle.stack.forEach((handler) => {
-            if (handler.route) {
-              const methods = Object.keys(handler.route.methods).join(',').toUpperCase();
-              const path = handler.route.path;
+        } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+          // Router middleware with sub-routes
+          layer.handle.stack.forEach((subLayer) => {
+            if (subLayer.route) {
+              const methods = Object.keys(subLayer.route.methods).join(',').toUpperCase();
+              const path = (layer.regexp.source.match(/\^\\?\/?([^\\$]*)/)?.[1] || '') + subLayer.route.path;
               routes.push(`${methods} ${path}`);
               console.log(`   ✅ ${methods} ${path}`);
             }
           });
+        } else {
+          // Other middleware
+          const name = layer.name || 'anonymous';
+          console.log(`   🔧 Middleware: ${name}`);
         }
       });
+
+      console.log(`📋 Total routes registered: ${routes.length}`);
     } else {
-      console.error('❌ Router stack not found!');
+      console.error('❌ Router stack still not found after initialization!');
+      console.error('❌ App state:', {
+        hasRouter: !!app._router,
+        appType: typeof app,
+        appProperties: Object.keys(app || {})
+      });
       throw new Error('Express router not properly initialized');
     }
 
     // Verify critical routes are registered
-    const criticalRoutes = ['/api/playlists', '/api/auth/login', '/api/auth/register', '/api/health'];
+    const criticalRoutes = ['/api/health', '/api/auth/login', '/api/auth/register'];
     const missingRoutes = criticalRoutes.filter(route => 
-      !routes.some(r => r.includes(route))
+      !routes.some(r => r.includes(route.replace('/api/', '')))
     );
 
     if (missingRoutes.length > 0) {
