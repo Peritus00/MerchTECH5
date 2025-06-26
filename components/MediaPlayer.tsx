@@ -11,8 +11,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { Audio } from 'expo-av';
-import { Video, ResizeMode } from 'expo-video';
+import { Audio } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';

@@ -10,7 +10,6 @@ import {
   Linking,
 } from 'react-native';
 import { Audio } from 'expo-audio';
-import { Video, ResizeMode } from 'expo-video';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
