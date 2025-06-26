@@ -9,23 +9,65 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database connection
+console.log('🚀 Starting working server...');
+console.log('🔍 Environment check:');
+console.log('  - PORT:', PORT);
+console.log('  - DATABASE_URL:', process.env.DATABASE_URL ? 'Set' : 'Not set');
+console.log('  - JWT_SECRET:', process.env.JWT_SECRET ? 'Set' : 'Not set');
+
+// Database connection with better error handling
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 10,
+  connectionTimeoutMillis: 10000,
 });
+
+// Test database connection
+pool.connect()
+  .then(client => {
+    console.log('✅ Database connected successfully');
+    client.release();
+  })
+  .catch(err => {
+    console.error('❌ Database connection failed:', err.message);
+  });
 
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_jwt_secret_djjetfuel_merchtech_2024_secure_key';
 
-// Middleware
+// Enhanced CORS configuration
 app.use(cors({
-  origin: true,
-  credentials: true
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+
+    // Allow all Replit development URLs
+    if (origin.includes('.replit.dev') || origin.includes('.repl.co')) {
+      return callback(null, true);
+    }
+
+    // Allow localhost for local development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+
+    // Allow all origins in development
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+  next();
+});
 
 // Authentication middleware
 const authenticateToken = (req, res, next) => {
@@ -50,6 +92,7 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, async (err, user) => {
     if (err) {
+      console.error('JWT verification error:', err.message);
       return res.status(403).json({ error: 'Invalid token' });
     }
 
@@ -64,7 +107,7 @@ const authenticateToken = (req, res, next) => {
         user.isAdmin = dbUser.rows[0].is_admin;
       }
     } catch (dbError) {
-      console.error('Error checking admin status:', dbError);
+      console.error('Error checking admin status:', dbError.message);
     }
 
     req.user = user;
@@ -77,31 +120,38 @@ app.get('/', (req, res) => {
   res.json({ 
     message: 'MerchTech QR API Server', 
     status: 'running',
+    version: '1.0.0',
     port: PORT,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    pid: process.pid
   });
 });
 
 app.get('/api/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
+    const result = await pool.query('SELECT NOW() as timestamp');
     res.json({ 
       status: 'healthy', 
       database: 'connected',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      dbTimestamp: result.rows[0].timestamp,
+      port: PORT,
+      pid: process.pid
     });
   } catch (error) {
+    console.error('Health check error:', error.message);
     res.status(503).json({ 
       status: 'unhealthy', 
       database: 'disconnected',
-      error: error.message
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 });
 
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
-  console.log('🔵 LOGIN REQUEST:', req.body);
+  console.log('🔵 LOGIN REQUEST:', { email: req.body.email });
   
   try {
     const { email, password } = req.body;
@@ -358,26 +408,82 @@ async function initializeDatabase() {
 
     console.log('✅ Database initialized');
   } catch (error) {
-    console.error('❌ Database init error:', error);
+    console.error('❌ Database init error:', error.message);
   }
 }
+
+// Error handling
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Catch-all for undefined routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Start server
 async function startServer() {
   try {
     await initializeDatabase();
     
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('🚀 ================================');
       console.log(`🚀 Working server running on port ${PORT}`);
-      console.log(`📍 Health check: http://0.0.0.0:${PORT}/api/health`);
+      console.log(`📍 Local: http://0.0.0.0:${PORT}`);
+      console.log(`🌐 External: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}`);
+      console.log(`❤️ Health check: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
       console.log(`🔐 Dev login: djjetfuel@gmail.com / Kerrie321`);
+      console.log(`🔧 Process ID: ${process.pid}`);
       console.log('🚀 ================================');
     });
+
+    server.on('error', (error) => {
+      if (error.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+        process.exit(1);
+      } else {
+        console.error('❌ Server error:', error);
+      }
+    });
+
+    return server;
   } catch (error) {
-    console.error('❌ Server start error:', error);
+    console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully');
+  pool.end(() => {
+    console.log('📊 Database pool closed');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 SIGINT received, shutting down gracefully');
+  pool.end(() => {
+    console.log('📊 Database pool closed');
+    process.exit(0);
+  });
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 startServer();
