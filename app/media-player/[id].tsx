@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import MediaPlayer from '@/components/MediaPlayer';
@@ -26,51 +27,30 @@ export default function MediaPlayerScreen() {
 
   const loadPlaylistData = async () => {
     try {
-      // Mock data - replace with actual API call
-      const mockMediaFiles: MediaFile[] = [
-        {
-          id: 1,
-          uniqueId: 'audio-1',
-          title: 'Sample Track 1.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/audio1.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 5242880,
-          createdAt: new Date().toISOString(),
+      // Fetch actual playlist data from API
+      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
         },
-        {
-          id: 2,
-          uniqueId: 'audio-2',
-          title: 'Sample Track 2.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/audio2.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 4194304,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 3,
-          uniqueId: 'audio-3',
-          title: 'Sample Track 3.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/audio3.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 6291456,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      });
 
+      if (!response.ok) {
+        throw new Error(`Failed to load playlist: ${response.statusText}`);
+      }
+
+      const playlist = await response.json();
+      
       // Convert to format expected by MediaPlayer
-      const formattedFiles = mockMediaFiles.map(file => ({
+      const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
         id: file.id,
         title: file.title,
-        url: file.filePath, // In production, this would be the actual URL
+        url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
         fileType: file.fileType,
         contentType: file.contentType,
-      }));
+      })) || [];
 
       setMediaFiles(formattedFiles);
-      setPlaylistName(`Playlist ${id}`);
+      setPlaylistName(playlist.name || `Playlist ${id}`);
     } catch (error) {
       console.error('Error loading playlist:', error);
       Alert.alert('Error', 'Failed to load playlist');

@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -27,41 +28,30 @@ export default function PreviewPlayerScreen() {
 
   const loadPreviewData = async () => {
     try {
-      // Mock data - replace with actual API call
-      const mockMediaFiles: MediaFile[] = [
-        {
-          id: 1,
-          uniqueId: 'preview-1',
-          title: 'Preview Track 1.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/preview1.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 5242880,
-          createdAt: new Date().toISOString(),
+      // Fetch actual playlist data from API for preview
+      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
         },
-        {
-          id: 2,
-          uniqueId: 'preview-2',
-          title: 'Preview Track 2.mp3',
-          fileType: 'audio',
-          filePath: '/path/to/preview2.mp3',
-          contentType: 'audio/mpeg',
-          filesize: 4194304,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      });
 
+      if (!response.ok) {
+        throw new Error(`Failed to load playlist: ${response.statusText}`);
+      }
+
+      const playlist = await response.json();
+      
       // Convert to format expected by PreviewPlayer
-      const formattedFiles = mockMediaFiles.map(file => ({
+      const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
         id: file.id,
         title: file.title,
-        url: file.filePath, // In production, this would be the actual URL
+        url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
         fileType: file.fileType,
         contentType: file.contentType,
-      }));
+      })) || [];
 
       setMediaFiles(formattedFiles);
-      setPlaylistName(`Preview: Playlist ${id}`);
+      setPlaylistName(`Preview: ${playlist.name || `Playlist ${id}`}`);
     } catch (error) {
       console.error('Error loading preview:', error);
       Alert.alert('Error', 'Failed to load preview');

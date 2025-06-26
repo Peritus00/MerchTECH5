@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Playlist } from '@/shared/media-schema';
 import PreviewPlayer from '@/components/PreviewPlayer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -33,34 +34,26 @@ export default function PlaylistAccessScreen() {
 
   const fetchPlaylist = async () => {
     try {
-      // Mock data - replace with actual API call
-      const mockPlaylist: Playlist = {
-        id: id,
-        name: 'Hip Hop Hits Premium',
-        requiresActivationCode: true,
-        isPublic: true,
-        createdAt: new Date().toISOString(),
-        mediaFiles: [
-          {
-            id: 1,
-            uniqueId: 'audio-1',
-            title: 'Track 1.mp3',
-            fileType: 'audio',
-            filePath: '/path/to/audio1.mp3',
-            contentType: 'audio/mpeg',
-            createdAt: new Date().toISOString(),
-          },
-          {
-            id: 2,
-            uniqueId: 'audio-2',
-            title: 'Track 2.mp3',
-            fileType: 'audio',
-            filePath: '/path/to/audio2.mp3',
-            contentType: 'audio/mpeg',
-            createdAt: new Date().toISOString(),
-          },
-        ],
-      };
+      // Fetch actual playlist data from API
+      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load playlist: ${response.statusText}`);
+      }
+
+      const mockPlaylist = await response.json();
+
+      // Ensure mediaFiles have full URLs
+      if (mockPlaylist.mediaFiles) {
+        mockPlaylist.mediaFiles = mockPlaylist.mediaFiles.map((file: any) => ({
+          ...file,
+          filePath: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
+        }));
+      }
 
       setPlaylist(mockPlaylist);
     } catch (error) {

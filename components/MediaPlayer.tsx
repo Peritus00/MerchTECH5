@@ -11,8 +11,7 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { VideoView } from 'expo-video';
-import { useAudioPlayer } from 'expo-audio';
+import { Audio } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -101,15 +100,19 @@ export default function MediaPlayer({
       const track = mediaFiles[trackIndex];
       if (!track) return;
 
+      console.log('Loading track:', track.url);
+
       const { sound: newSound } = await Audio.Sound.createAsync(
         { uri: track.url },
         {
           shouldPlay: autoplay,
           volume: volume,
           isLooping: false,
-        },
-        onPlaybackStatusUpdate
+        }
       );
+
+      // Set up status update listener
+      newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
 
       setSound(newSound);
       setCurrentTrackIndex(trackIndex);
@@ -122,7 +125,7 @@ export default function MediaPlayer({
       }
     } catch (error) {
       console.error('Error loading track:', error);
-      Alert.alert('Error', 'Failed to load audio track');
+      Alert.alert('Error', `Failed to load audio track: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
