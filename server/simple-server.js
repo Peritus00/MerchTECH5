@@ -13,20 +13,20 @@ app.use(cors({
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    
+
     // Allow all Replit development URLs
     if (origin.includes('.replit.dev') || origin.includes('.repl.co')) {
       return callback(null, true);
     }
-    
+
     // Allow localhost for local development
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
-    
+
     // Log the origin for debugging
     console.log('🔴 SERVER: CORS request from origin:', origin);
-    
+
     // Allow all origins in development (fallback)
     return callback(null, true);
   },
@@ -417,7 +417,34 @@ app.post('/api/auth/register', async (req, res) => {
       tokenPreview: token.substring(0, 20) + '...'
     });
 
-    const responseData = {
+    console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
+
+    // Send verification email automatically
+    try {
+      const verificationToken = jwt.sign(
+        { email: user.email, type: 'email_verification' },
+        JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+
+      await pool.query(
+        'UPDATE users SET verification_token = $1 WHERE id = $2',
+        [verificationToken, user.id]
+      );
+
+      const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
+        `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+        'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+
+      console.log('🔴 SERVER: Auto-generated verification link:', verificationLink);
+      console.log('🔴 SERVER: (In production, this would be sent via email)');
+    } catch (emailError) {
+      console.error('🔴 SERVER: Failed to generate verification email:', emailError);
+    }
+
+    console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
+
+    res.status(201).json({
       user: {
         id: user.id,
         email: user.email,
@@ -432,19 +459,7 @@ app.post('/api/auth/register', async (req, res) => {
       },
       token,
       refreshToken: `refresh_${token}`
-    };
-
-    console.log('🔴 SERVER: Sending registration response:', {
-      hasUser: !!responseData.user,
-      hasToken: !!responseData.token,
-      userId: responseData.user?.id,
-      userEmail: responseData.user?.email
     });
-
-    console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
-    console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
-
-    res.status(201).json(responseData);
 
   } catch (error) {
     console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG START ============');
@@ -925,6 +940,101 @@ app.delete('/api/admin/users/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ==================== EMAIL ROUTES ====================
+
+// Send verification email
+app.post('/api/auth/send-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    console.log('🔴 SERVER: Send verification email requested for:', email);
+
+    // For now, simulate sending email (you can integrate with a real email service later)
+    // Generate a verification token
+    const verificationToken = jwt.sign(
+      { email, type: 'email_verification' },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    // Store the verification token in the database
+    await pool.query(
+      'UPDATE users SET verification_token = $1 WHERE email = $2',
+      [verificationToken, email]
+    );
+
+    // In a real implementation, you would send an actual email here
+    // For now, we'll just log the verification link
+    const verificationLink = `${process.env.REPLIT_DEV_DOMAIN ? 
+      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+      'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
+
+    console.log('🔴 SERVER: Verification email would be sent with link:', verificationLink);
+    console.log('🔴 SERVER: (Email service not configured - this is just a simulation)');
+
+    res.json({
+      success: true,
+      message: 'Verification email sent successfully',
+      // In development, include the verification link for testing
+      verificationLink: process.env.NODE_ENV === 'development' ? verificationLink : undefined
+    });
+
+  } catch (error) {
+    console.error('🔴 SERVER: Send verification email error:', error);
+    res.status(500).json({ error: 'Failed to send verification email' });
+  }
+});
+
+// Verify email endpoint
+app.get('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token } = req.query;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Verification token is required' });
+    }
+
+    console.log('🔴 SERVER: Email verification requested with token');
+
+    // Verify the token
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    if (decoded.type !== 'email_verification') {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+
+    // Update user as verified
+    const result = await pool.query(
+      `UPDATE users SET is_email_verified = true, verification_token = null 
+       WHERE email = $1 RETURNING id, email, username`,
+      [decoded.email]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log('🔴 SERVER: Email verified successfully for:', decoded.email);
+
+    // Redirect to success page
+    const redirectUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+      `https://${process.env.REPLIT_DEV_DOMAIN}` : 
+      'http://localhost:8081'}/auth/verify-email?verified=true`;
+
+    res.redirect(redirectUrl);
+
+  } catch (error) {
+    console.error('🔴 SERVER: Email verification error:', error);
+    res.status(400).json({ error: 'Invalid or expired verification token' });
+  }
+});
+
+// ==================== STRIPE ROUTES ====================
+
 // Database initialization function
 async function initializeDatabase() {
   try {
@@ -944,7 +1054,8 @@ async function initializeDatabase() {
         is_new_user BOOLEAN DEFAULT true,
         is_admin BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        verification_token VARCHAR(255)
       )
     `);
 
@@ -952,6 +1063,12 @@ async function initializeDatabase() {
     await pool.query(`
       ALTER TABLE users 
       ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT false
+    `);
+
+    // Add verification_token column if it doesn't exist
+    await pool.query(`
+        ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS verification_token VARCHAR(255)
     `);
 
     // Create qr_codes table if it doesn't exist

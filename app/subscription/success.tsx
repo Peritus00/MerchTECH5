@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -29,7 +30,40 @@ export default function SubscriptionSuccessScreen() {
     if (isNewUser && user?.isNewUser) {
       updateProfile({ isNewUser: false });
     }
-  }, [isNewUser, user, updateProfile]);
+
+    // Auto-redirect to dashboard after successful subscription
+    if (Platform.OS === 'web' && subscriptionTier) {
+      // If this is running in a new tab (opened from checkout), close it and redirect parent
+      const isInNewTab = window.opener !== null;
+      
+      if (isInNewTab) {
+        // Send message to parent window to redirect to dashboard
+        try {
+          window.opener.postMessage({ 
+            type: 'SUBSCRIPTION_SUCCESS', 
+            tier: subscriptionTier,
+            redirect: '/(tabs)/' 
+          }, '*');
+          
+          // Close this tab after a short delay
+          setTimeout(() => {
+            window.close();
+          }, 2000);
+        } catch (error) {
+          console.error('Error communicating with parent window:', error);
+          // Fallback: redirect this tab to dashboard
+          setTimeout(() => {
+            router.push('/(tabs)/');
+          }, 3000);
+        }
+      } else {
+        // If not in a new tab, redirect normally after showing success message
+        setTimeout(() => {
+          router.push('/(tabs)/');
+        }, 3000);
+      }
+    }
+  }, [isNewUser, user, updateProfile, subscriptionTier, router]);
 
   useEffect(() => {
     // Process the subscription update and send verification email
@@ -99,6 +133,7 @@ export default function SubscriptionSuccessScreen() {
 
         <ThemedText style={styles.description}>
           Your subscription is now active! You can start using all the features included in your plan.
+          {Platform.OS === 'web' && '\n\nRedirecting to dashboard in 3 seconds...'}
         </ThemedText>
 
         <View style={styles.buttonContainer}>

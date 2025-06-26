@@ -51,7 +51,7 @@ export default function SubscriptionCheckoutScreen() {
 
       const token = await AsyncStorage.getItem('authToken');
       console.log('🔥 Auth token exists:', !!token);
-      
+
       const requestBody = JSON.stringify({
         subscriptionTier: tier,
         amount: tierInfo.price, // Send price in dollars, server will convert to cents
@@ -62,9 +62,9 @@ export default function SubscriptionCheckoutScreen() {
           ? `${window.location.origin}/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
           : `https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/subscription/checkout?tier=${tier}&newUser=${isNewUser}`
       });
-      
+
       console.log('🔥 Request body:', requestBody);
-      
+
       const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
@@ -76,7 +76,7 @@ export default function SubscriptionCheckoutScreen() {
 
       console.log('🔥 Response status:', response.status);
       console.log('🔥 Response ok:', response.ok);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('🔥 Response error text:', errorText);
@@ -195,6 +195,26 @@ export default function SubscriptionCheckoutScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (selectedTier) {
+      setTier(selectedTier);
+    }
+
+    // Listen for messages from Stripe success page (when opened in new tab)
+    const handleMessage = (event) => {
+      if (event.data?.type === 'SUBSCRIPTION_SUCCESS') {
+        console.log('Received subscription success message:', event.data);
+        // Redirect to dashboard
+        router.push('/(tabs)/');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }
+  }, [selectedTier, router]);
 
   if (!tierInfo) {
     return (
