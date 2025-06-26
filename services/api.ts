@@ -1,21 +1,41 @@
 import axios from 'axios';
 
-// Get API base URL from environment variable with proper fallback
-const getApiBaseUrl = () => {
-  // Try multiple environment variable names
-  const envUrl = process.env.EXPO_PUBLIC_API_URL || 
-                 process.env.API_BASE_URL || 
-                 process.env.REACT_NATIVE_API_URL;
+// API Configuration with dynamic port handling
+const getApiBaseUrl = (): string => {
+  if (typeof window !== 'undefined') {
+    // Web environment
+    const currentUrl = window.location;
+    const protocol = currentUrl.protocol;
+    const hostname = currentUrl.hostname;
 
-  if (envUrl) {
-    console.log('Using environment API URL:', envUrl);
-    return envUrl;
+    // For Replit, use the current domain with port 5001
+    if (hostname.includes('replit.dev') || hostname.includes('replit.co')) {
+      return `${protocol}//${hostname.replace(/:\d+$/, '')}:5001/api`;
+    }
+
+    // For localhost development
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${protocol}//${hostname}:5001/api`;
+    }
+
+    // Default fallback
+    return `${protocol}//${hostname}:5001/api`;
   }
 
-  // Fallback to hardcoded URL with correct port
-  const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
-  console.log('Using fallback API URL:', fallbackUrl);
-  return fallbackUrl;
+  // Server-side or React Native environment
+  const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.EXPO_PUBLIC_API_URL;
+
+  if (replitDomain) {
+    // Handle full URL
+    if (replitDomain.startsWith('http')) {
+      return replitDomain.endsWith('/api') ? replitDomain : `${replitDomain}/api`;
+    }
+    // Handle domain only
+    return `https://${replitDomain}:5001/api`;
+  }
+
+  // Local development fallback
+  return 'http://localhost:5001/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
