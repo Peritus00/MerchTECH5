@@ -1,0 +1,85 @@
+Of course. Based on the test results you provided, here is a detailed analysis of the instabilities and a prioritized action plan to rectify them.
+
+### **Executive Summary: The Core Problem**
+
+The most critical issue is that **your server is not staying online after it starts**. The test logs show the server begins to initialize, but it receives a `SIGTERM` signal and performs a "graceful shutdown" *before* it can ever accept connections. This is why all your endpoint tests are failing with `connect ECONNREFUSED 127.0.0.1:5001`—nothing is listening on that port when the tests try to connect.
+
+The action plan will focus on resolving this startup failure first, as it is the root cause of the most significant errors.
+
+-----
+
+### **Action Plan to Rectify Server Instabilities**
+
+Here are the steps to fix the issues, ordered by priority.
+
+#### **Priority 1: Fix the Server Startup Failure**
+
+The server is being terminated prematurely. The log line `🧹 Starting smart port cleanup for port 5001` followed by `🛑 SIGTERM received` is the key indicator. This often happens in containerized environments like Replit for one of two main reasons.
+
+**Action 1.1: Bind the Server to `0.0.0.0`**
+
+In Replit (and other container-based platforms), a server must listen on the host `0.0.0.0` (all available network interfaces) rather than `127.0.0.1` (localhost). Replit's proxy then forwards external requests to your application on the correct port. If you bind to `127.0.0.1`, the proxy can't "see" your server, assumes the port is not being used correctly, and may shut it down.
+
+  * **Locate the `app.listen()` command** in your `server/stable-server.js` and `server/simple-server.js` files.
+  * **Modify it** to explicitly include the host `0.0.0.0`.
+
+**Example (for Express.js):**
+
+```javascript
+// Change this:
+const PORT = process.env.PORT || 5001;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+// To this:
+const PORT = process.env.PORT || 5001;
+const HOST = '0.0.0.0'; 
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on http://${HOST}:${PORT}`);
+});
+```
+
+**Action 1.2: Manually Run the Server and Check for Errors**
+
+The test script might be hiding a more fundamental startup error.
+
+  * Open the **Shell** tab in your Replit workspace.
+  * Manually start your main server file with the command: `node server/stable-server.js`
+  * Carefully observe the console output. Look for any error messages that occur *before* the server prints its "listening on port..." message. An unhandled exception during initialization (like a problem with Stripe or Brevo configuration, even if it says "configured successfully") could be crashing the process, causing Replit to clean it up.
+
+#### **Priority 2: Resolve Configuration Warnings**
+
+These warnings indicate that your migration from port 5000 to 5001 was not fully completed. This can lead to future bugs and confusion.
+
+**Action 2.1: Remove Hardcoded References to Port `5000`**
+
+The test results show that `server/simple-server.js` and `server/monitor.js` still contain references to port `5000`.
+
+  * **Perform a project-wide search** (use the search tool in the Replit sidebar) for the string `5000`.
+  * **Replace all hardcoded instances** with `process.env.PORT`. This makes your server more flexible and respects the environment configuration provided by Replit.
+  * The only place `5000` might remain is in a comment or a `.env.example` file as a default suggestion, but even there, `5001` is preferable for consistency.
+
+**Action 2.2: Review the Purpose of `server/monitor.js`**
+
+The `server/monitor.js` file has several warnings (`routes: false`, `database: false`, `auth: false`).
+
+  * **Determine its function.** Is this an old, unused file? Is it a lightweight health-checker that is *not* supposed to have routes and a database connection?
+  * **If it's obsolete, delete it.** This prevents confusion and future errors.
+  * **If it's intentional,** ensure it's not being run by mistake as your main server. Your `.replit` configuration file should point to `server/stable-server.js` as the main run command.
+
+#### **Priority 3: Re-run Tests**
+
+After completing the steps above, run your test suite again.
+
+  * The server startup should no longer show a `SIGTERM` warning.
+  * The endpoint tests for Root, Health Check, and Login should now pass.
+
+### **Summary of Recommended Changes**
+
+1.  **Modify `app.listen`:** Change `app.listen(PORT)` to `app.listen(PORT, '0.0.0.0')` in all your server files (`stable-server.js`, `simple-server.js`). This is the most likely fix for the `ECONNREFUSED` errors.
+2.  **Clean Up Port References:** Search for and remove all active code referencing port `5000`. Replace them with `process.env.PORT`.
+3.  **Audit Server Files:** Decide the fate of `server/monitor.js` and `server/simple-server.js`. If `stable-server.js` is your definitive server, consider removing the others to simplify the project.
+4.  **Validate:** Run your test script again to confirm that the `FAIL` and `WARNING` messages have been resolved.
+
+By following this plan, you should be able to stabilize your server configuration and get your application running reliably on Replit.
