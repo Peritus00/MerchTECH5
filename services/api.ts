@@ -26,10 +26,20 @@ const getApiBaseUrl = (): string => {
   return fallbackUrl;
 };
 
-// Get the API base URL from environment variable
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+// Force port 5000 for all API calls
+const getCorrectApiUrl = () => {
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+    if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
+      return `https://${hostname}:5000/api`;
+    }
+  }
+  return 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+};
 
-console.log('API Base URL:', API_BASE_URL);
+const API_BASE_URL = getCorrectApiUrl();
+
+console.log('API Base URL (FORCED PORT 5000):', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
