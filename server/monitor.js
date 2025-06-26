@@ -35,7 +35,7 @@ function startServer() {
 function healthCheck() {
   const options = {
     hostname: 'localhost',
-    port: 5000,
+    port: 5001,
     path: '/api/health',
     method: 'GET',
     timeout: 10000

@@ -127,7 +127,7 @@ class HealthMonitor {
 
   async getServerStatus() {
     try {
-      const response = await axios.get('http://localhost:5000/api/health', {
+      const response = await axios.get('http://localhost:5001/api/health', {
         timeout: 3000
       });
       return response.data;
@@ -139,7 +139,7 @@ class HealthMonitor {
   async requestServerRestart() {
     try {
       // Send restart signal to server
-      const response = await axios.post('http://localhost:5000/api/admin/restart', {}, {
+      const response = await axios.post('http://localhost:5001/api/admin/restart', {}, {
         timeout: 5000,
         headers: {
           'Authorization': 'Bearer dev_jwt_token_djjetfuel_12345' // Admin token
