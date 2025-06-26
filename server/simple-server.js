@@ -872,7 +872,6 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-The code is modified to update the media_files table creation with new columns and rename existing ones.```text
 // ==================== ANALYTICS ENDPOINTS ====================
 
 // Get analytics summary
