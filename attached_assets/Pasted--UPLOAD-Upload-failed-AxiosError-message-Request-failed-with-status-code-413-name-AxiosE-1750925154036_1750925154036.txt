@@ -1,0 +1,31 @@
+🔴 UPLOAD: Upload failed: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
+
+at t.value (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:17465)
+at new t (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:12630)
+at t.value (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:32766)
+at https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/__replco/static/devtools/eruda/3.2.3/eruda.js:2:34400
+Error selecting/uploading file: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
+
+🔴 MEDIA: Upload error: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
+
+🔴 MEDIA: Starting file upload...
+🔴 UPLOAD: Uploading media to database: 
+Object {title: "Squid games type beat.mp3", filePath: "data:audio/mpeg;base64,SUQzAwAAAAcqFVRJVDIAAAAWAAAAU3F1aWQgZ2FtZXMgdHlwZSBiZWF0VFBFMQAAABoAAABCbGFj…", url: "data:audio/mpeg;base64,SUQzAwAAAAcqFVRJVDIAAAAWAAAAU3F1aWQgZ2FtZXMgdHlwZSBiZWF0VFBFMQAAABoAAABCbGFj…", filename: "Squid games type beat.mp3", fileType: "audio", …}
+🔵 API Request: 
+Object {method: "POST", url: "/media", baseURL: "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api", fullURL: "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/media", headers: AxiosHeaders, …}
+🔴 API Response Error: 
+Object {status: 413, statusText: "Request Entity Too Large", url: "/media", baseURL: "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api", fullURL: "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/media", …}
+API Error Details: 
+Object {message: "Request failed with status code 413", code: "ERR_BAD_REQUEST", baseURL: "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api", status: 413, url: "/media", …}
+
+🔴 UPLOAD: Upload failed: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
+
+Error selecting/uploading file: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
+
+🔴 MEDIA: Upload error: 
+AxiosError {message: "Request failed with status code 413", name: "AxiosError", code: "ERR_BAD_REQUEST", config: {…}, request: XMLHttpRequest, …}
