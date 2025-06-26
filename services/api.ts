@@ -2,7 +2,7 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// Get the API base URL - simplified version
+// Get the API base URL - simplified version with explicit port
 const getApiBaseUrl = (): string => {
   // Check environment variable first
   if (process.env.EXPO_PUBLIC_API_URL) {
@@ -10,19 +10,18 @@ const getApiBaseUrl = (): string => {
     return process.env.EXPO_PUBLIC_API_URL;
   }
 
-  // For web environment in Replit
+  // For web environment in Replit - use explicit port 5000
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
-      // Use the current hostname without port - Replit routes internally
-      const baseUrl = `https://${hostname}/api`;
-      console.log('API Base URL (web):', baseUrl);
+      const baseUrl = `https://${hostname}:5000/api`;
+      console.log('API Base URL (web with port):', baseUrl);
       return baseUrl;
     }
   }
 
-  // Local development fallback
-  const fallbackUrl = 'http://localhost:5000/api';
+  // Fallback with explicit port
+  const fallbackUrl = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
   console.log('API Base URL (fallback):', fallbackUrl);
   return fallbackUrl;
 };
