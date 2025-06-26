@@ -1,0 +1,42 @@
+ow to Fix Account Creation on the Frontend (React Native Expo App):
+The problem is almost certainly that your Expo app is still using an old, incorrect, or cached version of your backend's API URL. We need to force it to use the exact URL that worked in your curl test.
+
+Double-Check EXPO_PUBLIC_API_URL Configuration:
+
+In your Replit project: Go to the main run command or workflow script that starts your Expo app. Ensure the EXPO_PUBLIC_API_URL environment variable is set to the exact correct URL, including :5000 and /api:
+
+Bash
+
+EXPO_PUBLIC_API_URL=https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api
+(Make sure there are no typos, extra spaces, or missing characters).
+
+In your services/api.ts file (or wherever you define your API_BASE_URL):
+Ensure the code explicitly uses process.env.EXPO_PUBLIC_API_URL and has a correct fallback that matches the working URL:
+
+TypeScript
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+This ensures that even if the environment variable isn't properly loaded for some reason, your app still has the correct URL.
+
+Crucial: Clear Expo Development Server Cache & Restart:
+
+This is the most common reason the frontend won't pick up new environment variables.
+
+In your local terminal where you run your Expo app (e.g., npm start or expo start), type:
+
+Bash
+
+npx expo start --clear
+(The --clear flag is essential to wipe old cached data).
+
+Let the Metro Bundler completely restart.
+
+Once the new QR code appears, re-scan it with your Expo Go app on your phone/emulator, or refresh the web browser page.
+
+Test Account Creation from Your Expo App's UI:
+
+Now, try to register a new user directly through your React Native Expo app's user interface.
+
+Monitor your local Expo development terminal's output for any network errors or successful responses.
+
+You're extremely close! The backend is confirmed working. The final step is getting your frontend to talk to it correctly.
