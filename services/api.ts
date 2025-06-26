@@ -26,20 +26,22 @@ const getApiBaseUrl = (): string => {
   return fallbackUrl;
 };
 
-// Force port 5000 for all API calls
+// Force correct API URL for Replit environment
 const getCorrectApiUrl = () => {
   if (typeof window !== 'undefined') {
     const hostname = window.location.hostname;
     if (hostname.includes('replit.dev') || hostname.includes('repl.co')) {
-      return `https://${hostname}:5000/api`;
+      // Don't include port in external URL - Replit handles this automatically
+      return `https://${hostname}/api`;
     }
   }
-  return 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
+  // For development fallback, also remove port
+  return 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev/api';
 };
 
 const API_BASE_URL = getCorrectApiUrl();
 
-console.log('API Base URL (FORCED PORT 5000):', API_BASE_URL);
+console.log('API Base URL (NO PORT):', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
