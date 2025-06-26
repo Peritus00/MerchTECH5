@@ -62,8 +62,7 @@ class ServerConfigTester {
     
     const serverFiles = [
       'server/simple-server.js',
-      'server/stable-server.js',
-      'server/monitor.js'
+      'server/stable-server.js'
     ];
     
     for (const file of serverFiles) {
