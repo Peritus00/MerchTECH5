@@ -8,6 +8,9 @@ import { Platform } from 'react-native';
 const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api';
 // -----------------------------------------------------------------------
 
+// Force override any environment variables that might interfere
+process.env.EXPO_PUBLIC_API_URL = API_BASE_URL;
+
 console.log('Final API Base URL:', API_BASE_URL);
 
 export const api = axios.create({
