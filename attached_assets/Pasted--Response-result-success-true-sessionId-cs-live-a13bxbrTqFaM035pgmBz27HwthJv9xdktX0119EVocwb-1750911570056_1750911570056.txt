@@ -1,0 +1,29 @@
+🔥 Response result: {success: true, sessionId: 'cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK', url: 'https://checkout.stripe.com/c/pay/cs_live_a13bxbrT…WBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl'}
+checkout.stripe.com/c/pay/cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK#fidkdWxOYHwnPyd1blppbHNgWjA0V1RxSExCRGdQYFw8V1J%2FfEtDZGEwYzc0RzZ9d2pLZk1tRjZtNVM2ZmJjVW9xa0ZwPX9JQTVWME10TlBMNUhid3ZxZDd9MTU0dHE3MHVMX31RZ1I2dG18NTVjS2FVT0NrbCcpJ2N3amhWYHdzYHcnP3F3cGApJ2lkfGpwcVF8dWAnPyd2bGtiaWBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl:1 <link rel=preload> uses an unsupported `as` valueUnderstand this warning
+checkout.stripe.com/c/pay/cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK#fidkdWxOYHwnPyd1blppbHNgWjA0V1RxSExCRGdQYFw8V1J%2FfEtDZGEwYzc0RzZ9d2pLZk1tRjZtNVM2ZmJjVW9xa0ZwPX9JQTVWME10TlBMNUhid3ZxZDd9MTU0dHE3MHVMX31RZ1I2dG18NTVjS2FVT0NrbCcpJ2N3amhWYHdzYHcnP3F3cGApJ2lkfGpwcVF8dWAnPyd2bGtiaWBabHFgaCcpJ2BrZGdpYFVpZGZgbWppYWB3dic%2FcXdwYHgl:1 <link rel=preload> uses an unsupported `as` valueUnderstand this warning
+cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6 Uncaught (in promise) Error: Cannot find module './en'
+    at cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6:301466
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+Promise.then
+r @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+t.Z @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+D @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+H @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+Y @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6Understand this error
+checkout-app-init-0d90471e773299047dd08bec249cf3c6.js:1 Stripe Checkout is not able to run in an iFrame. Please redirect to Checkout at the top level.
+n.Z @ checkout-app-init-0d90471e773299047dd08bec249cf3c6.js:1
+o @ checkout-app-init-0d90471e773299047dd08bec249cf3c6.js:1
+eW @ checkout-app-init-0d90471e773299047dd08bec249cf3c6.js:1
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+Promise.then
+Q @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+Promise.then
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6
+(anonymous) @ cs_live_a13bxbrTqFaM035pgmBz27HwthJv9xdktX0119EVocwbqIcnoq3pBLQtHK:6Understand this error
+[Violation] Potential permissions policy violation: payment is not allowed in this document.Understand this error
+[Violation] Potential permissions policy violation: payment is not allowed in this document.
