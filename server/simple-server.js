@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5001; // Use port 5001 consistently
+const PORT = 5001; // Force port 5001
 
 // Self-healing configuration
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
@@ -1503,14 +1503,11 @@ async function startServer() {
                                    // Ensure it's idempotent. It is, so this is fine.
 
         // Start the server with enhanced error handling
-        // Make sure the PORT constant accurately reflects process.env.PORT if it was changed by smartPortCleanup
-        const currentPort = parseInt(process.env.PORT || PORT);
-
-        serverInstance = app.listen(currentPort, '0.0.0.0', () => { // Use currentPort for listening
-            console.log(`✅ Production server running on port ${currentPort}`);
-            console.log(`📍 API available at: http://0.0.0.0:${currentPort}/api`);
-            console.log(`🌐 External API URL: https://${process.env.REPLIT_DEV_DOMAIN || 'YOUR_REPLIT_DOMAIN'}:${currentPort}/api`);
-            console.log(`❤️ Health check URL: https://${process.env.REPLIT_DEV_DOMAIN || 'YOUR_REPLIT_DOMAIN'}:${currentPort}/api/health`);
+        serverInstance = app.listen(PORT, '0.0.0.0', () => {
+            console.log(`✅ Production server running on port ${PORT}`);
+            console.log(`📍 API available at: http://0.0.0.0:${PORT}/api`);
+            console.log(`🌐 External API URL: https://${process.env.REPLIT_DEV_DOMAIN || 'YOUR_REPLIT_DOMAIN'}/api`);
+            console.log(`❤️ Health check URL: https://${process.env.REPLIT_DEV_DOMAIN || 'YOUR_REPLIT_DOMAIN'}/api/health`);
             console.log(`🔒 Process ID: ${process.pid}`);
             console.log(`🔄 Restart attempts: ${restartAttempts}`);
             console.log(`🛡️ Self-healing enabled`);

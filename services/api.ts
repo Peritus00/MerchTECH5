@@ -11,8 +11,8 @@ const getCurrentDomain = (): string => {
   return process.env.REPLIT_DEV_DOMAIN || '4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev';
 };
 
-// HARDCODED to port 5001 - this should override any caching issues
-const API_BASE_URL = `https://${getCurrentDomain()}:${FORCED_PORT}/api`;
+// For Replit, we need to use the domain without the port in the URL
+const API_BASE_URL = `https://${getCurrentDomain()}/api`;
 
 console.log('🔵 FORCED API Base URL:', API_BASE_URL);
 
