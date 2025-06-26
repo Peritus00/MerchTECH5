@@ -158,6 +158,52 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  // Handle developer fallback token
+  if (token === 'dev_jwt_token_djjetfuel_12345') {
+    req.user = {
+      userId: 1,
+      id: 1,
+      email: 'djjetfuel@gmail.com',
+      username: 'djjetfuel',
+      isAdmin: true
+    };
+    return next();
+  }
+
+  jwt.verify(token, JWT_SECRET, async (err, user) => {
+    if (err) {
+      console.error('JWT verification error:', err);
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+
+    // Check if user is admin in database
+    try {
+      const dbUser = await pool.query(
+        'SELECT is_admin FROM users WHERE id = $1',
+        [user.userId]
+      );
+
+      if (dbUser.rows.length > 0) {
+        user.isAdmin = dbUser.rows[0].is_admin;
+      }
+    } catch (dbError) {
+      console.error('Error checking admin status:', dbError);
+    }
+
+    req.user = user;
+    next();
+  });
+};
+
 // Playlist endpoints
 app.get('/api/playlists', authenticateToken, async (req, res) => {
   try {
@@ -690,51 +736,7 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// Authentication middleware
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  // Handle developer fallback token
-  if (token === 'dev_jwt_token_djjetfuel_12345') {
-    req.user = {
-      userId: 1,
-      id: 1,
-      email: 'djjetfuel@gmail.com',
-      username: 'djjetfuel',
-      isAdmin: true
-    };
-    return next();
-  }
-
-  jwt.verify(token, JWT_SECRET, async (err, user) => {
-    if (err) {
-      console.error('JWT verification error:', err);
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-
-    // Check if user is admin in database
-    try {
-      const dbUser = await pool.query(
-        'SELECT is_admin FROM users WHERE id = $1',
-        [user.userId]
-      );
-
-      if (dbUser.rows.length > 0) {
-        user.isAdmin = dbUser.rows[0].is_admin;
-      }
-    } catch (dbError) {
-      console.error('Error checking admin status:', dbError);
-    }
-
-    req.user = user;
-    next();
-  });
-};
 
 // ==================== QR CODE ENDPOINTS ====================
 
