@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -40,7 +39,7 @@ export default function PreviewPlayerScreen() {
       }
 
       const playlist = await response.json();
-      
+
       // Convert to format expected by PreviewPlayer
       const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
         id: file.id,

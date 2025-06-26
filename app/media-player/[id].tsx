@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -28,12 +27,12 @@ export default function MediaPlayerScreen() {
   const loadPlaylistData = async () => {
     try {
       console.log('🔴 MEDIA_PLAYER: Loading playlist with ID:', id);
-      
+
       const { playlistAPI } = await import('@/services/api');
       const playlist = await playlistAPI.getById(id);
-      
+
       console.log('🔴 MEDIA_PLAYER: Loaded playlist:', playlist);
-      
+
       // Convert to format expected by MediaPlayer
       const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
         id: file.id,

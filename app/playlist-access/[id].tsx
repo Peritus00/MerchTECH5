@@ -35,10 +35,10 @@ export default function PlaylistAccessScreen() {
   const fetchPlaylist = async () => {
     try {
       console.log('🔴 PLAYLIST_ACCESS: Fetching playlist with ID:', id);
-      
+
       const { playlistAPI } = await import('@/services/api');
       const playlistData = await playlistAPI.getById(id);
-      
+
       console.log('🔴 PLAYLIST_ACCESS: Loaded playlist:', playlistData);
 
       // Ensure mediaFiles have full URLs
