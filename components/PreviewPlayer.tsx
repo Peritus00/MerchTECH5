@@ -5,10 +5,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ScrollView,
+  Image,
+  Linking,
 } from 'react-native';
 import { Audio } from 'expo-audio';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ProductLink } from '@/shared/media-schema';
 
 interface MediaFile {
   id: number;
@@ -23,6 +27,7 @@ interface PreviewPlayerProps {
   playlistName: string;
   previewDuration?: number; // in seconds, default 25
   autoplay?: boolean;
+  productLinks?: ProductLink[];
 }
 
 // Global audio instance manager to prevent multiple players
@@ -34,6 +39,7 @@ export default function PreviewPlayer({
   playlistName,
   previewDuration = 25,
   autoplay = false,
+  productLinks = [],
 }: PreviewPlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -243,6 +249,20 @@ export default function PreviewPlayer({
     }
   };
 
+  // Handle product link press
+  const handleProductLinkPress = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (supported) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', 'Cannot open this URL');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to open link');
+    }
+  };
+
   if (!currentMedia) {
     return (
       <View style={styles.emptyContainer}>
@@ -252,11 +272,12 @@ export default function PreviewPlayer({
   }
 
   return (
-    <LinearGradient
-      colors={['#7c3aed', '#3b82f6']}
-      style={styles.container}
-    >
-      <View style={styles.content}>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#7c3aed', '#3b82f6']}
+        style={styles.playerContainer}
+      >
+        <View style={styles.content}>
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.playlistName}>{playlistName}</Text>
@@ -339,15 +360,68 @@ export default function PreviewPlayer({
             <Text style={styles.endSubtext}>Scan QR code for full access</Text>
           </View>
         )}
-      </View>
-    </LinearGradient>
+        </View>
+      </LinearGradient>
+
+      {/* Product Links Section */}
+      {productLinks.length > 0 && (
+        <View style={styles.productLinksContainer}>
+          <Text style={styles.productLinksTitle}>Featured Products</Text>
+          <ScrollView 
+            style={styles.productLinksList}
+            showsVerticalScrollIndicator={false}
+          >
+            {productLinks
+              .filter(link => link.isActive)
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((link) => (
+                <TouchableOpacity
+                  key={link.id}
+                  style={styles.productLinkCard}
+                  onPress={() => handleProductLinkPress(link.url)}
+                >
+                  {link.imageUrl ? (
+                    <Image
+                      source={{ uri: link.imageUrl }}
+                      style={styles.productLinkImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.productLinkPlaceholder}>
+                      <MaterialIcons name="shopping-bag" size={24} color="#9ca3af" />
+                    </View>
+                  )}
+                  <View style={styles.productLinkContent}>
+                    <Text style={styles.productLinkTitle} numberOfLines={2}>
+                      {link.title}
+                    </Text>
+                    {link.description && (
+                      <Text style={styles.productLinkDescription} numberOfLines={2}>
+                        {link.description}
+                      </Text>
+                    )}
+                    <View style={styles.productLinkAction}>
+                      <MaterialIcons name="open-in-new" size={16} color="#3b82f6" />
+                      <Text style={styles.productLinkActionText}>View Product</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
     flex: 1,
     minHeight: 400,
+  },
+  playerContainer: {
+    flex: 2,
   },
   content: {
     flex: 1,
@@ -461,5 +535,70 @@ const styles = StyleSheet.create({
   endSubtext: {
     fontSize: 14,
     color: '#e0e7ff',
+  },
+  productLinksContainer: {
+    flex: 1,
+    minWidth: 200,
+    maxWidth: 300,
+    backgroundColor: '#ffffff',
+    padding: 16,
+  },
+  productLinksTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  productLinksList: {
+    flex: 1,
+  },
+  productLinkCard: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  productLinkImage: {
+    width: '100%',
+    height: 80,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  productLinkPlaceholder: {
+    width: '100%',
+    height: 80,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  productLinkContent: {
+    flex: 1,
+  },
+  productLinkTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  productLinkDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  productLinkAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  productLinkActionText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#3b82f6',
   },
 });

@@ -7,11 +7,15 @@ import {
   Alert,
   Dimensions,
   ActivityIndicator,
+  ScrollView,
+  Image,
+  Linking,
 } from 'react-native';
 import { VideoView } from 'expo-video';
 import { useAudioPlayer } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import { MaterialIcons } from '@expo/vector-icons';
 
 interface MediaFile {
   id: number;
@@ -21,12 +25,23 @@ interface MediaFile {
   contentType: string;
 }
 
+interface ProductLink {
+  id: string;
+  title: string;
+  url: string;
+  imageUrl?: string;
+  description?: string;
+  displayOrder: number;
+  isActive: boolean;
+}
+
 interface MediaPlayerProps {
   mediaFiles: MediaFile[];
   playlistId?: string;
   shouldAutoplay?: boolean;
   onSetPlaybackState?: (isPlaying: boolean, trackIndex: number) => void;
   qrCodeId?: string;
+  productLinks?: ProductLink[];
 }
 
 export default function MediaPlayer({
@@ -35,6 +50,7 @@ export default function MediaPlayer({
   onSetPlaybackState,
   playlistId,
   qrCodeId,
+  productLinks = [],
 }: MediaPlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -186,6 +202,10 @@ export default function MediaPlayer({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  const handleProductLinkPress = (url: string) => {
+    Linking.openURL(url).catch((err) => console.error("Couldn't load page", err));
+  };
+
   if (!currentTrack) {
     return (
       <View style={styles.emptyContainer}>
@@ -298,6 +318,54 @@ export default function MediaPlayer({
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Product Links Section */}
+      {productLinks.length > 0 && (
+        <View style={styles.productLinksContainer}>
+          <Text style={styles.productLinksTitle}>Featured Products</Text>
+          <ScrollView 
+            style={styles.productLinksList}
+            showsVerticalScrollIndicator={false}
+          >
+            {productLinks
+              .filter(link => link.isActive)
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((link) => (
+                <TouchableOpacity
+                  key={link.id}
+                  style={styles.productLinkCard}
+                  onPress={() => handleProductLinkPress(link.url)}
+                >
+                  {link.imageUrl ? (
+                    <Image
+                      source={{ uri: link.imageUrl }}
+                      style={styles.productLinkImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.productLinkPlaceholder}>
+                      <MaterialIcons name="shopping-bag" size={24} color="#9ca3af" />
+                    </View>
+                  )}
+                  <View style={styles.productLinkContent}>
+                    <Text style={styles.productLinkTitle} numberOfLines={2}>
+                      {link.title}
+                    </Text>
+                    {link.description && (
+                      <Text style={styles.productLinkDescription} numberOfLines={2}>
+                        {link.description}
+                      </Text>
+                    )}
+                    <View style={styles.productLinkAction}>
+                      <MaterialIcons name="open-in-new" size={16} color="#3b82f6" />
+                      <Text style={styles.productLinkActionText}>View Product</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              ))}
+          </ScrollView>
+        </View>
+      )}
     </View>
   );
 }
@@ -412,5 +480,63 @@ const styles = StyleSheet.create({
   activePlaylistItemText: {
     color: '#3b82f6',
     fontWeight: '500',
+  },
+  productLinksContainer: {
+    marginTop: 16,
+  },
+  productLinksTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  productLinksList: {
+    maxHeight: 200,
+  },
+  productLinkCard: {
+    flexDirection: 'row',
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  productLinkImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    marginRight: 12,
+  },
+  productLinkPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 6,
+    marginRight: 12,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  productLinkContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  productLinkTitle: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  productLinkDescription: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  productLinkAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  productLinkActionText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    marginLeft: 4,
   },
 });
