@@ -487,7 +487,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     if (existingUser.rows.length > 0) {
       console.log('🔴 SERVER: User already exists, returning error');
-      return res.status(400).json({ 
+      return res.status(409).json({ 
         error: 'Email or username already exists' 
       });
     }
@@ -1335,52 +1335,52 @@ app.post('/api/auth/send-verification', async (req, res) => {
   try {
     console.log('🔴 SERVER: Send verification email endpoint hit');
     const { email } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
-    
+
     console.log('🔴 SERVER: Sending verification email to:', email);
-    
+
     // Find the user
     const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    
+
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     const user = userResult.rows[0];
-    
+
     // Generate verification token
     const verificationToken = jwt.sign(
       { email: user.email, userId: user.id },
       process.env.JWT_SECRET,
       { expiresIn: '24h' }
     );
-    
+
     // Update user with verification token
     await pool.query(
       'UPDATE users SET verification_token = $1 WHERE id = $2',
       [verificationToken, user.id]
     );
-    
+
     // Create verification URL
     const verificationUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
       `https://${process.env.REPLIT_DEV_DOMAIN}:5000` : 
       'http://localhost:5000'}/api/auth/verify-email/${verificationToken}`;
-    
+
     console.log('🔴 SERVER: Verification URL:', verificationUrl);
-    
+
     // For now, just log the verification URL (you can integrate with email service later)
     console.log('🔴 SERVER: Email verification link:', verificationUrl);
     console.log('🔴 SERVER: Verification email would be sent to:', email);
-    
+
     res.json({ 
       success: true, 
       message: 'Verification email sent successfully',
       verificationUrl: verificationUrl // Remove this in production
     });
-    
+
   } catch (error) {
     console.error('🔴 SERVER: Send verification email error:', error);
     res.status(500).json({ error: 'Failed to send verification email' });
@@ -1491,7 +1491,7 @@ async function handleAccountVerification() {
 app.post('/api/test/send-email', async (req, res) => {
   try {
     const { email, testType = 'verification' } = req.body;
-    
+
     if (!email) {
       return res.status(400).json({ error: 'Email is required' });
     }
@@ -1583,7 +1583,7 @@ app.post('/api/test/send-email', async (req, res) => {
           '🧪 Test Email - MerchTech QR Platform',
           testEmailHtml
         );
-        
+
         console.log('✅ SERVER: Test email sent successfully:', result);
         res.json({
           success: true,
@@ -1745,4 +1745,145 @@ process.on('SIGTERM', () => {
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   process.exit(0);
+});
+
+async function getUserByEmail(email) {
+  const result = await pool.query(
+    'SELECT id FROM users WHERE email = $1',
+    [email]
+  );
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+async function getUserByUsername(username) {
+  const result = await pool.query(
+    'SELECT id FROM users WHERE username = $1',
+    [username]
+  );
+  return result.rows.length > 0 ? result.rows[0] : null;
+}
+
+app.post('/api/auth/register', async (req, res) => {
+  console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG START ============');
+  console.log('🔴 SERVER: Registration endpoint hit at:', new Date().toISOString());
+  console.log('🔴 SERVER: Request method:', req.method);
+  console.log('🔴 SERVER: Request URL:', req.url);
+  console.log('🔴 SERVER: Request headers:', req.headers);
+  console.log('🔴 SERVER: Request body:', req.body);
+
+  try {
+    const { email, password, username } = req.body;
+
+    console.log('🔴 SERVER: Extracted registration data:', {
+      email,
+      username,
+      hasPassword: !!password,
+      passwordLength: password?.length
+    });
+
+    if (!email || !password || !username) {
+      console.error('🔴 SERVER: Missing required fields:', {
+        hasEmail: !!email,
+        hasPassword: !!password,
+        hasUsername: !!username
+      });
+      return res.status(400).json({ error: 'Email, password, and username are required' });
+    }
+
+    console.log('🔴 SERVER: Checking for existing user...');
+    // Check if user already exists
+    const existingUser = await getUserByEmail(email);
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        error: 'This email address is already registered',
+        message: 'This email address is already registered'
+      });
+    }
+
+    const existingUsername = await getUserByUsername(username);
+    if (existingUsername) {
+      return res.status(409).json({
+        success: false,
+        error: 'This username is already taken',
+        message: 'This username is already taken'
+      });
+    }
+
+    console.log('🔴 SERVER: Hashing password...');
+    // Hash password
+    const bcrypt = require('bcrypt');
+    const saltRounds = 12;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+    console.log('🔴 SERVER: Password hashed successfully');
+
+    console.log('🔴 SERVER: Inserting new user into database...');
+    // Insert new user
+    const result = await pool.query(
+      `INSERT INTO users (email, username, password_hash, is_email_verified, subscription_tier, is_new_user, created_at, updated_at)
+       VALUES ($1, $2, $3, false, 'free', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, email, username, is_email_verified, subscription_tier, is_new_user, created_at, updated_at`,
+      [email, username, hashedPassword]
+    );
+
+    console.log('🔴 SERVER: Database insert result:', {
+      rowCount: result.rowCount,
+      rows: result.rows
+    });
+
+    const user = result.rows[0];
+    console.log('🔴 SERVER: Created user:', user);
+
+    console.log('🔴 SERVER: Generating JWT token...');
+    // Generate JWT token
+    const jwt = require('jsonwebtoken');
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        username: user.username
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    console.log('🔴 SERVER: JWT token generated:', {
+      tokenLength: token.length,
+      tokenPreview: token.substring(0, 20) + '...'
+    });
+
+    console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
+    console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
+
+    res.status(201).json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        firstName: null,
+        lastName: null,
+        isEmailVerified: user.is_email_verified,
+        subscriptionTier: user.subscription_tier,
+        isNewUser: user.is_new_user,
+        createdAt: user.created_at,
+        updatedAt: user.updated_at
+      },
+      token,
+      refreshToken: `refresh_${token}`
+    });
+
+  } catch (error) {
+    console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG START ============');
+    console.error('🔴 SERVER: Registration error:', error);
+    console.error('🔴 SERVER: Error type:', typeof error);
+    console.error('🔴 SERVER: Error name:', error.name);
+    console.error('🔴 SERVER: Error message:', error.message);
+    console.error('🔴 SERVER: Error stack:', error.stack);
+    console.error('🔴 SERVER: ============ REGISTRATION ERROR DEBUG END ============');
+
+    res.status(500).json({
+      error: 'Internal server error during registration',
+      details: error.message
+    });
+  }
 });

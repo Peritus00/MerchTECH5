@@ -239,20 +239,38 @@ export const authAPI = {
 
       // Provide detailed error messages based on status codes
       if (error.response?.status === 404) {
-        throw new Error('Registration endpoint not found. Server may not be running correctly.');
+        throw new Error('Registration service is currently unavailable. Please try again later.');
       } else if (error.response?.status === 400) {
-        const errorMsg = error.response?.data?.error || error.message;
-        if (errorMsg.includes('Email or username already exists') || errorMsg.includes('already registered') || errorMsg.includes('already taken')) {
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message;
+        
+        // Check for specific duplicate errors
+        if (errorMsg.includes('email') && (errorMsg.includes('already') || errorMsg.includes('exists') || errorMsg.includes('taken'))) {
+          throw new Error('This email address is already registered. Please use a different email or try logging in.');
+        } else if (errorMsg.includes('username') && (errorMsg.includes('already') || errorMsg.includes('exists') || errorMsg.includes('taken'))) {
+          throw new Error('This username is already taken. Please choose a different username.');
+        } else if (errorMsg.includes('Email or username already exists') || errorMsg.includes('already registered')) {
           throw new Error('This email or username is already registered. Please try logging in instead, or use different credentials.');
+        } else if (errorMsg.includes('validation') || errorMsg.includes('invalid')) {
+          throw new Error('Please check your information and try again.');
         } else {
-          throw new Error(errorMsg || 'Invalid registration data. Please check your information.');
+          throw new Error(errorMsg || 'Registration failed. Please check your information and try again.');
+        }
+      } else if (error.response?.status === 409) {
+        // Conflict status typically indicates duplicate data
+        const errorMsg = error.response?.data?.error || error.response?.data?.message || '';
+        if (errorMsg.includes('email')) {
+          throw new Error('This email address is already registered. Please use a different email.');
+        } else if (errorMsg.includes('username')) {
+          throw new Error('This username is already taken. Please choose a different username.');
+        } else {
+          throw new Error('This email or username is already registered. Please use different credentials.');
         }
       } else if (error.response?.status === 500) {
-        throw new Error('Server error. Please try again in a few moments.');
+        throw new Error('Server error occurred during registration. Please try again in a few moments.');
       } else if (error.response?.status === 422) {
-        throw new Error('Registration data validation failed. Please check all required fields.');
+        throw new Error('Invalid registration data. Please check all required fields and try again.');
       } else if (!error.response) {
-        throw new Error('Network connection error. Please check your internet connection and try again.');
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
       }
 
       // Generic fallback
