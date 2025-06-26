@@ -1,0 +1,1408 @@
+GET https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/assets/?unstable_path=.%2Fnode_modules%2F%40expo%2Fvector-icons%2Fbuild%2Fvendor%2Freact-native-vector-icons%2FFonts/Ionicons.ttf net::ERR_ABORTED 500 (Internal Server Error)Understand this error
+entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:58250 Uncaught (in promise) NetworkError: A network error occurred.
+componentDidMount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:58250
+await in componentDidMount
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193439
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:181962
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187414
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187478
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187468
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187478Understand this error
+4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/assets/?unstable_path=.%2Fnode_modules%2F%40expo%2Fvector-icons%2Fbuild%2Fvendor%2Freact-native-vector-icons%2FFonts/MaterialIcons.ttf:1 
+            
+            
+           GET https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/assets/?unstable_path=.%2Fnode_modules%2F%40expo%2Fvector-icons%2Fbuild%2Fvendor%2Freact-native-vector-icons%2FFonts/MaterialIcons.ttf net::ERR_ABORTED 500 (Internal Server Error)Understand this error
+entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:58250 Uncaught (in promise) NetworkError: A network error occurred.
+componentDidMount @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:58250
+await in componentDidMount
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193439
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:181962
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187414
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187478
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187468
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187478
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187468
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187450
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187485
+recursivelyTraverseLayoutEffects @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187902
+commitLayoutEffectOnFiber @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:187409Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Console.js:61 Unexpected text node: . A text node cannot be a child of a <View>.
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9743
+View @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9741
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193417
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184734
+updateForwardRef @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185909
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:186677
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:181962
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189206
+workLoopSync @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189100
+renderRootSync @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189084
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:188821
+performSyncWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189655
+flushSyncWorkAcrossRoots_impl @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189578
+processRootScheduleInMicrotask @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189595
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189666Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+28Console.js:61 Unexpected text node: . A text node cannot be a child of a <View>.
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9743
+View @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:9741
+react-stack-bottom-frame @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:193417
+renderWithHooks @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:184734
+updateForwardRef @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185909
+beginWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:186677
+runWithFiberInDEV @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:181962
+performUnitOfWork @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189206
+workLoopSync @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189100
+renderRootSync @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189084
+performWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:188821
+performSyncWorkOnRoot @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189655
+flushSyncWorkAcrossRoots_impl @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189578
+flushSyncWork$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:188964
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183427
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Registration: Starting registration process...
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT REGISTRATION DEBUG START ============
+Console.js:61 🔴 Auth: Starting registration for: {email: 'perrie.benton@gmail.com', username: 'peritus00', hasPassword: true, passwordLength: 9, timestamp: '2025-06-26T04:10:53.062Z'}
+Console.js:61 🔴 Auth: Starting registration for: perrie.benton@gmail.com
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE REGISTRATION DEBUG START ============
+Console.js:61 🔴 AuthService: Starting registration process for: {email: 'perrie.benton@gmail.com', username: 'peritus00', hasPassword: true, passwordLength: 9, timestamp: '2025-06-26T04:10:53.062Z'}
+Console.js:61 🔴 AuthService: Validating registration data...
+Console.js:61 🔴 AuthService: Registration data validation passed
+Console.js:61 🔴 AuthService: Calling authAPI.register...
+Console.js:61 🔴 API: ============ REGISTRATION DEBUG START ============
+Console.js:61 🔴 API: Registration attempt with: {email: 'perrie.benton@gmail.com', username: 'peritus00', passwordLength: 9, timestamp: '2025-06-26T04:10:53.063Z'}
+Console.js:61 🔴 API: Current base URL: https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api
+Console.js:61 🔴 API: Full registration URL: https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register
+Console.js:61 🔴 API: Testing server health...
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Console.js:61 🔵 API Request: {method: 'GET', url: '/health', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/health', headers: AxiosHeaders, …}
+Console.js:61 🟢 API Response: {status: 200, url: '/health', data: {…}}
+Console.js:61 🔴 API: Server health check successful: {status: 'healthy', database: 'connected', users: 10, timestamp: '2025-06-26T04:10:54.235Z', server: 'simple-server.js'}
+Console.js:61 🔴 API: Making registration request...
+Console.js:61 🔵 API Request: {method: 'POST', url: '/auth/register', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register', headers: AxiosHeaders, …}
+Network.js:159 
+            
+            
+           POST https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register 400 (Bad Request)
+t.enable.e.send @ Network.js:159
+dispatchXhrRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:85940
+xhr @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:85778
+dispatchRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84743
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84151
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84047
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84203
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83999
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82893
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API Response Error: {status: 400, statusText: 'Bad Request', url: '/auth/register', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register', …}
+Console.js:61 API Error Details: {message: 'Request failed with status code 400', code: 'ERR_BAD_REQUEST', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', status: 400, url: '/auth/register', …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82820
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84151
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84047
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84203
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83999
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82893
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: ============ REGISTRATION ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82923
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Registration failed with error: AxiosError {message: 'Request failed with status code 400', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82924
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82925
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error name: AxiosError
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82926
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error message: Request failed with status code 400
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82927
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error response details: {status: 400, statusText: 'Bad Request', headers: AxiosHeaders, dataType: 'object', dataPreview: {…}}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82929
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error config: {transitional: {…}, adapter: Array(3), transformRequest: Array(1), transformResponse: Array(1), timeout: 30000, …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82947
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: ============ REGISTRATION ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82948
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82380
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Registration error caught: Error: Email or username already exists
+    at Object.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82381
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82382
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error name: Error
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82383
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error message: Email or username already exists
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82384
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error stack: Error: Email or username already exists
+    at Object.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82385
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: No error response available
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82394
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Full error object: Error: Email or username already exists
+    at Object.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82396
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82397
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82202
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Registration error caught: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82203
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82204
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error name: Error
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82205
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error message: Network connection error. Please check your internet connection and try again.
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82206
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error stack: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82207
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Full error object: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82208
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82209
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Registration: Failed with result: {success: false, error: 'Network connection error. Please check your internet connection and try again.'}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154326
+await in handleRegister
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Console.js:61 🔴 Registration: Starting registration process...
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT REGISTRATION DEBUG START ============
+Console.js:61 🔴 Auth: Starting registration for: {email: 'blackeagleenertainmentcompany@gmail.com', username: 'blackeagle1', hasPassword: true, passwordLength: 9, timestamp: '2025-06-26T04:11:30.811Z'}
+Console.js:61 🔴 Auth: Starting registration for: blackeagleenertainmentcompany@gmail.com
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE REGISTRATION DEBUG START ============
+Console.js:61 🔴 AuthService: Starting registration process for: {email: 'blackeagleenertainmentcompany@gmail.com', username: 'blackeagle1', hasPassword: true, passwordLength: 9, timestamp: '2025-06-26T04:11:30.811Z'}
+Console.js:61 🔴 AuthService: Validating registration data...
+Console.js:61 🔴 AuthService: Registration data validation passed
+Console.js:61 🔴 AuthService: Calling authAPI.register...
+Console.js:61 🔴 API: ============ REGISTRATION DEBUG START ============
+Console.js:61 🔴 API: Registration attempt with: {email: 'blackeagleenertainmentcompany@gmail.com', username: 'blackeagle1', passwordLength: 9, timestamp: '2025-06-26T04:11:30.811Z'}
+Console.js:61 🔴 API: Current base URL: https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api
+Console.js:61 🔴 API: Full registration URL: https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register
+Console.js:61 🔴 API: Testing server health...
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Console.js:61 🔵 API Request: {method: 'GET', url: '/health', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/health', headers: AxiosHeaders, …}
+Console.js:61 🟢 API Response: {status: 200, url: '/health', data: {…}}
+Console.js:61 🔴 API: Server health check successful: {status: 'healthy', database: 'connected', users: 10, timestamp: '2025-06-26T04:11:31.416Z', server: 'simple-server.js'}
+Console.js:61 🔴 API: Making registration request...
+Console.js:61 🔵 API Request: {method: 'POST', url: '/auth/register', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register', headers: AxiosHeaders, …}
+Network.js:159 
+            
+            
+           POST https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register 400 (Bad Request)
+t.enable.e.send @ Network.js:159
+dispatchXhrRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:85940
+xhr @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:85778
+dispatchRequest @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84743
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84151
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84047
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84203
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83999
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82893
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API Response Error: {status: 400, statusText: 'Bad Request', url: '/auth/register', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/auth/register', …}
+Console.js:61 API Error Details: {message: 'Request failed with status code 400', code: 'ERR_BAD_REQUEST', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api', status: 400, url: '/auth/register', …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82820
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84151
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84047
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:84203
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83999
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82893
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: ============ REGISTRATION ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82923
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Registration failed with error: AxiosError {message: 'Request failed with status code 400', name: 'AxiosError', code: 'ERR_BAD_REQUEST', config: {…}, request: XMLHttpRequest, …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82924
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82925
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error name: AxiosError
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82926
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error message: Request failed with status code 400
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82927
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error response details: {status: 400, statusText: 'Bad Request', headers: AxiosHeaders, dataType: 'object', dataPreview: {…}}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82929
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: Error config: {transitional: {…}, adapter: Array(3), transformRequest: Array(1), transformResponse: Array(1), timeout: 30000, …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82947
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 API: ============ REGISTRATION ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82948
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82380
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Registration error caught: Error: Email or username already exists
+    at Object.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82381
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82382
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error name: Error
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82383
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error message: Email or username already exists
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82384
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Error stack: Error: Email or username already exists
+    at Object.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82385
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: No error response available
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82394
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: Full error object: Error: Email or username already exists
+    at Object.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82960:19)
+    at async AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82340:26)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82396
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82397
+await in register
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG START ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82202
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Registration error caught: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82203
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error type: object
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82204
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error name: Error
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82205
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error message: Network connection error. Please check your internet connection and try again.
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82206
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Error stack: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:3001/node_modules/expo-router/entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82207
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: Full error object: Error: Network connection error. Please check your internet connection and try again.
+    at AuthService.register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82414:17)
+    at async register (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82185:30)
+    at async handleRegister (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82208
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Auth: ============ AUTH CONTEXT ERROR DEBUG END ============
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+register @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82209
+await in register
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154320
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Registration: Failed with result: {success: false, error: 'Network connection error. Please check your internet connection and try again.'}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+handleRegister @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154326
+await in handleRegister
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189756
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:190053
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:183424
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:189836
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191918
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:191900Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
