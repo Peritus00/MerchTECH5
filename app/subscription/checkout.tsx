@@ -54,7 +54,7 @@ export default function SubscriptionCheckoutScreen() {
       
       const requestBody = JSON.stringify({
         subscriptionTier: tier,
-        amount: tierInfo.price * 100,
+        amount: tierInfo.price, // Send price in dollars, server will convert to cents
         successUrl: Platform.OS === 'web' 
           ? `${window.location.origin}/subscription/success?tier=${tier}&newUser=${isNewUser}`
           : `https://2baba274-1c74-4233-8964-1b11f1b566fa-00-205iex35lh4nb.kirk.replit.dev/subscription/success?tier=${tier}&newUser=${isNewUser}`,
@@ -171,7 +171,7 @@ export default function SubscriptionCheckoutScreen() {
         },
         body: JSON.stringify({
           subscriptionTier: selectedTier,
-          amount: tierInfo.price * 100, // Convert to cents
+          amount: tierInfo.price, // Send in dollars, server will convert to cents
         }),
       });
 

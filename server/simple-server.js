@@ -140,7 +140,7 @@ app.post('/api/stripe/create-payment-intent', async (req, res) => {
     });
 
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: Math.round(amount * 100), // Convert dollars to cents
       currency: currency,
       customer: customer.id,
       automatic_payment_methods: {
@@ -231,7 +231,7 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
             name: `${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan`,
             description: `Monthly subscription to ${subscriptionTier} plan`,
           },
-          unit_amount: Math.round(amount * 100), // Convert to cents
+          unit_amount: Math.round(amount * 100), // Convert dollars to cents
           recurring: {
             interval: 'month',
           },
