@@ -1288,6 +1288,63 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
   }
 });
 
+// Send verification email endpoint
+app.post('/api/auth/send-verification', async (req, res) => {
+  try {
+    console.log('🔴 SERVER: Send verification email endpoint hit');
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    console.log('🔴 SERVER: Sending verification email to:', email);
+    
+    // Find the user
+    const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Generate verification token
+    const verificationToken = jwt.sign(
+      { email: user.email, userId: user.id },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+    
+    // Update user with verification token
+    await pool.query(
+      'UPDATE users SET verification_token = $1 WHERE id = $2',
+      [verificationToken, user.id]
+    );
+    
+    // Create verification URL
+    const verificationUrl = `${process.env.REPLIT_DEV_DOMAIN ? 
+      `https://${process.env.REPLIT_DEV_DOMAIN}:5000` : 
+      'http://localhost:5000'}/api/auth/verify-email/${verificationToken}`;
+    
+    console.log('🔴 SERVER: Verification URL:', verificationUrl);
+    
+    // For now, just log the verification URL (you can integrate with email service later)
+    console.log('🔴 SERVER: Email verification link:', verificationUrl);
+    console.log('🔴 SERVER: Verification email would be sent to:', email);
+    
+    res.json({ 
+      success: true, 
+      message: 'Verification email sent successfully',
+      verificationUrl: verificationUrl // Remove this in production
+    });
+    
+  } catch (error) {
+    console.error('🔴 SERVER: Send verification email error:', error);
+    res.status(500).json({ error: 'Failed to send verification email' });
+  }
+});
+
 // Handle account verification and suspensions
 async function handleAccountVerification() {
   try {

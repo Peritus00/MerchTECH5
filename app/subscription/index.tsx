@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -42,78 +41,57 @@ export default function SubscriptionScreen() {
   const handleConfirmFreeAccount = async () => {
     console.log('🎯 User confirmed free plan selection - starting setup process');
     setShowFreeConfirmation(false);
-    
+
     try {
       setIsLoading('free');
-      const token = await AsyncStorage.getItem('authToken');
-      console.log('Retrieved token:', token ? 'Present' : 'Missing');
-      
-      if (token && user?.email) {
-        // Update user status to not new user and trigger email verification
-        console.log('Starting free account setup...');
-        const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'https://793b69da-5f5f-4ecb-a084-0d25bd48a221-00-mli9xfubddzk.picard.replit.dev:5000/api';
-        console.log('API URL:', apiUrl);
-        
-        const response = await fetch(`${apiUrl}/user/subscription`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            subscriptionTier: 'free',
-            isNewUser: false
-          })
-        });
-        
-        console.log('Response status:', response.status);
-        const responseText = await response.text();
-        console.log('Response:', responseText);
 
-        if (response.ok) {
-          console.log('User status updated to not new user');
-          
-          // Update the auth context state immediately
-          const updateResult = await updateProfile({ isNewUser: false });
-          if (updateResult.success) {
-            console.log('AuthContext updated with isNewUser: false');
-          } else {
-            console.log('Failed to update AuthContext:', updateResult.error);
-          }
-          
-          // Send verification email
-          console.log('Sending verification email to:', user.email);
-          const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
-          
-          if (verificationResult.success) {
-            console.log('Verification email sent successfully');
-            console.log('Navigating to dashboard after successful setup');
-            router.replace('/(tabs)/');
-          } else {
-            console.error('Failed to send verification email:', verificationResult.message);
-            console.log('Navigating to dashboard after setup with email issue');
-            router.replace('/(tabs)/');
-          }
+      if (user?.email) {
+        console.log('Starting free account setup for:', user.email);
+
+        // Send verification email first
+        console.log('Sending verification email...');
+        const verificationResult = await authService.sendEmailVerificationAfterSubscription(user.email);
+
+        if (verificationResult.success) {
+          console.log('✅ Verification email sent successfully');
+
+          // Update user profile to mark as not new user
+          await updateProfile({ isNewUser: false });
+
+          // Show success message and redirect to dashboard
+          Alert.alert(
+            'Free Account Activated!',
+            'Welcome to MerchTech! A verification email has been sent to your email address. Please verify your email within 24 hours to keep your account active.',
+            [
+              {
+                text: 'Go to Dashboard',
+                onPress: () => router.replace('/(tabs)/')
+              }
+            ]
+          );
         } else {
-          console.error('Failed to update user status. Response:', responseText);
-          throw new Error(`Failed to update user status: ${response.status} ${responseText}`);
+          console.error('❌ Failed to send verification email:', verificationResult.message);
+
+          // Still allow them to proceed but warn about verification
+          await updateProfile({ isNewUser: false });
+
+          Alert.alert(
+            'Account Created',
+            'Your free account has been created! We had trouble sending the verification email, but you can still use your account. Please try to verify your email from the settings page.',
+            [
+              {
+                text: 'Go to Dashboard',
+                onPress: () => router.replace('/(tabs)/')
+              }
+            ]
+          );
         }
       } else {
-        console.error('Missing token or user email:', { 
-          hasToken: !!token, 
-          hasEmail: !!user?.email 
-        });
-        throw new Error('Missing authentication or email');
+        console.error('❌ Missing user email:', user);
+        throw new Error('User email not found. Please try logging in again.');
       }
     } catch (error) {
       console.error('❌ Failed to process free account selection:', error);
-      console.error('Error details:', {
-        message: error?.message || 'Unknown error',
-        stack: error?.stack || 'No stack trace',
-        userEmail: user?.email || 'Missing',
-        hasToken: !!await AsyncStorage.getItem('authToken'),
-        apiUrl: process.env.EXPO_PUBLIC_API_URL || 'Default URL'
-      });
       Alert.alert(
         'Setup Error',
         `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${error?.message || 'Unknown error'}`,
@@ -146,7 +124,7 @@ export default function SubscriptionScreen() {
     console.log('Selected tier:', tierKey);
     console.log('Is new user:', isNewUser);
     console.log('User data:', user);
-    
+
     try {
       if (tierKey === 'free') {
         if (isNewUser) {
@@ -155,8 +133,8 @@ export default function SubscriptionScreen() {
           setShowFreeConfirmation(true);
           return;
         }
-                  
-        
+
+
         console.log('Free tier selected for existing user');
         if (user) {
           router.push('/(tabs)/');
@@ -204,14 +182,14 @@ export default function SubscriptionScreen() {
             <ThemedText style={styles.iconText}>{getTierIcon(tierKey)}</ThemedText>
           </View>
           <ThemedText type="title" style={styles.tierName}>{tier.name}</ThemedText>
-          
+
           <View style={styles.priceContainer}>
             <ThemedText style={styles.price}>${tier.price}</ThemedText>
             {tier.price > 0 && (
               <ThemedText style={styles.period}>/month</ThemedText>
             )}
           </View>
-          
+
           <ThemedText style={styles.description}>{tier.description}</ThemedText>
         </View>
 
@@ -263,7 +241,7 @@ export default function SubscriptionScreen() {
             {isNewUser ? 'Welcome! Choose Your Plan' : 'Choose Your Plan'}
           </ThemedText>
           <ThemedText style={styles.subtitle}>
-            {isNewUser 
+            {isNewUser
               ? 'Get started with MerchTech by selecting the perfect plan for your needs'
               : 'Select the perfect plan for your QR code and media management needs'
             }
@@ -304,7 +282,7 @@ export default function SubscriptionScreen() {
             <ThemedText style={styles.modalMessage}>
               Are you sure you want to continue with the free plan? You can upgrade anytime.
             </ThemedText>
-            
+
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
@@ -315,7 +293,7 @@ export default function SubscriptionScreen() {
               >
                 <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
               </TouchableOpacity>
-              
+
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={handleConfirmFreeAccount}
