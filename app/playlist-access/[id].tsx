@@ -47,7 +47,7 @@ export default function PlaylistAccessScreen() {
           ...file,
           filePath: file.filePath.startsWith('http') 
             ? file.filePath 
-            : `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
+            : `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001${file.filePath}`,
         }));
       }
 

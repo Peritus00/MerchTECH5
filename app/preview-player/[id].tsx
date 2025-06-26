@@ -29,7 +29,7 @@ export default function PreviewPlayerScreen() {
   const loadPreviewData = async () => {
     try {
       // Fetch actual playlist data from API for preview
-      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api/playlists/${id}`, {
+      const response = await fetch(`https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api/playlists/${id}`, {
         headers: {
           'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
         },
@@ -45,7 +45,7 @@ export default function PreviewPlayerScreen() {
       const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
         id: file.id,
         title: file.title,
-        url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000${file.filePath}`,
+        url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001${file.filePath}`,
         fileType: file.fileType,
         contentType: file.contentType,
       })) || [];

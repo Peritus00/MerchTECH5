@@ -59,7 +59,7 @@ export default function Settings() {
       const testEmail = 'djkingcake@gmail.com';
       console.log('Testing email delivery to:', testEmail);
 
-      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5000/api'}/test/send-email`, {
+      const response = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api'}/test/send-email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

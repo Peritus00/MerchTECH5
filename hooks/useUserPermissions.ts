@@ -52,12 +52,12 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       const hostname = window.location.hostname;
       if (hostname.includes('replit.dev')) {
         // Use the same hostname without port for API calls in Replit
-        return `${window.location.protocol}//${hostname}:5000/api`;
+        return `${window.location.protocol}//${hostname}:5001/api`;
       }
-      return `${window.location.protocol}//${hostname}:5000/api`;
+      return `${window.location.protocol}//${hostname}:5001/api`;
     }
 
-    return 'http://localhost:5000/api';
+    return 'http://localhost:5001/api';
   };
 
   const fetchUsers = async () => {
