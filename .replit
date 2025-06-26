@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Stable Server"
+runButton = "Start Server Now"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -284,6 +284,15 @@ args = "sleep 2"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "echo \"🚀 Starting stable server...\""
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd server && node stable-server.js"
+
+[[workflows.workflow]]
+name = "Start Server Now"
+author = 42127692
+mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
