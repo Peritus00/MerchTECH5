@@ -997,6 +997,48 @@ app.get('/api/admin/all-users', authenticateToken, async (req, res) => {
       status: 'confirmed',
       isPending: false,
       isSuspended: false,
+
+
+// Check Brevo senders endpoint
+app.get('/api/test/brevo-senders', async (req, res) => {
+  try {
+    if (!brevoConfig.apiKey) {
+      return res.status(500).json({ error: 'Brevo API key not configured' });
+    }
+
+    const sendersResponse = await axios.get(
+      `${brevoConfig.baseURL}/senders`,
+      { headers: brevoConfig.headers }
+    );
+
+    const accountResponse = await axios.get(
+      `${brevoConfig.baseURL}/account`,
+      { headers: brevoConfig.headers }
+    );
+
+    res.json({
+      account: {
+        email: accountResponse.data.email,
+        plan: accountResponse.data.plan,
+        companyName: accountResponse.data.companyName
+      },
+      senders: sendersResponse.data.senders.map(sender => ({
+        email: sender.email,
+        name: sender.name,
+        verified: sender.verified,
+        active: sender.active
+      }))
+    });
+
+  } catch (error) {
+    console.error('🔴 SERVER: Brevo senders check error:', error);
+    res.status(500).json({ 
+      error: 'Failed to check Brevo senders',
+      details: error.response?.data || error.message 
+    });
+  }
+});
+
       // Add required permissions fields
       canViewAnalytics: true,
       canManagePlaylists: true,
@@ -1457,6 +1499,42 @@ app.post('/api/test/send-email', async (req, res) => {
     console.log('🔴 SERVER: Testing email send to:', email);
     console.log('🔴 SERVER: Brevo API key configured:', !!process.env.BREVO_API_KEY);
 
+    // First, check Brevo account status
+    let accountInfo = null;
+    if (brevoConfig.apiKey) {
+      try {
+        const accountResponse = await axios.get(
+          `${brevoConfig.baseURL}/account`,
+          { headers: brevoConfig.headers }
+        );
+        accountInfo = accountResponse.data;
+        console.log('🔴 SERVER: Brevo account info:', {
+          email: accountInfo.email,
+          firstName: accountInfo.firstName,
+          lastName: accountInfo.lastName,
+          companyName: accountInfo.companyName,
+          plan: accountInfo.plan
+        });
+      } catch (accountError) {
+        console.error('🔴 SERVER: Failed to get Brevo account info:', accountError.response?.data || accountError.message);
+      }
+    }
+
+    // Check sender verification status
+    let senders = null;
+    if (brevoConfig.apiKey) {
+      try {
+        const sendersResponse = await axios.get(
+          `${brevoConfig.baseURL}/senders`,
+          { headers: brevoConfig.headers }
+        );
+        senders = sendersResponse.data.senders;
+        console.log('🔴 SERVER: Verified senders:', senders.map(s => ({ email: s.email, verified: s.verified })));
+      } catch (sendersError) {
+        console.error('🔴 SERVER: Failed to get senders info:', sendersError.response?.data || sendersError.message);
+      }
+    }
+
     if (testType === 'verification') {
       // Generate a test verification token
       const testToken = jwt.sign(
@@ -1487,6 +1565,7 @@ app.post('/api/test/send-email', async (req, res) => {
             <li>Sent to: ${email}</li>
             <li>Timestamp: ${new Date().toISOString()}</li>
             <li>Environment: ${process.env.NODE_ENV || 'development'}</li>
+            <li>Sender: help@mertech.net</li>
           </ul>
 
           <p>If you received this email, our email system is working correctly!</p>
@@ -1511,7 +1590,17 @@ app.post('/api/test/send-email', async (req, res) => {
           message: 'Test email sent successfully',
           emailService: 'Brevo',
           messageId: result.messageId,
-          verificationLink: verificationLink
+          verificationLink: verificationLink,
+          brevoAccount: accountInfo ? {
+            email: accountInfo.email,
+            plan: accountInfo.plan,
+            companyName: accountInfo.companyName
+          } : null,
+          verifiedSenders: senders ? senders.filter(s => s.verified).map(s => s.email) : null,
+          warnings: [
+            !senders?.find(s => s.email === 'help@mertech.net' && s.verified) ? 
+              'Sender email help@mertech.net may not be verified in Brevo' : null
+          ].filter(Boolean)
         });
       } else {
         console.log('⚠️ SERVER: No Brevo API key - email not sent');
