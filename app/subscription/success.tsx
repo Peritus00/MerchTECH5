@@ -35,7 +35,7 @@ export default function SubscriptionSuccessScreen() {
     if (Platform.OS === 'web' && subscriptionTier) {
       // If this is running in a new tab (opened from checkout), close it and redirect parent
       const isInNewTab = window.opener !== null;
-      
+
       if (isInNewTab) {
         // Send message to parent window to redirect to dashboard
         try {
@@ -44,7 +44,7 @@ export default function SubscriptionSuccessScreen() {
             tier: subscriptionTier,
             redirect: '/(tabs)/' 
           }, '*');
-          
+
           // Close this tab after a short delay
           setTimeout(() => {
             window.close();

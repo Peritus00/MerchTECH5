@@ -65,6 +65,52 @@ console.log('🔴 SERVER: STRIPE_SECRET_KEY length:', process.env.STRIPE_SECRET_
 
 const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
 
+// Configure Brevo email service
+const axios = require('axios');
+console.log('🔴 SERVER: Checking Brevo configuration...');
+console.log('🔴 SERVER: BREVO_API_KEY exists:', !!process.env.BREVO_API_KEY);
+
+const brevoConfig = {
+  apiKey: process.env.BREVO_API_KEY,
+  baseURL: 'https://api.brevo.com/v3',
+  headers: {
+    'accept': 'application/json',
+    'api-key': process.env.BREVO_API_KEY,
+    'content-type': 'application/json'
+  }
+};
+
+// Email service helper function
+async function sendBrevoEmail(to, subject, htmlContent, templateId = null) {
+  try {
+    const emailData = {
+      sender: {
+        email: 'noreply@merchtech.io',
+        name: 'MerchTech QR Platform'
+      },
+      to: [{ email: to }],
+      subject: subject,
+      htmlContent: htmlContent
+    };
+
+    if (templateId) {
+      emailData.templateId = templateId;
+    }
+
+    const response = await axios.post(
+      `${brevoConfig.baseURL}/smtp/email`,
+      emailData,
+      { headers: brevoConfig.headers }
+    );
+
+    console.log('✅ SERVER: Email sent successfully via Brevo:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ SERVER: Brevo email error:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
 if (!stripe) {
   console.log('⚠️ SERVER: Stripe not configured - STRIPE_SECRET_KEY missing');
 } else {
@@ -316,6 +362,43 @@ app.put('/api/user/subscription', async (req, res) => {
     }
 
     console.log('✅ SERVER: User subscription updated:', userId, subscriptionTier);
+
+    // Send subscription confirmation email
+    try {
+      const user = result.rows[0];
+      const subscriptionEmailHtml = `
+        <h2>Subscription Confirmed!</h2>
+        <p>Hello ${user.username},</p>
+        <p>Your subscription to the <strong>${subscriptionTier.charAt(0).toUpperCase() + subscriptionTier.slice(1)} Plan</strong> has been successfully activated!</p>
+        <p>You now have access to all the features included in your plan:</p>
+        <ul>
+          <li>✅ QR Code Generation</li>
+          <li>✅ Media Management</li>
+          <li>✅ Analytics Dashboard</li>
+          <li>✅ Store Integration</li>
+          ${subscriptionTier === 'premium' ? '<li>✅ Advanced Features</li>' : ''}
+        </ul>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : 'http://localhost:8081'}/dashboard" 
+             style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Go to Dashboard
+          </a>
+        </div>
+        <p>Thank you for choosing MerchTech QR Platform!</p>
+      `;
+
+      if (brevoConfig.apiKey) {
+        await sendBrevoEmail(
+          user.email,
+          'Subscription Activated - MerchTech QR Platform',
+          subscriptionEmailHtml
+        );
+        console.log('✅ SERVER: Subscription confirmation email sent to:', user.email);
+      }
+    } catch (emailError) {
+      console.error('❌ SERVER: Failed to send subscription email:', emailError);
+    }
+
     res.json({
       success: true,
       user: result.rows[0]
@@ -419,7 +502,7 @@ app.post('/api/auth/register', async (req, res) => {
 
     console.log('🔴 SERVER: Registration successful for:', { userId: user.id, email: user.email, username: user.username });
 
-    // Send verification email automatically
+    // Send verification email automatically via Brevo
     try {
       const verificationToken = jwt.sign(
         { email: user.email, type: 'email_verification' },
@@ -436,10 +519,39 @@ app.post('/api/auth/register', async (req, res) => {
         `https://${process.env.REPLIT_DEV_DOMAIN}` : 
         'http://localhost:8081'}/auth/verify-email?token=${verificationToken}`;
 
-      console.log('🔴 SERVER: Auto-generated verification link:', verificationLink);
-      console.log('🔴 SERVER: (In production, this would be sent via email)');
+      // Send welcome email with verification link via Brevo
+      const emailHtml = `
+        <h2>Welcome to MerchTech QR Platform!</h2>
+        <p>Hello ${user.username},</p>
+        <p>Thank you for registering with MerchTech QR Platform. To complete your registration, please verify your email address by clicking the button below:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${verificationLink}" 
+             style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+            Verify Email Address
+          </a>
+        </div>
+        <p>Or copy and paste this link into your browser:</p>
+        <p><a href="${verificationLink}">${verificationLink}</a></p>
+        <p>This verification link will expire in 24 hours.</p>
+        <hr>
+        <p style="color: #666; font-size: 12px;">
+          If you didn't create an account with us, please ignore this email.
+        </p>
+      `;
+
+      if (brevoConfig.apiKey) {
+        await sendBrevoEmail(
+          user.email,
+          'Verify Your Email - MerchTech QR Platform',
+          emailHtml
+        );
+        console.log('✅ SERVER: Verification email sent via Brevo to:', user.email);
+      } else {
+        console.log('🔴 SERVER: Brevo not configured, verification link:', verificationLink);
+      }
     } catch (emailError) {
-      console.error('🔴 SERVER: Failed to generate verification email:', emailError);
+      console.error('🔴 SERVER: Failed to send verification email:', emailError);
+      // Don't fail registration if email fails
     }
 
     console.log('🔴 SERVER: ============ REGISTRATION ENDPOINT DEBUG END ============');
