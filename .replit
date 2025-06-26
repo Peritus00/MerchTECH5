@@ -26,7 +26,7 @@ localPort = 8084
 externalPort = 3002
 
 [workflows]
-runButton = "Robust Backend Server"
+runButton = "Production Server"
 
 [[workflows.workflow]]
 name = "Dev Server"
@@ -198,17 +198,17 @@ task = "shell.exec"
 args = "cd server && node simple-server.js"
 
 [[workflows.workflow]]
-name = "Robust Backend Server"
+name = "Production Server"
 author = 42127692
 mode = "sequential"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🔧 Starting Robust Backend Server with Self-Healing...\""
+args = "echo \"🚀 Starting Production Server with Self-Healing...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🧹 Comprehensive cleanup of existing processes...\""
+args = "echo \"🧹 Comprehensive cleanup...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
@@ -220,23 +220,15 @@ args = "pkill -f \"node.*5000\" || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "sleep 3"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "echo \"🔍 Checking for orphaned processes...\""
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
 args = "lsof -ti:5000 | xargs kill -9 2>/dev/null || true"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "sleep 2"
+args = "sleep 3"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "echo \"🚀 Starting self-healing backend server...\""
+args = "echo \"🔍 Starting server with automatic restart capability...\""
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"

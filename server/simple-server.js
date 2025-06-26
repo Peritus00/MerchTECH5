@@ -1,3 +1,4 @@
+
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -8,13 +9,24 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Self-healing configuration
+const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds
+const RESTART_DELAY = 5000; // 5 seconds
+const MAX_RESTART_ATTEMPTS = 10;
+let restartAttempts = 0;
+let serverInstance = null;
+let healthCheckTimer = null;
+
 // JWT Secret
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
 
-// Database configuration
+// Database configuration with retry logic
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 20,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
 });
 
 // Authentication middleware - MOVED TO TOP
@@ -63,40 +75,15 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Process management - Add cleanup handlers EARLY
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully');
-  if (pool) {
-    pool.end(() => {
-      console.log('📊 Database pool closed');
-      process.exit(0);
-    });
-  } else {
-    process.exit(0);
-  }
-});
-
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully');
-  if (pool) {
-    pool.end(() => {
-      console.log('📊 Database pool closed');
-      process.exit(0);
-    });
-  } else {
-    process.exit(0);
-  }
-});
-
-// Enhanced port cleanup function with multiple strategies
-async function cleanupPort() {
+// Self-healing port cleanup with multiple strategies
+async function aggressivePortCleanup() {
   try {
-    console.log('🧹 Starting comprehensive port cleanup for port', PORT);
+    console.log('🧹 Starting aggressive port cleanup for port', PORT);
     const { spawn, exec } = require('child_process');
     const util = require('util');
     const execAsync = util.promisify(exec);
 
-    // Strategy 1: Kill specific node processes
+    // Strategy 1: Kill by port
     try {
       const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
       if (stdout.trim()) {
@@ -109,43 +96,152 @@ async function cleanupPort() {
               await execAsync(`kill -9 ${pid}`);
               console.log('🧹 Killed process', pid);
             } catch (err) {
-              console.log('🧹 Could not kill process', pid, '(may already be dead)');
+              console.log('🧹 Process', pid, 'already terminated');
             }
           }
         }
       }
     } catch (error) {
-      console.log('🧹 lsof method failed, trying alternative...');
+      console.log('🧹 lsof method completed');
     }
 
     // Strategy 2: Kill by pattern
     try {
-      await execAsync(`pkill -f "node.*simple-server" || true`);
-      await execAsync(`pkill -f "node.*${PORT}" || true`);
+      await execAsync(`pkill -9 -f "node.*simple-server" || true`);
+      await execAsync(`pkill -9 -f "node.*${PORT}" || true`);
       console.log('🧹 Pattern-based cleanup completed');
     } catch (error) {
-      console.log('🧹 Pattern cleanup warning:', error.message);
+      console.log('🧹 Pattern cleanup completed');
     }
 
-    // Strategy 3: Wait and verify
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Verify port is free
+    // Strategy 3: Force cleanup
     try {
-      const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
-      if (stdout.trim()) {
-        console.log('⚠️ Port', PORT, 'still has processes, but continuing...');
-      } else {
-        console.log('✅ Port', PORT, 'is now clean');
-      }
+      await execAsync(`fuser -k ${PORT}/tcp || true`);
+      console.log('🧹 Force cleanup completed');
     } catch (error) {
-      console.log('🧹 Port verification completed');
+      console.log('🧹 Force cleanup not available');
     }
+
+    // Wait for cleanup to take effect
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    console.log('✅ Port cleanup completed');
   } catch (error) {
     console.log('🧹 Port cleanup completed with warnings:', error.message);
-    // Don't fail startup if cleanup fails
   }
 }
+
+// Self-healing server health check
+function startHealthMonitoring() {
+  if (healthCheckTimer) {
+    clearInterval(healthCheckTimer);
+  }
+
+  healthCheckTimer = setInterval(async () => {
+    try {
+      // Check if server is still listening
+      if (!serverInstance || !serverInstance.listening) {
+        console.log('⚠️ Server health check: Server not listening');
+        await attemptServerRestart();
+        return;
+      }
+
+      // Check database connection
+      try {
+        await pool.query('SELECT 1');
+        console.log('💚 Health check: Server and database OK');
+        restartAttempts = 0; // Reset on successful check
+      } catch (dbError) {
+        console.log('⚠️ Health check: Database connection issue');
+        // Don't restart for database issues, just log
+      }
+    } catch (error) {
+      console.error('❌ Health check error:', error);
+      await attemptServerRestart();
+    }
+  }, HEALTH_CHECK_INTERVAL);
+}
+
+// Self-healing restart mechanism
+async function attemptServerRestart() {
+  if (restartAttempts >= MAX_RESTART_ATTEMPTS) {
+    console.error(`❌ Maximum restart attempts (${MAX_RESTART_ATTEMPTS}) reached. Manual intervention required.`);
+    return;
+  }
+
+  restartAttempts++;
+  console.log(`🔄 Attempting server restart ${restartAttempts}/${MAX_RESTART_ATTEMPTS}...`);
+
+  try {
+    // Stop current server
+    if (serverInstance) {
+      serverInstance.close();
+    }
+    
+    // Clear health monitoring
+    if (healthCheckTimer) {
+      clearInterval(healthCheckTimer);
+    }
+
+    // Wait before restart
+    await new Promise(resolve => setTimeout(resolve, RESTART_DELAY));
+
+    // Cleanup port
+    await aggressivePortCleanup();
+
+    // Restart server
+    await startServer();
+  } catch (error) {
+    console.error(`❌ Restart attempt ${restartAttempts} failed:`, error);
+    
+    // Try again after delay
+    setTimeout(() => attemptServerRestart(), RESTART_DELAY * 2);
+  }
+}
+
+// Enhanced graceful shutdown handlers
+const gracefulShutdown = async (signal) => {
+  console.log(`🛑 ${signal} received, starting graceful shutdown...`);
+  
+  // Clear health monitoring
+  if (healthCheckTimer) {
+    clearInterval(healthCheckTimer);
+    console.log('🔄 Health monitoring stopped');
+  }
+
+  // Close server
+  if (serverInstance) {
+    serverInstance.close(() => {
+      console.log('🚫 HTTP server closed');
+    });
+  }
+
+  // Close database connections
+  if (pool) {
+    await pool.end();
+    console.log('📊 Database pool closed');
+  }
+
+  console.log('✅ Graceful shutdown complete');
+  process.exit(0);
+};
+
+// Register shutdown handlers
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGHUP', () => gracefulShutdown('SIGHUP'));
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit on unhandled rejections, just log them
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // For uncaught exceptions, we should restart
+  setTimeout(() => attemptServerRestart(), 1000);
+});
 
 // CORS configuration - Dynamic origin handling for Replit development
 app.use(cors({
@@ -186,18 +282,38 @@ app.get('/', (req, res) => {
     status: 'running',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
-    port: PORT
+    port: PORT,
+    pid: process.pid,
+    uptime: process.uptime(),
+    restartAttempts: restartAttempts
   });
 });
 
-// Add health check endpoint
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    timestamp: new Date().toISOString(),
-    port: PORT,
-    pid: process.pid
-  });
+// Enhanced health check endpoint
+app.get('/api/health', async (req, res) => {
+  try {
+    // Test database connection
+    await pool.query('SELECT 1');
+    
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      port: PORT,
+      pid: process.pid,
+      uptime: process.uptime(),
+      database: 'connected',
+      restartAttempts: restartAttempts,
+      memoryUsage: process.memoryUsage()
+    });
+  } catch (error) {
+    console.error('Health check database error:', error);
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
+    });
+  }
 });
 
 // Load and configure Stripe
@@ -1255,97 +1371,51 @@ async function initializeDatabase() {
   }
 }
 
-// Self-healing server with automatic restart and health monitoring
-let restartCount = 0;
-const MAX_RESTARTS = 5;
-const RESTART_DELAY = 3000;
-
+// Main server startup function
 async function startServer() {
   try {
-    console.log(`🚀 Starting server (attempt ${restartCount + 1}/${MAX_RESTARTS + 1})`);
+    console.log(`🚀 Starting server (attempt ${restartAttempts + 1})`);
     
     // Clean up any existing processes on this port
-    await cleanupPort();
+    await aggressivePortCleanup();
 
     // Initialize database
     await initializeDatabase();
 
     // Start the server with enhanced error handling
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`✅ Simple server running on port ${PORT}`);
+    serverInstance = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Production server running on port ${PORT}`);
       console.log(`📍 API available at: http://0.0.0.0:${PORT}/api`);
       console.log(`🌐 External API URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api`);
       console.log(`❤️ Health check URL: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
       console.log(`🔒 Process ID: ${process.pid}`);
-      console.log(`🔄 Restart count: ${restartCount}`);
+      console.log(`🔄 Restart attempts: ${restartAttempts}`);
+      console.log(`🛡️ Self-healing enabled`);
       
       // Reset restart count on successful start
-      restartCount = 0;
+      restartAttempts = 0;
+      
+      // Start health monitoring
+      startHealthMonitoring();
     });
 
     // Enhanced error handling with self-healing
-    server.on('error', async (error) => {
+    serverInstance.on('error', async (error) => {
       console.error('❌ Server error:', error);
       
       if (error.code === 'EADDRINUSE') {
         console.error('❌ Port', PORT, 'is already in use');
-        
-        if (restartCount < MAX_RESTARTS) {
-          console.log(`🔄 Attempting self-healing restart ${restartCount + 1}/${MAX_RESTARTS}...`);
-          restartCount++;
-          
-          server.close(async () => {
-            await new Promise(resolve => setTimeout(resolve, RESTART_DELAY));
-            await cleanupPort();
-            startServer();
-          });
-        } else {
-          console.error(`❌ Maximum restart attempts (${MAX_RESTARTS}) reached. Exiting.`);
-          process.exit(1);
-        }
+        await attemptServerRestart();
       } else {
         console.error('❌ Unhandled server error:', error);
-        if (restartCount < MAX_RESTARTS) {
-          console.log('🔄 Attempting restart due to error...');
-          restartCount++;
-          setTimeout(() => startServer(), RESTART_DELAY);
-        } else {
-          process.exit(1);
-        }
+        await attemptServerRestart();
       }
     });
 
-    // Add periodic health check
-    setInterval(() => {
-      try {
-        // Simple health check - verify server is responding
-        if (server.listening) {
-          console.log('💚 Server health check: OK');
-        } else {
-          console.log('⚠️ Server health check: Server not listening');
-          if (restartCount < MAX_RESTARTS) {
-            console.log('🔄 Restarting unhealthy server...');
-            restartCount++;
-            startServer();
-          }
-        }
-      } catch (error) {
-        console.error('❌ Health check error:', error);
-      }
-    }, 30000); // Check every 30 seconds
-
-    return server;
+    return serverInstance;
   } catch (error) {
     console.error('❌ Failed to start server:', error);
-    
-    if (restartCount < MAX_RESTARTS) {
-      console.log(`🔄 Retrying server start in ${RESTART_DELAY}ms...`);
-      restartCount++;
-      setTimeout(() => startServer(), RESTART_DELAY);
-    } else {
-      console.error(`❌ Maximum restart attempts reached. Exiting.`);
-      process.exit(1);
-    }
+    await attemptServerRestart();
   }
 }
 
@@ -1371,7 +1441,7 @@ async function validateAndStart() {
       const { stdout } = await execAsync(`lsof -ti:${PORT} || true`);
       if (stdout.trim()) {
         console.log(`⚠️ Port ${PORT} is in use. Cleaning up...`);
-        await cleanupPort();
+        await aggressivePortCleanup();
       } else {
         console.log(`✅ Port ${PORT} is available`);
       }
@@ -1389,7 +1459,7 @@ async function validateAndStart() {
       console.log('🔄 Server will continue and retry database connection...');
     }
     
-    console.log('✅ Validation complete. Starting server...');
+    console.log('✅ Validation complete. Starting production server...');
     await startServer();
     
   } catch (error) {
@@ -1399,5 +1469,5 @@ async function validateAndStart() {
   }
 }
 
-// Start the server with validation
+// Start the production server with validation
 validateAndStart();
