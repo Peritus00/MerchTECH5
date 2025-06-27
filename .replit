@@ -8,48 +8,35 @@ modules = ["nodejs-20", "postgresql-16"]
 # The Nix channel to use for package management.
 channel = "stable-24_05"
 
-# --- SIMPLIFIED PORT CONFIGURATION ---
-# The backend on 5001 will be accessed directly via its port.
-# The frontend on 8081 is exposed as the main web service on port 80 (and 443 for HTTPS).
-
+# --- PORT CONFIGURATION ---
 [[ports]]
 localPort = 5001
-# No external port needed; Replit will proxy to this port automatically.
-
 [[ports]]
 localPort = 8081
 externalPort = 80
 
 # --- WORKFLOWS ---
-# This section defines what happens when you click the "Run" button
-# or select a workflow from the dropdown.
-
-# This sets the default action for the main "Run" button.
 [workflows]
 runButton = "Run App"
 
-# This is now the ONLY workflow for running your application.
-# It starts the backend and frontend in parallel for development.
 [[workflows.workflow]]
 name = "Run App"
 mode = "parallel"
 
 [[workflows.workflow.tasks]]
 # Task 1: Start the stable backend server.
-# FIX: Using a direct path to the server file, which is more robust.
+# FIX: Using nodemon for a more stable development server process.
+# It will automatically install and run nodemon.
 task = "shell.exec"
-args = "node server/working-server.js"
+args = "npx nodemon server/working-server.js"
 
 [[workflows.workflow.tasks]]
 # Task 2: Start the Expo frontend development server.
-# It uses environment variables to communicate with the backend and Replit's proxy.
-# --clear ensures the cache is cleared on startup to apply any changes.
 task = "shell.exec"
 args = "npx expo start --web --clear"
 
 # --- DEPLOYMENT CONFIGURATION ---
-# This tells Replit how to run your application when it's deployed.
 [deployment]
-# It will run only the stable working-server.js on the correct port.
+# For deployment, we still use the standard node command.
 run = ["sh", "-c", "node server/working-server.js"]
 
