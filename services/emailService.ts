@@ -1,4 +1,3 @@
-
 import axios from 'axios';
 
 interface EmailTemplate {
@@ -16,7 +15,7 @@ interface SMSData {
 class BrevoService {
   private apiKey: string;
   private baseURL = 'https://api.brevo.com/v3';
-  
+
   constructor() {
     this.apiKey = process.env.BREVO_API_KEY || '';
     if (!this.apiKey) {
@@ -39,13 +38,13 @@ class BrevoService {
         {
           ...data,
           sender: {
-            email: 'noreply@samona.io',
-            name: 'Samona.io'
+            email: 'help@merchtech.net',
+            name: 'MerchTech'
           }
         },
         { headers: this.getHeaders() }
       );
-      
+
       return response.data;
     } catch (error) {
       console.error('Brevo email error:', error);
@@ -91,13 +90,13 @@ class BrevoService {
       const response = await axios.post(
         `${this.baseURL}/transactionalSMS/sms`,
         {
-          sender: 'Samona',
+          sender: 'MerchTech',
           recipient: data.recipient,
           content: data.content
         },
         { headers: this.getHeaders() }
       );
-      
+
       return response.data;
     } catch (error) {
       console.error('Brevo SMS error:', error);
@@ -107,7 +106,7 @@ class BrevoService {
 
   async sendSMSVerification(phoneNumber: string, verificationCode: string) {
     return this.sendSMS({
-      sender: 'Samona',
+      sender: 'MerchTech',
       recipient: phoneNumber,
       content: `Your Samona.io verification code is: ${verificationCode}`
     });
