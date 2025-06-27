@@ -137,6 +137,13 @@ export default function StoreScreen() {
       filtered = filtered.filter(product => product.category === selectedCategory);
     }
 
+    // Sort by popularity (descending). Use metadata.popularity if available, else 0.
+    filtered = filtered.sort((a, b) => {
+      const popA = Number(a.metadata?.popularity ?? 0);
+      const popB = Number(b.metadata?.popularity ?? 0);
+      return popB - popA;
+    });
+
     setFilteredProducts(filtered);
   };
 
