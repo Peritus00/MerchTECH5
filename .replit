@@ -8,35 +8,35 @@ modules = ["nodejs-20", "postgresql-16"]
 # The Nix channel to use for package management.
 channel = "stable-24_05"
 
-# --- PORT CONFIGURATION ---
 [[ports]]
 localPort = 5001
+
 [[ports]]
 localPort = 8081
 externalPort = 80
 
 # --- WORKFLOWS ---
 [workflows]
+# The "Run" button will execute the "Run App" workflow below.
 runButton = "Run App"
 
 [[workflows.workflow]]
+# This is the final workflow to run your full application for development.
 name = "Run App"
-mode = "parallel"
+mode = "parallel" # Runs both tasks at the same time.
 
 [[workflows.workflow.tasks]]
-# Task 1: Start the stable backend server.
-# FIX: Using nodemon for a more stable development server process.
-# It will automatically install and run nodemon.
+# Task 1: Start the backend server.
+# FIX: Pointing to the correct path for the main server file.
 task = "shell.exec"
-args = "npx nodemon server/working-server.js"
+args = "node services/Server/main.js"
 
 [[workflows.workflow.tasks]]
-# Task 2: Start the Expo frontend development server.
+# Task 2: Start the frontend Expo server.
 task = "shell.exec"
 args = "npx expo start --web --clear"
 
 # --- DEPLOYMENT CONFIGURATION ---
 [deployment]
-# For deployment, we still use the standard node command.
-run = ["sh", "-c", "node server/working-server.js"]
-
+# The deployment command is also updated to the correct path.
+run = ["sh", "-c", "node services/Server/main.js"]
