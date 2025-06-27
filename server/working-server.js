@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const { brevoService } = require('../services/emailService');
@@ -7,6 +6,7 @@ const PORT = process.env.PORT || 5001;
 
 // Stripe configuration
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const jwt = require('jsonwebtoken');
 
 // Middleware
 app.use(cors({
@@ -53,7 +53,7 @@ app.get('/api/stripe/health', async (req, res) => {
 
     // Test Stripe connection
     await stripe.accounts.retrieve();
-    
+
     res.json({
       stripeConfigured: true,
       secretKeyValid: true,
@@ -160,9 +160,9 @@ app.post('/api/stripe/create-payment-intent', async (req, res) => {
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   try {
     const { priceId, quantity = 1, successUrl, cancelUrl } = req.body;
-    
+
     const baseUrl = `https://${req.get('host')}`;
-    
+
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       payment_method_types: ['card'],
@@ -189,9 +189,9 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
 // Authentication endpoints
 app.post('/api/auth/login', (req, res) => {
   console.log('✅ Login route reached:', req.body);
-  
+
   const { email, password } = req.body;
-  
+
   // Mock authentication for development
   if (email && password) {
     res.json({
@@ -211,10 +211,60 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
+// Dev login for testing
+app.post('/api/auth/dev-login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Check for dev credentials
+    if (email === 'djjetfuel@gmail.com' && password === 'Kerrie321') {
+      const devUser = {
+        id: 999,
+        email: 'djjetfuel@gmail.com',
+        username: 'djjetfuel',
+        firstName: 'DJ',
+        lastName: 'JetFuel',
+        subscriptionTier: 'premium',
+        isEmailVerified: true,
+        isAdmin: true,
+        createdAt: new Date().toISOString()
+      };
+
+      const token = jwt.sign(
+        { 
+          userId: devUser.id, 
+          email: devUser.email,
+          subscriptionTier: devUser.subscriptionTier 
+        },
+        process.env.JWT_SECRET || 'dev-secret-key',
+        { expiresIn: '24h' }
+      );
+
+      return res.json({
+        success: true,
+        user: devUser,
+        token: token
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: 'Invalid dev credentials'
+    });
+  } catch (error) {
+    console.error('Dev login error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Dev login failed'
+    });
+  }
+});
+
+// Auth routes
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { email, username, password } = req.body;
-    
+
     // Mock user creation
     const user = {
       id: Math.floor(Math.random() * 1000),
@@ -249,9 +299,9 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/email/send-welcome', async (req, res) => {
   try {
     const { email, name } = req.body;
-    
+
     const result = await brevoService.sendWelcomeEmail(email, name);
-    
+
     res.json({
       success: true,
       messageId: result.messageId
@@ -268,9 +318,9 @@ app.post('/api/email/send-welcome', async (req, res) => {
 app.post('/api/email/send-verification', async (req, res) => {
   try {
     const { email, code } = req.body;
-    
+
     const result = await brevoService.sendEmailVerification(email, code);
-    
+
     res.json({
       success: true,
       messageId: result.messageId
@@ -288,9 +338,9 @@ app.post('/api/email/send-verification', async (req, res) => {
 app.post('/api/sms/send-verification', async (req, res) => {
   try {
     const { phoneNumber, code } = req.body;
-    
+
     const result = await brevoService.sendSMSVerification(phoneNumber, code);
-    
+
     res.json({
       success: true,
       messageId: result.messageId

@@ -16,10 +16,32 @@ export const api = axios.create({
 
 // Auth API endpoints
 export const authAPI = {
-  async login(email: string, password: string) {
-    const response = await api.post('/auth/login', { email, password });
-    return response.data;
-  },
+  login: async (email: string, password: string) => {
+      console.log('🔴 API: Making login request for:', email);
+
+      try {
+        const response = await api.post('/auth/login', { email, password });
+        console.log('🔴 API: Login response:', response.data);
+        return response.data;
+      } catch (error) {
+        console.log('🔴 API: Login failed, checking for developer fallback');
+
+        // Try dev login for djjetfuel@gmail.com
+        if (email === 'djjetfuel@gmail.com') {
+          console.log('🔴 API: Using developer fallback login');
+          try {
+            const devResponse = await api.post('/auth/dev-login', { email, password });
+            console.log('🔴 API: Dev login response:', devResponse.data);
+            return devResponse.data;
+          } catch (devError) {
+            console.log('🔴 API: Dev login also failed');
+            throw error; // Throw original error
+          }
+        }
+
+        throw error;
+      }
+    },
   // ... other api calls
 };
 
