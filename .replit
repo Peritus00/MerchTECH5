@@ -36,9 +36,9 @@ mode = "parallel"
 
 [[workflows.workflow.tasks]]
 # Task 1: Start the stable backend server.
-# It navigates to the 'server' directory and runs the corrected server file.
+# FIX: Using a direct path to the server file, which is more robust.
 task = "shell.exec"
-args = "node working-server.js"
+args = "node server/working-server.js"
 
 [[workflows.workflow.tasks]]
 # Task 2: Start the Expo frontend development server.
@@ -51,5 +51,5 @@ args = "npx expo start --web --clear"
 # This tells Replit how to run your application when it's deployed.
 [deployment]
 # It will run only the stable working-server.js on the correct port.
-run = ["sh", "-c", "node working-server.js"]
+run = ["sh", "-c", "node server/working-server.js"]
 
