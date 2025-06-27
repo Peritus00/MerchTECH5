@@ -2,7 +2,7 @@
 import axios from 'axios';
 
 // FIXED CONFIGURATION - NO DYNAMIC DETECTION
-const API_BASE_URL = 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || `${window.location.protocol}//${window.location.hostname}:5001/api`;
 
 console.log('🎯 FIXED API Base URL (PORT 5001):', API_BASE_URL);
 
