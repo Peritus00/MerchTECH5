@@ -1,0 +1,55 @@
+const axios = require('axios');
+
+async function verifyServer() {
+  console.log('🔍 Verifying server startup...');
+
+  // Wait for 5 seconds to give the server time to initialize
+  await new Promise(resolve => setTimeout(resolve, 5000));
+
+  const testEndpoints = [
+    '/api/health',
+    '/api/playlists' 
+    // Add any other key endpoints you want to verify here
+  ];
+
+  console.log('--- STARTING ENDPOINT VERIFICATION ---');
+
+  for (const endpoint of testEndpoints) {
+    const url = `http://localhost:5001${endpoint}`;
+    try {
+      const options = {
+        headers: {
+          'Authorization': 'Bearer dev_jwt_token_djjetfuel_12345'
+        },
+        timeout: 10000 // 10 second timeout
+      };
+
+      const response = await axios.get(url, options);
+
+      console.log(`✅ SUCCESS: ${endpoint} -> Status: ${response.status}`);
+      // Optionally log response data for debugging
+      // console.log('   Response:', response.data);
+
+    } catch (error) {
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error(`❌ FAILURE: ${endpoint} -> Status: ${error.response.status} | Data:`, error.response.data);
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error(`❌ TIMEOUT or NO RESPONSE: ${endpoint} -> ${error.message}`);
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error(`❌ ERROR: ${endpoint} -> ${error.message}`);
+      }
+    }
+  }
+  console.log('--- VERIFICATION COMPLETE ---');
+}
+
+// Run the verification if the script is called directly
+if (require.main === module) {
+  verifyServer();
+}
+
+module.exports = { verifyServer };

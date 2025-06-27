@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -7,7 +6,8 @@ const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+// FIX: Corrected default port from 5000 to 5001 for consistency.
+const PORT = process.env.PORT || 5001;
 
 console.log('🚀 Starting working server...');
 console.log('🔍 Environment check:');
@@ -52,7 +52,7 @@ app.use(cors({
       return callback(null, true);
     }
 
-    // Allow all origins in development
+    // Fallback to allow all origins in development
     return callback(null, true);
   },
   credentials: true,
@@ -115,7 +115,9 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
-// Routes
+// --- ROUTES ---
+
+// Root route
 app.get('/', (req, res) => {
   res.json({ 
     message: 'MerchTech QR API Server', 
@@ -127,6 +129,7 @@ app.get('/', (req, res) => {
   });
 });
 
+// Health check route
 app.get('/api/health', async (req, res) => {
   try {
     const result = await pool.query('SELECT NOW() as timestamp');
@@ -152,7 +155,7 @@ app.get('/api/health', async (req, res) => {
 // Auth routes
 app.post('/api/auth/login', async (req, res) => {
   console.log('🔵 LOGIN REQUEST:', { email: req.body.email });
-  
+
   try {
     const { email, password } = req.body;
 
@@ -332,97 +335,9 @@ app.get('/api/media', authenticateToken, async (req, res) => {
   }
 });
 
-// Initialize database
-async function initializeDatabase() {
-  try {
-    console.log('🔧 Initializing database...');
+// --- ERROR HANDLING ---
 
-    // Create users table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        first_name VARCHAR(100),
-        last_name VARCHAR(100),
-        is_email_verified BOOLEAN DEFAULT false,
-        subscription_tier VARCHAR(20) DEFAULT 'free',
-        is_new_user BOOLEAN DEFAULT true,
-        is_admin BOOLEAN DEFAULT false,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create playlists table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS playlists (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        requires_activation_code BOOLEAN DEFAULT FALSE,
-        is_public BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create media_files table
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS media_files (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        title VARCHAR(255) NOT NULL,
-        file_path TEXT NOT NULL,
-        file_type VARCHAR(50) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    // Create/update dev user with correct password
-    console.log('🔧 Setting up dev user...');
-    const existingUser = await pool.query(
-      'SELECT id FROM users WHERE email = $1',
-      ['djjetfuel@gmail.com']
-    );
-
-    const hashedPassword = await bcrypt.hash('Kerrie321', 12);
-
-    if (existingUser.rows.length === 0) {
-      await pool.query(
-        `INSERT INTO users (email, username, password_hash, is_email_verified, is_admin, subscription_tier)
-         VALUES ($1, $2, $3, true, true, 'premium')`,
-        ['djjetfuel@gmail.com', 'djjetfuel', hashedPassword]
-      );
-      console.log('✅ Dev user created: djjetfuel@gmail.com / Kerrie321');
-    } else {
-      await pool.query(
-        `UPDATE users 
-         SET password_hash = $1, is_email_verified = true, is_admin = true, subscription_tier = 'premium'
-         WHERE email = $2`,
-        [hashedPassword, 'djjetfuel@gmail.com']
-      );
-      console.log('✅ Dev user password updated: djjetfuel@gmail.com / Kerrie321');
-    }
-
-    console.log('✅ Database initialized');
-  } catch (error) {
-    console.error('❌ Database init error:', error.message);
-  }
-}
-
-// Error handling
-app.use((err, req, res, next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: err.message,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Catch-all for undefined routes
+// 404 handler - Must be after all other routes
 app.use('*', (req, res) => {
   res.status(404).json({
     error: 'Route not found',
@@ -432,17 +347,105 @@ app.use('*', (req, res) => {
   });
 });
 
-// Start server
-async function startServer() {
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
+  });
+});
+
+
+// --- SERVER STARTUP ---
+
+const initializeDatabase = async () => {
+    try {
+        console.log('🔧 Initializing database...');
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS users (
+            id SERIAL PRIMARY KEY,
+            email VARCHAR(255) UNIQUE NOT NULL,
+            username VARCHAR(50) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            first_name VARCHAR(100),
+            last_name VARCHAR(100),
+            is_email_verified BOOLEAN DEFAULT false,
+            subscription_tier VARCHAR(20) DEFAULT 'free',
+            is_new_user BOOLEAN DEFAULT true,
+            is_admin BOOLEAN DEFAULT false,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS playlists (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            requires_activation_code BOOLEAN DEFAULT FALSE,
+            is_public BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS media_files (
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            file_path TEXT NOT NULL,
+            file_type VARCHAR(50) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `);
+
+        console.log('🔧 Setting up dev user...');
+        const existingUser = await pool.query(
+            'SELECT id FROM users WHERE email = $1',
+            ['djjetfuel@gmail.com']
+        );
+
+        const hashedPassword = await bcrypt.hash('Kerrie321', 12);
+
+        if (existingUser.rows.length === 0) {
+            await pool.query(
+                `INSERT INTO users (email, username, password_hash, is_email_verified, is_admin, subscription_tier)
+                 VALUES ($1, $2, $3, true, true, 'premium')`,
+                ['djjetfuel@gmail.com', 'djjetfuel', hashedPassword]
+            );
+            console.log('✅ Dev user created: djjetfuel@gmail.com / Kerrie321');
+        } else {
+            await pool.query(
+                `UPDATE users 
+                 SET password_hash = $1, is_email_verified = true, is_admin = true, subscription_tier = 'premium'
+                 WHERE email = $2`,
+                [hashedPassword, 'djjetfuel@gmail.com']
+            );
+            console.log('✅ Dev user password updated: djjetfuel@gmail.com / Kerrie321');
+        }
+
+        console.log('✅ Database initialized');
+    } catch (error) {
+        console.error('❌ Database init error:', error.message);
+        throw error; // Propagate error to stop server startup
+    }
+};
+
+const startServer = async () => {
   try {
     await initializeDatabase();
-    
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('🚀 ================================');
       console.log(`🚀 Working server running on port ${PORT}`);
       console.log(`📍 Local: http://0.0.0.0:${PORT}`);
-      console.log(`🌐 External: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}`);
-      console.log(`❤️ Health check: https://${process.env.REPLIT_DEV_DOMAIN}:${PORT}/api/health`);
+      console.log(`🌐 External: https://${process.env.REPLIT_DEV_DOMAIN}`);
+      console.log(`❤️ Health check: https://${process.env.REPLIT_DEV_DOMAIN}/api/health`);
       console.log(`🔐 Dev login: djjetfuel@gmail.com / Kerrie321`);
       console.log(`🔧 Process ID: ${process.pid}`);
       console.log('🚀 ================================');
@@ -462,26 +465,20 @@ async function startServer() {
     console.error('❌ Failed to start server:', error);
     process.exit(1);
   }
-}
+};
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully');
-  pool.end(() => {
-    console.log('📊 Database pool closed');
-    process.exit(0);
-  });
-});
+const gracefulShutdown = (signal) => {
+    console.log(`🛑 ${signal} received, shutting down gracefully`);
+    pool.end(() => {
+        console.log('📊 Database pool closed');
+        process.exit(0);
+    });
+};
 
-process.on('SIGINT', () => {
-  console.log('🛑 SIGINT received, shutting down gracefully');
-  pool.end(() => {
-    console.log('📊 Database pool closed');
-    process.exit(0);
-  });
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Handle unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });

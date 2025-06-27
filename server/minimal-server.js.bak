@@ -1,12 +1,14 @@
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
+// FIX 1: Standardized to use the native 'bcrypt' library for consistency and performance.
+const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+// FIX 2: Corrected the default port from 5000 to 5001.
+const PORT = process.env.PORT || 5001;
 const HOST = '0.0.0.0';
 
 console.log('🔴 SERVER: Starting minimal server...');
@@ -249,18 +251,9 @@ async function initializeDatabase() {
   }
 }
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('🔴 SERVER: Unhandled error:', err);
-  res.status(500).json({ 
-    error: 'Internal server error',
-    message: err.message,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// 404 handler
-app.use('/*splat', (req, res) => {
+// FIX 3: Replaced invalid '/*splat' with the correct Express catch-all for 404 errors.
+// This must be placed after all other valid routes.
+app.use((req, res, next) => {
   console.log(`🔴 SERVER: 404 - Route not found: ${req.method} ${req.originalUrl}`);
   res.status(404).json({ 
     error: 'Route not found',
@@ -268,6 +261,16 @@ app.use('/*splat', (req, res) => {
     path: req.originalUrl,
     timestamp: new Date().toISOString(),
     server: 'minimal-server.js'
+  });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+  console.error('🔴 SERVER: Unhandled error:', err);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: err.message,
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -316,3 +319,5 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('🔴 SERVER: Unhandled Rejection at:', promise, 'reason:', reason);
   process.exit(1);
 });
+
+module.exports = app;

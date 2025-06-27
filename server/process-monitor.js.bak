@@ -1,8 +1,9 @@
-
 const express = require('express');
 const { spawn, exec } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
+// FIX 1: Using axios for HTTP requests as it's an existing dependency.
+const axios = require('axios');
 
 class ProcessMonitor {
   constructor() {
@@ -14,9 +15,9 @@ class ProcessMonitor {
     this.healthCheckTimer = null;
     this.isShuttingDown = false;
     this.lastHealthCheck = null;
-    
+
     console.log('🔄 Process Monitor initialized');
-    
+
     // Bind methods to preserve context
     this.startServer = this.startServer.bind(this);
     this.stopServer = this.stopServer.bind(this);
@@ -32,13 +33,13 @@ class ProcessMonitor {
     }
 
     console.log(`🚀 Starting server (attempt ${this.restartCount + 1}/${this.maxRestarts + 1})`);
-    
+
     try {
       // Clean up any orphaned processes first
       await this.cleanupOrphanedProcesses();
-      
-      // Start the server process
-      this.serverProcess = spawn('node', ['simple-server.js'], {
+
+      // FIX 2: Starting the corrected 'minimal-server.js' instead of the old file.
+      this.serverProcess = spawn('node', ['minimal-server.js'], {
         cwd: path.join(__dirname),
         stdio: ['pipe', 'pipe', 'pipe'],
         env: { ...process.env }
@@ -63,7 +64,7 @@ class ProcessMonitor {
       this.serverProcess.on('exit', async (code, signal) => {
         console.log(`🔴 Server process exited with code ${code}, signal ${signal}`);
         this.serverProcess = null;
-        
+
         if (!this.isShuttingDown) {
           if (this.restartCount < this.maxRestarts) {
             console.log(`🔄 Scheduling restart in ${this.restartDelay / 1000} seconds...`);
@@ -84,13 +85,13 @@ class ProcessMonitor {
 
       // Wait for server to be ready
       await this.waitForServerReady();
-      
+
       // Start health monitoring
       this.startHealthMonitoring();
-      
+
       console.log('✅ Server started successfully');
       this.restartCount = 0; // Reset on successful start
-      
+
     } catch (error) {
       console.error('❌ Failed to start server:', error);
       throw error;
@@ -104,7 +105,7 @@ class ProcessMonitor {
 
     console.log('🛑 Stopping server...');
     this.isShuttingDown = true;
-    
+
     // Stop health monitoring
     if (this.healthCheckTimer) {
       clearInterval(this.healthCheckTimer);
@@ -113,7 +114,7 @@ class ProcessMonitor {
 
     // Gracefully terminate the server
     this.serverProcess.kill('SIGTERM');
-    
+
     // Wait for graceful shutdown
     await new Promise((resolve) => {
       const timeout = setTimeout(() => {
@@ -142,7 +143,7 @@ class ProcessMonitor {
 
     this.restartCount++;
     console.log(`🔄 Restarting server (${this.restartCount}/${this.maxRestarts})`);
-    
+
     await this.stopServer();
     await new Promise(resolve => setTimeout(resolve, this.restartDelay));
     await this.startServer();
@@ -156,7 +157,7 @@ class ProcessMonitor {
     while (waited < maxWaitTime) {
       try {
         const response = await this.makeHealthRequest();
-        if (response.ok) {
+        if (response.status === 200) {
           console.log('✅ Server is ready');
           return;
         }
@@ -172,9 +173,8 @@ class ProcessMonitor {
   }
 
   async makeHealthRequest() {
-    const fetch = (await import('node-fetch')).default;
-    return fetch('http://0.0.0.0:5001/api/health', {
-      method: 'GET',
+    // FIX 3: Using axios with the correct 'localhost' address.
+    return axios.get('http://localhost:5001/api/health', {
       timeout: 5000
     });
   }
@@ -194,11 +194,10 @@ class ProcessMonitor {
   async healthCheck() {
     try {
       const response = await this.makeHealthRequest();
-      
-      if (response.ok) {
-        const data = await response.json();
+
+      if (response.status === 200) {
         this.lastHealthCheck = new Date().toISOString();
-        console.log('💚 Health check passed:', data.status);
+        console.log('💚 Health check passed:', response.data.status);
         return true;
       } else {
         console.log('⚠️ Health check failed with status:', response.status);
@@ -214,7 +213,7 @@ class ProcessMonitor {
 
   async handleHealthCheckFailure() {
     console.log('🔄 Health check failed, attempting server restart...');
-    
+
     if (!this.isShuttingDown) {
       await this.restartServer();
     }
@@ -223,9 +222,10 @@ class ProcessMonitor {
   async cleanupOrphanedProcesses() {
     try {
       console.log('🧹 Cleaning up orphaned processes...');
-      
+
+      // FIX 4: Targeting the correct server file for cleanup.
       const commands = [
-        'pkill -f "node.*simple-server" || true',
+        'pkill -f "node.*minimal-server" || true',
         'pkill -f "node.*5001" || true',
         'lsof -ti:5001 | xargs kill -9 2>/dev/null || true',
         'fuser -k 5001/tcp 2>/dev/null || true'
@@ -241,7 +241,7 @@ class ProcessMonitor {
 
       // Wait for cleanup to take effect
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       console.log('✅ Process cleanup completed');
     } catch (error) {
       console.log('🧹 Process cleanup completed with warnings:', error.message);
@@ -252,7 +252,8 @@ class ProcessMonitor {
     return new Promise((resolve, reject) => {
       exec(command, (error, stdout, stderr) => {
         if (error) {
-          reject(error);
+          // Don't reject, just resolve to allow cleanup to continue
+          resolve({ error, stdout, stderr });
         } else {
           resolve({ stdout, stderr });
         }
@@ -263,12 +264,12 @@ class ProcessMonitor {
   async cleanup() {
     console.log('🧹 Process monitor cleanup...');
     this.isShuttingDown = true;
-    
+
     if (this.healthCheckTimer) {
       clearInterval(this.healthCheckTimer);
       this.healthCheckTimer = null;
     }
-    
+
     await this.stopServer();
     console.log('✅ Process monitor cleanup complete');
   }
@@ -305,7 +306,6 @@ process.on('unhandledRejection', (reason, promise) => {
 
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
-  // Don't exit immediately, let the monitor handle it
 });
 
 // Start the monitor

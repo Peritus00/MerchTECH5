@@ -1,0 +1,56 @@
+🔴 AuthService: Attempting login for: djjetfuel@gmail.com
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}
+Console.js:61 🔵 API Request: {method: 'POST', url: '/auth/login', baseURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api', fullURL: 'https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api/auth/login'}
+Console.js:61 🔴 API Response Error: {url: '/auth/login', status: undefined, message: 'timeout of 30000ms exceeded'}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82776
+Promise.then
+_request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83862
+request @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83758
+httpMethod @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83914
+wrap @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:83710
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82787
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82314
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167
+handleLogin @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154332
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192056
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192353
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185724
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192136
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194218
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194200Understand this error
+Console.js:61 🔴 AuthService: Login error: AxiosError {message: 'timeout of 30000ms exceeded', name: 'AxiosError', code: 'ECONNABORTED', config: {…}, request: XMLHttpRequest, …}
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82326
+await in login
+login @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167
+handleLogin @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154332
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192056
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192353
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185724
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192136
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194218
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194200Understand this error
+Console.js:61 Login error: Error: timeout of 30000ms exceeded
+    at AuthService.login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82327:15)
+    at async login (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:82167:26)
+    at async handleLogin (entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154332:24)
+Mt.forEach.n.<computed> @ Console.js:61
+registerError @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:4007
+console.error @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:3945
+handleLogin @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:154341
+await in handleLogin
+onClick @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:15066
+processDispatchQueue @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192056
+(anonymous) @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192353
+batchedUpdates$1 @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:185724
+dispatchEventForPluginEventSystem @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:192136
+dispatchEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194218
+dispatchDiscreteEvent @ entry.bundle?platform=web&dev=true&hot=false&lazy=true&transform.routerRoot=app:194200Understand this error
+Console.js:61 🔴 Route navigation check: {isAuthenticated: false, inAuthGroup: true, inSubscriptionGroup: false, inNotFoundGroup: false, currentSegments: Array(2), …}

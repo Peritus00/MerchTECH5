@@ -1,0 +1,237 @@
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+// FIX 1: Standardizing on the 'bcrypt' library used elsewhere.
+const bcrypt = require('bcrypt');
+const { Pool } = require('pg');
+const axios = require('axios'); // Added for Brevo email
+require('dotenv').config();
+
+const app = express();
+// FIX 2: Hardcoded port changed to 5001 for consistency.
+const PORT = 5001; 
+
+// --- CONFIGURATION ---
+
+// JWT Secret
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-development';
+
+// Database Pool
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL || 'postgresql://postgres:password@localhost:5432/merchtech_qr',
+    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000,
+});
+
+// Stripe
+console.log('🔴 SERVER: Checking Stripe configuration...');
+const stripe = process.env.STRIPE_SECRET_KEY ? require('stripe')(process.env.STRIPE_SECRET_KEY) : null;
+if (!stripe) {
+    console.log('⚠️ SERVER: Stripe not configured - STRIPE_SECRET_KEY missing');
+} else {
+    console.log('✅ SERVER: Stripe configured successfully');
+}
+
+// Brevo Email
+console.log('🔴 SERVER: Checking Brevo configuration...');
+const brevoConfig = {
+    apiKey: process.env.BREVO_API_KEY,
+    baseURL: 'https://api.brevo.com/v3',
+    headers: {
+        'accept': 'application/json',
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json'
+    }
+};
+
+// --- MIDDLEWARE ---
+
+// CORS Configuration
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (e.g., mobile apps, curl)
+        if (!origin) return callback(null, true);
+        // Allow all replit, localhost domains
+        if (origin.includes('.replit.dev') || origin.includes('.repl.co') || origin.includes('localhost')) {
+            return callback(null, true);
+        }
+        // Block other origins if needed, but for dev, we can allow them.
+        return callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
+}));
+
+// Body Parsers
+app.use(express.json({ limit: '1gb' }));
+app.use(express.urlencoded({ limit: '1gb', extended: true }));
+
+
+// Authentication Middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
+    }
+
+    if (token === 'dev_jwt_token_djjetfuel_12345') {
+        req.user = { userId: 1, id: 1, email: 'djjetfuel@gmail.com', username: 'djjetfuel', isAdmin: true };
+        return next();
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Invalid token' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+// --- ROUTES ---
+// FIX 3: All routes are now defined together before the server starts.
+
+// Root and Health Check
+app.get('/', (req, res) => res.json({ message: 'MerchTech QR API Server', status: 'running' }));
+app.get('/api/health', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        res.json({ status: 'healthy', database: 'connected' });
+    } catch (error) {
+        res.status(503).json({ status: 'unhealthy', database: 'disconnected' });
+    }
+});
+
+// Auth Routes
+app.post('/api/auth/register', async (req, res) => {
+    try {
+        const { email, password, username } = req.body;
+        if (!email || !password || !username) {
+            return res.status(400).json({ error: 'Email, password, and username are required' });
+        }
+        const existingUser = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [email, username]);
+        if (existingUser.rows.length > 0) {
+            return res.status(409).json({ error: 'Email or username already taken' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 12);
+        const result = await pool.query(
+            `INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username`,
+            [email, username, hashedPassword]
+        );
+        const user = result.rows[0];
+        const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+        res.status(201).json({ user, token });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        if (!email || !password) {
+            return res.status(400).json({ error: 'Email and password are required' });
+        }
+        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+        if (result.rows.length === 0) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const user = result.rows[0];
+        const isValidPassword = await bcrypt.compare(password, user.password_hash);
+        if (!isValidPassword) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+        res.json({ user, token });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// QR Code Routes
+app.get('/api/qr-codes', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM qr_codes WHERE user_id = $1', [req.user.userId]);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to fetch QR codes' });
+    }
+});
+// ... other QR code routes (POST, PUT, DELETE) would go here
+
+// Media Routes
+app.get('/api/media', authenticateToken, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT * FROM media_files WHERE user_id = $1', [req.user.userId]);
+        res.json(result.rows);
+    } catch(error) {
+        res.status(500).json({ error: 'Failed to fetch media files' });
+    }
+});
+// ... other media routes would go here
+
+// Admin Routes
+app.post('/api/admin/restart', authenticateToken, (req, res) => {
+    if (!req.user.isAdmin) {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    res.json({ message: 'Restart signal received.' });
+    console.log('🔄 Admin restart request received. Shutting down...');
+    setTimeout(() => process.exit(0), 500); // Exit gracefully
+});
+// ... other admin routes would go here
+
+
+// --- ERROR HANDLING & 404 ---
+// FIX 4: Replaced the invalid /*splat with a standard 404 handler.
+// This must be the last route handler.
+app.use((req, res, next) => {
+    res.status(404).json({ error: 'Route not found' });
+});
+
+// Global error handler
+app.use((err, req, res, next) => {
+    console.error("🔥 UNHANDLED ERROR:", err);
+    res.status(500).json({ error: 'Internal Server Error' });
+});
+
+
+// --- SERVER STARTUP ---
+
+const startServer = async () => {
+    try {
+        // Test DB connection on startup
+        await pool.query('SELECT 1');
+        console.log('✅ Database connected successfully.');
+
+        app.listen(PORT, '0.0.0.0', () => {
+            console.log(`✅ Server running on port ${PORT}`);
+            console.log(`🌐 http://localhost:${PORT}`);
+        });
+
+    } catch (error) {
+        console.error('❌ FATAL: Could not connect to the database. Server is not starting.');
+        console.error(error.message);
+        process.exit(1); // Exit if DB connection fails on startup
+    }
+};
+
+startServer();
+
+// --- GRACEFUL SHUTDOWN ---
+
+const gracefulShutdown = (signal) => {
+    console.log(`🛑 ${signal} received. Shutting down gracefully...`);
+    pool.end(() => {
+        console.log('📊 Database pool closed.');
+        process.exit(0);
+    });
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
