@@ -4,16 +4,31 @@ export interface User {
   username: string;
   firstName?: string;
   lastName?: string;
-  isAdmin?: boolean;
-  subscriptionTier?: 'free' | 'premium' | 'enterprise';
+  isAdmin: boolean;
+  subscriptionTier: 'free' | 'basic' | 'premium';
   permissions?: string[];
   isEmailVerified?: boolean;
-  isSuspended?: boolean;
+  isSuspended: boolean;
   isPending?: boolean;
   pendingExpiry?: Date;
-  lastActive?: Date;
-  createdAt?: Date;
+  lastActive: string;
+  createdAt: string;
   isNewUser?: boolean;
+  canViewAnalytics: boolean;
+  canManagePlaylists: boolean;
+  canEditPlaylists: boolean;
+  canUploadMedia: boolean;
+  canGenerateCodes: boolean;
+  canAccessStore: boolean;
+  canViewFanmail: boolean;
+  canManageQRCodes: boolean;
+  maxPlaylists: number;
+  maxVideos: number;
+  maxAudioFiles: number;
+  maxActivationCodes: number;
+  maxProducts: number;
+  maxQrCodes: number;
+  maxSlideshows: number;
 }
 
 export interface QRCode {

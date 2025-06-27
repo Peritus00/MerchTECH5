@@ -75,7 +75,7 @@ export default function ProfileScreen() {
       // Note: Don't check authentication state here since logout immediately 
       // clears the state and navigates away from this component
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔴 Profile logout error:', error);
       console.error('🔴 Profile logout error details:', {
         message: error?.message || 'Unknown error',
@@ -252,37 +252,39 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
     marginBottom: 8,
+    color: '#666',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#d0d0d0',
+    backgroundColor: '#fff',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   subscriptionInfo: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
   },
   subscriptionTier: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#007BFF',
+    fontWeight: 'bold',
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    marginBottom: 16,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
   },
   switchInfo: {
     flex: 1,
-    marginRight: 16,
   },
   switchLabel: {
     fontSize: 16,
@@ -290,8 +292,8 @@ const styles = StyleSheet.create({
   },
   switchDescription: {
     fontSize: 12,
-    opacity: 0.7,
-    marginTop: 2,
+    color: '#666',
+    marginTop: 4,
   },
   actions: {
     marginTop: 16,
@@ -301,90 +303,94 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   saveButtonText: {
     color: '#fff',
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: '600',
   },
   logoutButton: {
-    backgroundColor: '#DC3545',
+    backgroundColor: '#f8d7da',
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
   },
   logoutButtonText: {
-    color: '#fff',
+    color: '#721c24',
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: '600',
   },
   disabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   footer: {
-    alignItems: 'center',
     marginTop: 32,
-    paddingTop: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    alignItems: 'center',
   },
   footerText: {
-    fontSize: 12,
-    opacity: 0.7,
+    color: '#999',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    margin: 20,
-    minWidth: 300,
+    width: '90%',
     maxWidth: 400,
+    backgroundColor: 'white',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 22,
+    fontWeight: 'bold',
     marginBottom: 12,
     textAlign: 'center',
-    color: '#22c55e',
   },
   modalMessage: {
     fontSize: 16,
-    marginBottom: 24,
     textAlign: 'center',
+    marginBottom: 24,
+    color: '#333',
     lineHeight: 22,
-    color: '#22c55e',
   },
   modalButtons: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
+    width: '100%',
   },
   modalButton: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#f3f4f6',
-  },
-  confirmButton: {
-    backgroundColor: '#DC3545',
+    backgroundColor: '#f0f0f0',
+    marginRight: 8,
   },
   cancelButtonText: {
-    color: '#22c55e',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  confirmButton: {
+    backgroundColor: '#d9534f',
+    marginLeft: 8,
   },
   confirmButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: 'white',
+    fontWeight: 'bold',
   },
-});
+}); 

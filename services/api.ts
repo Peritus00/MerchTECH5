@@ -1,8 +1,7 @@
 import axios from 'axios';
 
-// Rely on the environment variable set in Replit Secrets.
-// This ensures it uses the full, correct public URL.
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+// Rely on the environment variable set in your .env file
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
 
 console.log('✅ API configured to use public URL:', API_BASE_URL);
 
@@ -16,33 +15,34 @@ export const api = axios.create({
 
 // Auth API endpoints
 export const authAPI = {
-  login: async (email: string, password: string) => {
-      console.log('🔴 API: Making login request for:', email);
+  async login(email: string, password: string) {
+    const response = await api.post('/auth/login', { email, password });
+    return response.data;
+  },
 
-      try {
-        const response = await api.post('/auth/login', { email, password });
-        console.log('🔴 API: Login response:', response.data);
-        return response.data;
-      } catch (error) {
-        console.log('🔴 API: Login failed, checking for developer fallback');
+  async register(email: string, password: string, username: string) {
+    const response = await api.post('/auth/register', { email, password, username });
+    return response.data;
+  },
 
-        // Try dev login for djjetfuel@gmail.com
-        if (email === 'djjetfuel@gmail.com') {
-          console.log('🔴 API: Using developer fallback login');
-          try {
-            const devResponse = await api.post('/auth/dev-login', { email, password });
-            console.log('🔴 API: Dev login response:', devResponse.data);
-            return devResponse.data;
-          } catch (devError) {
-            console.log('🔴 API: Dev login also failed');
-            throw error; // Throw original error
-          }
-        }
+  // **THE FIX**: Added the missing sendVerification function.
+  async sendVerification(email: string) {
+    const response = await api.post('/auth/send-verification', { email });
+    return response.data;
+  },
+  
+  // You may need these other functions later, so I've added them proactively.
+  async resendVerification(email: string) {
+    const response = await api.post('/auth/resend-verification', { email });
+    return response.data;
+  },
 
-        throw error;
-      }
-    },
-  // ... other api calls
+  async verifyEmail(token: string) {
+    // Note: The verification link is a GET request, but if you have a form for it, it might be a POST.
+    // This assumes the server has a POST route for this.
+    const response = await api.post('/auth/verify-email', { token });
+    return response.data;
+  },
 };
 
 export default api;

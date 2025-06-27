@@ -1,44 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-interface UserPermissions {
-  id: number | string;
-  username: string;
-  email: string;
-  subscriptionTier: 'free' | 'basic' | 'premium';
-  isAdmin: boolean;
-  canViewAnalytics: boolean;
-  canManagePlaylists: boolean;
-  canEditPlaylists: boolean;
-  canUploadMedia: boolean;
-  canGenerateCodes: boolean;
-  canAccessStore: boolean;
-  canViewFanmail: boolean;
-  canManageQRCodes: boolean;
-  maxPlaylists: number;
-  maxVideos: number;
-  maxAudioFiles: number;
-  maxActivationCodes: number;
-  maxProducts: number;
-  maxQrCodes: number;
-  maxSlideshows: number;
-  isSuspended: boolean;
-  createdAt: string;
-  lastActive: string;
-  isPending?: boolean;
-}
+import api from '@/services/api';
+import { User } from '@/types';
 
 interface UseUserPermissionsResult {
-  users: UserPermissions[];
+  users: User[];
   isLoading: boolean;
   refreshUsers: () => Promise<void>;
-  updateUserPermissions: (userId: number, permissions: Partial<UserPermissions>) => Promise<boolean>;
+  updateUserPermissions: (userId: number, permissions: Partial<User>) => Promise<boolean>;
   deleteUser: (userId: number | string) => Promise<boolean>;
 }
 
 export const useUserPermissions = (): UseUserPermissionsResult => {
-  const [users, setUsers] = useState<UserPermissions[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Get the current domain and construct the API URL properly
@@ -111,7 +86,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
         console.log('Number of users:', Array.isArray(data) ? data.length : 'Not an array');
 
         // Transform the API data to match our UserPermissions interface
-        const transformedUsers: UserPermissions[] = data.map((user: any) => {
+        const transformedUsers: User[] = data.map((user: any) => {
           // Use the correct field names from the API response
           const subscriptionTier = user.subscriptionTier || user.subscription_tier || 'free';
           const isPending = user.isPending || user.status === 'pending' || false;
@@ -153,17 +128,21 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      let errorMessage = 'An unknown error occurred';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      
       console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
+        message: errorMessage,
         apiUrl: `${getApiUrl()}/admin/all-users`
       });
 
       // Don't show alert for network errors, just log them
-      if (error.message?.includes('Network Error') || error.message?.includes('fetch') || error.message?.includes('TypeError')) {
+      if (errorMessage.includes('Network Error') || errorMessage.includes('fetch') || errorMessage.includes('TypeError')) {
         console.log('Network connectivity issue - users list will be empty');
       } else {
-        Alert.alert('Error', `Failed to load users: ${error.message}`);
+        Alert.alert('Error', `Failed to load users: ${errorMessage}`);
       }
     } finally {
       setIsLoading(false);
@@ -172,7 +151,7 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
 
   const updateUserPermissions = async (
     userId: number,
-    permissions: Partial<UserPermissions>
+    permissions: Partial<User>
   ): Promise<boolean> => {
     try {
       // Mock update for development
@@ -213,112 +192,37 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   };
 
   const deleteUser = async (userId: number | string): Promise<boolean> => {
-    console.log('=== DELETE USER FUNCTION CALLED ===');
-    console.log('User ID to delete:', userId, 'Type:', typeof userId);
-
     try {
-      let token = await AsyncStorage.getItem('authToken');
-      console.log('Auth token available:', !!token);
-
-      // Check if we need to use the developer fallback token
+      const token = await AsyncStorage.getItem('authToken');
       if (!token) {
-        console.log('No token found, checking for developer fallback');
-        const currentUser = await AsyncStorage.getItem('currentUser');
-        if (currentUser) {
-          const user = JSON.parse(currentUser);
-          if (user.email === 'djjetfuel@gmail.com') {
-            token = 'dev_jwt_token_djjetfuel_12345';
-            console.log('Using developer fallback token');
-          }
-        }
+        throw new Error('Authentication token not found');
       }
 
-      if (!token) {
-        console.error('No auth token found');
-        Alert.alert('Error', 'Authentication required');
-        return false;
-      }
-
-      // Handle pending user IDs (format: "pending_123")
-      let actualUserId = userId;
-      if (typeof userId === 'string' && userId.startsWith('pending_')) {
-        actualUserId = userId.replace('pending_', '');
-        console.log('Converted pending user ID:', actualUserId);
-      }
-
-      console.log('Final user ID for API call:', actualUserId);
-
-      const apiUrl = `${getApiUrl()}/admin/users/${actualUserId}`;
-      console.log('Delete API URL:', apiUrl);
-
-      console.log('Making DELETE request...');
-      console.log('Request headers:', {
-        'Authorization': `Bearer ${token ? token.substring(0, 20) + '...' : 'None'}`,
-        'Content-Type': 'application/json'
-      });
-
+      const apiUrl = `${getApiUrl()}/admin/users/${userId}`;
       const response = await fetch(apiUrl, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
 
-      console.log('Delete response status:', response.status);
-      console.log('Delete response ok:', response.ok);
-      console.log('Delete response headers:', Object.fromEntries(response.headers.entries()));
-
       if (response.ok) {
-        console.log('Delete successful - updating local state');
-        try {
-          const responseData = await response.text();
-          console.log('Delete response data:', responseData);
-        } catch (e) {
-          console.log('Could not read response data, but delete was successful');
-        }
-
-        // Remove from local state using the original userId (which might be a string)
-        setUsers(prev => {
-          const before = prev.length;
-          const filteredUsers = prev.filter(u => u.id !== userId);
-          const after = filteredUsers.length;
-          console.log(`Users before deletion: ${before}, after: ${after}`);
-          console.log('Removed user with ID:', userId);
-          return filteredUsers;
-        });
-
-        console.log('User deleted successfully from state');
+        setUsers(prev => prev.filter(u => u.id !== userId));
+        Alert.alert('Success', 'User deleted successfully');
         return true;
       } else {
-        const errorText = await response.text();
-        console.error('=== DELETE FAILED ===');
-        console.error('Delete error response:', errorText);
-        console.error('Response status:', response.status);
-        console.error('Response status text:', response.statusText);
-
-        let errorMessage = 'Failed to delete user';
-        try {
-          const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorJson.message || errorMessage;
-        } catch (e) {
-          console.log('Could not parse error response as JSON');
-          errorMessage = errorText || errorMessage;
-        }
-
-        console.error('Final error message:', errorMessage);
-        Alert.alert('Delete Failed', errorMessage);
-        return false;
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete user');
       }
     } catch (error) {
-      console.error('=== DELETE USER ERROR ===');
-      console.error('Error deleting user:', error);
-      console.error('Error message:', error?.message || 'Unknown error');
-      console.error('Error stack:', error?.stack || 'No stack trace');
-
-      // Show specific error message to user
-      const errorMessage = error?.message || 'Network error occurred';
-      Alert.alert('Delete Error', `Failed to delete user: ${errorMessage}`);
+      if (error instanceof Error) {
+        console.error('Error deleting user:', error.message);
+        Alert.alert('Error', `Failed to delete user: ${error.message}`);
+      } else {
+        console.error('An unknown error occurred while deleting user:', error);
+        Alert.alert('Error', 'An unknown error occurred while deleting the user.');
+      }
       return false;
     }
   };

@@ -43,13 +43,13 @@ function RootLayoutNav() {
         // User is signed in
         if (inAuthGroup) {
           // Redirect away from sign-in if already authenticated
-          router.replace('/(tabs)/');
+          router.replace('/(tabs)');
         } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup && !inTabsGroup) {
           // Only redirect new users to subscription if they're not already in tabs or subscription
           // Dev user bypass - skip subscription flow
           if (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel') {
             console.log('🔴 Dev user detected, redirecting to dashboard');
-            router.replace('/(tabs)/');
+            router.replace('/(tabs)');
           } else {
             console.log('🔴 New user detected outside subscription flow, redirecting to subscription');
             router.replace('/subscription');
@@ -72,7 +72,6 @@ function RootLayoutNav() {
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
-        <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
         <Stack.Screen name="store" options={{ headerShown: false }} />
         <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
