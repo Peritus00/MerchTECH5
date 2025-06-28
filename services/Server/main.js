@@ -180,6 +180,65 @@ app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) 
     }
 });
 
+// ---------- PRODUCT ROUTES ----------
+
+// Get products – supports ?mine=true to return only caller's items
+app.get('/api/products', authenticateToken, async (req, res) => {
+  try {
+    const mine = req.query.mine === 'true';
+    let result;
+    if (mine) {
+      result = await pool.query('SELECT * FROM products WHERE user_id = $1 AND is_deleted = false', [req.user.userId]);
+    } else {
+      result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+    }
+    res.json({ products: result.rows });
+  } catch (err) {
+    console.error('Error fetching products:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Public all-products route (no auth)
+app.get('/api/products/all', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+    res.json({ products: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update product (owner or admin)
+app.patch('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Fetch product to verify rights
+    const prodRes = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+    if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    const product = prodRes.rows[0];
+    if (!req.user.isAdmin && product.user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const { name, inStock, prices, isSuspended } = req.body;
+    await pool.query(
+      `UPDATE products SET name = COALESCE($1, name), in_stock = COALESCE($2, in_stock),
+        is_suspended = COALESCE($3, is_suspended), updated_at = NOW() WHERE id = $4`,
+      [name, inStock, isSuspended, id]
+    );
+
+    // Note: prices update would normally involve stripe API; omitted for brevity.
+
+    const updated = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+    res.json({ product: updated.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- ERROR HANDLING & SERVER STARTUP ---
 app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, req, res, next) => {
@@ -216,6 +275,23 @@ const initializeDatabase = async () => {
       console.log(`   -> Checking for column: ${column.name}`);
       await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};`);
     }
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        images TEXT[],
+        category VARCHAR(100),
+        in_stock BOOLEAN DEFAULT true,
+        is_suspended BOOLEAN DEFAULT false,
+        is_deleted BOOLEAN DEFAULT false,
+        metadata JSONB DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
 
     console.log('✅ Database schema initialized successfully.');
   } catch (err) {
