@@ -61,4 +61,21 @@ export const productsAPI = {
   },
 };
 
+export const salesAPI = {
+  async getMySales() {
+    const res = await api.get('/sales/user');
+    return res.data.sales;
+  },
+  async downloadMyCsv() {
+    return api.get('/sales/user/csv', { responseType: 'blob' });
+  },
+  async getAllSales() {
+    const res = await api.get('/sales/all');
+    return res.data.sales;
+  },
+  async downloadAllCsv() {
+    return api.get('/sales/all/csv', { responseType: 'blob' });
+  }
+};
+
 export default api;
