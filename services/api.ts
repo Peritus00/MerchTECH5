@@ -45,4 +45,20 @@ export const authAPI = {
   },
 };
 
+// Products API
+export const productsAPI = {
+  async getMyProducts() {
+    const res = await api.get('/products?mine=true');
+    return res.data.products;
+  },
+  async getAllProducts() {
+    const res = await api.get('/products/all');
+    return res.data.products;
+  },
+  async updateProduct(productId: string, updates: Partial<Record<string, any>>) {
+    const res = await api.patch(`/products/${productId}`, updates);
+    return res.data.product;
+  },
+};
+
 export default api;
