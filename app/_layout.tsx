@@ -80,6 +80,7 @@ function RootLayoutNav() {
         <Stack.Screen name="playlist-access/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="demo-players" options={{ headerShown: false }} />
+        <Stack.Screen name="shop" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <StatusBar style="auto" />

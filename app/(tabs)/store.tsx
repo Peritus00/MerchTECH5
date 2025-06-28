@@ -18,12 +18,15 @@ import ProductCard from '@/components/ProductCard';
 import SearchBar from '@/components/SearchBar';
 import CategoryFilter from '@/components/CategoryFilter';
 import { stripeAPI } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width } = Dimensions.get('window');
 
 export default function StoreScreen() {
   const router = useRouter();
   const { getTotalItems } = useCart();
+  const { user } = useAuth();
+  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -111,7 +114,7 @@ export default function StoreScreen() {
           ]
         }
       ];
-      setProducts(mockProducts);
+      setProducts(isAdmin ? mockProducts : mockProducts.filter(p => p.creator.username === user?.username));
     } catch (error) {
       console.error('Error fetching products:', error);
       Alert.alert('Error', 'Failed to load products. Please try again.');
@@ -177,6 +180,12 @@ export default function StoreScreen() {
           <ThemedText type="title" style={styles.headerTitle}>Store</ThemedText>
           <ThemedText style={styles.headerSubtitle}>Browse our products and services</ThemedText>
         </ThemedView>
+
+        {isAdmin && (
+          <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
+            <ThemedText style={{ fontSize: 14 }}>Shop Page ↗️</ThemedText>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
           <ThemedText style={styles.cartIcon}>🛒</ThemedText>
@@ -334,5 +343,8 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     gap: 16,
+  },
+  publicShopButton: {
+    padding: 8,
   },
 });
