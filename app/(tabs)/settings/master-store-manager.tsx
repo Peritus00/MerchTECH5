@@ -12,11 +12,14 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
 import ProductCard from '@/components/ProductCard';
+import { productsAPI } from '@/services/api';
+import ProductEditorModal from '@/components/ProductEditorModal';
 
 export default function MasterStoreManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
 
   useEffect(() => {
     fetchProducts();
@@ -24,58 +27,8 @@ export default function MasterStoreManager() {
 
   const fetchProducts = async () => {
     try {
-      // TODO: Replace with real API call once backend endpoint is available
-      // const { data } = await api.get('/admin/products');
-      // setProducts(data.products);
-
-      // Mock data for development
-      const mockProducts: Product[] = [
-        {
-          id: '1',
-          name: 'Premium Hoodie',
-          description: 'High-quality hoodie for all seasons',
-          images: ['https://picsum.photos/400?random=11'],
-          category: 'Apparel',
-          inStock: true,
-          slug: 'premium-hoodie',
-          hasSizes: true,
-          availableSizes: ['S', 'M', 'L', 'XL'],
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'alice' },
-          prices: [
-            {
-              id: 'price_11',
-              unit_amount: 4999,
-              currency: 'usd',
-              type: 'one_time',
-            },
-          ],
-        },
-        {
-          id: '2',
-          name: 'Collector Poster',
-          description: 'Limited edition poster',
-          images: ['https://picsum.photos/400?random=12'],
-          category: 'Merchandise',
-          inStock: true,
-          slug: 'collector-poster',
-          hasSizes: false,
-          isSuspended: true,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'bob' },
-          prices: [
-            {
-              id: 'price_12',
-              unit_amount: 1499,
-              currency: 'usd',
-              type: 'one_time',
-            },
-          ],
-        },
-      ];
-
-      setProducts(mockProducts);
+      const items = await productsAPI.getAllProducts();
+      setProducts(items);
     } catch (error) {
       console.error('Failed to fetch products:', error);
       Alert.alert('Error', 'Unable to load products.');
@@ -88,14 +41,8 @@ export default function MasterStoreManager() {
   const toggleSuspension = async (product: Product) => {
     const newStatus = !product.isSuspended;
     try {
-      // TODO: Replace with real API call once backend endpoint is available
-      // await api.patch(`/admin/products/${product.id}/suspend`, { isSuspended: newStatus });
-
-      setProducts((prev) =>
-        prev.map((p) =>
-          p.id === product.id ? { ...p, isSuspended: newStatus } : p,
-        ),
-      );
+      const updated = await productsAPI.updateProduct(product.id, { isSuspended: newStatus });
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
       Alert.alert(
         'Success',
         `Product ${newStatus ? 'suspended' : 're-enabled'} successfully.`,
@@ -103,6 +50,19 @@ export default function MasterStoreManager() {
     } catch (error) {
       console.error('Failed to update product status:', error);
       Alert.alert('Error', 'Unable to update product status.');
+    }
+  };
+
+  const handleSave = async (updates: Partial<Product>) => {
+    if (!editing) return;
+    try {
+      const updated = await productsAPI.updateProduct(editing.id, updates);
+      setProducts((prev) => prev.map((p) => (p.id === editing.id ? updated : p)));
+      setEditing(null);
+      Alert.alert('Saved', 'Product updated');
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Failed to update');
     }
   };
 
@@ -120,7 +80,20 @@ export default function MasterStoreManager() {
           {item.isSuspended ? 'Enable' : 'Suspend'}
         </ThemedText>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.editButton} onPress={() => setEditing(item)}>
+        <ThemedText style={{ color: '#fff' }}>Edit</ThemedText>
+      </TouchableOpacity>
     </View>
+  );
+
+  const listContent = (
+    <FlatList
+      data={products}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      contentContainerStyle={{ padding: 16 }}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchProducts} />}
+    />
   );
 
   if (loading) {
@@ -133,14 +106,12 @@ export default function MasterStoreManager() {
 
   return (
     <ThemedView style={styles.container}>
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={{ padding: 16 }}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchProducts} />
-        }
+      {listContent}
+      <ProductEditorModal
+        visible={!!editing}
+        product={editing}
+        onClose={() => setEditing(null)}
+        onSave={handleSave}
       />
     </ThemedView>
   );
@@ -166,5 +137,12 @@ const styles = StyleSheet.create({
   suspendText: {
     fontWeight: '600',
     color: '#ffffff',
+  },
+  editButton: {
+    marginTop: 6,
+    backgroundColor: '#2563eb',
+    paddingVertical: 6,
+    alignItems: 'center',
+    borderRadius: 4,
   },
 }); 
