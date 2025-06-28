@@ -73,15 +73,26 @@ export default function MyStoreManager() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <FlatList
-        data={products}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={fetchProducts} />
-        }
-        contentContainerStyle={{ padding: 16 }}
-      />
+      {products.length === 0 ? (
+        <ThemedView style={styles.emptyState}>
+          <ThemedText style={{ fontSize: 64 }}>📦</ThemedText>
+          <ThemedText style={{ marginTop: 12 }}>No products yet</ThemedText>
+          <ThemedText style={{ opacity: 0.7, textAlign:'center', marginTop:4 }}>Tap the + button below to add your first product.</ThemedText>
+        </ThemedView>
+      ) : (
+        <FlatList
+          data={products}
+          keyExtractor={(item) => item.id}
+          renderItem={renderItem}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={fetchProducts} />
+          }
+          contentContainerStyle={{ padding: 16 }}
+        />
+      )}
+      <TouchableOpacity style={styles.fab} onPress={() => Alert.alert('Add Product button tapped - creation flow coming soon')}> 
+        <ThemedText style={{ fontSize: 28, color:'#fff' }}>＋</ThemedText>
+      </TouchableOpacity>
       <ProductEditorModal
         visible={!!editing}
         product={editing}
@@ -100,5 +111,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 4,
+  },
+  emptyState:{flex:1,justifyContent:'center',alignItems:'center',padding:32},
+  fab:{
+    position:'absolute',
+    right:24,
+    bottom:24,
+    width:56,
+    height:56,
+    borderRadius:28,
+    backgroundColor:'#2563eb',
+    justifyContent:'center',
+    alignItems:'center',
+    elevation:4,
   },
 }); 
