@@ -239,6 +239,54 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ---------- SALES ROUTES ----------
+
+const toCsv = (rows) => {
+  if (rows.length === 0) return '';
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(',')];
+  for (const r of rows) {
+    lines.push(headers.map((h)=>`"${String(r[h]??'').replace(/"/g,'""')}"`).join(','));
+  }
+  return lines.join('\n');
+};
+
+// Seller scoped
+app.get('/api/sales/user', authenticateToken, async (req,res)=>{
+  try{
+    const result = await pool.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
+    res.json({sales: result.rows});
+  }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
+});
+
+app.get('/api/sales/user/csv', authenticateToken, async (req,res)=>{
+  try{
+    const result = await pool.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
+    const csv = toCsv(result.rows);
+    res.setHeader('Content-Type','text/csv');
+    res.setHeader('Content-Disposition','attachment; filename="my-sales.csv"');
+    res.send(csv);
+  }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
+});
+
+// Admin
+app.get('/api/sales/all', authenticateToken, isAdmin, async (req,res)=>{
+  try{
+    const result = await pool.query('SELECT * FROM sales ORDER BY purchased_at DESC');
+    res.json({sales: result.rows});
+  }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
+});
+
+app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
+  try{
+    const result = await pool.query('SELECT * FROM sales ORDER BY purchased_at DESC');
+    const csv = toCsv(result.rows);
+    res.setHeader('Content-Type','text/csv');
+    res.setHeader('Content-Disposition','attachment; filename="all-sales.csv"');
+    res.send(csv);
+  }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
+});
+
 // --- ERROR HANDLING & SERVER STARTUP ---
 app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
 app.use((err, req, res, next) => {
@@ -290,6 +338,18 @@ const initializeDatabase = async () => {
         metadata JSONB DEFAULT '{}',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS sales (
+        id SERIAL PRIMARY KEY,
+        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        buyer_email VARCHAR(255),
+        quantity INTEGER NOT NULL DEFAULT 1,
+        total_cents INTEGER NOT NULL,
+        purchased_at TIMESTAMPTZ DEFAULT NOW()
       );
     `);
 
