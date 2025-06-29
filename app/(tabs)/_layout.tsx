@@ -121,6 +121,14 @@ export default function TabLayout() {
             <TabBarIcon name={focused ? 'settings' : 'settings-outline'} color={color} />
           ),
         }}
+        listeners={{
+          tabPress: (e) => {
+            e.preventDefault();
+            // Always navigate to settings root menu
+            const router = require('expo-router').useRouter();
+            router.navigate('/settings');
+          },
+        }}
       />
     </Tabs>
   );
