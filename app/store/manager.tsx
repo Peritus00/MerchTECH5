@@ -14,12 +14,14 @@ import { Product } from '@/shared/product-schema';
 import ProductCard from '@/components/ProductCard';
 import { productsAPI } from '@/services/api';
 import ProductEditorModal from '@/components/ProductEditorModal';
+import { useRouter } from 'expo-router';
 
 export default function MyStoreManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     fetchProducts();
@@ -41,14 +43,31 @@ export default function MyStoreManager() {
   const handleSave = async (updates: Partial<Product>) => {
     if (!editing) return;
     try {
-      const updated = await productsAPI.updateProduct(editing.id, updates);
-      setProducts((prev) => prev.map((p) => (p.id === editing.id ? updated : p)));
+      let updatedProduct: Product;
+      if (editing.id === 'new') { // Creating a new product
+        updatedProduct = await productsAPI.createProduct(updates);
+        setProducts((prev) => [updatedProduct, ...prev]);
+        Alert.alert('Success', 'Product created successfully.');
+      } else { // Updating an existing product
+        updatedProduct = await productsAPI.updateProduct(editing.id, updates);
+        setProducts((prev) => prev.map((p) => (p.id === editing.id ? updatedProduct : p)));
+        Alert.alert('Success', 'Product updated successfully.');
+      }
       setEditing(null);
-      Alert.alert('Saved', 'Product updated successfully');
     } catch (e) {
       console.error(e);
-      Alert.alert('Error', 'Failed to update product');
+      Alert.alert('Error', 'Failed to save product.');
     }
+  };
+
+  const handleAddNew = () => {
+    setEditing({
+      id: 'new',
+      name: '',
+      description: '',
+      prices: [{ id: '', unit_amount: 0, currency: 'usd', type: 'one_time' }],
+      // Add other default fields for a new product here
+    });
   };
 
   const renderItem = ({ item }: { item: Product }) => (
@@ -73,6 +92,11 @@ export default function MyStoreManager() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <ThemedText style={{color: '#2563eb'}}>← Back to Settings</ThemedText>
+        </TouchableOpacity>
+      </View>
       {products.length === 0 ? (
         <ThemedView style={styles.emptyState}>
           <ThemedText style={{ fontSize: 64 }}>📦</ThemedText>
@@ -90,7 +114,7 @@ export default function MyStoreManager() {
           contentContainerStyle={{ padding: 16 }}
         />
       )}
-      <TouchableOpacity style={styles.fab} onPress={() => Alert.alert('Add Product button tapped - creation flow coming soon')}> 
+      <TouchableOpacity style={styles.fab} onPress={handleAddNew}>
         <ThemedText style={{ fontSize: 28, color:'#fff' }}>＋</ThemedText>
       </TouchableOpacity>
       <ProductEditorModal
@@ -105,6 +129,14 @@ export default function MyStoreManager() {
 
 const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  backButton: {
+    alignSelf: 'flex-start',
+  },
   editButton: {
     marginTop: 8,
     backgroundColor: '#2563eb',

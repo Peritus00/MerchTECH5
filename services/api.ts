@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { Product } from '@/shared/product-schema';
 
 // Rely on the environment variable set in your .env file
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
@@ -57,6 +58,10 @@ export const productsAPI = {
   },
   async updateProduct(productId: string, updates: Partial<Record<string, any>>) {
     const res = await api.patch(`/products/${productId}`, updates);
+    return res.data.product;
+  },
+  async createProduct(productData: Partial<Product>) {
+    const res = await api.post('/products', productData);
     return res.data.product;
   },
 };
