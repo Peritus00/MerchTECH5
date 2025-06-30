@@ -16,6 +16,12 @@ import { productsAPI } from '@/services/api';
 import ProductEditorModal from '@/components/ProductEditorModal';
 import { useRouter } from 'expo-router';
 
+// --- Helpers -------------------------------------------------------------
+const normalizeProduct = (p: any): Product => ({
+  ...p,
+  in_stock: p.in_stock ?? p.inStock ?? true,
+});
+
 export default function MasterStoreManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +36,7 @@ export default function MasterStoreManager() {
   const fetchProducts = async () => {
     try {
       const items = await productsAPI.getAllProducts();
-      setProducts(items);
+      setProducts(items.map(normalizeProduct));
     } catch (error) {
       console.error('Failed to fetch products:', error);
       Alert.alert('Error', 'Unable to load products.');
@@ -40,14 +46,14 @@ export default function MasterStoreManager() {
     }
   };
 
-  const toggleSuspension = async (product: Product) => {
-    const newStatus = !product.isSuspended;
+  const toggleStock = async (product: Product) => {
+    const newStatus = !product.in_stock;
     try {
-      const updated = await productsAPI.updateProduct(product.id, { isSuspended: newStatus });
-      setProducts((prev) => prev.map((p) => (p.id === product.id ? updated : p)));
+              const updated = await productsAPI.updateProduct(product.id, { in_stock: newStatus });
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? normalizeProduct(updated) : p)));
       Alert.alert(
         'Success',
-        `Product ${newStatus ? 'suspended' : 're-enabled'} successfully.`,
+        `Product marked as ${newStatus ? 'in stock' : 'out of stock'} successfully.`,
       );
     } catch (error) {
       console.error('Failed to update product status:', error);
@@ -90,13 +96,13 @@ export default function MasterStoreManager() {
       <ProductCard product={item} onPress={() => {}} />
       <TouchableOpacity
         style={[
-          styles.suspendButton,
-          { backgroundColor: item.isSuspended ? '#22c55e' : '#ef4444' },
+          styles.stockButton,
+          { backgroundColor: item.in_stock ? '#ef4444' : '#22c55e' },
         ]}
-        onPress={() => toggleSuspension(item)}
+        onPress={() => toggleStock(item)}
       >
-        <ThemedText style={styles.suspendText}>
-          {item.isSuspended ? 'Enable' : 'Suspend'}
+        <ThemedText style={styles.stockText}>
+          {item.in_stock ? 'Mark Out of Stock' : 'Mark In Stock'}
         </ThemedText>
       </TouchableOpacity>
       <TouchableOpacity style={styles.editButton} onPress={() => setEditing(item)}>
@@ -145,6 +151,7 @@ export default function MasterStoreManager() {
         product={editing}
         onClose={() => setEditing(null)}
         onSave={handleSave}
+        onDelete={() => {}} // Fix: Provide a no-op function or implement handleDelete if needed
       />
     </ThemedView>
   );
@@ -170,12 +177,12 @@ const styles = StyleSheet.create({
   cardWrapper: {
     marginBottom: 24,
   },
-  suspendButton: {
+  stockButton: {
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 4,
   },
-  suspendText: {
+  stockText: {
     fontWeight: '600',
     color: '#ffffff',
   },

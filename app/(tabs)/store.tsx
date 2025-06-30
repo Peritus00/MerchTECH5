@@ -17,8 +17,10 @@ import { Product } from '@/shared/product-schema';
 import ProductCard from '@/components/ProductCard';
 import SearchBar from '@/components/SearchBar';
 import CategoryFilter from '@/components/CategoryFilter';
-import { stripeAPI } from '@/services/api';
+import { productsAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import ShareButton from '@/components/ShareButton';
+
 
 const { width } = Dimensions.get('window');
 
@@ -26,7 +28,7 @@ export default function StoreScreen() {
   const router = useRouter();
   const { getTotalItems } = useCart();
   const { user } = useAuth();
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  const isAdmin = user && user.isAdmin;
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,11 +37,20 @@ export default function StoreScreen() {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [error, setError] = useState<string | null>(null);
 
-  const categories = ['All', 'Apparel', 'Music', 'Merchandise', 'Electronics', 'Other'];
+  // Updated categories to align with the new taxonomy
+  const categories = ['All', 'PaintingMusic', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
 
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Re-fetch products when user context changes (fixes race condition)
+  useEffect(() => {
+    if (user !== null) {
+      console.log('🏪 Store: User context loaded, re-fetching products for:', user.username);
+      fetchProducts();
+    }
+  }, [user, isAdmin]);
 
   useEffect(() => {
     filterProducts();
@@ -47,74 +58,37 @@ export default function StoreScreen() {
 
   const fetchProducts = async () => {
     try {
-      // Mock data for development
-      const mockProducts: Product[] = [
-        {
-          id: '1',
-          name: 'Test Product',
-          description: 'A test product for store functionality',
-          images: ['https://picsum.photos/400/400?random=1'],
-          category: 'Electronics',
-          inStock: true,
-          slug: 'test-product',
-          hasSizes: false,
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' },
-          prices: [
-            {
-              id: 'price_1',
-              unit_amount: 2999,
-              currency: 'usd',
-              type: 'one_time'
-            }
-          ]
-        },
-        {
-          id: '2',
-          name: 'Premium Headphones',
-          description: 'High-quality wireless headphones with noise cancellation',
-          images: ['https://picsum.photos/400/400?random=2'],
-          category: 'Electronics',
-          inStock: true,
-          slug: 'premium-headphones',
-          hasSizes: false,
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' },
-          prices: [
-            {
-              id: 'price_2',
-              unit_amount: 19999,
-              currency: 'usd',
-              type: 'one_time'
-            }
-          ]
-        },
-        {
-          id: '3',
-          name: 'Brand T-Shirt',
-          description: 'Comfortable cotton t-shirt with logo',
-          images: ['https://picsum.photos/400/400?random=3'],
-          category: 'Apparel',
-          inStock: true,
-          slug: 'brand-t-shirt',
-          hasSizes: true,
-          availableSizes: ['S', 'M', 'L', 'XL'],
-          isSuspended: false,
-          createdAt: new Date().toISOString(),
-          creator: { username: 'dijetfuel' },
-          prices: [
-            {
-              id: 'price_3',
-              unit_amount: 2499,
-              currency: 'usd',
-              type: 'one_time'
-            }
-          ]
-        }
-      ];
-      setProducts(isAdmin ? mockProducts : mockProducts.filter(p => p.creator.username === user?.username));
+      console.log('🏪 Store: Fetching products for user:', user?.username, 'isAdmin:', isAdmin, 'user.id:', user?.id);
+      const items = await productsAPI.getAllProducts();
+      console.log('🏪 Store: Fetched', items.length, 'total products');
+      
+      const normalize = (p: any): Product => ({
+        ...p,
+        in_stock: p.in_stock ?? p.inStock ?? true,
+      });
+
+      let list: Product[] = items.map(normalize);
+      console.log('🏪 Store: After normalization:', list.length, 'products');
+
+      // Hide out-of-stock or suspended products from customers
+      list = list.filter((p) => p.in_stock && !p.isSuspended);
+      console.log('🏪 Store: After stock filter:', list.length, 'products');
+
+      // If you only want to show your own items when logged-in seller
+      if (!isAdmin && user) {
+        console.log('🏪 Store: Filtering for user products. User ID:', user.id);
+        const beforeFilter = list.length;
+        list = list.filter((p) => {
+          const matches = String(p.user_id) === String(user.id);
+          console.log('🏪 Store: Product', p.name, 'user_id:', p.user_id, 'matches user', user.id, ':', matches);
+          return matches;
+        });
+        console.log('🏪 Store: After user filter:', list.length, 'products (was', beforeFilter, ')');
+      } else {
+        console.log('🏪 Store: Showing all products (admin or no user)');
+      }
+
+      setProducts(list);
     } catch (error) {
       console.error('Error fetching products:', error);
       Alert.alert('Error', 'Failed to load products. Please try again.');
@@ -156,11 +130,45 @@ export default function StoreScreen() {
   };
 
   const handleProductPress = (product: Product) => {
-    router.push(`/store/product/${product.id}`);
+    router.push({
+      pathname: `/store/product/${product.id}`,
+      params: { product: JSON.stringify(product) },
+    });
   };
 
   const handleCartPress = () => {
     router.push('/store/cart');
+  };
+
+  const getStoreUrl = () => {
+    const baseUrl = 'https://merchtech.net';
+    if (isAdmin) {
+      // Admin can share master store
+      return `${baseUrl}/store/master`;
+    } else if (user) {
+      // Regular user shares their own store
+      return `${baseUrl}/store/user/${user.id}`;
+    }
+    // Fallback to master store
+    return `${baseUrl}/store/master`;
+  };
+
+  const getStoreTitle = () => {
+    if (isAdmin) {
+      return 'MerchTech Master Store';
+    } else if (user) {
+      return `${user.firstName || user.username || 'My'}'s Store`;
+    }
+    return 'MerchTech Store';
+  };
+
+  const getStoreDescription = () => {
+    if (isAdmin) {
+      return 'Browse amazing products from all our creators';
+    } else if (user) {
+      return 'Check out my amazing products';
+    }
+    return 'Browse our amazing products and services';
   };
 
   if (isLoading) {
@@ -177,24 +185,39 @@ export default function StoreScreen() {
       {/* Header */}
       <ThemedView style={styles.header}>
         <ThemedView style={styles.headerLeft}>
-          <ThemedText type="title" style={styles.headerTitle}>Store</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Browse our products and services</ThemedText>
+          <ThemedText type="title" style={styles.headerTitle}>
+            {user ? `${user.firstName || user.username || 'My'} Store` : 'Store'}
+          </ThemedText>
+          <ThemedText style={styles.headerSubtitle}>
+            {user ? `Support ${user.firstName || user.username || 'this creator'} by buying a product today :)` : 'Browse our products and services'}
+          </ThemedText>
         </ThemedView>
 
-        {isAdmin && (
-          <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
-            <ThemedText style={{ fontSize: 14 }}>Shop Page ↗️</ThemedText>
-          </TouchableOpacity>
-        )}
+        {/* Central Share Button */}
+        <View style={styles.headerCenter}>
+          <ShareButton
+            url={getStoreUrl()}
+            title={getStoreTitle()}
+            description={getStoreDescription()}
+            type="store"
+            compact={false}
+          />
+        </View>
 
-        <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
-          <ThemedText style={styles.cartIcon}>🛒</ThemedText>
-          {getTotalItems() > 0 && (
-            <ThemedView style={styles.cartBadge}>
-              <ThemedText style={styles.cartBadgeText}>{getTotalItems()}</ThemedText>
-            </ThemedView>
-          )}
-        </TouchableOpacity>
+        <ThemedView style={styles.headerRight}>
+          <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
+            <ThemedText style={styles.publicShopButtonText}>MERCHTECH OFFICIAL STORE ↗️</ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
+            <ThemedText style={styles.cartIcon}>🛍</ThemedText>
+            {getTotalItems() > 0 && (
+              <ThemedView style={styles.cartBadge}>
+                <ThemedText style={styles.cartBadgeText}>{getTotalItems()}</ThemedText>
+              </ThemedView>
+            )}
+          </TouchableOpacity>
+        </ThemedView>
       </ThemedView>
 
       {/* Search and Filters */}
@@ -210,6 +233,8 @@ export default function StoreScreen() {
           onSelectCategory={setSelectedCategory}
         />
       </ThemedView>
+
+
 
       {/* Products Grid */}
       <ScrollView
@@ -237,6 +262,7 @@ export default function StoreScreen() {
                 key={product.id}
                 product={product}
                 onPress={() => handleProductPress(product)}
+                showShareButton={true}
               />
             ))}
           </ThemedView>
@@ -272,6 +298,18 @@ const styles = StyleSheet.create({
   headerLeft: {
     flex: 1,
   },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  headerRight: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 8,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -281,12 +319,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.7,
   },
+  publicShopButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  publicShopButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
   cartButton: {
     position: 'relative',
     padding: 8,
   },
   cartIcon: {
     fontSize: 24,
+    color: '#ffffff',
   },
   cartBadge: {
     position: 'absolute',

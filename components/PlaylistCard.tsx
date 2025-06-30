@@ -125,8 +125,16 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             <TouchableOpacity
               style={styles.actionButton}
               onPress={(e) => {
+                console.log('🔴 PLAYLIST_CARD: Play button pressed for playlist:', {
+                  id: playlist.id,
+                  name: playlist.name,
+                  hasMediaFiles: !!(playlist.mediaFiles && playlist.mediaFiles.length > 0),
+                  mediaCount: playlist.mediaFiles?.length || 0
+                });
                 e.stopPropagation();
+                console.log('🔴 PLAYLIST_CARD: Calling onView function...');
                 onView();
+                console.log('🔴 PLAYLIST_CARD: onView function called');
               }}
             >
               <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />

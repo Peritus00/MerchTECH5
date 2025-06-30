@@ -10,13 +10,14 @@ import {
   Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { MediaFile } from '@/shared/media-schema';
+import { MediaFile, Playlist } from '@/shared/media-schema';
 import MediaSelectionList from './MediaSelectionList';
+import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 
 interface CreatePlaylistModalProps {
   visible: boolean;
   onClose: () => void;
-  onCreatePlaylist: (name: string, description: string, mediaIds: number[]) => void;
+  onCreatePlaylist: (playlist: Playlist) => void;
   mediaFiles: MediaFile[];
 }
 
@@ -30,10 +31,25 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const [description, setDescription] = useState('');
   const [selectedMediaIds, setSelectedMediaIds] = useState<number[]>([]);
   const [step, setStep] = useState<'details' | 'media'>('details');
+  const [isCreating, setIsCreating] = useState(false);
+  const [requiresActivationCode, setRequiresActivationCode] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const { canCreate } = useSubscriptionLimits();
 
   const handleCreate = async () => {
     if (!name.trim()) {
       Alert.alert('Error', 'Please enter a playlist name');
+      return;
+    }
+
+    // Check subscription limits before creating playlist
+    const canCreatePlaylist = canCreate('playlists');
+    if (!canCreatePlaylist.allowed) {
+      Alert.alert(
+        'Playlist Limit Reached',
+        canCreatePlaylist.message,
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -65,7 +81,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
       };
 
       console.log('🔴 CreatePlaylistModal: Created playlist:', playlistWithMedia);
-      onPlaylistCreated(playlistWithMedia);
+      onCreatePlaylist(playlistWithMedia);
       onClose();
 
       // Reset form
@@ -88,6 +104,9 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     setDescription('');
     setSelectedMediaIds([]);
     setStep('details');
+    setRequiresActivationCode(false);
+    setIsPublic(false);
+    setIsCreating(false);
   };
 
   const handleClose = () => {
@@ -137,13 +156,13 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           </Text>
           <TouchableOpacity 
             onPress={step === 'details' ? handleNext : handleCreate}
-            disabled={!name.trim()}
+            disabled={!name.trim() || isCreating}
           >
             <Text style={[
               styles.headerAction,
-              (!name.trim()) && styles.headerActionDisabled
+              (!name.trim() || isCreating) && styles.headerActionDisabled
             ]}>
-              {step === 'details' ? 'Next' : 'Create'}
+              {step === 'details' ? 'Next' : isCreating ? 'Creating...' : 'Create'}
             </Text>
           </TouchableOpacity>
         </View>

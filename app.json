@@ -15,7 +15,9 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": "network_security_config.xml"
     },
     "web": {
       "bundler": "metro",

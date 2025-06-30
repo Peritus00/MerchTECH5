@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -7,11 +6,14 @@ import {
   TouchableOpacity,
   Image,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useCart } from '@/contexts/CartContext';
+import { checkoutAPI } from '@/services/api';
+import * as WebBrowser from 'expo-web-browser';
 
 export default function CartScreen() {
   const router = useRouter();
@@ -21,12 +23,38 @@ export default function CartScreen() {
     return `$${(priceInCents / 100).toFixed(2)}`;
   };
 
-  const handleCheckout = () => {
+  const getUnitPrice = (p: any): number => {
+    if (p.prices && p.prices.length) return p.prices[0].unit_amount;
+    if (p.metadata && (p.metadata.price || p.metadata.unit_amount)) {
+      return Number(p.metadata.price || p.metadata.unit_amount);
+    }
+    if (p.price) return p.price;
+    return 0;
+  };
+
+  const handleCheckout = async () => {
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Please add items to your cart before checkout.');
       return;
     }
-    Alert.alert('Checkout', 'Checkout functionality would be implemented here.');
+
+    try {
+      const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = `${base}/store/checkout-cancel`;
+
+      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+
+      if (Platform.OS === 'web') {
+        window.location.href = url;
+      } else {
+        await WebBrowser.openBrowserAsync(url);
+      }
+    } catch (err: any) {
+      console.error('Checkout error', err);
+      Alert.alert('Error', err.message || 'Failed to start checkout');
+    }
   };
 
   const handleClearCart = () => {
@@ -46,7 +74,7 @@ export default function CartScreen() {
         <ThemedView style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() => router.push('/(tabs)/store')}
           >
             <ThemedText style={styles.backButtonText}>← Back</ThemedText>
           </TouchableOpacity>
@@ -54,7 +82,7 @@ export default function CartScreen() {
         </ThemedView>
         
         <ThemedView style={styles.emptyContainer}>
-          <ThemedText style={styles.emptyIcon}>🛒</ThemedText>
+          <ThemedText style={styles.emptyIcon}>🛍</ThemedText>
           <ThemedText style={styles.emptyText}>Your cart is empty</ThemedText>
           <ThemedText style={styles.emptySubtext}>Add some products to get started</ThemedText>
           <TouchableOpacity
@@ -74,20 +102,23 @@ export default function CartScreen() {
       <ThemedView style={styles.header}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.push('/(tabs)/store')}
         >
           <ThemedText style={styles.backButtonText}>← Back</ThemedText>
         </TouchableOpacity>
         <ThemedText type="title">Shopping Cart ({cart.length})</ThemedText>
         <TouchableOpacity style={styles.clearButton} onPress={handleClearCart}>
-          <ThemedText style={styles.clearButtonText}>🗑️</ThemedText>
+          <ThemedText style={styles.clearButtonText}>✕</ThemedText>
         </TouchableOpacity>
       </ThemedView>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {cart.map((item, index) => (
           <ThemedView key={`${item.product.id}-${item.size || 'default'}`} style={styles.cartItem}>
-            <Image source={{ uri: item.product.imageUrl }} style={styles.itemImage} />
+            <Image
+              source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || 'https://placehold.co/100x100' }}
+              style={styles.itemImage}
+            />
             
             <ThemedView style={styles.itemDetails}>
               <ThemedText style={styles.itemName} numberOfLines={2}>
@@ -99,7 +130,7 @@ export default function CartScreen() {
               )}
               
               <ThemedText style={styles.itemPrice}>
-                {formatPrice(item.product.price)}
+                {formatPrice(getUnitPrice(item.product))}
               </ThemedText>
             </ThemedView>
 
@@ -126,7 +157,7 @@ export default function CartScreen() {
                 style={styles.removeButton}
                 onPress={() => removeFromCart(item.product.id, item.size)}
               >
-                <ThemedText style={styles.removeButtonText}>🗑️</ThemedText>
+                <ThemedText style={styles.removeButtonText}>✕</ThemedText>
               </TouchableOpacity>
             </ThemedView>
           </ThemedView>
@@ -172,7 +203,9 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   clearButtonText: {
-    fontSize: 20,
+    fontSize: 24,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   scrollView: {
     flex: 1,
@@ -246,7 +279,9 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   removeButtonText: {
-    fontSize: 16,
+    fontSize: 20,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   emptyContainer: {
     flex: 1,
@@ -257,6 +292,7 @@ const styles = StyleSheet.create({
   emptyIcon: {
     fontSize: 64,
     marginBottom: 16,
+    color: '#ffffff',
   },
   emptyText: {
     fontSize: 20,

@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Product, CartItem } from '../shared/product-schema';
@@ -48,6 +47,12 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addToCart = (product: Product, size?: string) => {
+    // Check if product is in stock
+    if (!product.in_stock) {
+      console.log('🚫 Cannot add out of stock product to cart:', product.name);
+      return;
+    }
+
     setCart(prevCart => {
       const existingItemIndex = prevCart.findIndex(
         item => item.product.id === product.id && item.size === size
@@ -90,12 +95,19 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCart([]);
   };
 
+  const getUnitPrice = (p: Product): number => {
+    if (p.prices && p.prices.length) return p.prices[0].unit_amount;
+    if (p.metadata && (p.metadata.price || p.metadata.unit_amount)) {
+      return Number(p.metadata.price || p.metadata.unit_amount);
+    }
+    if (p.price) return p.price;
+    return 0;
+  };
+
   const getTotalPrice = () => {
     return cart.reduce((total, item) => {
-      const price = item.product.prices && item.product.prices.length > 0 
-        ? item.product.prices[0].unit_amount 
-        : 0;
-      return total + (price * item.quantity);
+      const price = getUnitPrice(item.product);
+      return total + price * item.quantity;
     }, 0);
   };
 

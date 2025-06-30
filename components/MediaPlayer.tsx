@@ -11,10 +11,10 @@ import {
   Image,
   Linking,
 } from 'react-native';
-import { Audio } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
-import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 
 interface MediaFile {
   id: number;
@@ -51,323 +51,337 @@ export default function MediaPlayer({
   qrCodeId,
   productLinks = [],
 }: MediaPlayerProps) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  console.log('🔴 MEDIA_PLAYER: MediaPlayer component initialized with:', {
+    mediaFilesCount: mediaFiles.length,
+    shouldAutoplay,
+    playlistId,
+    mediaFiles: mediaFiles
+  });
+
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [position, setPosition] = useState(0);
   const [volume, setVolume] = useState(0.8);
-  const [isLoading, setIsLoading] = useState(false);
 
+  // Get current track
   const currentTrack = mediaFiles[currentTrackIndex];
+  console.log('🔴 MEDIA_PLAYER: Current track set to:', currentTrack);
+  
+  // Use the new expo-audio hooks - create player without initial source
+  const player = useAudioPlayer();
+  const status = useAudioPlayerStatus(player);
+  
+  console.log('🔴 MEDIA_PLAYER: Audio player created, status:', {
+    isLoaded: status.isLoaded,
+    playing: status.playing,
+    duration: status.duration,
+    currentTime: status.currentTime
+  });
 
-  // Initialize audio session
+  // Load track when currentTrack changes
   useEffect(() => {
-    const initializeAudio = async () => {
+    if (currentTrack && player && currentTrack.url) {
+      console.log('🔴 MEDIA_PLAYER: Loading new track:', {
+        title: currentTrack.title,
+        url: currentTrack.url,
+        fileType: currentTrack.fileType,
+        contentType: currentTrack.contentType,
+        id: currentTrack.id
+      });
+      
+      // Check if it's an audio file (be flexible with field names)
+      const isAudioFile = currentTrack.fileType === 'audio' || 
+                         currentTrack.contentType?.startsWith('audio/') ||
+                         currentTrack.fileType?.includes('audio');
+      
+      console.log('🔴 MEDIA_PLAYER: Is audio file?', isAudioFile);
+      
+      if (!isAudioFile) {
+        console.log('🔴 MEDIA_PLAYER: Skipping non-audio file');
+        return;
+      }
+      
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: true,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-          playThroughEarpieceAndroid: false,
-        });
-      } catch (error) {
-        console.error('Failed to initialize audio:', error);
-      }
-    };
-
-    initializeAudio();
-
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, []);
-
-  // Load and play track
-  const loadTrack = useCallback(async (trackIndex: number, autoplay: boolean = false) => {
-    try {
-      setIsLoading(true);
-      if (sound) {
-        await sound.unloadAsync();
-      }
-
-      const track = mediaFiles[trackIndex];
-      if (!track) return;
-
-      console.log('Loading track:', track.url);
-
-      if (track.fileType === 'audio') {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: track.url },
-          {
-            shouldPlay: autoplay,
-            volume: volume,
-            isLooping: false,
-          }
-        );
-
-        // Set up status update listener
-        newSound.setOnPlaybackStatusUpdate(onPlaybackStatusUpdate);
-
-        setSound(newSound);
-        setCurrentTrackIndex(trackIndex);
-
-        if (autoplay) {
-          setIsPlaying(true);
-          if (onSetPlaybackState) {
-            onSetPlaybackState(true, trackIndex);
-          }
+        console.log('🔴 MEDIA_PLAYER: Attempting to replace player source...');
+        player.replace({ uri: currentTrack.url });
+        console.log('🔴 MEDIA_PLAYER: Player source replaced successfully');
+        
+        // Auto-play if requested
+        if (shouldAutoplay) {
+          console.log('🔴 MEDIA_PLAYER: Auto-play requested, starting in 100ms...');
+          // Small delay to ensure track is loaded
+          setTimeout(() => {
+            try {
+              console.log('🔴 MEDIA_PLAYER: Starting auto-play');
+              player.play();
+            } catch (playError) {
+              console.error('🔴 MEDIA_PLAYER: Error auto-playing:', playError);
+            }
+          }, 100);
         }
-      } else if (track.fileType === 'video') {
-        // Handle video loading here. This is a placeholder.
-        console.log('Video loading not yet implemented');
+      } catch (error) {
+        console.error('🔴 MEDIA_PLAYER: Error loading track:', error);
+        console.error('🔴 MEDIA_PLAYER: Error details:', {
+          message: error.message,
+          name: error.name,
+          stack: error.stack
+        });
+        Alert.alert('Error', `Failed to load audio track: ${error instanceof Error ? error.message : String(error)}`);
       }
-    } catch (error) {
-      console.error('Error loading track:', error);
-      Alert.alert('Error', `Failed to load audio track: ${error.message}`);
-    } finally {
-      setIsLoading(false);
+    } else {
+      console.log('🔴 MEDIA_PLAYER: Not loading track because:', {
+        hasCurrentTrack: !!currentTrack,
+        hasPlayer: !!player,
+        hasUrl: !!currentTrack?.url,
+        currentTrack: currentTrack
+      });
     }
-  }, [sound, mediaFiles, volume, onSetPlaybackState]);
+  }, [currentTrack, player, shouldAutoplay]);
 
-  // Playback status update
-  const onPlaybackStatusUpdate = useCallback((status: any) => {
-    if (status.isLoaded) {
-      setPosition(status.positionMillis);
-      setDuration(status.durationMillis || 0);
-      setProgress(status.durationMillis ? (status.positionMillis / status.durationMillis) * 100 : 0);
-
-      if (status.didJustFinish) {
-        playNextTrack();
-      }
+  // Track navigation functions (defined before useEffects that use them)
+  const playNextTrack = useCallback(() => {
+    console.log('🎵 Playing next track');
+    if (currentTrackIndex < mediaFiles.length - 1) {
+      setCurrentTrackIndex(currentTrackIndex + 1);
+    } else {
+      setCurrentTrackIndex(0); // Loop back to first track
     }
-  }, []);
+  }, [currentTrackIndex, mediaFiles.length]);
 
-  // Load initial track
+  const playPreviousTrack = useCallback(() => {
+    console.log('🎵 Playing previous track');
+    if (currentTrackIndex > 0) {
+      setCurrentTrackIndex(currentTrackIndex - 1);
+    } else {
+      setCurrentTrackIndex(mediaFiles.length - 1); // Loop to last track
+    }
+  }, [currentTrackIndex, mediaFiles.length]);
+
+  // Initialize audio and load first track
   useEffect(() => {
-    if (mediaFiles.length > 0) {
-      loadTrack(0, shouldAutoplay);
+    if (mediaFiles.length > 0 && shouldAutoplay && player && currentTrack) {
+      setCurrentTrackIndex(0);
+      setTimeout(() => {
+        try {
+          player.play();
+        } catch (error) {
+          console.error('🎵 Autoplay failed:', error);
+        }
+      }, 100); // Small delay to ensure player is ready
     }
-  }, [mediaFiles, shouldAutoplay]);
+  }, [mediaFiles, shouldAutoplay, player, currentTrack]);
+
+  // Update playback state when status changes
+  useEffect(() => {
+    if (onSetPlaybackState) {
+      onSetPlaybackState(status.playing, currentTrackIndex);
+    }
+  }, [status.playing, currentTrackIndex, onSetPlaybackState]);
+
+  // Handle track completion
+  useEffect(() => {
+    if (status.didJustFinish) {
+      playNextTrack();
+    }
+  }, [status.didJustFinish, playNextTrack]);
 
   // Play/Pause toggle
-  const togglePlayPause = async () => {
-    if (!sound) return;
-
+  const togglePlayPause = () => {
+    console.log('🔴 MEDIA_PLAYER: Play button clicked!');
+    console.log('🔴 MEDIA_PLAYER: Player status:', { 
+      isLoaded: status.isLoaded, 
+      isBuffering: status.isBuffering,
+      duration: status.duration,
+      currentTime: status.currentTime,
+      playing: status.playing
+    });
+    console.log('🔴 MEDIA_PLAYER: Current track:', {
+      title: currentTrack?.title,
+      url: currentTrack?.url,
+      fileType: currentTrack?.fileType,
+      contentType: currentTrack?.contentType
+    });
+    
+    if (!player) {
+      console.log('🔴 MEDIA_PLAYER: No player available');
+      Alert.alert('Error', 'Audio player not initialized');
+      return;
+    }
+    
+    if (!currentTrack || !currentTrack.url) {
+      console.log('🔴 MEDIA_PLAYER: No current track or URL available');
+      Alert.alert('Error', 'No audio track selected');
+      return;
+    }
+    
+    // Check if it's an audio file (be flexible with field names)
+    const isAudioFile = currentTrack.fileType === 'audio' || 
+                       currentTrack.contentType?.startsWith('audio/') ||
+                       currentTrack.fileType?.includes('audio');
+    
+    if (!isAudioFile) {
+      console.log('🔴 MEDIA_PLAYER: Current track is not an audio file');
+      Alert.alert('Error', 'This file is not an audio file and cannot be played.');
+      return;
+    }
+    
+    if (!status.isLoaded) {
+      console.log('🔴 MEDIA_PLAYER: Track not loaded yet');
+      Alert.alert('Error', 'Audio track is still loading. Please wait...');
+      return;
+    }
+    
     try {
-      if (isPlaying) {
-        await sound.pauseAsync();
-        setIsPlaying(false);
-        if (onSetPlaybackState) {
-          onSetPlaybackState(false, currentTrackIndex);
-        }
+      if (status.playing) {
+        console.log('🔴 MEDIA_PLAYER: Pausing...');
+        player.pause();
+        console.log('🔴 MEDIA_PLAYER: Pause command sent');
       } else {
-        await sound.playAsync();
-        setIsPlaying(true);
-        if (onSetPlaybackState) {
-          onSetPlaybackState(true, currentTrackIndex);
-        }
+        console.log('🔴 MEDIA_PLAYER: Playing...');
+        player.play();
+        console.log('🔴 MEDIA_PLAYER: Play command sent');
       }
     } catch (error) {
-      console.error('Error toggling playback:', error);
+      console.error('🔴 MEDIA_PLAYER: Error toggling playback:', error);
+      console.error('🔴 MEDIA_PLAYER: Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      Alert.alert('Error', `Failed to control playback: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
-  // Play next track
-  const playNextTrack = () => {
-    const nextIndex = currentTrackIndex < mediaFiles.length - 1 ? currentTrackIndex + 1 : 0;
-    loadTrack(nextIndex, isPlaying);
-  };
-
-  // Play previous track
-  const playPreviousTrack = () => {
-    const prevIndex = currentTrackIndex > 0 ? currentTrackIndex - 1 : mediaFiles.length - 1;
-    loadTrack(prevIndex, isPlaying);
-  };
-
-  // Seek to position
   const seekToPosition = async (value: number) => {
-    if (!sound || !duration) return;
-    const newPosition = (value / 100) * duration;
-    try {
-      await sound.setPositionAsync(newPosition);
-    } catch (error) {
-      console.error('Error seeking:', error);
+    if (player && status.duration) {
+      try {
+        const seekTime = (value / 100) * status.duration;
+        player.seekTo(seekTime);
+      } catch (error) {
+        console.error('Error seeking:', error);
+      }
     }
   };
 
-  // Format time
-  const formatTime = (milliseconds: number) => {
-    const totalSeconds = Math.floor(milliseconds / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const handleProductLinkPress = (url: string) => {
-    Linking.openURL(url).catch((err) => console.error("Couldn't load page", err));
+    Linking.openURL(url).catch(err => console.error('Failed to open URL:', err));
   };
 
   if (!currentTrack) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No tracks available</Text>
+      <View style={styles.container}>
+        <Text style={styles.noMediaText}>No media files available</Text>
       </View>
     );
   }
+
+  const progress = status.duration ? (status.currentTime / status.duration) * 100 : 0;
 
   return (
     <View style={styles.container}>
       {/* Track Info */}
       <View style={styles.trackInfo}>
-        <Text style={styles.trackTitle} numberOfLines={1}>
-          {currentTrack.title}
-        </Text>
-        <Text style={styles.trackCounter}>
-          Track {currentTrackIndex + 1} of {mediaFiles.length}
+        <Text style={styles.trackTitle}>{currentTrack.title}</Text>
+        <Text style={styles.trackCount}>
+          {currentTrackIndex + 1} of {mediaFiles.length}
         </Text>
       </View>
 
       {/* Progress Bar */}
       <View style={styles.progressContainer}>
-        <Slider
-          style={styles.progressSlider}
-          value={progress}
-          minimumValue={0}
-          maximumValue={100}
-          onValueChange={seekToPosition}
-          minimumTrackTintColor="#3b82f6"
-          maximumTrackTintColor="#e5e7eb"
-        />
+        <View style={styles.progressBar}>
+          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+        </View>
         <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
-          <Text style={styles.timeText}>-{formatTime(duration - position)}</Text>
+          <Text style={styles.timeText}>
+            {formatTime(status.currentTime || 0)}
+          </Text>
+          <Text style={styles.timeText}>
+            {formatTime(status.duration || 0)}
+          </Text>
         </View>
       </View>
 
       {/* Controls */}
-      <View style={styles.controlsContainer}>
-        <View style={styles.playbackControls}>
-          <TouchableOpacity
-            onPress={playPreviousTrack}
-            disabled={mediaFiles.length <= 1}
-            style={[styles.controlButton, mediaFiles.length <= 1 && styles.disabledButton]}
-          >
-            <Ionicons name="play-skip-back" size={24} color="#374151" />
-          </TouchableOpacity>
+      <View style={styles.controls}>
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={playPreviousTrack}
+          disabled={mediaFiles.length <= 1}
+        >
+          <Ionicons name="play-skip-back" size={24} color="#333" />
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={togglePlayPause}
-            disabled={!currentTrack || isLoading}
-            style={[styles.playButton, (!currentTrack || isLoading) && styles.disabledButton]}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#ffffff" />
-            ) : (
-              <Ionicons
-                name={isPlaying ? 'pause' : 'play'}
-                size={28}
-                color="#ffffff"
-              />
-            )}
-          </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.playButton, status.isBuffering && styles.loadingButton]}
+          onPress={togglePlayPause}
+          disabled={!status.isLoaded || status.isBuffering}
+        >
+          {status.isBuffering ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons
+              name={status.playing ? "pause" : "play"}
+              size={32}
+              color="#fff"
+            />
+          )}
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={playNextTrack}
-            disabled={mediaFiles.length <= 1}
-            style={[styles.controlButton, mediaFiles.length <= 1 && styles.disabledButton]}
-          >
-            <Ionicons name="play-skip-forward" size={24} color="#374151" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Volume Control */}
-        <View style={styles.volumeContainer}>
-          <Ionicons name="volume-medium" size={20} color="#6b7280" />
-          <Slider
-            style={styles.volumeSlider}
-            value={volume}
-            minimumValue={0}
-            maximumValue={1}
-            onValueChange={setVolume}
-            minimumTrackTintColor="#3b82f6"
-            maximumTrackTintColor="#e5e7eb"
-          />
-        </View>
+        <TouchableOpacity
+          style={styles.controlButton}
+          onPress={playNextTrack}
+          disabled={mediaFiles.length <= 1}
+        >
+          <Ionicons name="play-skip-forward" size={24} color="#333" />
+        </TouchableOpacity>
       </View>
 
-      {/* Playlist */}
-      <View style={styles.playlistContainer}>
-        <Text style={styles.playlistTitle}>Playlist ({mediaFiles.length} tracks):</Text>
-        {mediaFiles.map((track, index) => (
-          <TouchableOpacity
-            key={track.id}
-            onPress={() => loadTrack(index, isPlaying)}
-            style={[
-              styles.playlistItem,
-              currentTrackIndex === index && styles.activePlaylistItem,
-            ]}
-          >
-            <Text
-              style={[
-                styles.playlistItemText,
-                currentTrackIndex === index && styles.activePlaylistItemText,
-              ]}
-              numberOfLines={1}
-            >
-              {track.title}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Volume Control */}
+      <View style={styles.volumeContainer}>
+        <Ionicons name="volume-low" size={20} color="#666" />
+        <View style={styles.volumeSlider}>
+          <View style={styles.volumeTrack}>
+            <View style={[styles.volumeFill, { width: `${volume * 100}%` }]} />
+          </View>
+        </View>
+        <Ionicons name="volume-high" size={20} color="#666" />
       </View>
 
-      {/* Product Links Section */}
+      {/* Product Links */}
       {productLinks.length > 0 && (
         <View style={styles.productLinksContainer}>
           <Text style={styles.productLinksTitle}>Featured Products</Text>
-          <ScrollView 
-            style={styles.productLinksList}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             {productLinks
               .filter(link => link.isActive)
               .sort((a, b) => a.displayOrder - b.displayOrder)
               .map((link) => (
                 <TouchableOpacity
                   key={link.id}
-                  style={styles.productLinkCard}
+                  style={styles.productLink}
                   onPress={() => handleProductLinkPress(link.url)}
                 >
-                  {link.imageUrl ? (
+                  {link.imageUrl && (
                     <Image
                       source={{ uri: link.imageUrl }}
-                      style={styles.productLinkImage}
+                      style={styles.productImage}
                       resizeMode="cover"
                     />
-                  ) : (
-                    <View style={styles.productLinkPlaceholder}>
-                      <MaterialIcons name="shopping-bag" size={24} color="#9ca3af" />
-                    </View>
                   )}
-                  <View style={styles.productLinkContent}>
-                    <Text style={styles.productLinkTitle} numberOfLines={2}>
+                  <View style={styles.productInfo}>
+                    <Text style={styles.productTitle} numberOfLines={2}>
                       {link.title}
                     </Text>
                     {link.description && (
-                      <Text style={styles.productLinkDescription} numberOfLines={2}>
+                      <Text style={styles.productDescription} numberOfLines={2}>
                         {link.description}
                       </Text>
                     )}
-                    <View style={styles.productLinkAction}>
-                      <MaterialIcons name="open-in-new" size={16} color="#3b82f6" />
-                      <Text style={styles.productLinkActionText}>View Product</Text>
-                    </View>
                   </View>
                 </TouchableOpacity>
               ))}
@@ -378,173 +392,135 @@ export default function MediaPlayer({
   );
 }
 
+const { width } = Dimensions.get('window');
+
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    margin: 16,
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    padding: 20,
   },
-  emptyContainer: {
-    padding: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emptyText: {
+  noMediaText: {
+    textAlign: 'center',
     fontSize: 16,
-    color: '#6b7280',
+    color: '#666',
+    marginTop: 50,
   },
   trackInfo: {
-    marginBottom: 16,
+    alignItems: 'center',
+    marginBottom: 30,
   },
   trackTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1f2937',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 5,
   },
-  trackCounter: {
+  trackCount: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#666',
   },
   progressContainer: {
-    marginBottom: 16,
+    marginBottom: 30,
   },
-  progressSlider: {
-    width: '100%',
-    height: 40,
+  progressBar: {
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
+    marginBottom: 10,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 2,
   },
   timeContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 4,
   },
   timeText: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#666',
   },
-  controlsContainer: {
-    marginBottom: 16,
-  },
-  playbackControls: {
+  controls: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 30,
   },
   controlButton: {
-    padding: 12,
-    marginHorizontal: 8,
+    padding: 15,
+    marginHorizontal: 20,
   },
   playButton: {
-    backgroundColor: '#3b82f6',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#007AFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginHorizontal: 16,
+    marginHorizontal: 20,
   },
-  disabledButton: {
-    opacity: 0.5,
+  loadingButton: {
+    backgroundColor: '#999',
   },
   volumeContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    marginBottom: 30,
+    paddingHorizontal: 20,
   },
   volumeSlider: {
     flex: 1,
-    marginLeft: 8,
-    height: 40,
+    marginHorizontal: 15,
   },
-  playlistContainer: {
-    marginTop: 8,
+  volumeTrack: {
+    height: 4,
+    backgroundColor: '#ddd',
+    borderRadius: 2,
   },
-  playlistTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
-  },
-  playlistItem: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  activePlaylistItem: {
-    backgroundColor: '#eff6ff',
-  },
-  playlistItemText: {
-    fontSize: 14,
-    color: '#6b7280',
-  },
-  activePlaylistItemText: {
-    color: '#3b82f6',
-    fontWeight: '500',
+  volumeFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 2,
   },
   productLinksContainer: {
-    marginTop: 16,
+    marginTop: 20,
   },
   productLinksTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 8,
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
   },
-  productLinksList: {
-    maxHeight: 200,
-  },
-  productLinkCard: {
-    flexDirection: 'row',
-    backgroundColor: '#f9fafb',
+  productLink: {
+    width: width * 0.6,
+    backgroundColor: '#fff',
     borderRadius: 8,
+    marginRight: 15,
+    overflow: 'hidden',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  productImage: {
+    width: '100%',
+    height: 120,
+  },
+  productInfo: {
     padding: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
   },
-  productLinkImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  productLinkPlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 6,
-    marginRight: 12,
-    backgroundColor: '#f3f4f6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  productLinkContent: {
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  productLinkTitle: {
+  productTitle: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#1f2937',
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
   },
-  productLinkDescription: {
+  productDescription: {
     fontSize: 12,
-    color: '#6b7280',
+    color: '#666',
   },
-  productLinkAction: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  productLinkActionText: {
-    fontSize: 12,
-    color: '#3b82f6',
-    marginLeft: 4,
-  },
-});
+}); 

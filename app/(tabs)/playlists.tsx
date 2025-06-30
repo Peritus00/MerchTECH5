@@ -69,23 +69,18 @@ export default function PlaylistsScreen() {
     }
   };
 
-  const handleCreatePlaylist = async (name: string, description: string, selectedMediaIds: number[]) => {
+  const handleCreatePlaylist = async (playlist: Playlist) => {
     try {
-      const newPlaylist: Playlist = {
-        id: Date.now().toString(),
-        name: name.trim(),
-        requiresActivationCode: false,
-        isPublic: false,
-        createdAt: new Date().toISOString(),
-        mediaFiles: mediaFiles.filter(file => selectedMediaIds.includes(file.id)),
-      };
-
-      setPlaylists(prev => [newPlaylist, ...prev]);
+      console.log('🔴 PLAYLISTS: Adding new playlist to state:', playlist);
+      
+      // Add the newly created playlist to the state
+      setPlaylists(prev => [playlist, ...prev]);
       setShowCreateModal(false);
+      
       Alert.alert('Success', 'Playlist created successfully');
     } catch (error) {
-      console.error('Error creating playlist:', error);
-      Alert.alert('Error', 'Failed to create playlist');
+      console.error('Error handling created playlist:', error);
+      Alert.alert('Error', 'Failed to add playlist to list');
     }
   };
 
@@ -113,8 +108,47 @@ export default function PlaylistsScreen() {
   };
 
   const handleViewPlaylist = (playlist: Playlist) => {
-    Alert.alert('View Playlist', `Playing: ${playlist.name}`);
-    // Navigate to playlist viewer when implemented
+    console.log('🔴 PLAYLISTS: Play button clicked for playlist:', {
+      id: playlist.id,
+      name: playlist.name,
+      mediaFiles: playlist.mediaFiles?.length || 0,
+      requiresActivationCode: playlist.requiresActivationCode,
+      playlist: playlist
+    });
+
+    try {
+      // Check if playlist has media files
+      if (!playlist.mediaFiles || playlist.mediaFiles.length === 0) {
+        console.log('🔴 PLAYLISTS: Playlist has no media files, showing alert');
+        Alert.alert('No Media', 'This playlist doesn\'t have any media files to play.');
+        return;
+      }
+
+      // SCENARIO LOGIC:
+      // 1. If playlist is NOT protected -> go directly to media player
+      // 2. If playlist IS protected -> go to access control page (handles activation code + preview)
+      
+      if (!playlist.requiresActivationCode) {
+        // SCENARIO 1: Not protected - direct access
+        console.log('🔴 PLAYLISTS: Playlist is public, navigating directly to media player');
+        const navigationPath = `/media-player/${playlist.id}`;
+        console.log('🔴 PLAYLISTS: Navigation path:', navigationPath);
+        router.push(navigationPath);
+        
+      } else {
+        // SCENARIO 2 & 3: Protected - needs activation code or preview
+        console.log('🔴 PLAYLISTS: Playlist is protected, navigating to access control');
+        const navigationPath = `/playlist-access/${playlist.id}`;
+        console.log('🔴 PLAYLISTS: Navigation path:', navigationPath);
+        router.push(navigationPath);
+      }
+      
+      console.log('🔴 PLAYLISTS: Navigation command sent successfully');
+      
+    } catch (error) {
+      console.error('🔴 PLAYLISTS: Error in handleViewPlaylist:', error);
+      Alert.alert('Error', 'Failed to open playlist');
+    }
   };
 
   const handleAccessSettings = (playlist: Playlist) => {

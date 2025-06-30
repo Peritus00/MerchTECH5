@@ -12,24 +12,21 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { Playlist, ProductLink } from '@/shared/media-schema';
-import ProductLinkCard from '@/components/ProductLinkCard';
-import CreateProductLinkModal from '@/components/CreateProductLinkModal';
+import { Product } from '@/shared/product-schema';
+import ProductCard from '@/components/ProductCard';
 
 export default function ProductLinkManagerScreen() {
-  const route = useRoute();
+  const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
-  const { id } = route.params as { id: string };
   
-  const [playlist, setPlaylist] = useState<Playlist | null>(null);
-  const [productLinks, setProductLinks] = useState<ProductLink[]>([]);
+  const [playlistName, setPlaylistName] = useState<string>('');
+  const [products, setProducts] = useState<Product[]>([]);
+  const [linkedProductIds, setLinkedProductIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [editingLink, setEditingLink] = useState<ProductLink | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -37,123 +34,62 @@ export default function ProductLinkManagerScreen() {
 
   const fetchData = async () => {
     try {
-      // Mock data - replace with actual API calls
-      const mockPlaylist: Playlist = {
-        id: id,
-        userId: 1,
-        name: 'My Awesome Playlist',
-        requiresActivationCode: false,
-        isPublic: true,
-        createdAt: new Date().toISOString(),
-        mediaFiles: [],
-      };
-
-      const mockProductLinks: ProductLink[] = [
-        {
-          id: 1,
-          playlistId: id,
-          title: 'Limited Edition T-Shirt',
-          url: 'https://example.com/tshirt',
-          description: 'Premium cotton t-shirt with exclusive design',
-          imageUrl: 'https://example.com/tshirt.jpg',
-          displayOrder: 0,
-          isActive: true,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          playlistId: id,
-          title: 'Album Vinyl Record',
-          url: 'https://example.com/vinyl',
-          description: 'High-quality vinyl pressing of our latest album',
-          displayOrder: 1,
-          isActive: false,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      console.log('🔴 PRODUCT_LINKS: Fetching data for playlist:', id);
       
-      setPlaylist(mockPlaylist);
-      setProductLinks(mockProductLinks.sort((a, b) => a.displayOrder - b.displayOrder));
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      Alert.alert('Error', 'Failed to load product links');
+      const { playlistAPI, api } = await import('@/services/api');
+      
+      // Fetch playlist info
+      try {
+        const playlist = await playlistAPI.getById(id);
+        setPlaylistName(playlist.name);
+        console.log('🔴 PRODUCT_LINKS: Loaded playlist:', playlist.name);
+      } catch (error) {
+        console.log('🔴 PRODUCT_LINKS: Could not load playlist, using default name');
+        setPlaylistName('Playlist');
+      }
+      
+      // Fetch user's products
+      const response = await api.get('/products?mine=true');
+      const userProducts = response.data.products || [];
+      setProducts(userProducts);
+      console.log('🔴 PRODUCT_LINKS: Loaded user products:', userProducts.length);
+      
+      // TODO: Fetch which products are already linked to this playlist
+      // For now, we'll start with no linked products
+      setLinkedProductIds([]);
+      
+    } catch (error: any) {
+      console.error('🔴 PRODUCT_LINKS: Error fetching data:', error);
+      Alert.alert('Error', `Failed to load data: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
   };
 
-  const handleCreateLink = async (linkData: {
-    title: string;
-    url: string;
-    description?: string;
-    imageUrl?: string;
-  }) => {
+  const handleToggleProductLink = async (productId: number) => {
     try {
-      const newLink: ProductLink = {
-        id: Date.now(),
-        playlistId: id,
-        title: linkData.title,
-        url: linkData.url,
-        description: linkData.description,
-        imageUrl: linkData.imageUrl,
-        displayOrder: productLinks.length,
-        isActive: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      setProductLinks(prev => [...prev, newLink]);
-      setShowCreateModal(false);
-      Alert.alert('Success', 'Product link created successfully');
+      const isCurrentlyLinked = linkedProductIds.includes(productId);
+      
+      if (isCurrentlyLinked) {
+        // Remove link
+        setLinkedProductIds(prev => prev.filter(id => id !== productId));
+        console.log('🔴 PRODUCT_LINKS: Unlinked product:', productId);
+        
+        // TODO: Call API to remove product link from playlist
+        // await playlistAPI.removeProductLink(id, productId);
+        
+      } else {
+        // Add link
+        setLinkedProductIds(prev => [...prev, productId]);
+        console.log('🔴 PRODUCT_LINKS: Linked product:', productId);
+        
+        // TODO: Call API to add product link to playlist
+        // await playlistAPI.addProductLink(id, productId);
+      }
+      
     } catch (error) {
-      console.error('Error creating product link:', error);
-      Alert.alert('Error', 'Failed to create product link');
-    }
-  };
-
-  const handleUpdateLink = async (linkId: number, updateData: Partial<ProductLink>) => {
-    try {
-      setProductLinks(prev => 
-        prev.map(link => link.id === linkId ? { ...link, ...updateData } : link)
-      );
-      setEditingLink(null);
-      Alert.alert('Success', 'Product link updated successfully');
-    } catch (error) {
-      console.error('Error updating product link:', error);
-      Alert.alert('Error', 'Failed to update product link');
-    }
-  };
-
-  const handleDeleteLink = async (linkId: number) => {
-    Alert.alert(
-      'Delete Product Link',
-      'Are you sure you want to delete this product link?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              setProductLinks(prev => prev.filter(link => link.id !== linkId));
-              Alert.alert('Success', 'Product link deleted');
-            } catch (error) {
-              console.error('Error deleting product link:', error);
-              Alert.alert('Error', 'Failed to delete product link');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleToggleLinkStatus = async (linkId: number, isActive: boolean) => {
-    try {
-      setProductLinks(prev => 
-        prev.map(link => link.id === linkId ? { ...link, isActive } : link)
-      );
-    } catch (error) {
-      console.error('Error updating product link:', error);
+      console.error('🔴 PRODUCT_LINKS: Error toggling product link:', error);
       Alert.alert('Error', 'Failed to update product link');
     }
   };
@@ -163,17 +99,17 @@ export default function ProductLinkManagerScreen() {
     fetchData();
   };
 
-  if (isLoading || !playlist) {
+  if (isLoading) {
     return (
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
-        <ThemedText style={styles.loadingText}>Loading product links...</ThemedText>
+        <ThemedText style={styles.loadingText}>Loading products...</ThemedText>
       </ThemedView>
     );
   }
 
-  const activeLinks = productLinks.filter(link => link.isActive);
-  const inactiveLinks = productLinks.filter(link => !link.isActive);
+  const linkedProducts = products.filter(product => linkedProductIds.includes(product.id));
+  const availableProducts = products.filter(product => !linkedProductIds.includes(product.id));
 
   return (
     <ThemedView style={styles.container}>
@@ -183,9 +119,9 @@ export default function ProductLinkManagerScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Product Links</Text>
-        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-          <MaterialIcons name="add" size={24} color="#3b82f6" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerSubtitle}>{linkedProducts.length} linked</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -199,92 +135,83 @@ export default function ProductLinkManagerScreen() {
         {/* Playlist Info */}
         <View style={styles.playlistInfo}>
           <Text style={styles.playlistName} numberOfLines={2}>
-            {playlist.name}
+            {playlistName}
           </Text>
           <Text style={styles.playlistSubtitle}>
-            {productLinks.length} product links
+            {linkedProducts.length} product link{linkedProducts.length !== 1 ? 's' : ''}
           </Text>
         </View>
 
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <MaterialIcons name="add" size={20} color="#3b82f6" />
-            <Text style={styles.actionButtonText}>Add Link</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Product Links List */}
-        {activeLinks.length > 0 && (
-          <View style={styles.linkGroup}>
-            <Text style={styles.groupTitle}>
-              Active Links ({activeLinks.length})
+        {/* Linked Products */}
+        {linkedProducts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Active Links ({linkedProducts.length})
             </Text>
-            {activeLinks.map((link) => (
-              <ProductLinkCard
-                key={link.id}
-                link={link}
-                onEdit={() => setEditingLink(link)}
-                onDelete={() => handleDeleteLink(link.id)}
-                onToggleStatus={(isActive) => handleToggleLinkStatus(link.id, isActive)}
-              />
+            {linkedProducts.map((product) => (
+              <View key={product.id} style={styles.productContainer}>
+                <ProductCard
+                  product={product}
+                  onPress={() => {}}
+                  showActions={false}
+                />
+                <TouchableOpacity
+                  style={styles.unlinkButton}
+                  onPress={() => handleToggleProductLink(product.id)}
+                >
+                  <MaterialIcons name="link-off" size={20} color="#ef4444" />
+                  <Text style={styles.unlinkButtonText}>Remove Link</Text>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}
 
-        {inactiveLinks.length > 0 && (
-          <View style={styles.linkGroup}>
-            <Text style={styles.groupTitle}>
-              Inactive Links ({inactiveLinks.length})
+        {/* Available Products */}
+        {availableProducts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Available Products ({availableProducts.length})
             </Text>
-            {inactiveLinks.map((link) => (
-              <ProductLinkCard
-                key={link.id}
-                link={link}
-                onEdit={() => setEditingLink(link)}
-                onDelete={() => handleDeleteLink(link.id)}
-                onToggleStatus={(isActive) => handleToggleLinkStatus(link.id, isActive)}
-              />
+            {availableProducts.map((product) => (
+              <View key={product.id} style={styles.productContainer}>
+                <ProductCard
+                  product={product}
+                  onPress={() => {}}
+                  showActions={false}
+                />
+                <TouchableOpacity
+                  style={styles.linkButton}
+                  onPress={() => handleToggleProductLink(product.id)}
+                >
+                  <MaterialIcons name="add-link" size={20} color="#22c55e" />
+                  <Text style={styles.linkButtonText}>Add Link</Text>
+                </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}
 
         {/* Empty State */}
-        {productLinks.length === 0 && (
+        {products.length === 0 && (
           <View style={styles.emptyContainer}>
             <MaterialIcons name="shopping-bag" size={64} color="#9ca3af" />
-            <Text style={styles.emptyText}>No product links yet</Text>
+            <Text style={styles.emptyText}>No products found</Text>
             <Text style={styles.emptySubtext}>
-              Add product links to promote merchandise and products related to this playlist
+              Create products in your store first, then link them to this playlist for promotion during playback
             </Text>
             <TouchableOpacity
               style={styles.createButton}
-              onPress={() => setShowCreateModal(true)}
+              onPress={() => navigation.navigate('store' as never)}
             >
               <MaterialIcons name="add" size={20} color="#fff" />
-              <Text style={styles.createButtonText}>Add First Link</Text>
+              <Text style={styles.createButtonText}>Go to Store</Text>
             </TouchableOpacity>
           </View>
         )}
       </ScrollView>
 
-      {/* Create/Edit Product Link Modal */}
-      <CreateProductLinkModal
-        visible={showCreateModal || !!editingLink}
-        onClose={() => {
-          setShowCreateModal(false);
-          setEditingLink(null);
-        }}
-        onSave={editingLink 
-          ? (data) => handleUpdateLink(editingLink.id, data)
-          : handleCreateLink
-        }
-        initialData={editingLink}
-        playlistName={playlist.name}
-      />
+
     </ThemedView>
   );
 }
@@ -317,6 +244,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
   },
   scrollView: {
     flex: 1,
@@ -369,14 +303,47 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
   },
-  linkGroup: {
+  section: {
     marginBottom: 24,
   },
-  groupTitle: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
     marginBottom: 12,
+  },
+  productContainer: {
+    marginBottom: 16,
+  },
+  linkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dcfce7',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  linkButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#22c55e',
+  },
+  unlinkButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginTop: 8,
+    gap: 6,
+  },
+  unlinkButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ef4444',
   },
   emptyContainer: {
     alignItems: 'center',

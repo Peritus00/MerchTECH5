@@ -20,7 +20,7 @@ interface CreateQRModalProps {
   onQRCreated: () => void;
 }
 
-type ContentType = 'url' | 'text' | 'email' | 'phone' | 'playlist' | 'slideshow';
+type ContentType = 'url' | 'text' | 'email' | 'phone' | 'playlist' | 'slideshow' | 'store';
 
 export const CreateQRModal: React.FC<CreateQRModalProps> = ({
   visible,
@@ -41,10 +41,15 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
   const [requiresActivationCode, setRequiresActivationCode] = useState(false);
   const [selectedProducts, setSelectedProducts] = useState<any[]>([]);
   
+  // Store specific states
+  const [storeType, setStoreType] = useState<'user' | 'master'>('user');
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  
   // Mock data - replace with actual data from your services
   const [playlists, setPlaylists] = useState<any[]>([]);
   const [slideshows, setSlideshows] = useState<any[]>([]);
   const [products, setProducts] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   useEffect(() => {
     if (visible) {
@@ -75,6 +80,12 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
         { id: 1, name: 'Premium Headphones', price: 299.99 },
         { id: 2, name: 'Wireless Speaker', price: 149.99 },
       ]);
+
+      setUsers([
+        { id: 1, name: 'John Doe', email: 'john@example.com', productCount: 12 },
+        { id: 2, name: 'Jane Smith', email: 'jane@example.com', productCount: 8 },
+        { id: 3, name: 'Bob Wilson', email: 'bob@example.com', productCount: 15 },
+      ]);
     } catch (error) {
       console.error('Error loading data:', error);
     }
@@ -91,6 +102,8 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
     setSelectedSlideshow(null);
     setRequiresActivationCode(false);
     setSelectedProducts([]);
+    setStoreType('user');
+    setSelectedUser(null);
   };
 
   const handleCreate = async () => {
@@ -101,7 +114,7 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
 
     let finalContent = content;
     
-    // Handle playlist/slideshow content generation
+    // Handle playlist/slideshow/store content generation
     if (contentType === 'playlist' && selectedPlaylist) {
       if (requiresActivationCode) {
         finalContent = `https://your-domain.com/playlist-access/${selectedPlaylist.id}`;
@@ -113,6 +126,16 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
         finalContent = `https://your-domain.com/slideshow-access/${selectedSlideshow.id}`;
       } else {
         finalContent = `https://your-domain.com/media-player/${selectedSlideshow.id}`;
+      }
+    } else if (contentType === 'store') {
+      if (storeType === 'master') {
+        finalContent = `https://merchtech.net/store/master`;
+      } else if (storeType === 'user' && selectedUser) {
+        finalContent = `https://merchtech.net/store/user/${selectedUser.id}`;
+      } else {
+        Alert.alert('Error', 'Please select a user for the store QR code');
+        setLoading(false);
+        return;
       }
     } else if (!finalContent.trim()) {
       Alert.alert('Error', 'Please enter content for your QR code');
@@ -156,6 +179,7 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
     { value: 'phone', label: 'Phone Number' },
     { value: 'playlist', label: 'Playlist' },
     { value: 'slideshow', label: 'Slideshow' },
+    { value: 'store', label: 'Store Link' },
   ];
 
   const renderContentInput = () => {
@@ -223,6 +247,77 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
       );
     }
 
+    if (contentType === 'store') {
+      return (
+        <View>
+          <ThemedText style={styles.label}>Store Type</ThemedText>
+          <View style={styles.storeTypeContainer}>
+            <TouchableOpacity
+              style={[
+                styles.storeTypeButton,
+                storeType === 'user' && styles.activeStoreTypeButton
+              ]}
+              onPress={() => setStoreType('user')}
+            >
+              <ThemedText style={[
+                styles.storeTypeButtonText,
+                storeType === 'user' && styles.activeStoreTypeButtonText
+              ]}>
+                Individual Store
+              </ThemedText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.storeTypeButton,
+                storeType === 'master' && styles.activeStoreTypeButton
+              ]}
+              onPress={() => setStoreType('master')}
+            >
+              <ThemedText style={[
+                styles.storeTypeButtonText,
+                storeType === 'master' && styles.activeStoreTypeButtonText
+              ]}>
+                Master Store
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+
+          {storeType === 'user' && (
+            <View style={{ marginTop: 16 }}>
+              <ThemedText style={styles.label}>Select User</ThemedText>
+              <ScrollView style={styles.selectionList} showsVerticalScrollIndicator={false}>
+                {users.map((user) => (
+                  <TouchableOpacity
+                    key={user.id}
+                    style={[
+                      styles.selectionItem,
+                      selectedUser?.id === user.id && styles.selectedItem
+                    ]}
+                    onPress={() => setSelectedUser(user)}
+                  >
+                    <ThemedText style={styles.selectionItemText}>
+                      {user.name} ({user.productCount} products)
+                    </ThemedText>
+                    <ThemedText style={[styles.selectionItemText, { fontSize: 12, opacity: 0.7 }]}>
+                      {user.email}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {storeType === 'master' && (
+            <View style={styles.storePreview}>
+              <ThemedText style={styles.storePreviewText}>
+                🏪 Master Store - All products from all users
+              </ThemedText>
+            </View>
+          )}
+        </View>
+      );
+    }
+
     return (
       <View>
         <ThemedText style={styles.label}>Content</ThemedText>
@@ -244,6 +339,7 @@ export const CreateQRModal: React.FC<CreateQRModalProps> = ({
       case 'email': return 'contact@example.com';
       case 'phone': return '+1234567890';
       case 'text': return 'Enter your text here...';
+      case 'store': return 'Store URL will be generated automatically';
       default: return 'Enter content...';
     }
   };
@@ -576,5 +672,46 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  storeTypeContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  storeTypeButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginHorizontal: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#f5f5f5',
+    alignItems: 'center',
+  },
+  activeStoreTypeButton: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  storeTypeButtonText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+  },
+  activeStoreTypeButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  storePreview: {
+    marginTop: 16,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  storePreviewText: {
+    fontSize: 14,
+    color: '#6c757d',
+    textAlign: 'center',
   },
 });

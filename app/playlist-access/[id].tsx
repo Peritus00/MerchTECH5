@@ -27,6 +27,8 @@ export default function PlaylistAccessScreen() {
   const [isValidating, setIsValidating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewCompleted, setPreviewCompleted] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isBlocked, setIsBlocked] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -67,20 +69,56 @@ export default function PlaylistAccessScreen() {
       return;
     }
 
+    if (isBlocked) {
+      Alert.alert('Access Blocked', 'Too many failed attempts. Please visit our store to purchase access.');
+      return;
+    }
+
     setIsValidating(true);
     try {
-      // Mock validation - replace with actual API call
-      const isValid = activationCode === 'DEMO123'; // Mock valid code
+      console.log('🔴 PLAYLIST_ACCESS: Validating activation code:', activationCode);
+      
+      // TODO: Replace with actual API call to validate activation code
+      // For now, using mock validation
+      const isValid = activationCode === 'DEMO123' || activationCode === 'VALID123';
 
       if (isValid) {
-        // Redirect to full media player
+        console.log('🔴 PLAYLIST_ACCESS: Valid activation code, redirecting to media player');
+        // SCENARIO 2: Valid activation code - redirect to full media player
         router.replace(`/media-player/${id}`);
       } else {
-        Alert.alert('Invalid Code', 'The activation code you entered is not valid.');
+        console.log('🔴 PLAYLIST_ACCESS: Invalid activation code, attempt:', failedAttempts + 1);
+        
+        const newFailedAttempts = failedAttempts + 1;
+        setFailedAttempts(newFailedAttempts);
+        
+        if (newFailedAttempts >= 3) {
+          console.log('🔴 PLAYLIST_ACCESS: 3 failed attempts reached, blocking and redirecting to store');
+          setIsBlocked(true);
+          Alert.alert(
+            'Access Blocked', 
+            'You have entered an invalid activation code 3 times. You will be redirected to our store to purchase access.',
+            [
+              {
+                text: 'Go to Store',
+                onPress: () => {
+                  router.replace('/store');
+                }
+              }
+            ]
+          );
+        } else {
+          const remainingAttempts = 3 - newFailedAttempts;
+          Alert.alert(
+            'Invalid Code', 
+            `The activation code you entered is not valid. You have ${remainingAttempts} attempt${remainingAttempts === 1 ? '' : 's'} remaining.`
+          );
+        }
+        
         setActivationCode('');
       }
     } catch (error) {
-      console.error('Error validating code:', error);
+      console.error('🔴 PLAYLIST_ACCESS: Error validating code:', error);
       Alert.alert('Error', 'Failed to validate activation code');
     } finally {
       setIsValidating(false);
@@ -88,15 +126,18 @@ export default function PlaylistAccessScreen() {
   };
 
   const handlePreviewStart = () => {
+    console.log('🔴 PLAYLIST_ACCESS: Starting 30-second preview');
     setShowPreview(true);
   };
 
   const handlePreviewComplete = () => {
+    console.log('🔴 PLAYLIST_ACCESS: Preview completed, redirecting to store');
     setPreviewCompleted(true);
     setShowPreview(false);
-    // Redirect to store after preview
+    
+    // SCENARIO 3: Preview completed - redirect to store after 2 seconds
     setTimeout(() => {
-      router.push('/store');
+      router.replace('/store');
     }, 2000);
   };
 
@@ -127,6 +168,7 @@ export default function PlaylistAccessScreen() {
           playlistName={playlist.name}
           previewDuration={30}
           autoplay={true}
+          onPreviewComplete={handlePreviewComplete}
         />
         <View style={styles.previewActions}>
           <TouchableOpacity
@@ -191,26 +233,52 @@ export default function PlaylistAccessScreen() {
 
             <View style={styles.codeInputContainer}>
               <TextInput
-                style={styles.codeInput}
+                style={[styles.codeInput, isBlocked && styles.blockedInput]}
                 value={activationCode}
                 onChangeText={setActivationCode}
-                placeholder="Enter activation code"
-                placeholderTextColor="#9ca3af"
+                placeholder={isBlocked ? "Access blocked" : "Enter activation code"}
+                placeholderTextColor={isBlocked ? "#ef4444" : "#9ca3af"}
                 autoCapitalize="characters"
                 maxLength={20}
+                editable={!isBlocked}
               />
               <TouchableOpacity
-                style={[styles.submitButton, (!activationCode.trim() || isValidating) && styles.disabledButton]}
+                style={[
+                  styles.submitButton, 
+                  (!activationCode.trim() || isValidating || isBlocked) && styles.disabledButton
+                ]}
                 onPress={handleActivationCodeSubmit}
-                disabled={!activationCode.trim() || isValidating}
+                disabled={!activationCode.trim() || isValidating || isBlocked}
               >
                 {isValidating ? (
                   <ActivityIndicator size="small" color="#fff" />
+                ) : isBlocked ? (
+                  <MaterialIcons name="block" size={20} color="#fff" />
                 ) : (
                   <MaterialIcons name="check" size={20} color="#fff" />
                 )}
               </TouchableOpacity>
             </View>
+            
+            {/* Failed attempts indicator */}
+            {failedAttempts > 0 && !isBlocked && (
+              <View style={styles.attemptsWarning}>
+                <MaterialIcons name="warning" size={16} color="#f59e0b" />
+                <Text style={styles.attemptsText}>
+                  {failedAttempts}/3 failed attempts
+                </Text>
+              </View>
+            )}
+            
+            {/* Blocked message */}
+            {isBlocked && (
+              <View style={styles.blockedMessage}>
+                <MaterialIcons name="block" size={16} color="#ef4444" />
+                <Text style={styles.blockedText}>
+                  Access blocked after 3 failed attempts. Visit our store to purchase access.
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Preview Option */}
@@ -459,5 +527,41 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  blockedInput: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fef2f2',
+  },
+  attemptsWarning: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#fef3c7',
+    borderRadius: 6,
+    gap: 6,
+  },
+  attemptsText: {
+    fontSize: 12,
+    color: '#92400e',
+    fontWeight: '500',
+  },
+  blockedMessage: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#fef2f2',
+    borderRadius: 6,
+    gap: 6,
+  },
+  blockedText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '500',
+    flex: 1,
+    lineHeight: 16,
   },
 });

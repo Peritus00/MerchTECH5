@@ -6,11 +6,16 @@ import {
   StyleSheet,
   Dimensions,
   Text,
+  Platform,
+  Alert,
 } from 'react-native';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { Product } from '@/shared/product-schema';
 import { useCart } from '@/contexts/CartContext';
+import { checkoutAPI } from '@/services/api';
+import * as WebBrowser from 'expo-web-browser';
+import ShareButton from './ShareButton';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 60) / 2; // Account for padding and gap
@@ -18,27 +23,67 @@ const cardWidth = (width - 60) / 2; // Account for padding and gap
 interface ProductCardProps {
   product: Product;
   onPress: () => void;
+  showShareButton?: boolean;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareButton = false }) => {
   const { addToCart } = useCart();
+
+  const getProductUrl = () => {
+    const baseUrl = 'https://merchtech.net';
+    return `${baseUrl}/store/product/${product.id}`;
+  };
 
   const handleAddToCart = (e: any) => {
     e.stopPropagation();
     addToCart(product);
   };
 
+  const handleBuyNow = async (e: any) => {
+    e.stopPropagation();
+    try {
+      console.log('BuyNow pressed for', product.id);
+      const items = [{ productId: product.id, quantity: 1 }];
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = base;
+      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+
+      if (Platform.OS === 'web') {
+        window.location.href = url;
+      } else {
+        await WebBrowser.openBrowserAsync(url);
+      }
+    } catch (err: any) {
+      console.error('BuyNow error', err);
+      Alert.alert('Error', err.message || 'Failed to start checkout');
+    }
+  };
+
   // Get the first image or use a default
   const imageUrl = product.images && product.images.length > 0
     ? product.images[0]
-    : 'https://via.placeholder.com/400x400?text=No+Image';
+    : 'https://placehold.co/400x400?text=No+Image';
 
   // Get the lowest price for display
-  const lowestPrice = product.prices.length > 0
+  const lowestPrice = product.prices && product.prices.length > 0
     ? Math.min(...product.prices.map(p => p.unit_amount))
     : 0;
 
-  const hasMultiplePrices = product.prices.length > 1;
+  // Rating: expect average rating stored in metadata.ratingAvg (0-5)
+  const avgRating = product.metadata && product.metadata.ratingAvg ? parseFloat(product.metadata.ratingAvg as any) : 0;
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    for (let i = 1; i <= 5; i++) {
+      stars.push(
+        <Text key={i} style={[styles.star, i <= rating ? styles.starFilled : styles.starEmpty]}>★</Text>
+      );
+    }
+    return <View style={styles.ratingRow}>{stars}</View>;
+  };
+
+  const hasMultiplePrices = product.prices && product.prices.length > 1;
 
   const formatPrice = (priceInCents: number) => {
     return `$${(priceInCents / 100).toFixed(2)}`;
@@ -51,7 +96,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
         <ThemedView style={styles.priceTag}>
           <ThemedText style={styles.priceText}>{formatPrice(lowestPrice)}</ThemedText>
         </ThemedView>
-        {!product.inStock && (
+        {showShareButton && (
+          <View style={styles.shareButtonContainer}>
+            <ShareButton
+              url={getProductUrl()}
+              title={product.name}
+              description={product.description}
+              type="product"
+              compact={true}
+            />
+          </View>
+        )}
+        {!product.in_stock && (
           <ThemedView style={styles.outOfStockOverlay}>
             <ThemedText style={styles.outOfStockText}>Out of Stock</ThemedText>
           </ThemedView>
@@ -73,33 +129,40 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress }) => {
           </ThemedView>
         )}
 
+        {/* Rating display */}
+        {renderStars(Math.round(avgRating))}
+
         <ThemedView style={styles.footer}>
           <ThemedView style={styles.stockStatus}>
             <ThemedView
               style={[
                 styles.stockIndicator,
-                { backgroundColor: product.inStock ? '#22c55e' : '#ef4444' },
+                { backgroundColor: product.in_stock ? '#22c55e' : '#ef4444' },
               ]}
             />
             <ThemedText style={styles.stockText}>
-              {product.inStock ? 'In Stock' : 'Out of Stock'}
+              {product.in_stock ? 'In Stock' : 'Out of Stock'}
             </ThemedText>
           </ThemedView>
 
           <TouchableOpacity
             style={[
               styles.addButton,
-              !product.inStock && styles.addButtonDisabled,
+              !product.in_stock && styles.addButtonDisabled,
             ]}
             onPress={handleAddToCart}
-            disabled={!product.inStock}
+            disabled={!product.in_stock}
           >
-            <ThemedText style={styles.addButtonText}>
-              {product.inStock ? '🛒' : '❌'}
-            </ThemedText>
+            <ThemedText style={styles.addButtonText}>+</ThemedText>
           </TouchableOpacity>
+
+          {product.in_stock && (
+            <TouchableOpacity style={styles.buyNowButton} onPress={handleBuyNow}>
+              <ThemedText style={styles.buyNowText}>Buy Now</ThemedText>
+            </TouchableOpacity>
+          )}
         </ThemedView>
-        {product.prices.length > 0 && (
+        {product.prices && product.prices.length > 0 && (
           <Text style={styles.priceCount}>
             {product.prices.length} price option{product.prices.length > 1 ? 's' : ''}
           </Text>
@@ -140,6 +203,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
+  },
+  shareButtonContainer: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
   },
   outOfStockOverlay: {
     position: 'absolute',
@@ -207,6 +275,8 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 18,
+    color: '#ffffff',
+    fontWeight: 'bold',
   },
   category: {
     color: '#666',
@@ -221,6 +291,27 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 11,
     marginTop: 4,
+  },
+  buyNowButton: {
+    marginLeft: 8,
+    backgroundColor: '#22c55e',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  buyNowText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  star: {
+    fontSize: 16,
+  },
+  starFilled: {
+    color: '#facc15',
+  },
+  starEmpty: {
+    color: '#555',
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    marginVertical: 4,
   },
 });
 

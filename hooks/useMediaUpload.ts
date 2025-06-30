@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
+import { Alert } from 'react-native';
 import { MediaFile } from '@/shared/media-schema';
 import { mediaAPI } from '@/services/api';
+import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 
 interface UploadProgress {
   loaded: number;
@@ -23,10 +25,22 @@ interface UseMediaUploadResult {
 export const useMediaUpload = (): UseMediaUploadResult => {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const { canCreate } = useSubscriptionLimits();
 
   const uploadFile = async (file: DocumentPicker.DocumentPickerResult): Promise<MediaFile> => {
     if (file.canceled || !file.assets || file.assets.length === 0) {
       throw new Error('No file selected');
+    }
+
+    // Check subscription limits before uploading
+    const canUpload = canCreate('media');
+    if (!canUpload.allowed) {
+      Alert.alert(
+        'Upload Limit Reached',
+        canUpload.message,
+        [{ text: 'OK' }]
+      );
+      throw new Error(canUpload.message);
     }
 
     const asset = file.assets[0];

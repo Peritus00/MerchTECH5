@@ -91,6 +91,51 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
           const subscriptionTier = user.subscriptionTier || user.subscription_tier || 'free';
           const isPending = user.isPending || user.status === 'pending' || false;
 
+          // Get limits - check for admin-set custom limits first, then fall back to subscription tier defaults
+          const getLimit = (customField: string, tierLimits: any) => {
+            const customValue = user[customField];
+            if (customValue !== null && customValue !== undefined) {
+              return customValue; // Admin has set a custom limit
+            }
+            return tierLimits; // Use subscription tier default
+          };
+
+          // Define subscription tier defaults
+          let tierLimits = {
+            maxQrCodes: 1,
+            maxSlideshows: 0,
+            maxVideos: 0,
+            maxAudioFiles: 3,
+            maxProducts: 1,
+          };
+
+          if (subscriptionTier === 'basic') {
+            tierLimits = {
+              maxQrCodes: 3,
+              maxSlideshows: 3,
+              maxVideos: 1,
+              maxAudioFiles: 10,
+              maxProducts: 3,
+            };
+          } else if (subscriptionTier === 'premium') {
+            tierLimits = {
+              maxQrCodes: 10,
+              maxSlideshows: 5,
+              maxVideos: 3,
+              maxAudioFiles: 20,
+              maxProducts: 10,
+            };
+          }
+
+          // Apply admin overrides if they exist
+          const limits = {
+            maxQrCodes: getLimit('max_qr_codes', tierLimits.maxQrCodes),
+            maxSlideshows: getLimit('max_slideshows', tierLimits.maxSlideshows),
+            maxVideos: getLimit('max_videos', tierLimits.maxVideos),
+            maxAudioFiles: getLimit('max_audio_files', tierLimits.maxAudioFiles),
+            maxProducts: getLimit('max_products', tierLimits.maxProducts),
+          };
+
           return {
             id: user.id,
             username: user.username || user.email?.split('@')[0] || 'Unknown',
@@ -105,13 +150,13 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
             canAccessStore: true,
             canViewFanmail: subscriptionTier === 'premium',
             canManageQRCodes: true,
-            maxPlaylists: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 25 : 5,
-            maxVideos: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 100 : 10,
-            maxAudioFiles: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 100 : 10,
-            maxActivationCodes: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 25 : 10,
-            maxProducts: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 15 : 5,
-            maxQrCodes: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 50 : 10,
-            maxSlideshows: subscriptionTier === 'premium' ? 999 : subscriptionTier === 'basic' ? 10 : 3,
+            maxPlaylists: subscriptionTier === 'premium' ? 50 : subscriptionTier === 'basic' ? 25 : 10,
+            maxVideos: limits.maxVideos,
+            maxAudioFiles: limits.maxAudioFiles,
+            maxActivationCodes: subscriptionTier === 'premium' ? 50 : subscriptionTier === 'basic' ? 25 : 10,
+            maxProducts: limits.maxProducts,
+            maxQrCodes: limits.maxQrCodes,
+            maxSlideshows: limits.maxSlideshows,
             isSuspended: user.isSuspended || false,
             createdAt: user.createdAt || user.created_at,
             lastActive: user.updatedAt || user.updated_at || user.createdAt || user.created_at,
@@ -154,36 +199,64 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
     permissions: Partial<User>
   ): Promise<boolean> => {
     try {
-      // Mock update for development
-      setUsers(prev =>
-        prev.map(user =>
-          user.id === userId ? { ...user, ...permissions } : user
-        )
-      );
-      Alert.alert('Success', 'User permissions updated successfully');
-      return true;
+      let token = await AsyncStorage.getItem('authToken');
+      
+      // Check if we need to use the developer fallback token
+      if (!token) {
+        const currentUser = await AsyncStorage.getItem('currentUser');
+        if (currentUser) {
+          const user = JSON.parse(currentUser);
+          if (user.email === 'djjetfuel@gmail.com') {
+            token = 'dev_jwt_token_djjetfuel_12345';
+          }
+        }
+      }
 
-      // Uncomment for real API integration:
-      // const response = await fetch(`http://0.0.0.0:5001/api/admin/users/${userId}/permissions`, {
-      //   method: 'PATCH',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(permissions),
-      // });
-      // 
-      // if (response.ok) {
-      //   const updatedUser = await response.json();
-      //   setUsers(prev =>
-      //     prev.map(user =>
-      //       user.id === userId ? { ...user, ...updatedUser.user } : user
-      //     )
-      //   );
-      //   Alert.alert('Success', 'User permissions updated successfully');
-      //   return true;
-      // } else {
-      //   const error = await response.json();
-      //   Alert.alert('Error', error.message || 'Failed to update permissions');
-      //   return false;
-      // }
+      if (!token) {
+        throw new Error('Authentication token not found');
+      }
+
+      const apiUrl = `${getApiUrl()}/admin/users/${userId}`;
+      
+      // Map the permissions to the backend field names
+      const backendPermissions = {
+        subscriptionTier: permissions.subscriptionTier,
+        isAdmin: permissions.isAdmin,
+        isSuspended: permissions.isSuspended,
+        maxProducts: permissions.maxProducts,
+        maxAudioFiles: permissions.maxAudioFiles,
+        maxPlaylists: permissions.maxPlaylists,
+        maxQrCodes: permissions.maxQrCodes,
+        maxSlideshows: permissions.maxSlideshows,
+        maxVideos: permissions.maxVideos,
+        maxActivationCodes: permissions.maxActivationCodes,
+      };
+
+      console.log('Updating user permissions:', { userId, permissions: backendPermissions });
+
+      const response = await fetch(apiUrl, {
+        method: 'PATCH',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(backendPermissions),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('User permissions updated successfully:', result);
+        
+        // Refresh the users list to get the updated data
+        await fetchUsers();
+        
+        return true;
+      } else {
+        const error = await response.json();
+        console.error('API Error:', error);
+        Alert.alert('Error', error.error || 'Failed to update permissions');
+        return false;
+      }
     } catch (error) {
       console.error('Error updating permissions:', error);
       Alert.alert('Error', 'Failed to update permissions');

@@ -8,8 +8,9 @@ import {
   ScrollView,
   Image,
   Linking,
+  Platform,
 } from 'react-native';
-import { Audio } from 'expo-audio';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
@@ -28,6 +29,7 @@ interface PreviewPlayerProps {
   previewDuration?: number; // in seconds, default 25
   autoplay?: boolean;
   productLinks?: ProductLink[];
+  onPreviewComplete?: () => void;
 }
 
 // Global audio instance manager to prevent multiple players
@@ -40,6 +42,7 @@ export default function PreviewPlayer({
   previewDuration = 25,
   autoplay = false,
   productLinks = [],
+  onPreviewComplete,
 }: PreviewPlayerProps) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -60,15 +63,18 @@ export default function PreviewPlayer({
   useEffect(() => {
     const initializeAudio = async () => {
       try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-          playThroughEarpieceAndroid: false,
-        });
+        // Only initialize audio mode on native platforms
+        if (Platform.OS !== 'web' && Audio.setAudioModeAsync) {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: false,
+            interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+            playThroughEarpieceAndroid: false,
+          });
+        }
       } catch (error) {
         console.error('Failed to initialize audio:', error);
       }
@@ -128,6 +134,12 @@ export default function PreviewPlayer({
       }
 
       // For audio files, create a demo audio for preview
+      // Check if Audio.Sound is available (web compatibility)
+      if (!Audio.Sound) {
+        console.warn('Audio.Sound not available on this platform');
+        return;
+      }
+
       const demoAudio = Audio.Sound.createAsync(
         { uri: 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=' },
         {
@@ -194,6 +206,18 @@ export default function PreviewPlayer({
       return () => clearTimeout(timer);
     }
   }, [sound, autoplay]);
+
+  // Handle preview completion
+  useEffect(() => {
+    if (previewEnded && onPreviewComplete) {
+      console.log('🔴 PREVIEW_PLAYER: Preview ended, calling completion callback');
+      // Small delay to allow UI to update before callback
+      const timer = setTimeout(() => {
+        onPreviewComplete();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [previewEnded, onPreviewComplete]);
 
   // Handle play
   const handlePlay = async () => {

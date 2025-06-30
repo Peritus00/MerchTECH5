@@ -152,6 +152,7 @@ export default function Settings() {
       onPress: () => router.push('/store/sales'),
       icon: '📈',
     },
+
     // Admin-only options
     ...(isAdmin ? [
       {

@@ -60,13 +60,9 @@ export default function LoginScreen() {
     setErrors({});
 
     try {
-      const result = await login(email.trim(), password);
-
-      if (result.success) {
-        router.replace('/(tabs)');
-      } else {
-        setErrors({ general: result.error || 'Login failed' });
-      }
+      await login(email.trim(), password);
+      // If login succeeds, it will not throw an error
+      router.replace('/(tabs)');
     } catch (error: any) {
       console.error('Login error:', error);
 

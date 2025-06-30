@@ -2,13 +2,14 @@
 export interface Product {
   id: string; // Changed to string for Stripe Product ID (prod_...)
   userId?: number;
+  user_id?: number; // API returns this field
   name: string;
   description: string;
   price?: number; // Deprecated - use prices array instead
   imageUrl?: string;
   images?: string[]; // Stripe product images
   category?: string;
-  inStock?: boolean;
+  in_stock?: boolean;
   slug?: string;
   tags?: string[];
   externalUrl?: string;

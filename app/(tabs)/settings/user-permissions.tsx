@@ -100,10 +100,22 @@ const UserPermissionCard = ({
         <View style={styles.userLimits}>
           <Text style={styles.limitsTitle}>Current Limits:</Text>
           <View style={styles.limitsGrid}>
-            <Text style={styles.limitItem}>QR Codes: {user.maxQrCodes}</Text>
-            <Text style={styles.limitItem}>Playlists: {user.maxPlaylists}</Text>
-            <Text style={styles.limitItem}>Products: {user.maxProducts}</Text>
-            <Text style={styles.limitItem}>Slideshows: {user.maxSlideshows}</Text>
+            <Text style={styles.limitItem}>
+              QR Codes: {user.maxQrCodes}
+              {user.maxQrCodes !== undefined && user.maxQrCodes !== null && <Text style={styles.customLimitIndicator}> (Custom)</Text>}
+            </Text>
+            <Text style={styles.limitItem}>
+              Playlists: {user.maxPlaylists}
+              {user.maxPlaylists !== undefined && user.maxPlaylists !== null && <Text style={styles.customLimitIndicator}> (Custom)</Text>}
+            </Text>
+            <Text style={styles.limitItem}>
+              Products: {user.maxProducts}
+              {user.maxProducts !== undefined && user.maxProducts !== null && <Text style={styles.customLimitIndicator}> (Custom)</Text>}
+            </Text>
+            <Text style={styles.limitItem}>
+              Slideshows: {user.maxSlideshows}
+              {user.maxSlideshows !== undefined && user.maxSlideshows !== null && <Text style={styles.customLimitIndicator}> (Custom)</Text>}
+            </Text>
           </View>
         </View>
       </View>
@@ -569,6 +581,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
     margin: 4,
+  },
+  customLimitIndicator: {
+    fontSize: 11,
+    color: '#f59e0b',
+    fontWeight: '600',
+    fontStyle: 'italic',
   },
   userActions: {
     flexDirection: 'row',
