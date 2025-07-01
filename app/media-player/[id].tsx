@@ -12,14 +12,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import MediaPlayer from '@/components/MediaPlayer';
+import PlaylistChat from '@/components/PlaylistChat';
 import { MediaFile } from '@/shared/media-schema';
 import { MaterialIcons } from '@expo/vector-icons';
+import ProductCard from '@/components/ProductCard';
 
 export default function MediaPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [playlistName, setPlaylistName] = useState('');
+  const [playlistData, setPlaylistData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -106,6 +109,9 @@ export default function MediaPlayerScreen() {
 
     console.log('🔴 MEDIA_PLAYER: Loaded playlist:', playlist);
 
+    // Store full playlist data for chat component
+    setPlaylistData(playlist);
+
     // Convert to format expected by MediaPlayer using streaming endpoint
     const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
       id: file.id,
@@ -125,6 +131,9 @@ export default function MediaPlayerScreen() {
     const mediaFile = await mediaAPI.getById(mediaId);
 
     console.log('🔴 MEDIA_PLAYER: Loaded individual media file:', mediaFile);
+
+    // For individual media files, we don't have playlist data for chat
+    setPlaylistData(null);
 
     // Convert single file to array format expected by MediaPlayer using streaming endpoint
     const formattedFile = {
@@ -160,38 +169,54 @@ export default function MediaPlayerScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header with Back Button */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={handleBackPress}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#007AFF" />
-            <ThemedText style={styles.backText}>Back</ThemedText>
-          </TouchableOpacity>
-          
-          <View style={styles.titleContainer}>
-            <ThemedText type="title" style={styles.title}>{playlistName}</ThemedText>
-            <ThemedText style={styles.subtitle}>
-              {mediaFiles.length} track{mediaFiles.length !== 1 ? 's' : ''}
-            </ThemedText>
+      <View style={styles.responsiveRow}>
+        {/* Left: Media Player and Chat */}
+        <View style={styles.leftColumn}>
+          {/* Header with Back Button */}
+          <View style={styles.header}>
+            <TouchableOpacity 
+              style={styles.backButton}
+              onPress={handleBackPress}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#007AFF" />
+              <ThemedText style={styles.backText}>Back</ThemedText>
+            </TouchableOpacity>
+            <View style={styles.titleContainer}>
+              <ThemedText type="title" style={styles.title}>{playlistName}</ThemedText>
+              <ThemedText style={styles.subtitle}>
+                {mediaFiles.length} track{mediaFiles.length !== 1 ? 's' : ''}
+              </ThemedText>
+            </View>
           </View>
+          {/* Media Player */}
+          <MediaPlayer
+            mediaFiles={mediaFiles}
+            playlistId={id}
+            shouldAutoplay={false}
+            onSetPlaybackState={handlePlaybackStateChange}
+            productLinks={playlistData?.productLinks || []}
+          />
+          {/* Chat Component - Only show for playlists */}
+          {playlistData && (
+            <PlaylistChat
+              playlistId={id}
+              playlistName={playlistData.name}
+            />
+          )}
         </View>
-
-        {/* Media Player */}
-        <MediaPlayer
-          mediaFiles={mediaFiles}
-          playlistId={id}
-          shouldAutoplay={false}
-          onSetPlaybackState={handlePlaybackStateChange}
-        />
-      </ScrollView>
+        {/* Right: Product Ads */}
+        <View style={styles.rightColumn}>
+          <ThemedText style={styles.productAdTitle}>Featured Products</ThemedText>
+          {playlistData?.productLinks && playlistData.productLinks.length > 0 ? (
+            playlistData.productLinks.map((product: any) => (
+              <ProductCard key={product.id} product={product} onPress={() => {}} />
+            ))
+          ) : (
+            <ThemedText style={styles.noProductsText}>No products to display.</ThemedText>
+          )}
+        </View>
+      </View>
     </ThemedView>
   );
 }
@@ -199,6 +224,50 @@ export default function MediaPlayerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  responsiveRow: {
+    flex: 1,
+    flexDirection: 'column',
+    '@media (min-width: 900px)': {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+    },
+  },
+  leftColumn: {
+    flex: 2,
+    minWidth: 0,
+    padding: 20,
+    '@media (min-width: 900px)': {
+      maxWidth: 700,
+    },
+  },
+  rightColumn: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    margin: 20,
+    padding: 24,
+    minWidth: 320,
+    maxWidth: 400,
+    boxShadow: '0px 2px 8px rgba(0,0,0,0.08)',
+    '@media (max-width: 899px)': {
+      marginTop: 0,
+      marginLeft: 0,
+      maxWidth: '100%',
+      minWidth: 0,
+    },
+  },
+  productAdTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#1f2937',
+  },
+  noProductsText: {
+    color: '#6b7280',
+    fontSize: 16,
+    marginTop: 16,
   },
   loadingContainer: {
     flex: 1,
