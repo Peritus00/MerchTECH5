@@ -10,6 +10,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import { ConsentBanner } from '@/components/ConsentBanner';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -84,6 +85,9 @@ function RootLayoutNav() {
         <Stack.Screen name="shop" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+      <ConsentBanner onConsentGiven={(consent) => {
+        console.log('User consent:', consent ? 'accepted' : 'declined');
+      }} />
       <StatusBar style="auto" />
     </ThemeProvider>
   );
