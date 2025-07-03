@@ -9,12 +9,14 @@ import {
   Platform,
   ActivityIndicator,
   Text,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialIcons } from '@expo/vector-icons';
+import { MerchTechLogo } from '@/components/MerchTechLogo';
 
 interface FormErrors {
   email?: string;
@@ -52,19 +54,29 @@ export default function LoginScreen() {
   };
 
   const handleLogin = async () => {
+    console.log('🚀 Login Screen: handleLogin called');
+    console.log('🚀 Email:', email);
+    console.log('🚀 Password length:', password.length);
+    
     if (!validateForm()) {
+      console.log('❌ Login Screen: Form validation failed');
       return;
     }
 
+    console.log('✅ Login Screen: Form validation passed');
     setIsSubmitting(true);
     setErrors({});
 
     try {
+      console.log('🔄 Login Screen: Calling auth context login...');
       await login(email.trim(), password);
+      console.log('✅ Login Screen: Login successful, navigating to tabs');
       // If login succeeds, it will not throw an error
       router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('Login error:', error);
+      console.error('❌ Login Screen: Login error caught:', error);
+      console.error('❌ Error message:', error.message);
+      console.error('❌ Error stack:', error.stack);
 
       if (error.message.includes('Account suspended')) {
         Alert.alert(
@@ -79,6 +91,7 @@ export default function LoginScreen() {
         setErrors({ general: error.message || 'Login failed' });
       }
     } finally {
+      console.log('🔄 Login Screen: Setting isSubmitting to false');
       setIsSubmitting(false);
     }
   };
@@ -94,114 +107,121 @@ export default function LoginScreen() {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <ThemedView style={styles.content}>
-        <View style={styles.header}>
-          <ThemedText type="title">Welcome Back</ThemedText>
-          <ThemedText type="subtitle">Sign in to your account</ThemedText>
-        </View>
-
-        <View style={styles.form}>
-          {errors.general && (
-            <View style={styles.errorContainer}>
-              <MaterialIcons name="error" size={16} color="#ef4444" />
-              <Text style={styles.errorText}>{errors.general}</Text>
-            </View>
-          )}
-
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.label}>Email Address</ThemedText>
-            <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-              <MaterialIcons name="email" size={20} color="#6b7280" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={(text) => {
-                  setEmail(text);
-                  if (errors.email) {
-                    setErrors(prev => ({ ...prev, email: undefined }));
-                  }
-                }}
-                placeholder="Enter your email"
-                placeholderTextColor="#9ca3af"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="email"
-              />
-            </View>
-            {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
+      <ScrollView 
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <ThemedView style={styles.content}>
+          <View style={styles.header}>
+            <MerchTechLogo size="large" variant="full" style={styles.logo} />
+            <ThemedText type="title">Welcome Back</ThemedText>
+            <ThemedText type="subtitle">Sign in to your MerchTech account</ThemedText>
           </View>
 
-          <View style={styles.inputGroup}>
-            <ThemedText style={styles.label}>Password</ThemedText>
-            <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-              <MaterialIcons name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={(text) => {
-                  setPassword(text);
-                  if (errors.password) {
-                    setErrors(prev => ({ ...prev, password: undefined }));
-                  }
-                }}
-                placeholder="Enter your password"
-                placeholderTextColor="#9ca3af"
-                secureTextEntry={!isPasswordVisible}
-                autoCapitalize="none"
-                autoComplete="password"
-              />
-              <TouchableOpacity
-                onPress={() => setIsPasswordVisible(!isPasswordVisible)}
-                style={styles.eyeIcon}
-              >
-                <MaterialIcons 
-                  name={isPasswordVisible ? 'visibility' : 'visibility-off'} 
-                  size={20} 
-                  color="#6b7280" 
-                />
-              </TouchableOpacity>
-            </View>
-            {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
-          </View>
-
-          <TouchableOpacity
-            style={styles.forgotPassword}
-            onPress={handleForgotPassword}
-          >
-            <ThemedText style={styles.forgotPasswordText}>
-              Forgot your password?
-            </ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.loginButton, loading && styles.disabled]}
-            onPress={handleLogin}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <ThemedText style={styles.loginButtonText}>Sign In</ThemedText>
+          <View style={styles.form}>
+            {errors.general && (
+              <View style={styles.errorContainer}>
+                <MaterialIcons name="error" size={16} color="#ef4444" />
+                <Text style={styles.errorText}>{errors.general}</Text>
+              </View>
             )}
-          </TouchableOpacity>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <ThemedText style={styles.dividerText}>or</ThemedText>
-            <View style={styles.dividerLine} />
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Email Address</ThemedText>
+              <View style={[styles.inputContainer, errors.email && styles.inputError]}>
+                <MaterialIcons name="email" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (errors.email) {
+                      setErrors(prev => ({ ...prev, email: undefined }));
+                    }
+                  }}
+                  placeholder="Enter your email"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="email"
+                />
+              </View>
+              {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Password</ThemedText>
+              <View style={[styles.inputContainer, errors.password && styles.inputError]}>
+                <MaterialIcons name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (errors.password) {
+                      setErrors(prev => ({ ...prev, password: undefined }));
+                    }
+                  }}
+                  placeholder="Enter your password"
+                  placeholderTextColor="#9ca3af"
+                  secureTextEntry={!isPasswordVisible}
+                  autoCapitalize="none"
+                  autoComplete="password"
+                />
+                <TouchableOpacity
+                  onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  style={styles.eyeIcon}
+                >
+                  <MaterialIcons 
+                    name={isPasswordVisible ? 'visibility' : 'visibility-off'} 
+                    size={20} 
+                    color="#6b7280" 
+                  />
+                </TouchableOpacity>
+              </View>
+              {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
+            </View>
+
+            <TouchableOpacity
+              style={styles.forgotPassword}
+              onPress={handleForgotPassword}
+            >
+              <ThemedText style={styles.forgotPasswordText}>
+                Forgot your password?
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.loginButton, loading && styles.disabled]}
+              onPress={handleLogin}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <ThemedText style={styles.loginButtonText}>Sign In</ThemedText>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <ThemedText style={styles.dividerText}>or</ThemedText>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <TouchableOpacity
+              style={styles.linkButton}
+              onPress={() => router.push('/auth/register')}
+            >
+              <ThemedText style={styles.linkText}>
+                Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
+              </ThemedText>
+            </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            style={styles.linkButton}
-            onPress={() => router.push('/auth/register')}
-          >
-            <ThemedText style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
+        </ThemedView>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -209,6 +229,10 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
   content: {
     flex: 1,
@@ -218,6 +242,9 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logo: {
+    marginBottom: 24,
   },
   form: {
     width: '100%',

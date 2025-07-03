@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -16,10 +15,11 @@ import { useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Product } from '@/shared/product-schema';
+import { api } from '@/services/api';
 import ProductCard from '@/components/ProductCard';
 
 export default function ProductLinkManagerScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const navigation = useNavigation();
   
   const [playlistName, setPlaylistName] = useState<string>('');
@@ -27,6 +27,7 @@ export default function ProductLinkManagerScreen() {
   const [linkedProductIds, setLinkedProductIds] = useState<number[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const contentType = (type === 'slideshow' ? 'slideshow' : 'playlist') as 'playlist' | 'slideshow';
 
   useEffect(() => {
     fetchData();
@@ -36,16 +37,26 @@ export default function ProductLinkManagerScreen() {
     try {
       console.log('🔴 PRODUCT_LINKS: Fetching data for playlist:', id);
       
-      const { playlistAPI, api } = await import('@/services/api');
+      const { playlistAPI, slideshowAPI } = await import('@/services/api');
       
-      // Fetch playlist info
-      try {
-        const playlist = await playlistAPI.getById(id);
-        setPlaylistName(playlist.name);
-        console.log('🔴 PRODUCT_LINKS: Loaded playlist:', playlist.name);
-      } catch (error) {
-        console.log('🔴 PRODUCT_LINKS: Could not load playlist, using default name');
-        setPlaylistName('Playlist');
+      if (contentType === 'playlist') {
+        try {
+          const playlist = await playlistAPI.getById(id);
+          setPlaylistName(playlist.name);
+          console.log('🔴 PRODUCT_LINKS: Loaded playlist:', playlist.name);
+        } catch (error) {
+          console.log('🔴 PRODUCT_LINKS: Could not load playlist, using default name');
+          setPlaylistName('Playlist');
+        }
+      } else {
+        try {
+          const slideshow = await slideshowAPI.getById(id);
+          setPlaylistName(slideshow.name);
+          console.log('🔴 PRODUCT_LINKS: Loaded slideshow:', slideshow.name);
+        } catch (error) {
+          console.log('🔴 PRODUCT_LINKS: Could not load slideshow, using default name');
+          setPlaylistName('Slideshow');
+        }
       }
       
       // Fetch user's products
@@ -54,9 +65,15 @@ export default function ProductLinkManagerScreen() {
       setProducts(userProducts);
       console.log('🔴 PRODUCT_LINKS: Loaded user products:', userProducts.length);
       
-      // TODO: Fetch which products are already linked to this playlist
-      // For now, we'll start with no linked products
-      setLinkedProductIds([]);
+      // Fetch existing links
+      try {
+        const linksRes = await api.get(contentType==='playlist'?`/playlists/${id}/product-links`:`/slideshows/${id}/product-links`);
+        const initialIds = (linksRes.data || linksRes.data.links || linksRes.data).map((l:any)=>l.productId || l.product_id);
+        setLinkedProductIds(initialIds);
+        console.log('🔴 PRODUCT_LINKS: Existing links:', initialIds.length);
+      } catch(linkErr){
+        console.log('🔴 PRODUCT_LINKS: No existing links found');
+      }
       
     } catch (error: any) {
       console.error('🔴 PRODUCT_LINKS: Error fetching data:', error);
@@ -76,16 +93,16 @@ export default function ProductLinkManagerScreen() {
         setLinkedProductIds(prev => prev.filter(id => id !== productId));
         console.log('🔴 PRODUCT_LINKS: Unlinked product:', productId);
         
-        // TODO: Call API to remove product link from playlist
-        // await playlistAPI.removeProductLink(id, productId);
+        await api.delete(contentType==='playlist'
+          ? `/playlists/${id}/product-links/${productId}`
+          : `/slideshows/${id}/product-links/${productId}`);
         
       } else {
         // Add link
         setLinkedProductIds(prev => [...prev, productId]);
         console.log('🔴 PRODUCT_LINKS: Linked product:', productId);
         
-        // TODO: Call API to add product link to playlist
-        // await playlistAPI.addProductLink(id, productId);
+        await api.post(contentType==='playlist'?`/playlists/${id}/product-links`:`/slideshows/${id}/product-links`, {productId});
       }
       
     } catch (error) {
@@ -309,7 +326,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#1f2937',
+    color: '#ffffff',
     marginBottom: 12,
   },
   productContainer: {

@@ -1,4 +1,3 @@
-
 import { User } from '@/types';
 import { authAPI } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -45,6 +44,11 @@ class AuthService {
       return response;
     } catch (error: any) {
       console.error('🔴 AuthService: Login error:', error);
+
+      if (error.response && error.response.status === 401) {
+        throw new Error('Invalid username or password. Please try again.');
+      }
+      
       throw new Error(error.message || 'Login failed. Please check your credentials.');
     }
   }

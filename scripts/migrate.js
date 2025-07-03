@@ -1,7 +1,9 @@
-
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
+
+// Load environment variables
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 async function runMigrations() {
   const pool = new Pool({
@@ -11,18 +13,28 @@ async function runMigrations() {
   try {
     console.log('🔄 Running database migrations...');
     
-    const migrationPath = path.join(__dirname, '../database/migrations/001_create_tables.sql');
-    const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+    // Run migrations in order
+    const migrations = [
+      '001_create_tables.sql',
+      '002_add_slideshow_fields.sql'
+    ];
     
-    await pool.query(migrationSQL);
+    for (const migrationFile of migrations) {
+      console.log(`📝 Running migration: ${migrationFile}`);
+      const migrationPath = path.join(__dirname, '../database/migrations', migrationFile);
+      const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
+      
+      await pool.query(migrationSQL);
+      console.log(`✅ Completed: ${migrationFile}`);
+    }
     
-    console.log('✅ Database migrations completed successfully!');
-    console.log('📊 Tables created:');
+    console.log('✅ All database migrations completed successfully!');
+    console.log('📊 Tables and columns updated:');
     console.log('  - users');
     console.log('  - qr_codes');
     console.log('  - qr_scans');
     console.log('  - products');
-    console.log('  - slideshows');
+    console.log('  - slideshows (with autoplay_interval, transition, requires_activation_code)');
     console.log('  - slideshow_images');
     console.log('  - fanmail');
     console.log('  - achievement_levels');

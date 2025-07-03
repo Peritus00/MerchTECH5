@@ -10,10 +10,13 @@ import {
   RefreshControl,
   TextInput,
   Modal,
+  Share,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
-import { activationCodesAPI, playlistAPI } from '@/services/api';
+import { activationCodesAPI, playlistAPI, slideshowAPI } from '@/services/api';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 
@@ -43,6 +46,28 @@ interface Playlist {
   requires_activation_code: boolean;
 }
 
+interface Slideshow {
+  id: number;
+  userId: number;
+  name: string;
+  description?: string;
+  autoplayInterval: number;
+  transition: string;
+  requiresActivationCode: boolean;
+  isPublic: boolean;
+  createdAt: string;
+  updatedAt: string;
+  uniqueId: string;
+  images: Array<{
+    id: number;
+    slideshowId: number;
+    imageUrl: string;
+    caption?: string;
+    displayOrder: number;
+    createdAt: string;
+  }>;
+}
+
 const ActivationCodesScreen = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('generate');
@@ -51,11 +76,18 @@ const ActivationCodesScreen = () => {
   
   // Generate Codes Tab
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [slideshows, setSlideshows] = useState<Slideshow[]>([]);
+  const [selectedContentType, setSelectedContentType] = useState<'playlist' | 'slideshow'>('playlist');
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
+  const [selectedSlideshowId, setSelectedSlideshowId] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [maxUses, setMaxUses] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  
+  // Batch Creation
+  const [batchQuantity, setBatchQuantity] = useState('1');
+  const [showBatchModal, setShowBatchModal] = useState(false);
   
   // My Access Codes Tab
   const [myAccessCodes, setMyAccessCodes] = useState<ActivationCode[]>([]);
@@ -73,15 +105,33 @@ const ActivationCodesScreen = () => {
   const [editIsActive, setEditIsActive] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
+  // Share Modal
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharingCode, setSharingCode] = useState<ActivationCode | null>(null);
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      if (selectedContentType === 'playlist' && playlists.length > 0) {
+        setSelectedPlaylistId(playlists[0].id);
+      } else if (selectedContentType === 'slideshow' && slideshows.length > 0) {
+        setSelectedSlideshowId(slideshows[0].id);
+      }
+    } else {
+      // Reset selections when modal closes
+      setSelectedPlaylistId(null);
+      setSelectedSlideshowId(null);
+    }
+  }, [showCreateModal, selectedContentType, playlists, slideshows]);
 
   const loadData = async () => {
     setIsLoading(true);
     try {
       if (activeTab === 'generate') {
-        await loadPlaylists();
+        await Promise.all([loadPlaylists(), loadSlideshows()]);
       } else if (activeTab === 'myAccess') {
         await loadMyAccessCodes();
       } else if (activeTab === 'allGenerated') {
@@ -104,6 +154,19 @@ const ActivationCodesScreen = () => {
       console.log('🔑 Loaded', playlistsData.length, 'playlists');
     } catch (error) {
       console.error('🔑 Error loading playlists:', error);
+      throw error;
+    }
+  };
+
+  const loadSlideshows = async () => {
+    try {
+      console.log('🔑 Loading slideshows for code generation');
+      const slideshowsData = await slideshowAPI.getAll();
+      console.log('🔑 Raw slideshows data from API:', slideshowsData);
+      setSlideshows(slideshowsData);
+      console.log('🔑 Loaded', slideshowsData.length, 'slideshows:', slideshowsData);
+    } catch (error) {
+      console.error('🔑 Error loading slideshows:', error);
       throw error;
     }
   };
@@ -132,37 +195,110 @@ const ActivationCodesScreen = () => {
     }
   };
 
-  const handleCreateCode = async () => {
-    if (!selectedPlaylistId) {
-      Alert.alert('Error', 'Please select a playlist');
+  // Copy to clipboard functionality
+  const handleCopyToClipboard = async (code: string) => {
+    try {
+      await Clipboard.setStringAsync(code);
+      Alert.alert('Copied!', `Activation code "${code}" has been copied to your clipboard.`);
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy to clipboard');
+    }
+  };
+
+  // Batch creation functionality
+  const handleBatchCreate = async () => {
+    let contentId: number | null = null;
+    let contentType: 'playlist' | 'slideshow' = selectedContentType;
+    if (contentType === 'playlist') {
+      contentId = selectedPlaylistId;
+    } else {
+      contentId = selectedSlideshowId;
+    }
+    if (!contentId) {
+      Alert.alert('Error', `Please select a ${contentType}`);
       return;
     }
-
+    const quantity = parseInt(batchQuantity);
+    if (isNaN(quantity) || quantity < 1 || quantity > 50) {
+      Alert.alert('Error', 'Please enter a valid quantity between 1 and 50');
+      return;
+    }
     setIsCreating(true);
     try {
       const expiresAt = expiresInDays ? 
         new Date(Date.now() + parseInt(expiresInDays) * 24 * 60 * 60 * 1000).toISOString() : 
         undefined;
+      const createdCodes = [];
+      for (let i = 0; i < quantity; i++) {
+        const createParams: any = {
+          maxUses: maxUses ? parseInt(maxUses) : undefined,
+          expiresAt,
+        };
+        if (contentType === 'playlist') {
+          createParams.playlistId = contentId.toString();
+        } else {
+          createParams.slideshowId = contentId.toString();
+        }
+        console.log('🔑 Creating activation code with params:', createParams);
+        const newCode = await activationCodesAPI.create(createParams);
+        createdCodes.push(newCode);
+      }
+      Alert.alert('Success', `${quantity} activation codes created successfully!`);
+      setShowBatchModal(false);
+      setMaxUses('');
+      setExpiresInDays('');
+      setBatchQuantity('1');
+      setSelectedPlaylistId(null);
+      setSelectedSlideshowId(null);
+      setSelectedContentType('playlist');
+      if (activeTab === 'allGenerated') {
+        await loadAllGeneratedCodes();
+      }
+    } catch (error) {
+      console.error('🔑 Error creating batch codes:', error);
+      Alert.alert('Error', 'Failed to create activation codes');
+    } finally {
+      setIsCreating(false);
+    }
+  };
 
-      console.log('🔑 Creating activation code:', { 
-        playlistId: selectedPlaylistId, 
-        maxUses: maxUses ? parseInt(maxUses) : undefined, 
-        expiresAt 
-      });
-
-      await activationCodesAPI.create({
-        playlistId: selectedPlaylistId.toString(),
+  const handleCreateCode = async () => {
+    Alert.alert('DEBUG', 'Create button pressed!');
+    let contentId: number | null = null;
+    let contentType: 'playlist' | 'slideshow' = selectedContentType;
+    if (contentType === 'playlist') {
+      contentId = selectedPlaylistId;
+    } else {
+      contentId = selectedSlideshowId;
+    }
+    if (!contentId) {
+      Alert.alert('Error', `Please select a ${contentType}`);
+      return;
+    }
+    setIsCreating(true);
+    try {
+      const expiresAt = expiresInDays ? 
+        new Date(Date.now() + parseInt(expiresInDays) * 24 * 60 * 60 * 1000).toISOString() : 
+        undefined;
+      const createParams: any = {
         maxUses: maxUses ? parseInt(maxUses) : undefined,
         expiresAt,
-      });
-
+      };
+      if (contentType === 'playlist') {
+        createParams.playlistId = contentId.toString();
+      } else {
+        createParams.slideshowId = contentId.toString();
+      }
+      console.log('🔑 Creating activation code with params:', createParams);
+      await activationCodesAPI.create(createParams);
       Alert.alert('Success', 'Activation code created successfully!');
       setShowCreateModal(false);
       setMaxUses('');
       setExpiresInDays('');
       setSelectedPlaylistId(null);
-      
-      // Refresh the all generated codes if we're on that tab
+      setSelectedSlideshowId(null);
+      setSelectedContentType('playlist');
       if (activeTab === 'allGenerated') {
         await loadAllGeneratedCodes();
       }
@@ -196,44 +332,58 @@ const ActivationCodesScreen = () => {
   };
 
   const handleDetachCode = async (codeId: number) => {
-    Alert.alert(
-      'Remove Access Code',
-      'Are you sure you want to remove this code from your profile? You will lose access to this content.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🔑 Detaching activation code:', codeId);
-              await activationCodesAPI.detach(codeId.toString());
-              Alert.alert('Success', 'Access code removed from your profile');
-              await loadMyAccessCodes();
-            } catch (error: any) {
-              console.error('🔑 Error detaching code:', error);
-              Alert.alert('Error', error.response?.data?.error || 'Failed to remove activation code');
-            }
-          },
-        },
-      ]
-    );
+    console.log('🗑️ DETACH DEBUG: Function called with codeId:', codeId, 'Type:', typeof codeId);
+    console.log('🗑️ DETACH DEBUG: Bypassing Alert.alert and using confirm() directly...');
+    
+    // Use browser confirm dialog directly for testing
+    const shouldDetach = confirm('Remove Access Code - Are you sure you want to remove this activation code from your account?');
+    
+    if (shouldDetach) {
+      console.log('🗑️ DETACH DEBUG: User confirmed detach');
+      console.log('🗑️ DETACH DEBUG: About to call API with codeId:', codeId);
+      console.log('🗑️ DETACH DEBUG: Converting to string:', codeId.toString());
+      
+      try {
+        console.log('🗑️ DETACH DEBUG: Calling activationCodesAPI.detach...');
+        const result = await activationCodesAPI.detach(codeId.toString());
+        console.log('🗑️ DETACH DEBUG: API call successful, result:', result);
+        
+        console.log('🗑️ DETACH DEBUG: Showing success message...');
+        alert('Success: Activation code removed from your profile');
+        
+        console.log('🗑️ DETACH DEBUG: Reloading access codes...');
+        await loadMyAccessCodes();
+        console.log('🗑️ DETACH DEBUG: Access codes reloaded successfully');
+        
+      } catch (error: any) {
+        console.error('🗑️ DETACH DEBUG: ❌ ERROR OCCURRED:');
+        console.error('🗑️ DETACH DEBUG: Error object:', error);
+        console.error('🗑️ DETACH DEBUG: Error message:', error.message);
+        console.error('🗑️ DETACH DEBUG: Error stack:', error.stack);
+        
+        if (error.response) {
+          console.error('🗑️ DETACH DEBUG: Response status:', error.response.status);
+          console.error('🗑️ DETACH DEBUG: Response data:', error.response.data);
+          console.error('🗑️ DETACH DEBUG: Response headers:', error.response.headers);
+        } else if (error.request) {
+          console.error('🗑️ DETACH DEBUG: Request made but no response:', error.request);
+        } else {
+          console.error('🗑️ DETACH DEBUG: Error setting up request:', error.message);
+        }
+        
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to remove activation code';
+        console.log('🗑️ DETACH DEBUG: Showing error message:', errorMessage);
+        alert('Error: ' + errorMessage);
+      }
+    } else {
+      console.log('🗑️ DETACH DEBUG: User cancelled detach');
+    }
   };
 
   const handleEditCode = (code: ActivationCode) => {
     setEditingCode(code);
     setEditMaxUses(code.max_uses ? code.max_uses.toString() : '');
-    
-    // Calculate days until expiration
-    if (code.expires_at) {
-      const expirationDate = new Date(code.expires_at);
-      const now = new Date();
-      const daysUntilExpiration = Math.ceil((expirationDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      setEditExpiresInDays(daysUntilExpiration > 0 ? daysUntilExpiration.toString() : '');
-    } else {
-      setEditExpiresInDays('');
-    }
-    
+    setEditExpiresInDays('');
     setEditIsActive(code.is_active);
     setShowEditModal(true);
   };
@@ -243,32 +393,30 @@ const ActivationCodesScreen = () => {
 
     setIsUpdating(true);
     try {
-      const expiresAt = editExpiresInDays ? 
-        new Date(Date.now() + parseInt(editExpiresInDays) * 24 * 60 * 60 * 1000).toISOString() : 
-        null;
-
-      console.log('🔑 Updating activation code:', { 
-        codeId: editingCode.id, 
-        maxUses: editMaxUses ? parseInt(editMaxUses) : null, 
-        expiresAt,
-        isActive: editIsActive
-      });
-
-      await activationCodesAPI.update(editingCode.id.toString(), {
-        maxUses: editMaxUses ? parseInt(editMaxUses) : null,
-        expiresAt,
+      const updates: any = {
         isActive: editIsActive,
-      });
+      };
 
+      if (editMaxUses) {
+        updates.maxUses = parseInt(editMaxUses);
+      }
+
+      if (editExpiresInDays) {
+        updates.expiresAt = new Date(Date.now() + parseInt(editExpiresInDays) * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      console.log('🔑 Updating activation code:', editingCode.id, updates);
+      await activationCodesAPI.update(editingCode.id.toString(), updates);
       Alert.alert('Success', 'Activation code updated successfully!');
       setShowEditModal(false);
       setEditingCode(null);
-      setEditMaxUses('');
-      setEditExpiresInDays('');
-      setEditIsActive(true);
       
-      // Refresh the codes list
-      await loadAllGeneratedCodes();
+      // Refresh the appropriate tab
+      if (activeTab === 'allGenerated') {
+        await loadAllGeneratedCodes();
+      } else if (activeTab === 'myAccess') {
+        await loadMyAccessCodes();
+      }
     } catch (error: any) {
       console.error('🔑 Error updating code:', error);
       Alert.alert('Error', error.response?.data?.error || 'Failed to update activation code');
@@ -278,28 +426,83 @@ const ActivationCodesScreen = () => {
   };
 
   const handleDeleteCode = async (codeId: number) => {
-    Alert.alert(
-      'Delete Activation Code',
-      'Are you sure you want to delete this activation code? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('🔑 Deleting activation code:', codeId);
-              await activationCodesAPI.delete(codeId.toString());
-              Alert.alert('Success', 'Activation code deleted successfully');
-              await loadAllGeneratedCodes();
-            } catch (error: any) {
-              console.error('🔑 Error deleting code:', error);
-              Alert.alert('Error', error.response?.data?.error || 'Failed to delete activation code');
-            }
-          },
-        },
-      ]
-    );
+    console.log('🗑️ DELETE DEBUG: Function called with codeId:', codeId, 'Type:', typeof codeId);
+    console.log('🗑️ DELETE DEBUG: Bypassing Alert.alert and using confirm() directly...');
+    
+    // Use browser confirm dialog directly for testing
+    const shouldDelete = confirm('Delete Activation Code - Are you sure you want to delete this activation code? This action cannot be undone.');
+    
+    if (shouldDelete) {
+      console.log('🗑️ DELETE DEBUG: User confirmed deletion');
+      console.log('🗑️ DELETE DEBUG: About to call API with codeId:', codeId);
+      console.log('🗑️ DELETE DEBUG: Converting to string:', codeId.toString());
+      
+      try {
+        console.log('🗑️ DELETE DEBUG: Calling activationCodesAPI.delete...');
+        const result = await activationCodesAPI.delete(codeId.toString());
+        console.log('🗑️ DELETE DEBUG: API call successful, result:', result);
+        
+        console.log('🗑️ DELETE DEBUG: Showing success message...');
+        alert('Success: Activation code deleted successfully');
+        
+        console.log('🗑️ DELETE DEBUG: Reloading generated codes...');
+        await loadAllGeneratedCodes();
+        console.log('🗑️ DELETE DEBUG: Generated codes reloaded successfully');
+        
+      } catch (error: any) {
+        console.error('🗑️ DELETE DEBUG: ❌ ERROR OCCURRED:');
+        console.error('🗑️ DELETE DEBUG: Error object:', error);
+        console.error('🗑️ DELETE DEBUG: Error message:', error.message);
+        console.error('🗑️ DELETE DEBUG: Error stack:', error.stack);
+        
+        if (error.response) {
+          console.error('🗑️ DELETE DEBUG: Response status:', error.response.status);
+          console.error('🗑️ DELETE DEBUG: Response data:', error.response.data);
+          console.error('🗑️ DELETE DEBUG: Response headers:', error.response.headers);
+        } else if (error.request) {
+          console.error('🗑️ DELETE DEBUG: Request made but no response:', error.request);
+        } else {
+          console.error('🗑️ DELETE DEBUG: Error setting up request:', error.message);
+        }
+        
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to delete activation code';
+        console.log('🗑️ DELETE DEBUG: Showing error message:', errorMessage);
+        alert('Error: ' + errorMessage);
+      }
+    } else {
+      console.log('🗑️ DELETE DEBUG: User cancelled deletion');
+    }
+  };
+
+  // Share functionality
+  const handleShareCode = (code: ActivationCode) => {
+    setSharingCode(code);
+    setShowShareModal(true);
+  };
+
+  const shareViaBuiltIn = async (message: string) => {
+    try {
+      const shareOptions: any = {
+        message: message,
+        title: 'Activation Code',
+      };
+
+      // On iOS, add URL to make it more shareable across social platforms
+      if (Platform.OS === 'ios') {
+        shareOptions.url = 'https://your-app-website.com'; // Replace with your actual website
+        shareOptions.subject = 'Your Activation Code';
+      }
+
+      const result = await Share.share(shareOptions);
+
+      if (result.action === Share.sharedAction) {
+        Alert.alert('Shared!', 'Activation code shared successfully');
+        setShowShareModal(false);
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+      Alert.alert('Error', 'Failed to share activation code');
+    }
   };
 
   const onRefresh = () => {
@@ -309,6 +512,7 @@ const ActivationCodesScreen = () => {
 
   const renderTabButton = (tab: TabType, title: string) => (
     <TouchableOpacity
+      key={tab}
       style={[styles.tabButton, activeTab === tab && styles.activeTabButton]}
       onPress={() => setActiveTab(tab)}
     >
@@ -320,189 +524,306 @@ const ActivationCodesScreen = () => {
 
   const renderGenerateTab = () => (
     <View style={styles.tabContent}>
-      <ThemedText style={styles.sectionTitle}>Generate Activation Codes</ThemedText>
+      <ThemedText style={styles.sectionTitle}>Generate New Codes</ThemedText>
       <ThemedText style={styles.sectionDescription}>
-        Create activation codes for your protected playlists
+        Create activation codes for your playlists and slideshows
       </ThemedText>
 
+      {/* Single Code Creation */}
       <TouchableOpacity
         style={styles.createButton}
-        onPress={() => setShowCreateModal(true)}
+        onPress={() => {
+          console.log('🟢 Opening create modal. Current slideshows:', slideshows);
+          setIsCreating(false);
+          setShowCreateModal(true);
+        }}
       >
         <MaterialIcons name="add" size={20} color="#fff" />
-        <Text style={styles.createButtonText}>Create New Code</Text>
+        <Text style={styles.createButtonText}>Create Single Code</Text>
       </TouchableOpacity>
 
-      {/* Create Code Modal */}
+      {/* Batch Code Creation */}
+      <TouchableOpacity
+        style={[styles.createButton, styles.batchButton]}
+        onPress={() => setShowBatchModal(true)}
+      >
+        <MaterialIcons name="add-circle-outline" size={20} color="#fff" />
+        <Text style={styles.createButtonText}>Create Multiple Codes</Text>
+      </TouchableOpacity>
+
+      {/* Create Modal */}
       <Modal
         visible={showCreateModal}
         animationType="slide"
-        presentationStyle="pageSheet"
+        transparent
+        onRequestClose={() => setShowCreateModal(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
+        {console.log('🟢 Modal opened. slideshows:', slideshows, 'selectedContentType:', selectedContentType)}
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Create Activation Code</Text>
-            <TouchableOpacity onPress={() => setShowCreateModal(false)}>
-              <MaterialIcons name="close" size={24} color="#333" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.modalContent}>
-            <Text style={styles.inputLabel}>Select Playlist *</Text>
+            
+            <Text style={styles.label}>Select Content:</Text>
             <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
-              {playlists.filter(p => p.requires_activation_code).map((playlist) => (
-                <TouchableOpacity
-                  key={playlist.id}
-                  style={[
-                    styles.playlistOption,
-                    selectedPlaylistId === playlist.id && styles.selectedPlaylistOption
-                  ]}
-                  onPress={() => setSelectedPlaylistId(playlist.id)}
-                >
-                  <Text style={[
-                    styles.playlistOptionText,
-                    selectedPlaylistId === playlist.id && styles.selectedPlaylistOptionText
-                  ]}>
-                    {playlist.name}
-                  </Text>
-                  {playlist.description && (
-                    <Text style={styles.playlistDescription}>{playlist.description}</Text>
-                  )}
-                </TouchableOpacity>
-              ))}
+              <TouchableOpacity
+                style={[
+                  styles.playlistOption,
+                  selectedContentType === 'playlist' && styles.selectedPlaylistOption
+                ]}
+                onPress={() => {
+                  console.log('🟢 Content type changed to: playlist');
+                  setSelectedContentType('playlist');
+                }}
+              >
+                <Text style={[
+                  styles.playlistOptionText,
+                  selectedContentType === 'playlist' && styles.selectedPlaylistOptionText
+                ]}>
+                  Playlist
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.playlistOption,
+                  selectedContentType === 'slideshow' && styles.selectedPlaylistOption
+                ]}
+                onPress={() => {
+                  console.log('🟢 Content type changed to: slideshow');
+                  console.log('🟢 Current slideshows state:', slideshows);
+                  setSelectedContentType('slideshow');
+                }}
+              >
+                <Text style={[
+                  styles.playlistOptionText,
+                  selectedContentType === 'slideshow' && styles.selectedPlaylistOptionText
+                ]}>
+                  Slideshow
+                </Text>
+              </TouchableOpacity>
             </ScrollView>
 
-            <Text style={styles.inputLabel}>Max Uses (optional)</Text>
+            {selectedContentType === 'playlist' && (
+              <>
+                <Text style={styles.label}>Select Playlist:</Text>
+                <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
+                  {playlists.map((playlist) => (
+                    <TouchableOpacity
+                      key={playlist.id}
+                      style={[
+                        styles.playlistOption,
+                        selectedPlaylistId === playlist.id && styles.selectedPlaylistOption
+                      ]}
+                      onPress={() => setSelectedPlaylistId(playlist.id)}
+                    >
+                      <Text style={[
+                        styles.playlistOptionText,
+                        selectedPlaylistId === playlist.id && styles.selectedPlaylistOptionText
+                      ]}>
+                        {playlist.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            {selectedContentType === 'slideshow' && (
+              <>
+                <Text style={styles.label}>Select Slideshow:</Text>
+                {console.log('🟢 Rendering slideshow selection. slideshows:', slideshows)}
+                <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
+                  {slideshows && slideshows.length > 0 ? (
+                    slideshows.map((slideshow) => {
+                      console.log('🟢 Rendering slideshow option:', slideshow);
+                      return (
+                        <TouchableOpacity
+                          key={slideshow.id}
+                          style={[
+                            styles.playlistOption,
+                            selectedSlideshowId === slideshow.id && styles.selectedPlaylistOption
+                          ]}
+                          onPress={() => {
+                            console.log('🟢 Slideshow selected:', slideshow);
+                            setSelectedSlideshowId(slideshow.id);
+                          }}
+                        >
+                          <Text style={[
+                            styles.playlistOptionText,
+                            selectedSlideshowId === slideshow.id && styles.selectedPlaylistOptionText
+                          ]}>
+                            {slideshow.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>No slideshows available</Text>
+                      <Text style={styles.emptyStateSubtext}>Create a slideshow first to generate activation codes</Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </>
+            )}
+
+            <Text style={styles.label}>Max Uses (optional):</Text>
             <TextInput
-              style={styles.textInput}
+              style={styles.input}
               value={maxUses}
               onChangeText={setMaxUses}
               placeholder="Leave empty for unlimited"
               keyboardType="numeric"
             />
 
-            <Text style={styles.inputLabel}>Expires in Days (optional)</Text>
+            <Text style={styles.label}>Expires in days (optional):</Text>
             <TextInput
-              style={styles.textInput}
+              style={styles.input}
               value={expiresInDays}
               onChangeText={setExpiresInDays}
               placeholder="Leave empty for no expiration"
               keyboardType="numeric"
             />
 
-            <TouchableOpacity
-              style={[styles.modalButton, isCreating && styles.disabledButton]}
-              onPress={handleCreateCode}
-              disabled={isCreating}
-            >
-              {isCreating ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.modalButtonText}>Create Code</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowCreateModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.createButton, isCreating && styles.disabledButton, (!selectedPlaylistId && selectedContentType==='playlist') || (!selectedSlideshowId && selectedContentType==='slideshow') ? styles.disabledButton : null]}
+                onPress={handleCreateCode}
+                disabled={isCreating || (selectedContentType==='playlist' ? !selectedPlaylistId : !selectedSlideshowId)}
+              >
+                {isCreating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.createButtonText}>Create</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Batch Create Modal */}
+      <Modal
+        visible={showBatchModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowBatchModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Create Multiple Activation Codes</Text>
+            
+            <Text style={styles.label}>Quantity (1-50):</Text>
+            <TextInput
+              style={styles.input}
+              value={batchQuantity}
+              onChangeText={setBatchQuantity}
+              placeholder="How many codes to create?"
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.label}>Select Content:</Text>
+            <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={[
+                  styles.playlistOption,
+                  selectedContentType === 'playlist' && styles.selectedPlaylistOption
+                ]}
+                onPress={() => setSelectedContentType('playlist')}
+              >
+                <Text style={[
+                  styles.playlistOptionText,
+                  selectedContentType === 'playlist' && styles.selectedPlaylistOptionText
+                ]}>
+                  Playlist
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.playlistOption,
+                  selectedContentType === 'slideshow' && styles.selectedPlaylistOption
+                ]}
+                onPress={() => setSelectedContentType('slideshow')}
+              >
+                <Text style={[
+                  styles.playlistOptionText,
+                  selectedContentType === 'slideshow' && styles.selectedPlaylistOptionText
+                ]}>
+                  Slideshow
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+
+            {selectedContentType === 'playlist' && (
+              <>
+                <Text style={styles.label}>Max Uses per code (optional):</Text>
+                <TextInput
+                  style={styles.input}
+                  value={maxUses}
+                  onChangeText={setMaxUses}
+                  placeholder="Leave empty for unlimited"
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            {selectedContentType === 'slideshow' && (
+              <>
+                <Text style={styles.label}>Max Uses per code (optional):</Text>
+                <TextInput
+                  style={styles.input}
+                  value={maxUses}
+                  onChangeText={setMaxUses}
+                  placeholder="Leave empty for unlimited"
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            <Text style={styles.label}>Expires in days (optional):</Text>
+            <TextInput
+              style={styles.input}
+              value={expiresInDays}
+              onChangeText={setExpiresInDays}
+              placeholder="Leave empty for no expiration"
+              keyboardType="numeric"
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setShowBatchModal(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.createButton, isCreating && styles.disabledButton]}
+                onPress={handleBatchCreate}
+                disabled={isCreating}
+              >
+                {isCreating ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.createButtonText}>Create {batchQuantity} Codes</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
     </View>
-  );
-
-  const renderEditModal = () => (
-    <Modal
-      visible={showEditModal}
-      animationType="slide"
-      presentationStyle="pageSheet"
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Edit Activation Code</Text>
-          <TouchableOpacity onPress={() => setShowEditModal(false)}>
-            <MaterialIcons name="close" size={24} color="#333" />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.modalContent}>
-          {editingCode && (
-            <>
-              <View style={styles.codeDisplaySection}>
-                <Text style={styles.inputLabel}>Code</Text>
-                <Text style={styles.codeDisplay}>{editingCode.code}</Text>
-              </View>
-
-              <View style={styles.toggleSection}>
-                <Text style={styles.inputLabel}>Status</Text>
-                <TouchableOpacity
-                  style={[
-                    styles.toggleButton,
-                    editIsActive ? styles.activeToggle : styles.inactiveToggle
-                  ]}
-                  onPress={() => setEditIsActive(!editIsActive)}
-                >
-                  <Text style={[
-                    styles.toggleText,
-                    editIsActive ? styles.activeToggleText : styles.inactiveToggleText
-                  ]}>
-                    {editIsActive ? 'Active' : 'Inactive'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.inputLabel}>Max Uses (optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editMaxUses}
-                onChangeText={setEditMaxUses}
-                placeholder="Leave empty for unlimited"
-                keyboardType="numeric"
-              />
-
-              <Text style={styles.inputLabel}>Days Until Expiration (optional)</Text>
-              <TextInput
-                style={styles.textInput}
-                value={editExpiresInDays}
-                onChangeText={setEditExpiresInDays}
-                placeholder="Leave empty for no expiration"
-                keyboardType="numeric"
-              />
-
-              <View style={styles.currentStatsSection}>
-                <Text style={styles.inputLabel}>Current Statistics</Text>
-                <Text style={styles.statText}>
-                  Uses: {editingCode.uses_count}{editingCode.max_uses ? `/${editingCode.max_uses}` : ' (unlimited)'}
-                </Text>
-                <Text style={styles.statText}>
-                  Created: {new Date(editingCode.created_at).toLocaleDateString()}
-                </Text>
-                {editingCode.expires_at && (
-                  <Text style={styles.statText}>
-                    Current Expiration: {new Date(editingCode.expires_at).toLocaleDateString()}
-                  </Text>
-                )}
-              </View>
-
-              <TouchableOpacity
-                style={[styles.modalButton, isUpdating && styles.disabledButton]}
-                onPress={handleUpdateCode}
-                disabled={isUpdating}
-              >
-                {isUpdating ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.modalButtonText}>Update Code</Text>
-                )}
-              </TouchableOpacity>
-            </>
-          )}
-        </ScrollView>
-      </View>
-    </Modal>
   );
 
   const renderMyAccessTab = () => (
     <View style={styles.tabContent}>
       <ThemedText style={styles.sectionTitle}>My Access Codes</ThemedText>
       <ThemedText style={styles.sectionDescription}>
-        Codes attached to your profile that grant you access to content
+        Activation codes attached to your profile
       </ThemedText>
 
       <View style={styles.addCodeSection}>
@@ -514,7 +835,7 @@ const ActivationCodesScreen = () => {
           autoCapitalize="characters"
         />
         <TouchableOpacity
-          style={[styles.attachButton, isAttaching && styles.disabledButton]}
+          style={styles.attachButton}
           onPress={handleAttachCode}
           disabled={isAttaching}
         >
@@ -532,7 +853,7 @@ const ActivationCodesScreen = () => {
             <MaterialIcons name="vpn-key" size={48} color="#ccc" />
             <Text style={styles.emptyStateText}>No access codes attached</Text>
             <Text style={styles.emptyStateSubtext}>
-              Enter activation codes above to gain access to protected content
+              Enter an activation code above to unlock content
             </Text>
           </View>
         ) : (
@@ -540,19 +861,36 @@ const ActivationCodesScreen = () => {
             <View key={code.id} style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeName}>{code.code}</Text>
-                <TouchableOpacity
-                  style={styles.removeButton}
-                  onPress={() => handleDetachCode(code.id)}
-                >
-                  <MaterialIcons name="remove-circle" size={20} color="#ff4444" />
-                </TouchableOpacity>
+                <View style={styles.codeActions}>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={() => handleCopyToClipboard(code.code)}
+                  >
+                    <MaterialIcons name="content-copy" size={18} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={() => handleShareCode(code)}
+                  >
+                    <MaterialIcons name="share" size={18} color="#4CAF50" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => handleDetachCode(code.id)}
+                  >
+                    <MaterialIcons name="remove" size={18} color="#ff4444" />
+                  </TouchableOpacity>
+                </View>
               </View>
               <Text style={styles.codeContent}>
                 {code.content_type === 'playlist' ? code.playlist_name : code.slideshow_name}
               </Text>
               <Text style={styles.codeDetails}>
-                Added: {new Date(code.attached_at!).toLocaleDateString()}
+                Uses: {code.uses_count}{code.max_uses ? `/${code.max_uses}` : ' (unlimited)'}
                 {code.expires_at && ` • Expires: ${new Date(code.expires_at).toLocaleDateString()}`}
+              </Text>
+              <Text style={styles.codeDate}>
+                Attached: {new Date(code.attached_at || code.created_at).toLocaleDateString()}
               </Text>
             </View>
           ))
@@ -582,7 +920,24 @@ const ActivationCodesScreen = () => {
             <View key={code.id} style={styles.codeCard}>
               <View style={styles.codeHeader}>
                 <Text style={styles.codeName}>{code.code}</Text>
+                <View style={styles.codeTypeBadge}>
+                  <Text style={styles.codeTypeText}>
+                    {code.content_type === 'playlist' ? 'Playlist' : 'Slideshow'}
+                  </Text>
+                </View>
                 <View style={styles.codeActions}>
+                  <TouchableOpacity
+                    style={styles.copyButton}
+                    onPress={() => handleCopyToClipboard(code.code)}
+                  >
+                    <MaterialIcons name="content-copy" size={18} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.shareButton}
+                    onPress={() => handleShareCode(code)}
+                  >
+                    <MaterialIcons name="share" size={18} color="#4CAF50" />
+                  </TouchableOpacity>
                   <View style={[
                     styles.statusBadge,
                     { backgroundColor: code.is_active ? '#4CAF50' : '#ff4444' }
@@ -622,6 +977,187 @@ const ActivationCodesScreen = () => {
     </View>
   );
 
+  const renderEditModal = () => (
+    <Modal
+      visible={showEditModal}
+      animationType="slide"
+      transparent
+      onRequestClose={() => setShowEditModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <Text style={styles.modalTitle}>Edit Activation Code</Text>
+          
+          {editingCode && (
+            <>
+              <View style={styles.codeDisplaySection}>
+                <Text style={styles.label}>Code:</Text>
+                <Text style={styles.codeDisplay}>{editingCode.code}</Text>
+              </View>
+
+              <View style={styles.toggleSection}>
+                <Text style={styles.label}>Status:</Text>
+                <TouchableOpacity
+                  style={[
+                    styles.toggleButton,
+                    editIsActive ? styles.activeToggle : styles.inactiveToggle
+                  ]}
+                  onPress={() => setEditIsActive(!editIsActive)}
+                >
+                  <Text style={[
+                    styles.toggleText,
+                    editIsActive ? styles.activeToggleText : styles.inactiveToggleText
+                  ]}>
+                    {editIsActive ? 'Active' : 'Inactive'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.label}>Max Uses (optional):</Text>
+              <TextInput
+                style={styles.input}
+                value={editMaxUses}
+                onChangeText={setEditMaxUses}
+                placeholder="Leave empty for unlimited"
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.label}>Days Until Expiration (optional):</Text>
+              <TextInput
+                style={styles.input}
+                value={editExpiresInDays}
+                onChangeText={setEditExpiresInDays}
+                placeholder="Leave empty for no expiration"
+                keyboardType="numeric"
+              />
+
+              <View style={styles.currentStatsSection}>
+                <Text style={styles.label}>Current Statistics:</Text>
+                <Text style={styles.statText}>
+                  Uses: {editingCode.uses_count}{editingCode.max_uses ? `/${editingCode.max_uses}` : ' (unlimited)'}
+                </Text>
+                <Text style={styles.statText}>
+                  Created: {new Date(editingCode.created_at).toLocaleDateString()}
+                </Text>
+                {editingCode.expires_at && (
+                  <Text style={styles.statText}>
+                    Current Expiration: {new Date(editingCode.expires_at).toLocaleDateString()}
+                  </Text>
+                )}
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowEditModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.createButton, isUpdating && styles.disabledButton]}
+                  onPress={handleUpdateCode}
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.createButtonText}>Update</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderShareModal = () => (
+    <Modal
+      visible={showShareModal}
+      animationType="slide"
+      transparent
+      onRequestClose={() => setShowShareModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Share Activation Code</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowShareModal(false)}
+            >
+              <MaterialIcons name="close" size={24} color="#666" />
+            </TouchableOpacity>
+          </View>
+          
+          {sharingCode && (
+            <>
+              <View style={styles.shareCodeSection}>
+                <Text style={styles.label}>Code:</Text>
+                <Text style={styles.codeDisplay}>{sharingCode.code}</Text>
+                <Text style={styles.label}>Content:</Text>
+                <Text style={styles.shareMessage}>
+                  {sharingCode.content_type === 'playlist' ? sharingCode.playlist_name : sharingCode.slideshow_name}
+                </Text>
+              </View>
+
+              <Text style={styles.shareInstructions}>
+                Share this activation code with your customer via any app:
+              </Text>
+
+              <View style={styles.shareOptions}>
+                <TouchableOpacity
+                  style={[styles.shareOptionButton, styles.primaryShareButton]}
+                  onPress={() => shareViaBuiltIn(`🎵 Here's your activation code: ${sharingCode.code}\n\nUse this code to access: ${sharingCode.content_type === 'playlist' ? sharingCode.playlist_name : sharingCode.slideshow_name}\n\nEnjoy your content!`)}
+                >
+                  <MaterialIcons name="share" size={24} color="#fff" />
+                  <Text style={[styles.shareOptionText, styles.primaryShareText]}>Share via Apps</Text>
+                  <Text style={styles.shareOptionSubtext}>Email, Messages, WhatsApp, etc.</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.shareOptionButton}
+                  onPress={() => handleCopyToClipboard(`🎵 Here's your activation code: ${sharingCode.code}\n\nUse this code to access: ${sharingCode.content_type === 'playlist' ? sharingCode.playlist_name : sharingCode.slideshow_name}\n\nEnjoy your content!`)}
+                >
+                  <MaterialIcons name="content-copy" size={24} color="#4CAF50" />
+                  <Text style={styles.shareOptionText}>Copy Full Message</Text>
+                  <Text style={styles.shareOptionSubtext}>Copy and paste anywhere</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.shareOptionButton}
+                  onPress={() => handleCopyToClipboard(sharingCode.code)}
+                >
+                  <MaterialIcons name="vpn-key" size={24} color="#FF9500" />
+                  <Text style={styles.shareOptionText}>Copy Code Only</Text>
+                  <Text style={styles.shareOptionSubtext}>Just the activation code</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.shareHint}>
+                <MaterialIcons name="info" size={16} color="#666" />
+                <Text style={styles.shareHintText}>
+                  Available apps depend on what's installed on your device. 
+                  Make sure you have Mail app configured for email sharing.
+                </Text>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={() => setShowShareModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -658,6 +1194,9 @@ const ActivationCodesScreen = () => {
 
       {/* Edit Modal */}
       {renderEditModal()}
+
+      {/* Share Modal */}
+      {renderShareModal()}
     </ThemedView>
   );
 };
@@ -731,7 +1270,10 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
-    marginBottom: 20,
+    marginBottom: 12,
+  },
+  batchButton: {
+    backgroundColor: '#4CAF50',
   },
   createButtonText: {
     color: '#fff',
@@ -780,9 +1322,49 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
     fontFamily: 'monospace',
+    flex: 1,
+  },
+  codeTypeBadge: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  codeTypeText: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '600',
+  },
+  codeActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  copyButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#E3F2FD',
+  },
+  shareButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#E8F5E8',
   },
   removeButton: {
-    padding: 5,
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#FFEBEE',
+  },
+  editButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#E3F2FD',
+  },
+  deleteButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#FFEBEE',
   },
   statusBadge: {
     paddingHorizontal: 8,
@@ -809,21 +1391,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   emptyState: {
+    padding: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
   },
   emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
     color: '#666',
-    marginTop: 15,
+    fontWeight: '600',
+    marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 14,
     color: '#999',
     textAlign: 'center',
-    marginTop: 8,
     lineHeight: 20,
   },
   loadingContainer: {
@@ -832,131 +1413,129 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 15,
+    marginTop: 16,
     fontSize: 16,
     color: '#666',
   },
-  disabledButton: {
-    opacity: 0.6,
-  },
-  // Modal styles
-  modalContainer: {
+  modalOverlay: {
     flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
     backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 10,
+    maxWidth: '90%',
+    maxHeight: '80%',
+    minWidth: 300,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-  },
-  modalContent: {
     flex: 1,
-    padding: 20,
+    textAlign: 'center',
   },
-  inputLabel: {
+  closeButton: {
+    padding: 4,
+    borderRadius: 20,
+    backgroundColor: '#f8f9fa',
+    position: 'absolute',
+    right: 0,
+    top: -2,
+  },
+  label: {
     fontSize: 16,
     fontWeight: '600',
     color: '#333',
     marginBottom: 8,
-    marginTop: 15,
+    marginTop: 12,
   },
-  textInput: {
+  input: {
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
+    padding: 12,
     fontSize: 16,
     backgroundColor: '#fff',
+    marginBottom: 8,
   },
   playlistSelector: {
-    maxHeight: 200,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    backgroundColor: '#fff',
+    maxHeight: 150,
+    marginBottom: 8,
   },
   playlistOption: {
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
   },
   selectedPlaylistOption: {
-    backgroundColor: '#007AFF15',
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
   },
   playlistOptionText: {
     fontSize: 16,
     color: '#333',
-    fontWeight: '500',
   },
   selectedPlaylistOptionText: {
-    color: '#007AFF',
+    color: '#fff',
     fontWeight: '600',
   },
-  playlistDescription: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 20,
+    gap: 10,
   },
-  modalButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 15,
+  cancelButton: {
+    backgroundColor: '#6c757d',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
     borderRadius: 8,
+    flex: 1,
     alignItems: 'center',
-    marginTop: 30,
   },
-  modalButtonText: {
+  cancelButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-  // Edit and Delete Button Styles
-  codeActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  disabledButton: {
+    opacity: 0.5,
   },
-  editButton: {
-    padding: 6,
-    borderRadius: 4,
-    backgroundColor: '#f0f8ff',
-  },
-  deleteButton: {
-    padding: 6,
-    borderRadius: 4,
-    backgroundColor: '#fff0f0',
-  },
-  // Edit Modal Styles
+  // Edit Modal Specific Styles
   codeDisplaySection: {
-    marginBottom: 20,
-    padding: 15,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    marginBottom: 15,
   },
   codeDisplay: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: '#007AFF',
     fontFamily: 'monospace',
-    color: '#333',
-    marginTop: 5,
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    textAlign: 'center',
   },
   toggleSection: {
-    marginBottom: 20,
+    marginBottom: 15,
   },
   toggleButton: {
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
-    marginTop: 8,
   },
   activeToggle: {
     backgroundColor: '#4CAF50',
@@ -975,16 +1554,113 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   currentStatsSection: {
-    marginTop: 20,
-    padding: 15,
     backgroundColor: '#f8f9fa',
+    padding: 15,
     borderRadius: 8,
+    marginBottom: 15,
   },
   statText: {
     fontSize: 14,
     color: '#666',
-    marginTop: 5,
+    marginBottom: 4,
+  },
+  // Share Modal Specific Styles
+  shareCodeSection: {
+    marginBottom: 20,
+  },
+  shareMessage: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    textAlign: 'center',
+  },
+  shareInstructions: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  shareOptions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  shareOptionButton: {
+    alignItems: 'center',
+    padding: 15,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  primaryShareButton: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  shareOptionText: {
+    fontSize: 16,
+    color: '#333',
+    marginTop: 8,
+    fontWeight: '600',
+  },
+  primaryShareText: {
+    color: '#fff',
+  },
+  shareOptionSubtext: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  shareHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  shareHintText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+    flex: 1,
+    lineHeight: 16,
   },
 });
 
-export default ActivationCodesScreen;
+class ErrorBoundary extends React.Component<any, { hasError: boolean; error: any }> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 }}>
+          <Text style={{ color: 'red', fontWeight: 'bold', fontSize: 18 }}>A rendering error occurred:</Text>
+          <Text selectable style={{ color: '#333', marginTop: 20 }}>{String(this.state.error)}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+const ActivationCodesScreenWithBoundary = (props: any) => (
+  <ErrorBoundary>
+    <ActivationCodesScreen {...props} />
+  </ErrorBoundary>
+);
+
+export default ActivationCodesScreenWithBoundary;
+export { ActivationCodesScreen };

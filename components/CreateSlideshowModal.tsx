@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import {
   View,
@@ -209,7 +208,10 @@ const CreateSlideshowModal: React.FC<CreateSlideshowModalProps> = ({
               </View>
               <Switch
                 value={requiresActivationCode}
-                onValueChange={setRequiresActivationCode}
+                onValueChange={(v)=>{
+                  console.log('🛡️ Require access code toggled:', v);
+                  setRequiresActivationCode(v);
+                }}
                 trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
                 thumbColor={requiresActivationCode ? '#3b82f6' : '#9ca3af'}
               />

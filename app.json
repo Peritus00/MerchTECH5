@@ -1,13 +1,20 @@
 {
   "expo": {
-    "name": "MerchTech QR",
-    "slug": "merchtech-qr",
+    "name": "MerchTech",
+    "slug": "merchtech",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "merchtechqr",
+    "scheme": "merchtechapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "notification": {
+      "icon": "./assets/images/notification-icon.png",
+      "color": "#000000",
+      "iosDisplayInForeground": true,
+      "androidMode": "default",
+      "androidCollapsedTitle": "#{unread_notifications} new notifications"
+    },
     "ios": {
       "supportsTablet": true
     },
@@ -27,13 +34,16 @@
     "plugins": [
       "expo-router",
       "expo-audio",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "apiBaseUrl": "https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api"
+      "eas": {
+        "projectId": "8f9a3e4c-7b2d-4a1e-9f8c-6d5e4f3a2b1c"
+      }
     }
   }
 }

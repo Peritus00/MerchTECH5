@@ -151,6 +151,44 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const handleToggleProtection = async (playlist: Playlist) => {
+    try {
+      console.log('🔴 PLAYLISTS: Toggling protection for playlist:', playlist.id, 'Current status:', playlist.requiresActivationCode);
+      
+      const { playlistAPI } = await import('@/services/api');
+      // Handle undefined case - default to false (public)
+      const currentStatus = playlist.requiresActivationCode ?? false;
+      const newProtectionStatus = !currentStatus;
+      
+      console.log('🔴 PLAYLISTS: Current status (with fallback):', currentStatus, 'New status:', newProtectionStatus);
+      
+      // Update the playlist protection status
+      const updatedPlaylist = await playlistAPI.update(playlist.id, {
+        requiresActivationCode: newProtectionStatus
+      });
+      
+      console.log('🔴 PLAYLISTS: Protection toggled successfully. New status:', newProtectionStatus);
+      
+      // Update the local state
+      setPlaylists(prev => prev.map(p => 
+        p.id === playlist.id 
+          ? { ...p, requiresActivationCode: newProtectionStatus }
+          : p
+      ));
+      
+      Alert.alert(
+        'Protection Updated', 
+        newProtectionStatus 
+          ? 'Playlist is now protected and requires an activation code'
+          : 'Playlist is now public and freely accessible'
+      );
+      
+    } catch (error: any) {
+      console.error('🔴 PLAYLISTS: Error toggling protection:', error);
+      Alert.alert('Error', `Failed to update playlist protection: ${error.message || 'Unknown error'}`);
+    }
+  };
+
   const handleAccessSettings = (playlist: Playlist) => {
     router.push(`/playlist-access/${playlist.id}`);
   };
@@ -268,6 +306,7 @@ export default function PlaylistsScreen() {
               onView={() => handleViewPlaylist(playlist)}
               onEdit={() => handleEditPlaylist(playlist)}
               onDelete={() => handleDeletePlaylist(playlist.id)}
+              onToggleProtection={() => handleToggleProtection(playlist)}
               onAccessSettings={() => handleAccessSettings(playlist)}
               showActions={selectedTab === 'my-playlists'}
             />

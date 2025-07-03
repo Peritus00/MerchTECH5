@@ -1,15 +1,19 @@
 import React from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons'; // Import MaterialIcons
+import * as Clipboard from 'expo-clipboard';
+import { MerchTechLogo } from '@/components/MerchTechLogo';
 
 export default function Settings() {
   const router = useRouter();
   const { user, logout, isAuthenticated } = useAuth();
+  const { unreadCount } = useNotifications();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   // Check if user is admin (djjetfuel)
@@ -26,31 +30,65 @@ export default function Settings() {
   }
 
   const handleLogout = async () => {
-    console.log('🔴 LOGOUT BUTTON PRESSED! Starting logout process...');
+    console.log('🔴 Settings: LOGOUT FUNCTION CALLED!');
+    console.log('🔴 Settings: Current authentication state before logout:', { user, isAuthenticated });
+    
+    // Use platform-specific confirmation dialog
+    let shouldLogout = false;
+    
+    if (Platform.OS === 'web') {
+      shouldLogout = window.confirm('Are you sure you want to logout?');
+    } else {
+      // Use Alert.alert for mobile platforms
+      Alert.alert(
+        'Logout',
+        'Are you sure you want to logout?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => {
+              console.log('🔴 Settings: ❌ USER CLICKED CANCEL - LOGOUT CANCELLED');
+            }
+          },
+          {
+            text: 'Logout',
+            style: 'destructive',
+            onPress: async () => {
+              await performLogout();
+            }
+          }
+        ]
+      );
+      return; // Exit early for mobile, the alert will handle the rest
+    }
+    
+    if (shouldLogout) {
+      await performLogout();
+    } else {
+      console.log('🔴 Settings: ❌ USER CLICKED CANCEL - LOGOUT CANCELLED');
+    }
+  };
+
+  const performLogout = async () => {
+    console.log('🔴 Settings: ✅ USER CONFIRMED LOGOUT - PROCEEDING...');
+    setIsLoggingOut(true);
+    
     try {
-      console.log('Settings: Logout button pressed - starting logout process');
-      console.log('Settings: Current user before logout:', user);
-      console.log('Settings: Current isAuthenticated before logout:', isAuthenticated);
-
-      setIsLoggingOut(true);
-
-      // Call logout function
-      console.log('Settings: Calling logout function...');
+      console.log('🔴 Settings: Calling logout function...');
       await logout();
-      console.log('Settings: Logout function completed successfully');
-
-      // Force navigation to login page
-      console.log('Settings: Navigating to login page...');
-      router.replace('/auth/login');
-      console.log('Settings: Navigation to login completed');
-
+      console.log('🔴 Settings: ✅ Logout function completed successfully');
+      console.log('🔴 Settings: 🎉 LOGOUT PROCESS COMPLETE!');
     } catch (error) {
-      console.error('Settings: Logout failed:', error);
-      Alert.alert('Error', 'Failed to logout. Please try again.');
+      console.error('🔴 Settings: ❌ Logout failed with error:', error);
+      if (Platform.OS === 'web') {
+        window.alert('Failed to logout. Please try again.');
+      } else {
+        Alert.alert('Error', 'Failed to logout. Please try again.');
+      }
     } finally {
-      // Always reset loading state
-      console.log('Settings: Resetting loading state');
       setIsLoggingOut(false);
+      console.log('🔴 Settings: Logout process finished, isLoggingOut set to false');
     }
   };
 
@@ -91,18 +129,67 @@ export default function Settings() {
     }
   };
 
+  const handleHelpSupport = () => {
+    if (Platform.OS === 'web') {
+      const shouldCopy = window.confirm(
+        'For assistance please contact help@merchtech.net\n\nClick OK to copy the email address to your clipboard.'
+      );
+      if (shouldCopy) {
+        navigator.clipboard.writeText('help@merchtech.net').then(() => {
+          window.alert('help@merchtech.net copied to clipboard');
+        });
+      }
+    } else {
+      Alert.alert(
+        'Help & Support',
+        'For assistance please contact help@merchtech.net',
+        [
+          {
+            text: 'Copy Email',
+            onPress: async () => {
+              await Clipboard.setStringAsync('help@merchtech.net');
+              Alert.alert('Copied', 'help@merchtech.net has been copied to your clipboard');
+            },
+          },
+          { text: 'Close', style: 'cancel' },
+        ]
+      );
+    }
+  };
+
+  const handleAbout = () => {
+    const message = 'VERSION 5.1';
+    if (Platform.OS === 'web') {
+      window.alert(message);
+    } else {
+      Alert.alert('About', message, [{ text: 'OK' }]);
+    }
+  };
+
   const settingsOptions = [
     {
       title: 'Profile',
       description: 'Manage your account information',
-      onPress: () => router.push('./profile'),
+      onPress: () => {
+        console.log('🔵 SETTINGS: Profile button pressed');
+        console.log('🔵 SETTINGS: Navigating to profile page...');
+        router.push('/(tabs)/settings/profile');
+        console.log('🔵 SETTINGS: Profile navigation command sent');
+      },
       icon: '👤',
     },
     {
-      title: 'Notifications',
-      description: 'Configure notification preferences',
-      onPress: () => console.log('Navigate to notifications'),
+      title: 'Purchase Notifications',
+      description: 'View customer purchases and share activation codes',
+      onPress: () => {
+        console.log('🔔 SETTINGS: Purchase Notifications button pressed');
+        console.log('🔔 SETTINGS: About to navigate to purchase-notifications');
+        console.log('🔔 SETTINGS: Current router state:', router);
+        router.push('/(tabs)/settings/purchase-notifications');
+        console.log('🔔 SETTINGS: Navigation command sent');
+      },
       icon: '🔔',
+      badgeCount: unreadCount,
     },
     {
       title: 'Subscription',
@@ -111,21 +198,15 @@ export default function Settings() {
       icon: '💳',
     },
     {
-      title: 'Export Data',
-      description: 'Download your QR code data',
-      onPress: () => console.log('Export data'),
-      icon: '📊',
-    },
-    {
       title: 'Help & Support',
       description: 'Get help and contact support',
-      onPress: () => console.log('Navigate to help'),
+      onPress: handleHelpSupport,
       icon: '❓',
     },
     {
       title: 'About',
-      description: 'App version and information',
-      onPress: () => console.log('Navigate to about'),
+      description: 'VERSION 5.1',
+      onPress: handleAbout,
       icon: 'ℹ️',
     },
     {
@@ -177,6 +258,13 @@ export default function Settings() {
         adminOnly: true,
       },
       {
+        title: 'Export Data',
+        description: 'Download your QR code data',
+        onPress: () => console.log('Export data'),
+        icon: '📊',
+        adminOnly: true,
+      },
+      {
         title: 'Master Sales Reports',
         description: 'View sales analytics for all products',
         onPress: () => router.push('/settings/master-sales-reports'),
@@ -201,6 +289,7 @@ export default function Settings() {
     <ThemedView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         <ThemedView style={styles.header}>
+          <MerchTechLogo size="medium" variant="full" style={styles.logo} />
           <ThemedText type="title">Settings</ThemedText>
           <ThemedText style={styles.subtitle}>
             Manage your account and preferences
@@ -236,6 +325,13 @@ export default function Settings() {
                   option.adminOnly && styles.adminOptionIcon
                 ]}>
                   <ThemedText style={styles.optionIconText}>{option.icon}</ThemedText>
+                  {option.badgeCount && option.badgeCount > 0 && (
+                    <ThemedView style={styles.notificationBadge}>
+                      <ThemedText style={styles.badgeText}>
+                        {option.badgeCount > 99 ? '99+' : option.badgeCount}
+                      </ThemedText>
+                    </ThemedView>
+                  )}
                 </ThemedView>
                 <ThemedView style={styles.optionText}>
                   <ThemedText style={styles.optionTitle}>
@@ -280,6 +376,9 @@ const styles = StyleSheet.create({
   header: {
     padding: 20,
     alignItems: 'center',
+  },
+  logo: {
+    marginBottom: 16,
   },
   subtitle: {
     marginTop: 4,
@@ -333,12 +432,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    position: 'relative',
   },
   adminOptionIcon: {
     backgroundColor: '#fef3c7',
   },
   optionIconText: {
     fontSize: 18,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ff4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
   },
   optionText: {
     flex: 1,

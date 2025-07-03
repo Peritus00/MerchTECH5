@@ -9,6 +9,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="master-store-manager" options={{ title: 'Master Store Manager' }} />
       <Stack.Screen name="enhanced-sales-reports" options={{ title: 'Enhanced Sales Reports' }} />
       <Stack.Screen name="master-sales-reports" options={{ title: 'Master Sales Reports' }} />
+      <Stack.Screen name="purchase-notifications" options={{ title: 'Purchase Notifications' }} />
 
     </Stack>
   );

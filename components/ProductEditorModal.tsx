@@ -33,6 +33,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     product?.metadata?.availableColors ?? []
   );
   const [category, setCategory] = useState<string>(product?.category ?? '');
+  const [acknowledgeServiceCharge, setAcknowledgeServiceCharge] = useState(false);
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   const COLORS = ['Red', 'Blue', 'Green', 'Yellow', 'Black', 'White', 'Gray', 'Pink', 'Purple', 'Orange', 'Brown', 'Navy'];
@@ -53,6 +54,21 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setHasColors(product.metadata?.hasColors ?? false);
       setAvailableColors(product.metadata?.availableColors ?? []);
       setCategory(product.category ?? '');
+      // Reset service charge acknowledgment for new products
+      setAcknowledgeServiceCharge(product.id !== 'new');
+    } else {
+      // Reset all fields when product is null (modal closed)
+      setName('');
+      setDescription('');
+      setImages([]);
+      setPrice('');
+      setInStock(true);
+      setHasSizes(false);
+      setAvailableSizes([]);
+      setHasColors(false);
+      setAvailableColors([]);
+      setCategory('');
+      setAcknowledgeServiceCharge(false);
     }
   }, [product]);
 
@@ -105,6 +121,16 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       Alert.alert('Invalid Price', 'Please enter a valid numeric price.');
       return;
     }
+
+    // Check service charge acknowledgment for new products
+    if (product?.id === 'new' && !acknowledgeServiceCharge) {
+      console.log('🔴 Validation failed: Service charge not acknowledged');
+      Alert.alert(
+        'Service Charge Acknowledgment Required',
+        'You must acknowledge that MerchTech collects a 9% service charge on all purchases before creating a product.'
+      );
+      return;
+    }
     
     console.log('✅ Validation passed, building updates object...');
     const updates: Partial<Product> & { metadata: any } = {
@@ -137,13 +163,35 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     console.log('🔵 onSave call completed');
   };
 
+  const handleClose = () => {
+    // Reset all state when closing
+    setName('');
+    setDescription('');
+    setImages([]);
+    setPrice('');
+    setInStock(true);
+    setHasSizes(false);
+    setAvailableSizes([]);
+    setHasColors(false);
+    setAvailableColors([]);
+    setCategory('');
+    setAcknowledgeServiceCharge(false);
+    onClose();
+  };
+
   if (!product) return null;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.overlay}>
         <ThemedView style={styles.modalContainer}>
-          <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent} 
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            keyboardShouldPersistTaps="handled"
+          >
             <ThemedText type="title" style={{ marginBottom: 12 }}>
               Edit Product
             </ThemedText>
@@ -258,6 +306,26 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
                 </View>
               </>
             )}
+
+            {/* Service Charge Acknowledgment - Only show for new products */}
+            {product?.id === 'new' && (
+              <View style={styles.serviceChargeContainer}>
+                <TouchableOpacity
+                  style={styles.serviceChargeCheckbox}
+                  onPress={() => setAcknowledgeServiceCharge(!acknowledgeServiceCharge)}
+                >
+                  <View style={[styles.checkbox, acknowledgeServiceCharge && styles.checkboxChecked]}>
+                    {acknowledgeServiceCharge && (
+                      <ThemedText style={styles.checkmark}>✓</ThemedText>
+                    )}
+                  </View>
+                  <ThemedText style={styles.serviceChargeText}>
+                    I acknowledge that MerchTech collects a 9% service charge on all purchases made through this platform.
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+            )}
+
             <View style={styles.actions}>
               {product?.id !== 'new' && (
                 <TouchableOpacity
@@ -269,7 +337,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
               )}
 
               <View style={styles.rightActions}>
-                <TouchableOpacity style={styles.cancel} onPress={onClose}>
+                <TouchableOpacity style={styles.cancel} onPress={handleClose}>
                   <ThemedText style={{ color: '#fff' }}>Cancel</ThemedText>
                 </TouchableOpacity>
                 <TouchableOpacity 
@@ -296,11 +364,20 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 50,
   },
   modalContainer: {
     padding: 20,
     borderRadius: 8,
     width: '90%',
+    maxHeight: '80%',
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   input: {
     borderWidth: 1,
@@ -427,5 +504,43 @@ const styles = StyleSheet.create({
   categoryChipSelected: {
     backgroundColor: '#2563eb',
     borderColor: '#2563eb',
+  },
+  serviceChargeContainer: {
+    backgroundColor: '#fef3c7',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
+  },
+  serviceChargeCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 2,
+    borderColor: '#d97706',
+    borderRadius: 4,
+    marginRight: 12,
+    marginTop: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#d97706',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  serviceChargeText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#92400e',
+    fontWeight: '500',
   },
 }); 

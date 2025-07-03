@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -10,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -17,6 +17,10 @@ import { ThemedView } from '@/components/ThemedView';
 import SlideshowCard from '@/components/SlideshowCard';
 import CreateSlideshowModal from '@/components/CreateSlideshowModal';
 import SlideshowImageManager from '@/components/SlideshowImageManager';
+import EditSlideshowModal from '@/components/EditSlideshowModal';
+import SlideshowPreview from '@/components/SlideshowPreview';
+import { slideshowAPI } from '@/services/api';
+import { useRouter } from 'expo-router';
 
 interface SlideshowImage {
   id: number;
@@ -46,7 +50,10 @@ export default function SlideshowsScreen() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingSlideshow, setEditingSlideshow] = useState<Slideshow | null>(null);
   const [managingSlideshow, setManagingSlideshow] = useState<Slideshow | null>(null);
+  const [previewingSlideshow, setPreviewingSlideshow] = useState<Slideshow | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetchSlideshows();
@@ -54,36 +61,9 @@ export default function SlideshowsScreen() {
 
   const fetchSlideshows = async () => {
     try {
-      // Mock data for development
-      const mockSlideshows: Slideshow[] = [
-        {
-          id: 1,
-          name: 'Product Showcase',
-          description: 'Our latest product collection',
-          uniqueId: 'slideshow-1',
-          autoplayInterval: 5000,
-          transition: 'fade',
-          requiresActivationCode: false,
-          createdAt: new Date().toISOString(),
-          images: [
-            {
-              id: 1,
-              slideshowId: 1,
-              imageUrl: 'https://picsum.photos/400/300?random=1',
-              caption: 'Product 1',
-              displayOrder: 0,
-            },
-            {
-              id: 2,
-              slideshowId: 1,
-              imageUrl: 'https://picsum.photos/400/300?random=2',
-              caption: 'Product 2',
-              displayOrder: 1,
-            },
-          ],
-        },
-      ];
-      setSlideshows(mockSlideshows);
+      const serverSlideshows = await slideshowAPI.getAll();
+      console.log('📥 Fetched slideshows from server:', serverSlideshows);
+      setSlideshows(serverSlideshows);
     } catch (error) {
       console.error('Error fetching slideshows:', error);
       Alert.alert('Error', 'Failed to load slideshows');
@@ -101,14 +81,8 @@ export default function SlideshowsScreen() {
     requiresActivationCode: boolean;
   }) => {
     try {
-      const newSlideshow: Slideshow = {
-        id: Date.now(),
-        uniqueId: `slideshow-${Date.now()}`,
-        images: [],
-        createdAt: new Date().toISOString(),
-        ...slideshowData,
-      };
-      setSlideshows(prev => [newSlideshow, ...prev]);
+      const created = await slideshowAPI.create(slideshowData);
+      setSlideshows(prev => [created, ...prev]);
       setShowCreateModal(false);
       Alert.alert('Success', 'Slideshow created successfully');
     } catch (error) {
@@ -118,21 +92,48 @@ export default function SlideshowsScreen() {
   };
 
   const handleDeleteSlideshow = async (slideshowId: number) => {
-    Alert.alert(
-      'Delete Slideshow',
-      'Are you sure you want to delete this slideshow? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setSlideshows(prev => prev.filter(slideshow => slideshow.id !== slideshowId));
-            Alert.alert('Success', 'Slideshow deleted successfully');
-          },
-        },
-      ]
-    );
+    console.log('🗑️ DELETE REQUEST: Slideshow ID:', slideshowId);
+    console.log('🗑️ Current slideshows count before delete:', slideshows.length);
+
+    const executeDelete = () => {
+      console.log('🗑️ Confirmed delete, filtering slideshows...');
+      slideshowAPI.delete(String(slideshowId)).catch(err =>
+        console.error('Failed to delete slideshow on server:', err)
+      );
+      setSlideshows(prev => prev.filter(slideshow => slideshow.id !== slideshowId));
+      setTimeout(() => {
+        console.log('🗑️ Slideshows count after delete:', slideshows.length - 1);
+      }, 0);
+      if (Platform.OS !== 'web') {
+        Alert.alert('Success', 'Slideshow deleted successfully');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm('Are you sure you want to delete this slideshow? This action cannot be undone.');
+      if (confirmed) {
+        executeDelete();
+      } else {
+        console.log('🗑️ Delete cancelled');
+      }
+    } else {
+      Alert.alert(
+        'Delete Slideshow',
+        'Are you sure you want to delete this slideshow? This action cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => console.log('🗑️ Delete cancelled') },
+          { text: 'Delete', style: 'destructive', onPress: executeDelete },
+        ]
+      );
+    }
+  };
+
+  const handlePreviewSlideshow = (slideshow: Slideshow) => {
+    console.log('🎬 PLAY pressed on slideshow', slideshow.id, 'protected?', slideshow.requiresActivationCode);
+
+    // Always send user to the access-gate screen for activation code / preview options
+    // This ensures all slideshows go through the access control flow
+    router.push(`/slideshow-access/${slideshow.id}`);
   };
 
   const onRefresh = () => {
@@ -171,7 +172,7 @@ export default function SlideshowsScreen() {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>
-              {slideshows.reduce((total, slideshow) => total + slideshow.images.length, 0)}
+              {slideshows.reduce((total, slideshow) => total + (slideshow.images?.length || 0), 0)}
             </Text>
             <Text style={styles.statLabel}>Total Images</Text>
           </View>
@@ -219,9 +220,17 @@ export default function SlideshowsScreen() {
               <SlideshowCard
                 key={slideshow.id}
                 slideshow={slideshow}
-                onEdit={() => setEditingSlideshow(slideshow)}
+                onEdit={() => {
+                  console.log('✏️ Edit button pressed for slideshow:', slideshow.id);
+                  setEditingSlideshow(slideshow);
+                }}
                 onDelete={() => handleDeleteSlideshow(slideshow.id)}
                 onManageImages={() => setManagingSlideshow(slideshow)}
+                onPreview={() => handlePreviewSlideshow(slideshow)}
+                onLinkProducts={() => {
+                  console.log('🔗 Link products pressed for slideshow', slideshow.id);
+                  router.push(`/product-links/${slideshow.id}?type=slideshow`);
+                }}
               />
             ))}
           </View>
@@ -265,6 +274,48 @@ export default function SlideshowsScreen() {
           setSlideshows(prev =>
             prev.map(s => s.id === updatedSlideshow.id ? updatedSlideshow : s)
           );
+        }}
+      />
+
+      {/* Edit Modal */}
+      <EditSlideshowModal
+        visible={!!editingSlideshow}
+        slideshow={editingSlideshow}
+        onClose={() => setEditingSlideshow(null)}
+        onSave={async (updates) => {
+          if (!editingSlideshow) return;
+          try {
+            // backend expects camelCase keys
+            const payload: any = {};
+            if (updates.name !== undefined) payload.name = updates.name;
+            if (updates.description !== undefined) payload.description = updates.description;
+            if (updates.transition !== undefined) payload.transition = updates.transition;
+            if (updates.autoplayInterval !== undefined) payload.autoplayInterval = updates.autoplayInterval;
+            if (updates.requiresActivationCode !== undefined) payload.requiresActivationCode = updates.requiresActivationCode;
+
+            console.log('📤 PATCH payload:', payload);
+            await slideshowAPI.update(editingSlideshow.id, payload);
+
+            // fetch fresh object
+            const fresh = await slideshowAPI.getById(String(editingSlideshow.id));
+            console.log('📥 Fresh slideshow:', fresh);
+
+            setSlideshows(prev => prev.map(s => (s.id === fresh.id ? fresh : s)));
+            setEditingSlideshow(null);
+          } catch (err) {
+            Alert.alert('Error', 'Failed to update slideshow');
+            console.error('Update error', err);
+          }
+        }}
+      />
+
+      <SlideshowPreview
+        visible={showPreviewModal}
+        slideshow={previewingSlideshow}
+        skipAccessCheck={true}
+        onClose={() => {
+          setShowPreviewModal(false);
+          setPreviewingSlideshow(null);
         }}
       />
     </ThemedView>

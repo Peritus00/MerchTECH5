@@ -37,9 +37,16 @@ export interface QRCode {
   name: string;
   url: string;
   qrCodeData: string;
+  shortUrl?: string;
+  description?: string;
   options?: QRCodeOptions;
-  createdAt: string;
   isActive: boolean;
+  scanCount?: number;
+  createdAt: string;
+  created_at?: string; // Backend uses snake_case
+  updatedAt?: string;
+  updated_at?: string; // Backend uses snake_case
+  contentType?: 'url' | 'text' | 'email' | 'phone' | 'playlist' | 'slideshow' | 'store';
 }
 
 export interface QRCodeOptions {
@@ -59,6 +66,14 @@ export interface QRCodeOptions {
     type: 'linear' | 'radial';
     angle?: number;
   };
+}
+
+export interface CreateQRCodeData {
+  name: string;
+  url: string;
+  description?: string;
+  contentType?: 'url' | 'text' | 'email' | 'phone' | 'playlist' | 'slideshow' | 'store';
+  options?: QRCodeOptions;
 }
 
 export interface QRScan {

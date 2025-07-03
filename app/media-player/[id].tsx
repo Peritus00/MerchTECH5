@@ -6,6 +6,8 @@ import {
   Alert,
   ActivityIndicator,
   TouchableOpacity,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,10 +22,15 @@ import ProductCard from '@/components/ProductCard';
 export default function MediaPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [playlistName, setPlaylistName] = useState('');
   const [playlistData, setPlaylistData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Responsive breakpoint - use horizontal layout on wider screens
+  const isWideScreen = width > 768;
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
     console.log('🔴 MEDIA_PLAYER: Component mounted with ID:', id);
@@ -116,12 +123,30 @@ export default function MediaPlayerScreen() {
     const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
       id: file.id,
       title: file.title,
-      url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api/media/${file.id}/stream`,
+              url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${file.id}/stream`,
       fileType: file.fileType,
       contentType: file.contentType,
     })) || [];
 
+    console.log('🔴 MEDIA_PLAYER: Raw playlist media files:', playlist.mediaFiles);
     console.log('🔴 MEDIA_PLAYER: Formatted files for MediaPlayer:', formattedFiles);
+    
+    // Test first media file URL
+    if (formattedFiles.length > 0) {
+      const firstFile = formattedFiles[0];
+      console.log('🔴 MEDIA_PLAYER: Testing first media file URL:', firstFile.url);
+      fetch(firstFile.url, { method: 'HEAD' })
+        .then(response => {
+          console.log('🔴 MEDIA_PLAYER: First file URL test response:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: firstFile.url
+          });
+        })
+        .catch(error => {
+          console.error('🔴 MEDIA_PLAYER: First file URL test failed:', error);
+        });
+    }
     setMediaFiles(formattedFiles);
     setPlaylistName(playlist.name || `Playlist ${playlistId}`);
   };
@@ -139,7 +164,7 @@ export default function MediaPlayerScreen() {
     const formattedFile = {
       id: mediaFile.id,
       title: mediaFile.title,
-      url: `https://4311622a-238a-4013-b1eb-c601507a6400-00-3l5qvyow6auc.kirk.replit.dev:5001/api/media/${mediaFile.id}/stream`,
+      url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${mediaFile.id}/stream`,
       fileType: mediaFile.fileType || mediaFile.file_type,
       contentType: mediaFile.contentType || mediaFile.content_type,
     };
@@ -169,53 +194,60 @@ export default function MediaPlayerScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.responsiveRow}>
-        {/* Left: Media Player and Chat */}
-        <View style={styles.leftColumn}>
-          {/* Header with Back Button */}
-          <View style={styles.header}>
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={handleBackPress}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="arrow-back" size={24} color="#007AFF" />
-              <ThemedText style={styles.backText}>Back</ThemedText>
-            </TouchableOpacity>
-            <View style={styles.titleContainer}>
-              <ThemedText type="title" style={styles.title}>{playlistName}</ThemedText>
-              <ThemedText style={styles.subtitle}>
-                {mediaFiles.length} track{mediaFiles.length !== 1 ? 's' : ''}
-              </ThemedText>
+      {/* Header with Back Button */}
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={handleBackPress}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#007AFF" />
+          <ThemedText style={styles.backText}>Back to Dashboard</ThemedText>
+        </TouchableOpacity>
+      </View>
+
+      {/* Main Content - Full Width Media Player */}
+      <View style={styles.mainContainer}>
+        {/* Media Player Container */}
+        <View style={styles.mediaPlayerContainer}>
+          {/* Playlist Info */}
+          <View style={styles.playlistHeader}>
+            <View style={styles.playlistIcon}>
+              <MaterialIcons name="queue-music" size={24} color="#3b82f6" />
             </View>
+            <View style={styles.playlistInfo}>
+              <ThemedText style={styles.playlistTitle}>{playlistName}</ThemedText>
+              <View style={styles.protectionBadge}>
+                <MaterialIcons name="lock" size={16} color="#10b981" />
+                <ThemedText style={styles.protectionText}>Access Granted</ThemedText>
+              </View>
+            </View>
+
           </View>
+
           {/* Media Player */}
-          <MediaPlayer
-            mediaFiles={mediaFiles}
-            playlistId={id}
-            shouldAutoplay={false}
-            onSetPlaybackState={handlePlaybackStateChange}
-            productLinks={playlistData?.productLinks || []}
-          />
+          <View style={styles.playerContainer}>
+            <MediaPlayer
+              mediaFiles={mediaFiles}
+              playlistId={id}
+              shouldAutoplay={false}
+              onSetPlaybackState={handlePlaybackStateChange}
+              productLinks={playlistData?.productLinks || []}
+            />
+          </View>
+
           {/* Chat Component - Only show for playlists */}
           {playlistData && (
-            <PlaylistChat
-              playlistId={id}
-              playlistName={playlistData.name}
-            />
+            <View style={styles.chatSection}>
+              <PlaylistChat
+                playlistId={id}
+                playlistName={playlistData.name}
+              />
+            </View>
           )}
         </View>
-        {/* Right: Product Ads */}
-        <View style={styles.rightColumn}>
-          <ThemedText style={styles.productAdTitle}>Featured Products</ThemedText>
-          {playlistData?.productLinks && playlistData.productLinks.length > 0 ? (
-            playlistData.productLinks.map((product: any) => (
-              <ProductCard key={product.id} product={product} onPress={() => {}} />
-            ))
-          ) : (
-            <ThemedText style={styles.noProductsText}>No products to display.</ThemedText>
-          )}
-        </View>
+
+
       </View>
     </ThemedView>
   );
@@ -226,73 +258,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
-  responsiveRow: {
-    flex: 1,
-    flexDirection: 'column',
-    '@media (min-width: 900px)': {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-    },
-  },
-  leftColumn: {
-    flex: 2,
-    minWidth: 0,
-    padding: 20,
-    '@media (min-width: 900px)': {
-      maxWidth: 700,
-    },
-  },
-  rightColumn: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    margin: 20,
-    padding: 24,
-    minWidth: 320,
-    maxWidth: 400,
-    boxShadow: '0px 2px 8px rgba(0,0,0,0.08)',
-    '@media (max-width: 899px)': {
-      marginTop: 0,
-      marginLeft: 0,
-      maxWidth: '100%',
-      minWidth: 0,
-    },
-  },
-  productAdTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 16,
-    color: '#1f2937',
-  },
-  noProductsText: {
-    color: '#6b7280',
-    fontSize: 16,
-    marginTop: 16,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#6b7280',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 32,
-  },
   header: {
-    padding: 20,
+    paddingHorizontal: 20,
     paddingTop: 60, // Account for status bar
+    paddingBottom: 20,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
   },
   backButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
     paddingVertical: 8,
     paddingHorizontal: 4,
   },
@@ -302,16 +278,69 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
   },
-  titleContainer: {
+  mainContainer: {
+    flex: 1,
+  },
+  mediaPlayerContainer: {
+    flex: 1,
+    padding: 16,
+    backgroundColor: '#fff',
+  },
+  playlistHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  playlistIcon: {
+    marginRight: 12,
+  },
+  playlistInfo: {
+    flex: 1,
+  },
+  playlistTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  protectionBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  title: {
-    textAlign: 'center',
+  protectionText: {
+    fontSize: 12,
+    color: '#10b981',
+    marginLeft: 4,
+    fontWeight: '500',
   },
-  subtitle: {
+
+  playerContainer: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  chatSection: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
-    marginTop: 4,
-    textAlign: 'center',
   },
 });

@@ -10,19 +10,26 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const { 
+    pushNotificationsEnabled, 
+    togglePushNotifications, 
+    sendTestPushNotification 
+  } = useNotifications();
   const router = useRouter();
   const [username, setUsername] = useState(user?.username || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [notifications, setNotifications] = useState(true);
   const [analytics, setAnalytics] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [pushNotificationLoading, setPushNotificationLoading] = useState(false);
 
   const handleSave = async () => {
     setLoading(true);
@@ -36,6 +43,49 @@ export default function ProfileScreen() {
       setLoading(false);
     }
   };
+
+  const handlePushNotificationToggle = async (enabled: boolean) => {
+    if (!user) {
+      Alert.alert('Error', 'Please log in to manage notifications');
+      return;
+    }
+
+    setPushNotificationLoading(true);
+    try {
+      // Get auth token from AsyncStorage
+      const authToken = await AsyncStorage.getItem('authToken');
+      if (!authToken) {
+        Alert.alert('Error', 'Authentication token not found. Please log in again.');
+        setPushNotificationLoading(false);
+        return;
+      }
+      
+      const success = await togglePushNotifications(enabled, authToken);
+      
+      if (success) {
+        if (enabled) {
+          Alert.alert(
+            '📱 Push Notifications Enabled!',
+            'You\'ll now receive notifications when customers make purchases.'
+          );
+        } else {
+          Alert.alert('📱 Push Notifications Disabled', 'You won\'t receive push notifications anymore.');
+        }
+      } else {
+        // If the API call failed, the context state should remain unchanged
+        // The switch will automatically revert to the previous state
+        Alert.alert('Error', 'Failed to update notification settings. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error toggling push notifications:', error);
+      // If there's an error, the context state should remain unchanged
+      Alert.alert('Error', 'Failed to update notification settings.');
+    } finally {
+      setPushNotificationLoading(false);
+    }
+  };
+
+
 
   const handleLogout = () => {
     console.log('🔴 PROFILE LOGOUT BUTTON PRESSED!');
@@ -140,16 +190,19 @@ export default function ProfileScreen() {
 
           <View style={styles.switchRow}>
             <View style={styles.switchInfo}>
-              <ThemedText style={styles.switchLabel}>Push Notifications</ThemedText>
+              <ThemedText style={styles.switchLabel}>Sales Push Notifications</ThemedText>
               <ThemedText style={styles.switchDescription}>
-                Get notified about QR code scans
+                Get notified on your phone when customers make purchases
               </ThemedText>
             </View>
             <Switch
-              value={notifications}
-              onValueChange={setNotifications}
+              value={pushNotificationsEnabled}
+              onValueChange={handlePushNotificationToggle}
+              disabled={pushNotificationLoading}
             />
           </View>
+
+
 
           <View style={styles.switchRow}>
             <View style={styles.switchInfo}>
@@ -262,6 +315,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#ddd',
+    color: '#333',
   },
   subscriptionInfo: {
     flexDirection: 'row',
@@ -271,6 +325,7 @@ const styles = StyleSheet.create({
   },
   subscriptionTier: {
     fontWeight: 'bold',
+    color: '#333',
   },
   switchRow: {
     flexDirection: 'row',
@@ -289,6 +344,7 @@ const styles = StyleSheet.create({
   switchLabel: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#333',
   },
   switchDescription: {
     fontSize: 12,
@@ -393,4 +449,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
+
 }); 

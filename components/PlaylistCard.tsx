@@ -15,6 +15,7 @@ interface PlaylistCardProps {
   onView: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onToggleProtection?: () => void;
   onAccessSettings?: () => void;
   showActions?: boolean;
 }
@@ -24,6 +25,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   onView,
   onEdit,
   onDelete,
+  onToggleProtection,
   onAccessSettings,
   showActions = true,
 }) => {
@@ -53,7 +55,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   const thumbnail = getPlaylistThumbnail();
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onView} activeOpacity={0.7}>
+    <View style={styles.card}>
       <View style={styles.content}>
         {/* Thumbnail */}
         <View style={styles.thumbnailContainer}>
@@ -124,14 +126,13 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
           <View style={styles.actions}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={(e) => {
+              onPress={() => {
                 console.log('🔴 PLAYLIST_CARD: Play button pressed for playlist:', {
                   id: playlist.id,
                   name: playlist.name,
                   hasMediaFiles: !!(playlist.mediaFiles && playlist.mediaFiles.length > 0),
                   mediaCount: playlist.mediaFiles?.length || 0
                 });
-                e.stopPropagation();
                 console.log('🔴 PLAYLIST_CARD: Calling onView function...');
                 onView();
                 console.log('🔴 PLAYLIST_CARD: onView function called');
@@ -139,21 +140,34 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             >
               <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />
             </TouchableOpacity>
+            {onToggleProtection && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => {
+                  console.log('🔴 PLAYLIST_CARD: Shield icon pressed for playlist:', playlist.id, 'Current protection:', playlist.requiresActivationCode);
+                  onToggleProtection();
+                }}
+              >
+                <MaterialIcons 
+                  name={(playlist.requiresActivationCode ?? false) ? "lock" : "lock-open"} 
+                  size={20} 
+                  color={(playlist.requiresActivationCode ?? false) ? "#f59e0b" : "#9ca3af"} 
+                />
+              </TouchableOpacity>
+            )}
             {onAccessSettings && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onPress={() => {
                   onAccessSettings();
                 }}
               >
-                <MaterialIcons name="security" size={20} color="#9ca3af" />
+                <MaterialIcons name="settings" size={20} color="#9ca3af" />
               </TouchableOpacity>
             )}
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={(e) => {
-                e.stopPropagation();
+              onPress={() => {
                 // Navigate to product links manager
                 router.push(`/product-links/${playlist.id}`);
               }}
@@ -163,8 +177,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             {onEdit && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onPress={() => {
                   onEdit();
                 }}
               >
@@ -174,8 +187,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
             {onDelete && (
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={(e) => {
-                  e.stopPropagation();
+                onPress={() => {
                   onDelete();
                 }}
               >
@@ -185,7 +197,7 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
           </View>
         )}
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 

@@ -49,11 +49,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       const cancelUrl = base;
       const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        window.location.href = url;
-      } else {
-        await WebBrowser.openBrowserAsync(url);
-      }
+      // Always use WebBrowser to keep app running in background
+      await WebBrowser.openBrowserAsync(url);
+      console.log('🔗 PAYMENT: Opened Stripe checkout in external browser (ProductCard)');
     } catch (err: any) {
       console.error('BuyNow error', err);
       Alert.alert('Error', err.message || 'Failed to start checkout');
@@ -184,6 +182,9 @@ const styles = StyleSheet.create({
   imageContainer: {
     position: 'relative',
     aspectRatio: 1,
+    height: 150,
+    alignSelf: 'center',
+    maxWidth: 150,
   },
   image: {
     width: '100%',

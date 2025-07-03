@@ -63,15 +63,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
+    console.log('🔐 AuthContext: login called');
+    console.log('🔐 AuthContext: email:', email);
+    console.log('🔐 AuthContext: password length:', password.length);
+    
     try {
       setIsLoading(true);
+      console.log('🔐 AuthContext: Calling authService.login...');
       const response = await authService.login({ email, password });
+      console.log('✅ AuthContext: authService.login successful');
+      console.log('✅ AuthContext: response user:', response.user?.username);
+      
       globalAuthState.user = response.user;
       setUser(response.user);
+      console.log('✅ AuthContext: User state updated');
     } catch (error: any) {
+      console.error('❌ AuthContext: Login error:', error);
+      console.error('❌ AuthContext: Error message:', error.message);
+      console.error('❌ AuthContext: Error type:', typeof error);
       throw error;
     } finally {
       setIsLoading(false);
+      console.log('🔐 AuthContext: setIsLoading(false) called');
     }
   };
 
@@ -112,17 +125,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    console.log('🔴 AuthContext: LOGOUT FUNCTION CALLED!');
+    console.log('🔴 AuthContext: Current user before logout:', user?.username);
+    console.log('🔴 AuthContext: isAuthenticated before logout:', !!user);
+    
     try {
       setIsLoading(true);
+      console.log('🔴 AuthContext: Calling authService.logout()...');
       await authService.logout();
+      console.log('🔴 AuthContext: authService.logout() completed');
+      
+      console.log('🔴 AuthContext: Clearing user state...');
       globalAuthState.user = null;
       setUser(null);
+      console.log('🔴 AuthContext: User state cleared');
+      console.log('🔴 AuthContext: New user state:', null);
+      console.log('🔴 AuthContext: New isAuthenticated:', false);
     } catch (error) {
-      console.error('🔴 Auth: Logout error:', error);
+      console.error('🔴 AuthContext: Logout error:', error);
+      console.log('🔴 AuthContext: Error occurred, still clearing user state...');
       globalAuthState.user = null;
       setUser(null);
     } finally {
       setIsLoading(false);
+      console.log('🔴 AuthContext: setIsLoading(false) called');
+      console.log('🔴 AuthContext: 🎉 LOGOUT PROCESS COMPLETE!');
     }
   };
 

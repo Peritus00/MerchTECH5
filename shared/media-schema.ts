@@ -1,4 +1,3 @@
-
 export interface MediaFile {
   id: number;
   userId?: number;
@@ -23,10 +22,26 @@ export interface ProductLink {
   url: string;
   description?: string;
   imageUrl?: string;
+  images?: string[]; // Multiple images for carousel
   displayOrder: number;
   isActive: boolean;
+  price?: string;
+  originalPrice?: string;
+  rating?: number; // 1-5 star rating
+  reviewCount?: number;
   createdAt: string;
   updatedAt?: string;
+}
+
+export interface ChatMessage {
+  id: number;
+  playlistId: number;
+  userId: number;
+  username: string;
+  message: string;
+  createdAt: string;
+  updatedAt?: string;
+  isDeleted: boolean;
 }
 
 export interface Playlist {
@@ -46,6 +61,7 @@ export interface Playlist {
   updatedAt?: string;
   mediaFiles: MediaFile[];
   productLinks?: ProductLink[];
+  chatMessages?: ChatMessage[];
 }
 
 export interface Slideshow {

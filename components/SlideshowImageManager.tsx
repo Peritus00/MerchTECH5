@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -11,9 +10,12 @@ import {
   ActivityIndicator,
   Image,
   TextInput,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { fileUploadAPI, slideshowAPI } from '@/services/api';
 
 interface SlideshowImage {
   id: number;
@@ -52,6 +54,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
   const [images, setImages] = useState<SlideshowImage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [audioUploading, setAudioUploading] = useState(false);
 
   useEffect(() => {
     if (slideshow) {
@@ -76,7 +79,15 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       if (!result.canceled && slideshow) {
         for (let i = 0; i < result.assets.length; i++) {
           setUploadingIndex(i);
-          await uploadImage(result.assets[i].uri, images.length + i);
+          const asset = result.assets[i] as any;
+          let filePayload;
+          if (asset.file) {
+            // Web returns actual File instance
+            filePayload = asset.file;
+          } else {
+            filePayload = { uri: asset.uri, name: asset.uri.split('/').pop() || `image_${Date.now()}.jpg`, type: 'image/jpeg' };
+          }
+          await uploadImage(filePayload, images.length + i);
         }
         setUploadingIndex(null);
       }
@@ -87,26 +98,21 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     }
   };
 
-  const uploadImage = async (imageUri: string, displayOrder: number) => {
+  const uploadImage = async (filePayload: any, displayOrder: number) => {
     if (!slideshow) return;
 
     try {
-      // Mock upload - in real app, upload to your server
-      const newImage: SlideshowImage = {
-        id: Date.now() + Math.random(),
-        slideshowId: slideshow.id,
-        imageUrl: imageUri,
-        caption: '',
-        displayOrder,
-      };
+      const fileUrl = await fileUploadAPI.upload(filePayload);
+      console.log('📤 uploadImage: fileUrl', fileUrl);
+      console.log('📤 uploadImage: calling addImage for slideshow', slideshow.id);
 
-      setImages(prev => [...prev, newImage].sort((a, b) => a.displayOrder - b.displayOrder));
-      
-      // Update the slideshow with new images
-      const updatedSlideshow = {
-        ...slideshow,
-        images: [...images, newImage],
-      };
+      const updatedSlideshow = await slideshowAPI.addImage(slideshow.id, {
+        imageUrl: fileUrl,
+        displayOrder,
+      });
+
+      // Refresh local state from server response
+      setImages(updatedSlideshow.images.sort((a, b) => a.displayOrder - b.displayOrder));
       onImagesUpdated(updatedSlideshow);
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -115,29 +121,37 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
   };
 
   const handleDeleteImage = async (imageId: number) => {
-    Alert.alert(
-      'Delete Image',
-      'Are you sure you want to delete this image?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            const updatedImages = images.filter(img => img.id !== imageId);
-            setImages(updatedImages);
-            
-            if (slideshow) {
-              const updatedSlideshow = {
-                ...slideshow,
-                images: updatedImages,
-              };
-              onImagesUpdated(updatedSlideshow);
-            }
-          },
-        },
-      ]
-    );
+    console.log('🗑️ handleDeleteImage called for', imageId);
+    const confirmDelete = async () => {
+      if (!slideshow) return;
+      console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshow.id);
+      try {
+        const updated = await slideshowAPI.deleteImage(slideshow.id, imageId);
+        console.log('🗑️ deleteImage API success, fresh images length', updated.images.length);
+        setImages(updated.images);
+        onImagesUpdated(updated);
+      } catch (err) {
+        console.error('🗑️ Failed to delete image', err);
+        Alert.alert('Error', 'Failed to delete image');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this image?')) {
+        await confirmDelete();
+      } else {
+        console.log('🗑️ Delete cancelled (web)');
+      }
+    } else {
+      Alert.alert(
+        'Delete Image',
+        'Are you sure you want to delete this image?',
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => console.log('🗑️ Delete cancelled') },
+          { text: 'Delete', style: 'destructive', onPress: confirmDelete },
+        ]
+      );
+    }
   };
 
   const handleUpdateCaption = (imageId: number, caption: string) => {
@@ -152,6 +166,34 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
         images: updatedImages,
       };
       onImagesUpdated(updatedSlideshow);
+    }
+  };
+
+  const handleAddAudio = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: 'audio/*',
+        multiple: false,
+      });
+
+      if (result.canceled || !slideshow) return;
+
+      const file = result.assets[0];
+      setAudioUploading(true);
+
+      const filename = file.name || `audio_${Date.now()}.mp3`;
+      const audioUrlServer = await fileUploadAPI.upload({ uri: file.uri, name: filename, type: file.mimeType || 'audio/mpeg' });
+
+      const updatedSlideshow = await slideshowAPI.updateAudio(slideshow.id, audioUrlServer);
+
+      onImagesUpdated(updatedSlideshow);
+      Alert.alert('Success', 'Audio added to slideshow');
+    } catch (error) {
+      console.error('Error selecting audio:', error);
+      Alert.alert('Error', 'Failed to select audio');
+    } finally {
+      setAudioUploading(false);
     }
   };
 
@@ -180,6 +222,20 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
         <View style={styles.slideshowInfo}>
           <Text style={styles.slideshowName}>{slideshow.name}</Text>
           <Text style={styles.imageCount}>{images.length} images</Text>
+          {slideshow.audioUrl ? (
+            <View style={styles.audioInfo}>
+              <MaterialIcons name="music-note" size={20} color="#1f2937" />
+              <Text style={styles.audioLabel}>Audio attached</Text>
+              <TouchableOpacity onPress={() => handleAddAudio()} style={styles.changeAudioButton}>
+                <Text style={styles.changeAudioText}>Change</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.addAudioButton} onPress={handleAddAudio} disabled={audioUploading}>
+              <MaterialIcons name="music-note" size={24} color="#3b82f6" />
+              <Text style={styles.addAudioText}>{audioUploading ? 'Uploading...' : 'Add Background Music'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -203,7 +259,11 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
                     
                     <TouchableOpacity
                       style={styles.deleteImageButton}
-                      onPress={() => handleDeleteImage(image.id)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => {
+                        console.log('🗑️ Delete button pressed for image', image.id);
+                        handleDeleteImage(image.id);
+                      }}
                     >
                       <MaterialIcons name="delete" size={16} color="#ef4444" />
                     </TouchableOpacity>
@@ -383,6 +443,35 @@ const styles = StyleSheet.create({
   uploadText: {
     fontSize: 14,
     color: '#3b82f6',
+  },
+  addAudioButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  addAudioText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+  audioInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  audioLabel: {
+    fontSize: 14,
+    color: '#1f2937',
+  },
+  changeAudioButton: {
+    marginLeft: 8,
+  },
+  changeAudioText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '500',
   },
 });
 

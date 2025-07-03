@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>this is it - MerchTech</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      color: white;
+    }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .playlist-title { font-size: 2.5rem; margin-bottom: 10px; }
+    .playlist-subtitle { opacity: 0.8; font-size: 1.1rem; }
+    .activation-section { 
+      background: rgba(255,255,255,0.1); 
+      border-radius: 20px; 
+      padding: 30px; 
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .activation-input { 
+      width: 100%; 
+      max-width: 300px; 
+      padding: 15px; 
+      border: none; 
+      border-radius: 10px; 
+      font-size: 1.1rem;
+      margin: 15px 0;
+      text-align: center;
+      background: rgba(255,255,255,0.9);
+      color: #333;
+    }
+    .activation-button { 
+      background: #10b981; 
+      border: none; 
+      color: white; 
+      padding: 15px 30px; 
+      border-radius: 10px; 
+      cursor: pointer;
+      font-size: 1.1rem;
+      margin: 10px;
+    }
+    .activation-button:hover { background: #059669; }
+    .preview-button { 
+      background: #f59e0b; 
+      border: none; 
+      color: white; 
+      padding: 15px 30px; 
+      border-radius: 10px; 
+      cursor: pointer;
+      font-size: 1.1rem;
+      margin: 10px;
+    }
+    .preview-button:hover { background: #d97706; }
+    .app-download { 
+      background: rgba(255,255,255,0.1); 
+      border-radius: 20px; 
+      padding: 20px; 
+      text-align: center;
+      margin-top: 30px;
+    }
+    .download-button { 
+      background: #3b82f6; 
+      border: none; 
+      color: white; 
+      padding: 15px 30px; 
+      border-radius: 10px; 
+      cursor: pointer;
+      font-size: 1.1rem;
+      margin: 10px;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .download-button:hover { background: #2563eb; }
+    .player-section { 
+      background: rgba(255,255,255,0.1); 
+      border-radius: 20px; 
+      padding: 30px; 
+      margin-bottom: 30px;
+      display: none;
+    }
+    .current-track { 
+      text-align: center; 
+      margin: 20px 0; 
+      font-size: 1.2rem; 
+      font-weight: bold;
+    }
+    .preview-timer { 
+      text-align: center; 
+      font-size: 1.5rem; 
+      color: #f59e0b; 
+      margin: 20px 0;
+      display: none;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 class="playlist-title">this is it</h1>
+      <p class="playlist-subtitle">Protected Content • Premium Access Required</p>
+    </div>
+
+    <div class="activation-section" id="activationSection">
+      <h2>🔐 This playlist requires an activation code</h2>
+      <p style="margin: 15px 0; opacity: 0.9;">Enter your activation code for full access, or try a 30-second preview</p>
+      <div>
+        <input type="text" id="activationCode" class="activation-input" placeholder="Enter activation code" maxlength="20">
+        <br>
+        <button class="activation-button" onclick="validateActivationCode()">🔓 Unlock Playlist</button>
+        <button class="preview-button" onclick="startPreview()">▶️ 30s Preview</button>
+      </div>
+    </div>
+
+    <div class="player-section" id="playerSection">
+      <div class="current-track" id="currentTrack">Access granted! Playlist unlocked.</div>
+      <div class="preview-timer" id="previewTimer">
+        Preview: <span id="timeLeft">30</span>s remaining
+      </div>
+      <p style="text-align: center; margin: 20px 0;">
+        🎵 This is where your playlist content would appear<br>
+        <em>Media files, player controls, track listings, etc.</em>
+      </p>
+    </div>
+
+    <div class="app-download">
+      <h3>🚀 Get the full MerchTech experience!</h3>
+      <p style="margin: 15px 0; opacity: 0.9;">
+        Download our app for the best experience, save your activation codes, and never lose access to your content.
+      </p>
+      <a href="#" class="download-button">📱 Download App</a>
+    </div>
+  </div>
+
+  <script>
+    let previewTimer = null;
+    let timeLeft = 30;
+
+    function validateActivationCode() {
+      const code = document.getElementById('activationCode').value.trim();
+      if (!code) {
+        alert('Please enter an activation code');
+        return;
+      }
+
+      // For demo, accept any code that's 6+ characters
+      if (code.length >= 6) {
+        document.getElementById('activationSection').style.display = 'none';
+        document.getElementById('playerSection').style.display = 'block';
+        alert('✅ Access granted! Enjoy the full playlist.');
+      } else {
+        alert('❌ Invalid activation code. Please try again or use the preview option.');
+      }
+    }
+
+    function startPreview() {
+      document.getElementById('activationSection').style.display = 'none';
+      document.getElementById('playerSection').style.display = 'block';
+      document.getElementById('previewTimer').style.display = 'block';
+      timeLeft = 30;
+      
+      alert('🎵 Starting 30-second preview. Download the app to save your progress!');
+      
+      previewTimer = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timeLeft').textContent = timeLeft;
+        
+        if (timeLeft <= 0) {
+          clearInterval(previewTimer);
+          alert('⏰ Preview time expired! Download the app or enter an activation code for full access.');
+          document.getElementById('activationSection').style.display = 'block';
+          document.getElementById('playerSection').style.display = 'none';
+          document.getElementById('previewTimer').style.display = 'none';
+        }
+      }, 1000);
+    }
+  </script>
+</body>
+</html> 

@@ -12,7 +12,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { QRCodeGenerator } from '@/components/QRCodeGenerator';
+import { AdvancedQRCodeGenerator } from '@/components/AdvancedQRCodeGenerator';
 import { qrCodeService } from '@/services/qrCodeService';
 import { downloadQRCode, shareQRCode, QRCodeFormat } from '@/services/qrUtils';
 import { captureRef } from 'react-native-view-shot';
@@ -174,10 +174,15 @@ export default function QRCodeDetailsScreen() {
         {/* QR Code Preview */}
         <View style={styles.qrSection}>
           <View ref={qrRef} style={styles.qrContainer}>
-            <QRCodeGenerator
+            <AdvancedQRCodeGenerator
               value={currentQRCode?.url || ''}
               size={280}
-              options={currentQRCode?.options}
+              fgColor={currentQRCode?.options?.foregroundColor || '#000000'}
+              bgColor={currentQRCode?.options?.backgroundColor || '#FFFFFF'}
+              level={currentQRCode?.options?.errorCorrectionLevel || 'H'}
+              cornerRadius={currentQRCode?.options?.cornerRadius || 0}
+              gradientColors={currentQRCode?.options?.gradientColors}
+              logoOptions={currentQRCode?.options?.logo}
             />
           </View>
         </View>

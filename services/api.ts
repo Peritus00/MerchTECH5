@@ -1,23 +1,23 @@
 import axios from 'axios';
 import { Product } from '@/shared/product-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { env } from '@/config/environment';
 
-// Rely on the environment variable set in your .env file
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.70:5001/api';
+// Use centralized environment configuration
+const API_BASE_URL = env.apiBaseUrl;
 
-console.log('✅ API configured to use public URL:', API_BASE_URL);
-console.log('🔍 Environment check:', {
-  EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
-  NODE_ENV: process.env.NODE_ENV,
-  finalURL: API_BASE_URL
-});
+console.log('✅ API configured with centralized environment config');
+if (env.isDevelopment) {
+  console.log('🔍 Environment details:', {
+    environment: env.nodeEnv,
+    apiUrl: API_BASE_URL,
+    isProduction: env.isProduction
+  });
+}
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60000, // Increased timeout for Android
-  headers: {
-    'Content-Type': 'application/json',
-  },
 });
 
 // Add response interceptor for better error handling
@@ -57,6 +57,14 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    // If data is plain object (not FormData), default to JSON
+    if (
+      config.data &&
+      typeof config.data === 'object' &&
+      !(typeof window !== 'undefined' && config.data instanceof FormData)
+    ) {
+      config.headers['Content-Type'] = 'application/json';
+    }
     return config;
   },
   (error) => {
@@ -82,8 +90,31 @@ export const healthAPI = {
 // Auth API endpoints
 export const authAPI = {
   async login(email: string, password: string) {
-    const response = await api.post('/auth/login', { email, password });
-    return response.data;
+    console.log('🔐 AuthAPI: Starting login request');
+    console.log('🔐 Email:', email);
+    console.log('🔐 API Base URL:', API_BASE_URL);
+    console.log('🔐 Full URL will be:', `${API_BASE_URL}/auth/login`);
+    console.log('🔐 Environment variable EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    
+    try {
+      const response = await api.post('/auth/login', { email, password });
+      console.log('✅ AuthAPI: Login successful:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ AuthAPI: Login failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method
+        }
+      });
+      throw error;
+    }
   },
 
   async register(email: string, password: string, username: string) {
@@ -244,6 +275,105 @@ export const playlistAPI = {
   },
 };
 
+// Slideshow API
+export const slideshowAPI = {
+  async create(slideshowData: any) {
+    console.log('📤 SlideshowAPI: Creating slideshow');
+    const res = await api.post('/slideshows', slideshowData);
+    return res.data.slideshow;
+  },
+  async getAll() {
+    const res = await api.get('/slideshows');
+    return res.data.slideshows;
+  },
+  async getById(id: string) {
+    const res = await api.get(`/slideshows/${id}`);
+    return res.data.slideshow;
+  },
+  async update(id: string, updates: any) {
+    const res = await api.patch(`/slideshows/${id}`, updates);
+    return res.data.slideshow;
+  },
+  async delete(id: string) {
+    const res = await api.delete(`/slideshows/${id}`);
+    return res.data;
+  },
+  async addImage(slideshowId: number | string, data: { imageUrl: string; caption?: string; displayOrder?: number }) {
+    console.log('📤 slideshowAPI.addImage: req', slideshowId, data);
+    const res = await api.post(`/slideshows/${slideshowId}/images`, data);
+    console.log('📤 slideshowAPI.addImage: res', res.data);
+    return res.data.slideshow;
+  },
+  async deleteImage(slideshowId: number | string, imageId: number | string) {
+    console.log('📤 slideshowAPI.deleteImage: req', slideshowId, imageId);
+    const res = await api.delete(`/slideshows/${slideshowId}/images/${imageId}`);
+    console.log('📤 slideshowAPI.deleteImage: res', res.data);
+    return res.data.slideshow;
+  },
+  async updateAudio(slideshowId: number | string, audioUrl: string) {
+    const res = await api.patch(`/slideshows/${slideshowId}/audio`, { audioUrl });
+    return res.data.slideshow;
+  },
+};
+
+// QR Code API
+export const qrCodeAPI = {
+  async create(qrData: any) {
+    console.log('📱 QRCodeAPI: ============ API CREATE DEBUG START ============');
+    console.log('📱 QRCodeAPI: Creating QR code with data:', JSON.stringify(qrData, null, 2));
+    console.log('📱 QRCodeAPI: API Base URL:', API_BASE_URL);
+    console.log('📱 QRCodeAPI: Full endpoint will be:', `${API_BASE_URL}/qr-codes`);
+    
+    try {
+      console.log('📱 QRCodeAPI: About to make POST request...');
+      const res = await api.post('/qr-codes', qrData);
+      console.log('📱 QRCodeAPI: POST request successful');
+      console.log('📱 QRCodeAPI: Response status:', res.status);
+      console.log('📱 QRCodeAPI: Response data:', JSON.stringify(res.data, null, 2));
+      console.log('📱 QRCodeAPI: ============ API CREATE DEBUG END ============');
+      return res.data.qrCode;
+    } catch (error: any) {
+      console.error('📱 QRCodeAPI: ============ API CREATE ERROR DEBUG START ============');
+      console.error('📱 QRCodeAPI: POST request failed:', error);
+      console.error('📱 QRCodeAPI: Error message:', error.message);
+      
+      if (error.response) {
+        console.error('📱 QRCodeAPI: Error response details:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data,
+          headers: error.response.headers
+        });
+      } else if (error.request) {
+        console.error('📱 QRCodeAPI: Network error - no response:', error.request);
+      }
+      
+      console.error('📱 QRCodeAPI: ============ API CREATE ERROR DEBUG END ============');
+      throw error;
+    }
+  },
+  async getAll() {
+    console.log('📱 QRCodeAPI: Fetching all QR codes');
+    const res = await api.get('/qr-codes');
+    return res.data.qrCodes;
+  },
+  async getById(id: string) {
+    console.log('📱 QRCodeAPI: Fetching QR code by ID:', id);
+    const res = await api.get(`/qr-codes/${id}`);
+    return res.data.qrCode;
+  },
+  async update(id: string, updates: any) {
+    console.log('📱 QRCodeAPI: Updating QR code:', id);
+    const res = await api.patch(`/qr-codes/${id}`, updates);
+    return res.data.qrCode;
+  },
+  async delete(id: string) {
+    console.log('📱 QRCodeAPI: Deleting QR code:', id);
+    const res = await api.delete(`/qr-codes/${id}`);
+    return res.data;
+  },
+};
+
 // Activation Codes API
 export const activationCodesAPI = {
   // Generate new activation code
@@ -307,6 +437,46 @@ export const activationCodesAPI = {
     console.log('🔑 ActivationCodesAPI: Deleting code:', codeId);
     const res = await api.delete(`/activation-codes/${codeId}`);
     return res.data;
+  },
+};
+
+// Chat API
+export const chatAPI = {
+  async getMessages(playlistId: string, limit = 50, offset = 0) {
+    console.log('📤 ChatAPI: Fetching messages for playlist:', playlistId);
+    const res = await api.get(`/playlists/${playlistId}/chat?limit=${limit}&offset=${offset}`);
+    return res.data.messages;
+  },
+  async sendMessage(playlistId: string, message: string) {
+    console.log('📤 ChatAPI: Sending message to playlist:', playlistId);
+    const res = await api.post(`/playlists/${playlistId}/chat`, { message });
+    return res.data.message;
+  },
+  async deleteMessage(playlistId: string, messageId: string) {
+    console.log('📤 ChatAPI: Deleting message:', messageId);
+    const res = await api.delete(`/playlists/${playlistId}/chat/${messageId}`);
+    return res.data;
+  },
+};
+
+export const fileUploadAPI = {
+  async upload(file: any) {
+    const formData = new FormData();
+    let payload: any;
+    if (file instanceof File) {
+      payload = file; // Web direct
+    } else if (typeof window !== 'undefined') {
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      payload = new File([blob], file.name, { type: file.type });
+    } else {
+      payload = { uri: file.uri, name: file.name, type: file.type } as any;
+    }
+    formData.append('file', payload, file.name ?? (payload.name || 'upload'));
+    // Let axios set the correct multipart boundary; specifying the header manually
+    // can omit the boundary and lead to 400 errors on some environments.
+    const res = await api.post('/upload', formData);
+    return res.data.fileUrl as string;
   },
 };
 

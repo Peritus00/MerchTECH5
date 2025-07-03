@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ShareButton from '@/components/ShareButton';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 import SubscriptionLimitsCard from '@/components/SubscriptionLimitsCard';
+import { env } from '@/config/environment';
 
 // --- Helpers -------------------------------------------------------------
 const normalizeProduct = (p: any): Product => ({
@@ -35,29 +36,28 @@ export default function MyStoreManager() {
   const [editing, setEditing] = useState<Product | null>(null);
   const router = useRouter();
   const { user } = useAuth();
-  const { canCreate, refresh: refreshLimits } = useSubscriptionLimits();
+  const { canCreate, refresh: refreshLimits, usage, limits, tier, isLoading: limitsLoading } = useSubscriptionLimits();
 
   // Generate shareable store URL
   const getStoreUrl = () => {
-    const baseUrl = 'https://merchtech.net';
-    return `${baseUrl}/store/user/${user?.id || 'unknown'}`;
+    return `${env.apiBaseUrl.replace('/api', '')}/store/user/${user?.id}`;
   };
 
   const getStoreTitle = () => {
-    return `${user?.firstName || user?.username || 'My'}'s Store`;
+    return `${user?.username || 'My'} Store - MerchTech`;
   };
 
   const copyStoreUrl = async () => {
-    const url = getStoreUrl();
     try {
       if (Platform.OS === 'web') {
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(getStoreUrl());
       } else {
-        Clipboard.setString(url);
+        await Clipboard.setStringAsync(getStoreUrl());
       }
-      Alert.alert('Success', 'Store URL copied to clipboard!');
+      Alert.alert('Success', 'Store link copied to clipboard!');
     } catch (error) {
-      Alert.alert('Error', 'Failed to copy URL');
+      console.error('Failed to copy:', error);
+      Alert.alert('Error', 'Failed to copy link');
     }
   };
 
@@ -70,8 +70,8 @@ export default function MyStoreManager() {
       const items = await productsAPI.getMyProducts();
       setProducts(items.map(normalizeProduct));
     } catch (error) {
-      console.error(error);
-      Alert.alert('Error', 'Could not load products');
+      console.error('Failed to fetch products:', error);
+      Alert.alert('Error', 'Unable to load products.');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -149,21 +149,59 @@ export default function MyStoreManager() {
   };
 
   const handleAddNew = () => {
-    // Check subscription limits before allowing product creation
-    const canCreateProduct = canCreate('products');
-    
-    if (!canCreateProduct.allowed) {
-      Alert.alert(
-        'Product Limit Reached',
-        canCreateProduct.message,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade Plan', onPress: () => router.push('/subscription') }
-        ]
-      );
+    console.log('🔍 DEBUG: + button clicked');
+    console.log('🔍 DEBUG: limitsLoading:', limitsLoading);
+    console.log('🔍 DEBUG: usage:', usage);
+    console.log('🔍 DEBUG: limits:', limits);
+    console.log('🔍 DEBUG: tier:', tier);
+
+    // Wait for subscription data to load before checking limits
+    if (limitsLoading) {
+      console.log('🔍 DEBUG: Still loading, returning early');
       return;
     }
 
+    // Check subscription limits before allowing product creation
+    const canCreateProduct = canCreate('products');
+    console.log('🔍 DEBUG: canCreateProduct result:', canCreateProduct);
+    
+    if (!canCreateProduct.allowed) {
+      const currentCount = usage.products;
+      const maxCount = limits.maxProducts;
+      const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+      
+      console.log('🔍 DEBUG: Showing alert with:', { currentCount, maxCount, tierName });
+      
+      const alertMessage = `You have reached your limit of ${maxCount} products on the ${tierName} plan.\n\nCurrent usage: ${currentCount}/${maxCount} products\n\nWould you like to upgrade to create more products?`;
+      
+      if (Platform.OS === 'web') {
+        // Use native browser confirm for web
+        const shouldUpgrade = window.confirm(`📦 Product Limit Reached\n\n${alertMessage}`);
+        if (shouldUpgrade) {
+          router.push('/subscription');
+        }
+      } else {
+        // Use React Native Alert for mobile
+        Alert.alert(
+          '📦 Product Limit Reached',
+          alertMessage,
+          [
+            { 
+              text: 'Cancel', 
+              style: 'cancel' 
+            },
+            { 
+              text: 'Upgrade Plan', 
+              style: 'default',
+              onPress: () => router.push('/subscription')
+            }
+          ]
+        );
+      }
+      return;
+    }
+
+    console.log('🔍 DEBUG: Limits check passed, opening modal');
     setEditing({
       id: 'new',
       name: '',

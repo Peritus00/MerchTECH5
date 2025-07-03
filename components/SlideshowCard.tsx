@@ -1,4 +1,3 @@
-
 import React from 'react';
 import {
   View,
@@ -36,6 +35,8 @@ interface SlideshowCardProps {
   onEdit: () => void;
   onDelete: () => void;
   onManageImages: () => void;
+  onPreview: () => void;
+  onLinkProducts: () => void;
 }
 
 const SlideshowCard: React.FC<SlideshowCardProps> = ({
@@ -43,9 +44,14 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
   onEdit,
   onDelete,
   onManageImages,
+  onPreview,
+  onLinkProducts,
 }) => {
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return '--';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return '--';
+    return d.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -62,7 +68,12 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
     return transitions[transition] || transition;
   };
 
-  const thumbnailImage = slideshow.images.length > 0 ? slideshow.images[0] : null;
+  const imagesArr = slideshow.images ?? [];
+  const thumbnailImage = imagesArr.length > 0 ? imagesArr[0] : null;
+
+  const intervalSeconds = typeof slideshow.autoplayInterval === 'number' && !isNaN(slideshow.autoplayInterval)
+    ? Math.round(slideshow.autoplayInterval / 1000)
+    : null;
 
   return (
     <View style={styles.card}>
@@ -76,7 +87,7 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
           </View>
         )}
         <View style={styles.imageCountBadge}>
-          <Text style={styles.imageCountText}>{slideshow.images.length}</Text>
+          <Text style={styles.imageCountText}>{imagesArr.length}</Text>
         </View>
       </View>
 
@@ -96,11 +107,11 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
           <View style={styles.metadataRow}>
             <MaterialIcons name="timer" size={14} color="#6b7280" />
             <Text style={styles.metadataText}>
-              {slideshow.autoplayInterval / 1000}s intervals
+              {intervalSeconds !== null ? `${intervalSeconds}s intervals` : '—'}
             </Text>
           </View>
           <View style={styles.metadataRow}>
-            <MaterialIcons name="transition-slide" size={14} color="#6b7280" />
+            <MaterialIcons name="swap-horiz" size={14} color="#6b7280" />
             <Text style={styles.metadataText}>
               {getTransitionLabel(slideshow.transition)}
             </Text>
@@ -121,6 +132,14 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
 
       {/* Actions */}
       <View style={styles.actions}>
+        <TouchableOpacity style={[styles.actionButton, styles.previewButton]} onPress={onPreview}>
+          <MaterialIcons name="play-arrow" size={18} color="#10b981" />
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.actionButton} onPress={onLinkProducts}>
+          <MaterialIcons name="link" size={18} color="#3b82f6" />
+        </TouchableOpacity>
+        
         <TouchableOpacity style={styles.actionButton} onPress={onManageImages}>
           <MaterialIcons name="photo-library" size={18} color="#3b82f6" />
         </TouchableOpacity>
@@ -131,18 +150,9 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
         
         <TouchableOpacity 
           style={styles.deleteButton} 
-          onPress={() => {
-            Alert.alert(
-              'Delete Slideshow',
-              'Are you sure you want to delete this slideshow?',
-              [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Delete', style: 'destructive', onPress: onDelete },
-              ]
-            );
-          }}
+          onPress={onDelete}
         >
-          <MaterialIcons name="delete" size={18} color="#ef4444" />
+          <MaterialIcons name="delete" size={18} color="#ffffff" />
         </TouchableOpacity>
       </View>
     </View>
@@ -257,12 +267,17 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#f8fafc',
   },
+  previewButton: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#10b981',
+  },
   deleteButton: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 8,
     borderRadius: 6,
-    backgroundColor: '#fef2f2',
+    backgroundColor: '#ef4444',
   },
 });
 

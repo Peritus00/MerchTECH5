@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
@@ -60,15 +61,14 @@ export default function SubscriptionCheckoutScreen() {
 
       const result = await response.json();
 
-      // **THE FIX**: Check for the 'url' property directly from the response.
+      // **FIXED**: Always use external browser to keep app running
       if (result.url) {
-        if (Platform.OS === 'web') {
-          window.location.href = result.url; // Redirect to Stripe for web
-        } else {
-          // For mobile, you would use Expo's WebBrowser
-          const { WebBrowser } = require('expo-web-browser');
-          await WebBrowser.openBrowserAsync(result.url);
-        }
+        // Always use WebBrowser.openBrowserAsync to open in external browser
+        // This keeps the app running in the background while user completes payment
+        await WebBrowser.openBrowserAsync(result.url);
+        
+        console.log('🔗 PAYMENT: Opened Stripe checkout in external browser');
+        console.log('✅ PAYMENT: App remains running in background');
       } else {
         throw new Error(result.error || 'Failed to get checkout session URL');
       }

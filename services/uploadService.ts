@@ -8,11 +8,11 @@ class UploadService {
     if (Platform.OS === 'web') {
       const response = await fetch(uri);
       const blob = await response.blob();
-      formData.append('image', blob, `photo.${blob.type.split('/')[1]}`);
+      formData.append('file', blob, `photo.${blob.type.split('/')[1]}`);
     } else {
       const uriParts = uri.split('.');
       const fileType = uriParts[uriParts.length - 1];
-      formData.append('image', {
+      formData.append('file', {
         uri,
         name: `photo.${fileType}`,
         type: `image/${fileType}`,
@@ -25,7 +25,7 @@ class UploadService {
       },
     });
 
-    return response.data;
+    return { imageUrl: response.data.fileUrl };
   }
 }
 

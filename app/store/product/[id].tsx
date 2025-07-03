@@ -78,11 +78,10 @@ export default function ProductDetailsScreen() {
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = `${base}/store/checkout-cancel`;
       const { url } = await checkoutAPI.createSession([{ productId: product.id, quantity: 1 }], successUrl, cancelUrl);
-      if (Platform.OS === 'web') {
-        window.location.href = url;
-      } else {
-        await WebBrowser.openBrowserAsync(url);
-      }
+      
+      // Always use WebBrowser to keep app running in background
+      await WebBrowser.openBrowserAsync(url);
+      console.log('🔗 PAYMENT: Opened Stripe checkout in external browser (Product Detail)');
     } catch (err) {
       console.error('BuyNow error', err);
     }

@@ -13,9 +13,17 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-const uploadsDir = path.join(__dirname, 'uploads');
+// Use a single uploads directory at the project root so that static
+// file URLs work consistently in all deployment / execution contexts.
+// __dirname here is   services/Server  so we go two levels up.
+const uploadsDir = path.join(__dirname, '../../uploads');
+
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
+  // Create recursively in case the ancestor path does not exist yet.
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log(`✅ Created uploads directory: ${uploadsDir}`);
+} else {
+  console.log(`📂 Uploads directory already exists: ${uploadsDir}`);
 }
 
 const storage = multer.diskStorage({
@@ -93,6 +101,11 @@ app.get('/api/health', async (req, res) => {
   } catch (error) {
     res.status(503).json({ status: 'unhealthy', database: 'disconnected' });
   }
+});
+
+// Simple test route
+app.get('/simple-test', (req, res) => {
+  res.send('Simple test route works!');
 });
 
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
@@ -179,7 +192,8 @@ app.post('/api/auth/send-verification', async (req, res) => {
 
     await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
 
-    const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    const verificationUrl = `${frontendUrl}/auth/verify?token=${verificationToken}`;
 
     await transporter.sendMail({
       from: '"MerchTech QR" <help@merchtech.net>',
@@ -210,7 +224,8 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
       return res.status(400).json({ error: 'Token is invalid or user is already verified.' });
     }
 
-    res.redirect(`http://localhost:8081/auth/verification-success`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    res.redirect(`${frontendUrl}/auth/verification-success`);
 
   } catch (error) {
     console.error('🔴 VERIFY EMAIL ERROR:', error);
@@ -595,12 +610,17 @@ app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
-app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
+app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+  console.log('🖼️ UPLOAD: headers', req.headers['content-type']);
+  console.log('🖼️ UPLOAD: req.body keys', Object.keys(req.body||{}));
+  console.log('🖼️ UPLOAD: req.file', req.file);
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ imageUrl: fileUrl });
+  console.log(`🖼️ UPLOAD: saved file at ${req.file.path}`);
+  console.log(`🖼️ UPLOAD: returning fileUrl ${fileUrl}`);
+  res.json({ fileUrl });
 });
 
 // ---------- MEDIA ROUTES ----------
@@ -708,10 +728,10 @@ app.get('/api/media/:id', async (req, res) => {
     let properUrl = media.url;
     if (media.url && media.url.startsWith('data:')) {
       // If it's base64 data, serve it through our audio streaming endpoint
-      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/api/media/${id}/stream`;
+      properUrl = `${process.env.API_BASE_URL || 'http://localhost:5001'}/api/media/${id}/stream`;
     } else if (media.filename) {
       // If we have a filename, construct the proper URL
-              properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/uploads/${media.filename}`;
+              properUrl = `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${media.filename}`;
     }
     
     // Return media with the proper URL structure expected by the frontend
@@ -746,13 +766,30 @@ app.get('/api/media/:id/stream', async (req, res) => {
       return res.status(400).json({ error: 'Media file is not stored as base64 data' });
     }
     
+    // Clean up the data URL - handle potential duplicate prefixes
+    let cleanUrl = media.url;
+    if (cleanUrl.includes('data:audio/mpeg;base64,data:audio/mpeg;base64,')) {
+      cleanUrl = cleanUrl.replace('data:audio/mpeg;base64,data:audio/mpeg;base64,', 'data:audio/mpeg;base64,');
+    }
+    
     // Parse the data URL
-    const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
+    const dataUrlMatch = cleanUrl.match(/^data:([^;]+);base64,(.+)$/);
     if (!dataUrlMatch) {
+      console.error('Failed to parse data URL:', cleanUrl.substring(0, 100));
       return res.status(400).json({ error: 'Invalid base64 data format' });
     }
     
-    const [, mimeType, base64Data] = dataUrlMatch;
+    let [, mimeType, base64Data] = dataUrlMatch;
+    
+    // Handle case where base64Data itself contains another data URL
+    if (base64Data.startsWith('data:')) {
+      const innerMatch = base64Data.match(/^data:([^;]+);base64,(.+)$/);
+      if (innerMatch) {
+        console.log('Found nested data URL, extracting inner base64');
+        mimeType = innerMatch[1];
+        base64Data = innerMatch[2];
+      }
+    }
     const audioBuffer = Buffer.from(base64Data, 'base64');
     
     // Set appropriate headers for audio streaming
@@ -900,7 +937,7 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     }
 
     // Fetch complete playlist with media files
-    const completePlaylist = await getPlaylistWithMedia(playlist.id);
+    const completePlaylist = await getPlaylistWithMedia(playlist.id, req);
     res.status(201).json({ playlist: completePlaylist });
   } catch (error) {
     console.error('Error creating playlist:', error);
@@ -921,7 +958,7 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
 
     const playlists = await Promise.all(
       result.rows.map(async (playlist) => {
-        return await getPlaylistWithMedia(playlist.id);
+        return await getPlaylistWithMedia(playlist.id, req);
       })
     );
 
@@ -935,7 +972,7 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
 app.get('/api/playlists/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const playlist = await getPlaylistWithMedia(id);
+    const playlist = await getPlaylistWithMedia(id, req);
     
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' });
@@ -953,35 +990,48 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { name, description, requiresActivationCode, isPublic } = req.body;
 
+    console.log('🔴 PLAYLIST_PATCH: Updating playlist:', id);
+    console.log('🔴 PLAYLIST_PATCH: Request body:', { name, description, requiresActivationCode, isPublic });
+    console.log('🔴 PLAYLIST_PATCH: User ID:', req.user.userId);
+
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
       'SELECT user_id FROM playlists WHERE id = $1',
       [id]
     );
 
+    console.log('🔴 PLAYLIST_PATCH: Owner check result:', ownerCheck.rows);
+
     if (ownerCheck.rows.length === 0) {
+      console.log('🔴 PLAYLIST_PATCH: Playlist not found');
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      console.log('🔴 PLAYLIST_PATCH: Not authorized - owner:', ownerCheck.rows[0].user_id, 'user:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to update this playlist' });
     }
 
+    console.log('🔴 PLAYLIST_PATCH: About to run UPDATE query...');
     const result = await pool.query(
       `UPDATE playlists 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description), 
            requires_activation_code = COALESCE($3, requires_activation_code), 
-           is_public = COALESCE($4, is_public),
-           updated_at = NOW()
+           is_public = COALESCE($4, is_public)
        WHERE id = $5 RETURNING *`,
       [name, description, requiresActivationCode, isPublic, id]
     );
 
-    const updatedPlaylist = await getPlaylistWithMedia(id);
+    console.log('🔴 PLAYLIST_PATCH: UPDATE query successful, result:', result.rows[0]);
+
+    const updatedPlaylist = await getPlaylistWithMedia(id, req);
+    console.log('🔴 PLAYLIST_PATCH: getPlaylistWithMedia result:', updatedPlaylist);
+    
     res.json({ playlist: updatedPlaylist });
   } catch (error) {
-    console.error('Error updating playlist:', error);
+    console.error('🔴 PLAYLIST_PATCH: Error updating playlist:', error);
+    console.error('🔴 PLAYLIST_PATCH: Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to update playlist' });
   }
 });
@@ -1014,8 +1064,23 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to get the correct API base URL from request
+function getApiBaseUrl(req) {
+  // For web requests, use the request host
+  if (req && req.headers && req.headers.host) {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const host = req.headers.host;
+    return `${protocol}://${host}`;
+  }
+  
+  // Fallback to environment variable or localhost
+  return process.env.API_BASE_URL?.replace('/api', '') || 'http://localhost:5001';
+}
+
 // Helper function to get playlist with media files
-async function getPlaylistWithMedia(playlistId) {
+async function getPlaylistWithMedia(playlistId, req = null) {
+  console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
+  
   const playlistResult = await pool.query(
     `SELECT p.*, u.username 
      FROM playlists p 
@@ -1025,10 +1090,12 @@ async function getPlaylistWithMedia(playlistId) {
   );
 
   if (playlistResult.rows.length === 0) {
+    console.log('🔴 GET_PLAYLIST: Playlist not found:', playlistId);
     return null;
   }
 
   const playlist = playlistResult.rows[0];
+  console.log('🔴 GET_PLAYLIST: Raw playlist data:', playlist);
 
   // Get media files for this playlist
   const mediaResult = await pool.query(
@@ -1040,16 +1107,73 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
+  // Use the correct base URL based on the request
+  const baseUrl = getApiBaseUrl(req);
+  console.log('🔴 GET_PLAYLIST: Using base URL:', baseUrl);
+
   playlist.mediaFiles = mediaResult.rows.map(media => ({
     id: media.id,
     title: media.title,
     filePath: `/uploads/${media.filename}`,
     fileType: media.file_type,
     contentType: media.content_type,
-    url: `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${media.filename}`,
+    url: `${baseUrl}/api/media/${media.id}/stream`,
   }));
 
-  return playlist;
+  // Get product links for this playlist
+  const productLinksResult = await pool.query(
+    `SELECT pl.*, p.name as product_name, p.description as product_description, p.images as product_images, p.price as product_price
+     FROM product_links pl 
+     LEFT JOIN products p ON pl.product_id = p.id 
+     WHERE pl.playlist_id = $1 AND pl.is_active = true
+     ORDER BY pl.display_order`,
+    [playlistId]
+  );
+
+  playlist.productLinks = productLinksResult.rows.map(link => ({
+    id: link.id,
+    playlistId: link.playlist_id,
+    productId: link.product_id,
+    title: link.title,
+    url: link.url,
+    description: link.description,
+    imageUrl: link.image_url || (link.product_images && link.product_images.length > 0 ? link.product_images[0] : null),
+    displayOrder: link.display_order,
+    isActive: link.is_active,
+    createdAt: link.created_at,
+    updatedAt: link.updated_at,
+    // Include product info for reference
+    product: link.product_id ? {
+      id: link.product_id,
+      name: link.product_name,
+      description: link.product_description,
+      images: link.product_images,
+      price: link.product_price
+    } : null
+  }));
+
+  console.log('🔴 GET_PLAYLIST: Found', playlist.productLinks.length, 'product links');
+
+  // Convert snake_case fields to camelCase for frontend compatibility
+  const convertedPlaylist = {
+    ...playlist,
+    requiresActivationCode: playlist.requires_activation_code,
+    isPublic: playlist.is_public,
+    userId: playlist.user_id,
+    createdAt: playlist.created_at,
+    updatedAt: playlist.updated_at
+  };
+  
+  console.log('🔴 GET_PLAYLIST: Converted playlist data:', {
+    id: convertedPlaylist.id,
+    name: convertedPlaylist.name,
+    requiresActivationCode: convertedPlaylist.requiresActivationCode,
+    requires_activation_code: playlist.requires_activation_code,
+    isPublic: convertedPlaylist.isPublic,
+    is_public: playlist.is_public
+  });
+  
+  return convertedPlaylist;
 }
 
 // ---------- STRIPE UTILITY ROUTES ----------
@@ -1152,6 +1276,7 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
       line_items,
       success_url: successUrl || `${req.protocol}://${req.get('host')}/store/checkout/success`,
       cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/store/checkout/cancel`,
+      phone_number_collection: { enabled: true }, // <-- Collect phone number
       metadata: {
         userId: req.user.userId,
       },
@@ -1161,6 +1286,416 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Checkout session error:', err);
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ---------- PRODUCT LINKS API ----------
+
+// Get product links for a playlist
+app.get('/api/playlists/:playlistId/product-links', async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    
+    const result = await pool.query(
+      `SELECT pl.*, p.name as product_name, p.description as product_description, p.images as product_images, p.price as product_price
+       FROM product_links pl 
+       LEFT JOIN products p ON pl.product_id = p.id 
+       WHERE pl.playlist_id = $1
+       ORDER BY pl.display_order`,
+      [playlistId]
+    );
+
+    const productLinks = result.rows.map(link => ({
+      id: link.id,
+      playlistId: link.playlist_id,
+      productId: link.product_id,
+      title: link.title,
+      url: link.url,
+      description: link.description,
+      imageUrl: link.image_url,
+      displayOrder: link.display_order,
+      isActive: link.is_active,
+      createdAt: link.created_at,
+      updatedAt: link.updated_at,
+      product: link.product_id ? {
+        id: link.product_id,
+        name: link.product_name,
+        description: link.product_description,
+        images: link.product_images,
+        price: link.product_price
+      } : null
+    }));
+
+    res.json(productLinks);
+  } catch (error) {
+    console.error('Error fetching product links:', error);
+    res.status(500).json({ error: 'Failed to fetch product links' });
+  }
+});
+
+// Create a product link
+app.post('/api/playlists/:playlistId/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { productId, title, url, description, imageUrl, displayOrder } = req.body;
+
+    // Check if user owns the playlist
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM playlists WHERE id = $1',
+      [playlistId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO product_links (playlist_id, product_id, title, url, description, image_url, display_order)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING *`,
+      [playlistId, productId, title, url, description, imageUrl, displayOrder || 0]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error creating product link:', error);
+    if (error.code === '23505') { // Unique constraint violation
+      res.status(409).json({ error: 'Product already linked to this playlist' });
+    } else {
+      res.status(500).json({ error: 'Failed to create product link' });
+    }
+  }
+});
+
+// Update a product link
+app.patch('/api/product-links/:linkId', authenticateToken, async (req, res) => {
+  try {
+    const { linkId } = req.params;
+    const { title, url, description, imageUrl, displayOrder, isActive } = req.body;
+
+    // Check if user owns the playlist that this link belongs to
+    const ownerCheck = await pool.query(
+      `SELECT p.user_id 
+       FROM product_links pl 
+       JOIN playlists p ON pl.playlist_id = p.id 
+       WHERE pl.id = $1`,
+      [linkId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this product link' });
+    }
+
+    const result = await pool.query(
+      `UPDATE product_links 
+       SET title = COALESCE($1, title),
+           url = COALESCE($2, url),
+           description = COALESCE($3, description),
+           image_url = COALESCE($4, image_url),
+           display_order = COALESCE($5, display_order),
+           is_active = COALESCE($6, is_active),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $7
+       RETURNING *`,
+      [title, url, description, imageUrl, displayOrder, isActive, linkId]
+    );
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating product link:', error);
+    res.status(500).json({ error: 'Failed to update product link' });
+  }
+});
+
+// Delete a product link
+app.delete('/api/product-links/:linkId', authenticateToken, async (req, res) => {
+  try {
+    const { linkId } = req.params;
+
+    // Check if user owns the playlist that this link belongs to
+    const ownerCheck = await pool.query(
+      `SELECT p.user_id 
+       FROM product_links pl 
+       JOIN playlists p ON pl.playlist_id = p.id 
+       WHERE pl.id = $1`,
+      [linkId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this product link' });
+    }
+
+    await pool.query('DELETE FROM product_links WHERE id = $1', [linkId]);
+    res.json({ message: 'Product link deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting product link:', error);
+    res.status(500).json({ error: 'Failed to delete product link' });
+  }
+});
+
+// Reorder product links
+app.patch('/api/playlists/:playlistId/product-links/reorder', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { updates } = req.body; // Array of { id, displayOrder }
+
+    // Check if user owns the playlist
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM playlists WHERE id = $1',
+      [playlistId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    }
+
+    // Update display orders
+    for (const update of updates) {
+      await pool.query(
+        'UPDATE product_links SET display_order = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 AND playlist_id = $3',
+        [update.displayOrder, update.id, playlistId]
+      );
+    }
+
+    res.json({ message: 'Product links reordered successfully' });
+  } catch (error) {
+    console.error('Error reordering product links:', error);
+    res.status(500).json({ error: 'Failed to reorder product links' });
+  }
+});
+
+// ---------- QR CODES API ----------
+
+// Get all QR codes for the current user
+app.get('/api/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT qr.*, COUNT(qs.id) as scan_count
+       FROM qr_codes qr
+       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       WHERE qr.owner_id = $1 AND qr.is_active = true
+       GROUP BY qr.id
+       ORDER BY qr.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    const qrCodes = result.rows.map(qr => ({
+      ...qr,
+      options: typeof qr.options === 'string' ? JSON.parse(qr.options) : qr.options,
+      scanCount: parseInt(qr.scan_count) || 0
+    }));
+    
+    console.log('📱 QR_CODES: Found', qrCodes.length, 'QR codes');
+    res.json({ qrCodes });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR codes:', error);
+    res.status(500).json({ error: 'Failed to fetch QR codes' });
+  }
+});
+
+// Get a specific QR code by ID
+app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('📱 QR_CODES: Fetching QR code:', id);
+    
+    const result = await pool.query(
+      `SELECT qr.*, COUNT(qs.id) as scan_count
+       FROM qr_codes qr
+       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       WHERE qr.id = $1 AND qr.owner_id = $2
+       GROUP BY qr.id`,
+      [id, req.user.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
+      scanCount: parseInt(result.rows[0].scan_count) || 0
+    };
+    
+    console.log('📱 QR_CODES: QR code found:', qrCode.name);
+    res.json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR code:', error);
+    res.status(500).json({ error: 'Failed to fetch QR code' });
+  }
+});
+
+// Create a new QR code
+app.post('/api/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    console.log('📱 QR_CODES: ============ CREATE QR CODE DEBUG START ============');
+    console.log('📱 QR_CODES: Request body:', JSON.stringify(req.body, null, 2));
+    console.log('📱 QR_CODES: Authenticated user:', req.user);
+    
+    const { name, url, description, contentType, options } = req.body;
+    
+    if (!name || !url) {
+      console.log('📱 QR_CODES: Validation failed - missing name or url:', { name, url });
+      return res.status(400).json({ error: 'Name and URL are required' });
+    }
+    
+    console.log('📱 QR_CODES: Creating QR code:', { name, url, contentType });
+    
+    // 🔒 SUBSCRIPTION LIMIT CHECK
+    const userResult = await pool.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const userTier = user?.subscription_tier || 'free';
+    
+    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE owner_id = $1 AND is_active = true', [req.user.userId]);
+    const currentCount = parseInt(countResult.rows[0].count);
+
+    // Check for admin-set custom limit first, then fall back to subscription tier limits
+    let maxQRCodes;
+    if (user?.max_qr_codes !== null && user?.max_qr_codes !== undefined) {
+      maxQRCodes = user.max_qr_codes;
+    } else {
+      const limits = {
+        free: { maxQRCodes: 10 },
+        basic: { maxQRCodes: 50 },
+        premium: { maxQRCodes: 100 }
+      };
+      maxQRCodes = (limits[userTier] || limits.free).maxQRCodes;
+    }
+    
+    if (currentCount >= maxQRCodes) {
+      return res.status(403).json({ 
+        error: `QR code limit reached. You have reached your limit of ${maxQRCodes} QR codes.`,
+        limit: maxQRCodes,
+        current: currentCount,
+        subscriptionTier: userTier
+      });
+    }
+
+    // Generate QR code data (simplified - in production you might want to use a proper QR library)
+    const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const result = await pool.query(
+      `INSERT INTO qr_codes (owner_id, name, url, qr_code_data, options, description) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
+    );
+    
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
+      scanCount: 0
+    };
+    
+    console.log('📱 QR_CODES: QR code created successfully:', qrCode.name);
+    res.status(201).json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error creating QR code:', error);
+    res.status(500).json({ error: 'Failed to create QR code' });
+  }
+});
+
+// Update a QR code
+app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, url, description, options } = req.body;
+    
+    console.log('📱 QR_CODES: Updating QR code:', id);
+    
+    // Check if user owns the QR code
+    const ownerCheck = await pool.query(
+      'SELECT owner_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    if (ownerCheck.rows[0].owner_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to update this QR code' });
+    }
+
+    const result = await pool.query(
+      `UPDATE qr_codes 
+       SET name = COALESCE($1, name), 
+           url = COALESCE($2, url), 
+           description = COALESCE($3, description), 
+           options = COALESCE($4, options),
+           updated_at = NOW()
+       WHERE id = $5 RETURNING *`,
+      [name, url, description, options ? JSON.stringify(options) : null, id]
+    );
+
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options
+    };
+    
+    console.log('📱 QR_CODES: QR code updated successfully:', qrCode.name);
+    res.json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error updating QR code:', error);
+    res.status(500).json({ error: 'Failed to update QR code' });
+  }
+});
+
+// Delete a QR code (soft delete)
+app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('📱 QR_CODES: Deleting QR code:', id);
+    
+    // Check if user owns the QR code
+    const ownerCheck = await pool.query(
+      'SELECT owner_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    if (ownerCheck.rows[0].owner_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this QR code' });
+    }
+
+    // Soft delete by setting is_active to false
+    await pool.query(
+      'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+    
+    console.log('📱 QR_CODES: QR code deleted successfully');
+    res.json({ message: 'QR code deleted successfully' });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error deleting QR code:', error);
+    res.status(500).json({ error: 'Failed to delete QR code' });
   }
 });
 
@@ -1207,7 +1742,7 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
-              'playlist' as content_type
+              CASE WHEN ac.playlist_id IS NOT NULL THEN 'playlist' ELSE 'slideshow' END as content_type
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
@@ -1500,12 +2035,805 @@ app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) 
   }
 });
 
-// --- ERROR HANDLING & SERVER STARTUP ---
-app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
-app.use((err, req, res, next) => {
-  console.error('🔴 Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' })
+// ---------- SLIDESHOW API ----------
+
+// Get all slideshows for the current user
+app.get('/api/slideshows', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎬 SLIDESHOWS: Fetching slideshows for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT s.* FROM slideshows s 
+       WHERE s.user_id = $1 
+       ORDER BY s.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    // Get images for each slideshow
+    const slideshows = await Promise.all(
+      result.rows.map(async (slideshow) => {
+        const imagesResult = await pool.query(
+          `SELECT * FROM slideshow_images 
+           WHERE slideshow_id = $1 
+           ORDER BY display_order`,
+          [slideshow.id]
+        );
+        
+        // Map database fields to frontend camelCase fields
+        const mappedSlideshow = {
+          id: slideshow.id,
+          userId: slideshow.user_id,
+          name: slideshow.name,
+          description: slideshow.description,
+          autoplayInterval: slideshow.autoplay_interval,
+          transition: slideshow.transition,
+          requiresActivationCode: slideshow.requires_activation_code,
+          audioUrl: slideshow.audio_url,
+          isPublic: slideshow.is_public,
+          createdAt: slideshow.created_at,
+          updatedAt: slideshow.updated_at,
+          uniqueId: `slideshow-${slideshow.id}`, // Generate uniqueId for frontend
+          images: imagesResult.rows.map(img => ({
+            id: img.id,
+            slideshowId: img.slideshow_id,
+            imageUrl: img.image_url,
+            caption: img.caption,
+            displayOrder: img.display_order,
+            createdAt: img.created_at
+          })),
+        };
+        
+        return mappedSlideshow;
+      })
+    );
+    
+    console.log('🎬 SLIDESHOWS: Found', slideshows.length, 'slideshows');
+    res.json({ slideshows });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error fetching slideshows:', error);
+    res.status(500).json({ error: 'Failed to fetch slideshows' });
+  }
 });
+
+// Get a specific slideshow by ID
+app.get('/api/slideshows/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎬 SLIDESHOWS: Fetching slideshow:', id);
+    
+    const result = await pool.query(
+      `SELECT s.* FROM slideshows s WHERE s.id = $1`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = result.rows[0];
+    
+    // Get images for the slideshow
+    const imagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [id]
+    );
+    
+    // Map database fields to frontend camelCase fields
+    const mappedSlideshow = {
+      id: slideshow.id,
+      userId: slideshow.user_id,
+      name: slideshow.name,
+      description: slideshow.description,
+      autoplayInterval: slideshow.autoplay_interval,
+      transition: slideshow.transition,
+      requiresActivationCode: slideshow.requires_activation_code,
+      audioUrl: slideshow.audio_url,
+      isPublic: slideshow.is_public,
+      createdAt: slideshow.created_at,
+      updatedAt: slideshow.updated_at,
+      uniqueId: `slideshow-${slideshow.id}`, // Generate uniqueId for frontend
+      images: imagesResult.rows.map(img => ({
+        id: img.id,
+        slideshowId: img.slideshow_id,
+        imageUrl: img.image_url,
+        caption: img.caption,
+        displayOrder: img.display_order,
+        createdAt: img.created_at
+      })),
+    };
+    
+    console.log('🎬 SLIDESHOWS: Slideshow found:', mappedSlideshow.name);
+    res.json({ slideshow: mappedSlideshow });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error fetching slideshow:', error);
+    res.status(500).json({ error: 'Failed to fetch slideshow' });
+  }
+});
+
+// Create a new slideshow
+app.post('/api/slideshows', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, autoplayInterval, transition, requiresActivationCode } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Slideshow name is required' });
+    }
+    
+    console.log('🎬 SLIDESHOWS: Creating slideshow:', name);
+    
+    // 🔒 SUBSCRIPTION LIMIT CHECK
+    const userResult = await pool.query('SELECT subscription_tier, max_slideshows FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const userTier = user?.subscription_tier || 'free';
+    
+    const countResult = await pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [req.user.userId]);
+    const currentCount = parseInt(countResult.rows[0].count);
+
+    let maxSlideshows;
+    if (user?.max_slideshows !== null && user?.max_slideshows !== undefined) {
+      maxSlideshows = user.max_slideshows;
+    } else {
+      const limits = {
+        free: { maxSlideshows: 5 },
+        basic: { maxSlideshows: 15 },
+        premium: { maxSlideshows: 30 }
+      };
+      maxSlideshows = (limits[userTier] || limits.free).maxSlideshows;
+    }
+    
+    if (currentCount >= maxSlideshows) {
+      return res.status(403).json({ 
+        error: `Slideshow limit reached. You have reached your limit of ${maxSlideshows} slideshows.`,
+        limit: maxSlideshows,
+        current: currentCount,
+        subscriptionTier: userTier
+      });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false]
+    );
+    
+    // Map database fields to frontend camelCase fields
+    const slideshow = {
+      id: result.rows[0].id,
+      userId: result.rows[0].user_id,
+      name: result.rows[0].name,
+      description: result.rows[0].description,
+      autoplayInterval: result.rows[0].autoplay_interval,
+      transition: result.rows[0].transition,
+      requiresActivationCode: result.rows[0].requires_activation_code,
+      audioUrl: result.rows[0].audio_url,
+      isPublic: result.rows[0].is_public,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at,
+      uniqueId: `slideshow-${result.rows[0].id}`,
+      images: []
+    };
+    
+    console.log('🎬 SLIDESHOWS: Slideshow created successfully:', slideshow.name);
+    res.status(201).json({ slideshow });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error creating slideshow:', error);
+    res.status(500).json({ error: 'Failed to create slideshow' });
+  }
+});
+
+// Update a slideshow
+app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, autoplayInterval, transition, requiresActivationCode } = req.body;
+    
+    console.log('🎬 SLIDESHOWS: Updating slideshow:', id);
+    
+    // Check if user owns the slideshow
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to update this slideshow' });
+    }
+
+    const result = await pool.query(
+      `UPDATE slideshows 
+       SET name = COALESCE($1, name), 
+           description = COALESCE($2, description), 
+           autoplay_interval = COALESCE($3, autoplay_interval), 
+           transition = COALESCE($4, transition),
+           requires_activation_code = COALESCE($5, requires_activation_code),
+           updated_at = NOW()
+       WHERE id = $6 RETURNING *`,
+      [name, description, autoplayInterval, transition, requiresActivationCode, id]
+    );
+
+    // Map database fields to frontend camelCase fields
+    const slideshow = {
+      id: result.rows[0].id,
+      userId: result.rows[0].user_id,
+      name: result.rows[0].name,
+      description: result.rows[0].description,
+      autoplayInterval: result.rows[0].autoplay_interval,
+      transition: result.rows[0].transition,
+      requiresActivationCode: result.rows[0].requires_activation_code,
+      audioUrl: result.rows[0].audio_url,
+      isPublic: result.rows[0].is_public,
+      createdAt: result.rows[0].created_at,
+      updatedAt: result.rows[0].updated_at,
+      uniqueId: `slideshow-${result.rows[0].id}`
+    };
+    
+    console.log('🎬 SLIDESHOWS: Slideshow updated successfully:', slideshow.name);
+    res.json({ slideshow });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error updating slideshow:', error);
+    res.status(500).json({ error: 'Failed to update slideshow' });
+  }
+});
+
+// Delete a slideshow
+app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('🎬 SLIDESHOWS: Deleting slideshow:', id);
+    
+    // Check if user owns the slideshow
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this slideshow' });
+    }
+
+    // Delete slideshow (this will cascade delete images)
+    await pool.query('DELETE FROM slideshows WHERE id = $1', [id]);
+    
+    console.log('🎬 SLIDESHOWS: Slideshow deleted successfully');
+    res.json({ message: 'Slideshow deleted successfully' });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error deleting slideshow:', error);
+    res.status(500).json({ error: 'Failed to delete slideshow' });
+  }
+});
+
+// ---------- CHAT ROUTES ----------
+app.get('/api/playlists/:playlistId/chat', async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    console.log('🔴 CHAT: Fetching messages for playlist:', playlistId);
+
+    // Check if playlist exists and is accessible
+    const playlistResult = await pool.query(
+      'SELECT id, requires_activation_code, is_public FROM playlists WHERE id = $1',
+      [playlistId]
+    );
+
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const playlist = playlistResult.rows[0];
+
+    // For now, allow all users to view chat for public playlists
+    // TODO: Add activation code check for protected playlists if needed
+
+    const result = await pool.query(
+      `SELECT cm.*, u.username 
+       FROM chat_messages cm 
+       JOIN users u ON cm.user_id = u.id 
+       WHERE cm.playlist_id = $1 AND cm.is_deleted = FALSE 
+       ORDER BY cm.created_at DESC 
+       LIMIT $2 OFFSET $3`,
+      [playlistId, parseInt(limit), parseInt(offset)]
+    );
+
+    const messages = result.rows.map(msg => ({
+      id: msg.id,
+      playlistId: msg.playlist_id,
+      userId: msg.user_id,
+      username: msg.username,
+      message: msg.message,
+      createdAt: msg.created_at,
+      updatedAt: msg.updated_at,
+      isDeleted: msg.is_deleted
+    }));
+
+    console.log('🔴 CHAT: Found', messages.length, 'messages');
+    res.json({ messages: messages.reverse() }); // Reverse to show oldest first
+  } catch (error) {
+    console.error('Error fetching chat messages:', error);
+    res.status(500).json({ error: 'Failed to fetch chat messages' });
+  }
+});
+
+app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId } = req.params;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    if (message.trim().length > 1000) {
+      return res.status(400).json({ error: 'Message too long (max 1000 characters)' });
+    }
+
+    console.log('🔴 CHAT: Creating message for playlist:', playlistId, 'by user:', req.user.userId);
+
+    // Check if playlist exists
+    const playlistResult = await pool.query(
+      'SELECT id FROM playlists WHERE id = $1',
+      [playlistId]
+    );
+
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    // Insert the message
+    const result = await pool.query(
+      `INSERT INTO chat_messages (playlist_id, user_id, message) 
+       VALUES ($1, $2, $3) RETURNING *`,
+      [playlistId, req.user.userId, message.trim()]
+    );
+
+    // Get the message with username
+    const messageResult = await pool.query(
+      `SELECT cm.*, u.username 
+       FROM chat_messages cm 
+       JOIN users u ON cm.user_id = u.id 
+       WHERE cm.id = $1`,
+      [result.rows[0].id]
+    );
+
+    const newMessage = messageResult.rows[0];
+    const formattedMessage = {
+      id: newMessage.id,
+      playlistId: newMessage.playlist_id,
+      userId: newMessage.user_id,
+      username: newMessage.username,
+      message: newMessage.message,
+      createdAt: newMessage.created_at,
+      updatedAt: newMessage.updated_at,
+      isDeleted: newMessage.is_deleted
+    };
+
+    console.log('🔴 CHAT: Message created:', formattedMessage.id);
+    res.status(201).json({ message: formattedMessage });
+  } catch (error) {
+    console.error('Error creating chat message:', error);
+    res.status(500).json({ error: 'Failed to create message' });
+  }
+});
+
+app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { playlistId, messageId } = req.params;
+
+    console.log('🔴 CHAT: Deleting message:', messageId, 'from playlist:', playlistId);
+
+    // Check if user owns the message or is admin
+    const messageResult = await pool.query(
+      'SELECT user_id FROM chat_messages WHERE id = $1 AND playlist_id = $2',
+      [messageId, playlistId]
+    );
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const messageOwnerId = messageResult.rows[0].user_id;
+    
+    // Check if user is admin
+    const userResult = await pool.query(
+      'SELECT is_admin FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    const isAdmin = userResult.rows[0]?.is_admin || false;
+
+    if (messageOwnerId !== req.user.userId && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to delete this message' });
+    }
+
+    // Soft delete the message
+    await pool.query(
+      'UPDATE chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
+      [messageId]
+    );
+
+    console.log('🔴 CHAT: Message deleted:', messageId);
+    res.json({ message: 'Message deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting chat message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// ---------- WEB ROUTES FOR QR CODE SCANNING ----------
+// These routes serve HTML pages for people who scan QR codes but don't have the app
+
+app.get('/playlist-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🌐 WEB: Serving playlist access page for ID:', id);
+    console.log('🌐 WEB: Request headers:', { host: req.headers.host, protocol: req.protocol, forwardedProto: req.headers['x-forwarded-proto'] });
+
+    // Get playlist data with request context for proper URL generation
+    const playlist = await getPlaylistWithMedia(id, req);
+    if (!playlist) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Playlist Not Found - MerchTech</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .error { color: #dc2626; }
+          </style>
+        </head>
+        <body>
+          <h1 class="error">Playlist Not Found</h1>
+          <p>The playlist you're looking for doesn't exist.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    // Generate HTML page with embedded media player
+    console.log('🌐 WEB: Media URLs for web player:', playlist.mediaFiles?.map(f => ({ title: f.title, url: f.url })));
+    const htmlContent = generatePlaylistWebPage(playlist);
+    res.send(htmlContent);
+
+  } catch (error) {
+    console.error('🌐 WEB: Error serving playlist page:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Error - MerchTech</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+          .error { color: #dc2626; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">Something went wrong</h1>
+        <p>Please try again later.</p>
+      </body>
+      </html>
+    `);
+  }
+});
+
+console.log('🌐 WEB: Playlist access route registered');
+
+// Function to generate the web page HTML
+function generatePlaylistWebPage(playlist) {
+  const isProtected = playlist.requiresActivationCode;
+  const mediaFiles = playlist.mediaFiles || [];
+  
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>${playlist.name} - MerchTech</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          min-height: 100vh;
+          color: white;
+        }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .playlist-title { font-size: 2.5rem; margin-bottom: 10px; }
+        .playlist-subtitle { opacity: 0.8; font-size: 1.1rem; }
+        .player-section { 
+          background: rgba(255,255,255,0.1); 
+          border-radius: 20px; 
+          padding: 30px; 
+          margin-bottom: 30px;
+          backdrop-filter: blur(10px);
+        }
+        .track-list { list-style: none; }
+        .track-item { 
+          background: rgba(255,255,255,0.1); 
+          margin: 10px 0; 
+          padding: 15px; 
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          cursor: pointer;
+          transition: all 0.3s ease;
+        }
+        .track-item:hover { background: rgba(255,255,255,0.2); }
+        .track-number { 
+          background: rgba(255,255,255,0.2); 
+          width: 30px; 
+          height: 30px; 
+          border-radius: 50%; 
+          display: flex; 
+          align-items: center; 
+          justify-content: center; 
+          margin-right: 15px;
+          font-weight: bold;
+        }
+        .track-title { flex: 1; font-size: 1.1rem; }
+        .play-button { 
+          background: #10b981; 
+          border: none; 
+          color: white; 
+          padding: 8px 12px; 
+          border-radius: 20px; 
+          cursor: pointer;
+          font-size: 0.9rem;
+        }
+        .play-button:hover { background: #059669; }
+        .activation-section { 
+          background: rgba(255,255,255,0.1); 
+          border-radius: 20px; 
+          padding: 30px; 
+          text-align: center;
+          margin-bottom: 30px;
+        }
+        .activation-input { 
+          width: 100%; 
+          max-width: 300px; 
+          padding: 15px; 
+          border: none; 
+          border-radius: 10px; 
+          font-size: 1.1rem;
+          margin: 15px 0;
+          text-align: center;
+          background: rgba(255,255,255,0.9);
+          color: #333;
+        }
+        .activation-button { 
+          background: #10b981; 
+          border: none; 
+          color: white; 
+          padding: 15px 30px; 
+          border-radius: 10px; 
+          cursor: pointer;
+          font-size: 1.1rem;
+          margin: 10px;
+        }
+        .activation-button:hover { background: #059669; }
+        .preview-button { 
+          background: #f59e0b; 
+          border: none; 
+          color: white; 
+          padding: 15px 30px; 
+          border-radius: 10px; 
+          cursor: pointer;
+          font-size: 1.1rem;
+          margin: 10px;
+        }
+        .preview-button:hover { background: #d97706; }
+        .app-download { 
+          background: rgba(255,255,255,0.1); 
+          border-radius: 20px; 
+          padding: 20px; 
+          text-align: center;
+          margin-top: 30px;
+        }
+        .download-button { 
+          background: #3b82f6; 
+          border: none; 
+          color: white; 
+          padding: 15px 30px; 
+          border-radius: 10px; 
+          cursor: pointer;
+          font-size: 1.1rem;
+          margin: 10px;
+          text-decoration: none;
+          display: inline-block;
+        }
+        .download-button:hover { background: #2563eb; }
+        .audio-player { 
+          width: 100%; 
+          margin: 20px 0; 
+          border-radius: 10px;
+        }
+        .current-track { 
+          text-align: center; 
+          margin: 20px 0; 
+          font-size: 1.2rem; 
+          font-weight: bold;
+        }
+        .preview-timer { 
+          text-align: center; 
+          font-size: 1.5rem; 
+          color: #f59e0b; 
+          margin: 20px 0;
+        }
+        .hidden { display: none; }
+        @media (max-width: 768px) {
+          .playlist-title { font-size: 2rem; }
+          .container { padding: 15px; }
+          .player-section, .activation-section { padding: 20px; }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <h1 class="playlist-title">${playlist.name}</h1>
+          <p class="playlist-subtitle">${mediaFiles.length} tracks • ${isProtected ? 'Premium Content' : 'Free Access'}</p>
+        </div>
+
+        ${isProtected ? `
+          <div class="activation-section" id="activationSection">
+            <h2>🔐 This playlist requires an activation code</h2>
+            <p style="margin: 15px 0; opacity: 0.9;">Enter your activation code for full access, or try a 30-second preview</p>
+            <div>
+              <input type="text" id="activationCode" class="activation-input" placeholder="Enter activation code" maxlength="20">
+              <br>
+              <button class="activation-button" onclick="validateActivationCode()">🔓 Unlock Playlist</button>
+              <button class="preview-button" onclick="startPreview()">▶️ 30s Preview</button>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="player-section" id="playerSection" ${isProtected ? 'style="display: none;"' : ''}>
+          <div class="current-track" id="currentTrack">Select a track to play</div>
+          <audio id="audioPlayer" class="audio-player" controls preload="none">
+            Your browser does not support the audio element.
+          </audio>
+          
+          <div class="preview-timer hidden" id="previewTimer">
+            Preview: <span id="timeLeft">30</span>s remaining
+          </div>
+
+          <ul class="track-list">
+            ${mediaFiles.map((track, index) => `
+              <li class="track-item" onclick="playTrack(${index}, '${track.url}', '${track.title.replace(/'/g, "\\'")}')">
+                <div class="track-number">${index + 1}</div>
+                <div class="track-title">${track.title}</div>
+                <button class="play-button">▶️</button>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+
+        <div class="app-download">
+          <h3>💾 CREATE YOUR PROFILE TODAY!</h3>
+          <p style="margin: 15px 0; opacity: 0.9;">
+            <strong>Save your access code to your profile</strong> and never lose access to your content again. Quick registration takes just 30 seconds!
+          </p>
+          <a href="/auth/register" class="download-button" style="background: linear-gradient(135deg, #10b981, #059669); font-weight: bold;">
+            🚀 CREATE PROFILE & SAVE ACCESS
+          </a>
+        </div>
+      </div>
+
+      <script>
+        let currentAudio = null;
+        let isPreviewMode = false;
+        let previewTimer = null;
+        let timeLeft = 30;
+
+        function playTrack(index, url, title) {
+          const player = document.getElementById('audioPlayer');
+          const currentTrackDiv = document.getElementById('currentTrack');
+          
+          if (currentAudio) {
+            currentAudio.pause();
+          }
+          
+          player.src = url;
+          currentTrackDiv.textContent = title;
+          currentAudio = player;
+          
+          player.play().catch(e => {
+            console.error('Error playing audio:', e);
+            alert('Unable to play this track. Please try another.');
+          });
+
+          // If in preview mode, start the timer
+          if (isPreviewMode) {
+            startPreviewTimer();
+          }
+        }
+
+        function validateActivationCode() {
+          const code = document.getElementById('activationCode').value.trim();
+          if (!code) {
+            alert('Please enter an activation code');
+            return;
+          }
+
+          // TODO: Add actual API call to validate code
+          // For demo, accept any code that looks valid
+          if (code.length >= 6) {
+            document.getElementById('activationSection').style.display = 'none';
+            document.getElementById('playerSection').style.display = 'block';
+            isPreviewMode = false;
+            alert('✅ Access granted! Enjoy the full playlist.');
+          } else {
+            alert('❌ Invalid activation code. Please try again or use the preview option.');
+          }
+        }
+
+        function startPreview() {
+          document.getElementById('activationSection').style.display = 'none';
+          document.getElementById('playerSection').style.display = 'block';
+          document.getElementById('previewTimer').classList.remove('hidden');
+          isPreviewMode = true;
+          timeLeft = 30;
+          
+          alert('🎵 Starting 30-second preview. Create your profile to save access codes!');
+        }
+
+        function startPreviewTimer() {
+          if (previewTimer) clearInterval(previewTimer);
+          
+          previewTimer = setInterval(() => {
+            timeLeft--;
+            document.getElementById('timeLeft').textContent = timeLeft;
+            
+            if (timeLeft <= 0) {
+              clearInterval(previewTimer);
+              if (currentAudio) {
+                currentAudio.pause();
+              }
+              alert('⏰ Preview time expired! Create your profile to save access codes or enter an activation code for full access.');
+              document.getElementById('activationSection').style.display = 'block';
+              document.getElementById('playerSection').style.display = 'none';
+            }
+          }, 1000);
+        }
+
+        // Auto-play first track if not protected
+        ${!isProtected && mediaFiles.length > 0 ? `
+          window.addEventListener('load', () => {
+            setTimeout(() => {
+              playTrack(0, '${mediaFiles[0].url}', '${mediaFiles[0].title.replace(/'/g, "\\'")}');
+            }, 1000);
+          });
+        ` : ''}
+      </script>
+    </body>
+    </html>
+  `;
+}
+
+// --- ERROR HANDLING & SERVER STARTUP ---
+// NOTE: Generic error handlers MUST be registered after all other routes
+// to avoid catching valid API paths (like /api/slideshows/:id/images) too early.
+// They are moved to the bottom of the file, just before startServer().
 
 const initializeDatabase = async () => {
   const client = await pool.connect();
@@ -1690,6 +3018,45 @@ const initializeDatabase = async () => {
       );
     `);
 
+    // Create QR codes table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS qr_codes (
+        id SERIAL PRIMARY KEY,
+        owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        url TEXT NOT NULL,
+        qr_code_data TEXT NOT NULL,
+        short_url VARCHAR(255),
+        description TEXT,
+        options JSONB DEFAULT '{}',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    // Create QR scans table for analytics
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS qr_scans (
+        id SERIAL PRIMARY KEY,
+        qr_code_id INTEGER REFERENCES qr_codes(id) ON DELETE CASCADE,
+        scanned_at TIMESTAMPTZ DEFAULT NOW(),
+        location VARCHAR(255),
+        device VARCHAR(255),
+        country_name VARCHAR(100),
+        country_code VARCHAR(2),
+        device_type VARCHAR(50),
+        browser_name VARCHAR(100),
+        operating_system VARCHAR(100),
+        ip_address INET
+      );
+    `);
+
+    await client.query(`
+      ALTER TABLE slideshows
+      ADD COLUMN IF NOT EXISTS audio_url TEXT;
+    `);
+
     console.log('✅ Database schema initialized successfully.');
   } catch (err) {
     console.error('❌ Database initialization error:', err);
@@ -1710,4 +3077,543 @@ const startServer = async () => {
   }
 };
 
+// Start the server (moved to bottom to ensure routes are registered)
+
+
+// ---------- STRIPE WEBHOOK ----------
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  let event;
+
+  try {
+    if (endpointSecret) {
+      event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    } else {
+      // If no webhook secret, parse the event directly (for testing)
+      event = JSON.parse(req.body);
+    }
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  console.log('📮 Received Stripe webhook event:', event.type);
+
+  // Handle the event
+  switch (event.type) {
+    case 'checkout.session.completed':
+      const session = event.data.object;
+      console.log('💳 Payment completed for session:', session.id);
+      
+      try {
+        // Get line items from the session
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, {
+          expand: ['data.price.product'],
+        });
+
+        const userId = session.metadata?.userId;
+        if (userId) {
+          console.log('👤 Found user ID in session metadata:', userId);
+          
+          // Create purchase notification
+          const notification = {
+            id: `purchase_${session.id}_${Date.now()}`,
+            customerId: session.customer || 'unknown',
+            customerEmail: session.customer_details?.email || session.customer_email,
+            customerName: session.customer_details?.name,
+            customerPhone: session.customer_details?.phone, // <-- Add phone number
+            products: lineItems.data.map(item => ({
+              id: item.price.product.id,
+              name: item.price.product.name,
+              price: item.price.unit_amount,
+              quantity: item.quantity,
+            })),
+            total: session.amount_total,
+            timestamp: new Date().toISOString(),
+            activationCodeShared: false,
+          };
+
+          // Store the notification in a simple in-memory store for demo
+          // In production, you'd want to use a proper database
+          console.log('🔔 Creating purchase notification:', notification);
+          
+          if (!global.purchaseNotifications) {
+            global.purchaseNotifications = new Map();
+          }
+          
+          if (!global.purchaseNotifications.has(userId)) {
+            global.purchaseNotifications.set(userId, []);
+          }
+          
+          global.purchaseNotifications.get(userId).unshift(notification);
+
+          // Send push notification to the user
+          const customerName = notification.customerEmail?.split('@')[0] || 'Customer';
+          const pushTitle = '🛒 New Sale!';
+          const pushBody = `${customerName} just purchased for $${(notification.total / 100).toFixed(2)}. Tap to share activation code!`;
+          const pushData = {
+            type: 'sale',
+            notificationId: notification.id,
+            customerId: notification.customerId,
+            amount: notification.total,
+            url: 'merchtechapp://purchase-notifications'
+          };
+
+          // Send push notification asynchronously
+          sendPushNotification(userId, pushTitle, pushBody, pushData)
+            .then(sent => {
+              if (sent) {
+                console.log('📱 Push notification sent for sale to user:', userId);
+              } else {
+                console.log('📱 Push notification not sent (disabled or no token) for user:', userId);
+              }
+            })
+            .catch(error => {
+              console.error('📱 Error sending push notification:', error);
+            });
+          
+          // Keep only the last 50 notifications per user
+          const userNotifications = global.purchaseNotifications.get(userId);
+          if (userNotifications.length > 50) {
+            global.purchaseNotifications.set(userId, userNotifications.slice(0, 50));
+          }
+        }
+      } catch (error) {
+        console.error('Error processing checkout completion:', error);
+      }
+      break;
+    
+    case 'payment_intent.succeeded':
+      const paymentIntent = event.data.object;
+      console.log('💰 PaymentIntent was successful:', paymentIntent.id);
+      break;
+    
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+
+  res.json({ received: true });
+});
+
+// ---------- PUSH NOTIFICATION SYSTEM ----------
+const { Expo } = require('expo-server-sdk');
+const expo = new Expo();
+
+// Store for user push tokens (in production, use database)
+if (!global.userPushTokens) {
+  global.userPushTokens = new Map();
+}
+
+// Register push token
+app.post('/api/notifications/register-token', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { pushToken, platform, deviceId } = req.body;
+
+    if (!pushToken) {
+      return res.status(400).json({ error: 'Push token is required' });
+    }
+
+    // Validate the push token
+    if (!Expo.isExpoPushToken(pushToken)) {
+      console.error('Invalid Expo push token:', pushToken);
+      return res.status(400).json({ error: 'Invalid push token format' });
+    }
+
+    // Store the token
+    global.userPushTokens.set(userId, {
+      pushToken,
+      platform,
+      deviceId,
+      registeredAt: new Date().toISOString(),
+    });
+
+    console.log('📱 Push token registered for user:', userId);
+    res.json({ success: true, message: 'Push token registered successfully' });
+  } catch (error) {
+    console.error('Error registering push token:', error);
+    res.status(500).json({ error: 'Failed to register push token' });
+  }
+});
+
+// Update notification settings
+app.put('/api/notifications/settings', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const settings = req.body;
+
+    // In production, store these settings in database
+    if (!global.userNotificationSettings) {
+      global.userNotificationSettings = new Map();
+    }
+    
+    global.userNotificationSettings.set(userId, {
+      ...settings,
+      updatedAt: new Date().toISOString(),
+    });
+
+    console.log('🔔 Notification settings updated for user:', userId, settings);
+    res.json({ success: true, message: 'Notification settings updated' });
+  } catch (error) {
+    console.error('Error updating notification settings:', error);
+    res.status(500).json({ error: 'Failed to update notification settings' });
+  }
+});
+
+// Get notification settings
+app.get('/api/notifications/settings', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    if (!global.userNotificationSettings || !global.userNotificationSettings.has(userId)) {
+      // Return default settings
+      return res.json({
+        salesNotifications: true,
+        orderNotifications: true,
+        marketingNotifications: false,
+      });
+    }
+    
+    const settings = global.userNotificationSettings.get(userId);
+    res.json(settings);
+  } catch (error) {
+    console.error('Error getting notification settings:', error);
+    res.status(500).json({ error: 'Failed to get notification settings' });
+  }
+});
+
+// Send push notification function
+const sendPushNotification = async (userId, title, body, data = {}) => {
+  try {
+    // Check if user has push notifications enabled
+    const userSettings = global.userNotificationSettings?.get(userId);
+    if (!userSettings?.salesNotifications) {
+      console.log('📱 Push notifications disabled for user:', userId);
+      return false;
+    }
+
+    // Get user's push token
+    const tokenData = global.userPushTokens?.get(userId);
+    if (!tokenData?.pushToken) {
+      console.log('📱 No push token found for user:', userId);
+      return false;
+    }
+
+    const pushToken = tokenData.pushToken;
+
+    // Validate token
+    if (!Expo.isExpoPushToken(pushToken)) {
+      console.error('📱 Invalid push token for user:', userId);
+      return false;
+    }
+
+    // Create the message
+    const message = {
+      to: pushToken,
+      sound: 'default',
+      title: title,
+      body: body,
+      data: data,
+      priority: 'high',
+      _displayInForeground: true,
+    };
+
+    // Send the notification
+    const chunks = expo.chunkPushNotifications([message]);
+    const tickets = [];
+
+    for (const chunk of chunks) {
+      try {
+        const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+      } catch (error) {
+        console.error('📱 Error sending push notification chunk:', error);
+      }
+    }
+
+    // Handle the tickets (check for errors)
+    for (const ticket of tickets) {
+      if (ticket.status === 'error') {
+        console.error('📱 Push notification error:', ticket.message);
+        if (ticket.details?.error === 'DeviceNotRegistered') {
+          // Remove invalid token
+          global.userPushTokens.delete(userId);
+        }
+      } else {
+        console.log('📱 Push notification sent successfully:', ticket.id);
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('📱 Error sending push notification:', error);
+    return false;
+  }
+};
+
+// ---------- PURCHASE NOTIFICATIONS API ----------
+app.get('/api/notifications/purchases', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    if (!global.purchaseNotifications || !global.purchaseNotifications.has(userId)) {
+      return res.json([]);
+    }
+    
+    const notifications = global.purchaseNotifications.get(userId) || [];
+    res.json(notifications);
+  } catch (error) {
+    console.error('Error fetching purchase notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+app.post('/api/notifications/purchases/:id/mark-shared', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const notificationId = req.params.id;
+    
+    if (!global.purchaseNotifications || !global.purchaseNotifications.has(userId)) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    
+    const notifications = global.purchaseNotifications.get(userId);
+    const notification = notifications.find(n => n.id === notificationId);
+    
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    
+    notification.activationCodeShared = true;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error marking notification as shared:', error);
+    res.status(500).json({ error: 'Failed to update notification' });
+  }
+});
+
+app.delete('/api/notifications/purchases', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    if (global.purchaseNotifications && global.purchaseNotifications.has(userId)) {
+      global.purchaseNotifications.set(userId, []);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error clearing notifications:', error);
+    res.status(500).json({ error: 'Failed to clear notifications' });
+  }
+});
+
+// ---------- CHECKOUT ROUTE ----------
+
+// ---------- SLIDESHOW IMAGE ROUTES ----------
+app.post('/api/slideshows/:id/images', authenticateToken, async (req, res) => {
+  console.log('��️ ADD_IMAGE: Params', req.params, 'Body', req.body);
+  try {
+    const { id } = req.params;
+    const { imageUrl, caption = '', displayOrder = 1 } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({ error: 'imageUrl is required' });
+    }
+
+    // Verify ownership
+    const ownerCheck = await pool.query('SELECT user_id FROM slideshows WHERE id = $1', [id]);
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this slideshow' });
+    }
+
+    // Insert image row
+    await pool.query(
+      `INSERT INTO slideshow_images (slideshow_id, image_url, caption, display_order)
+       VALUES ($1, $2, $3, $4)`,
+      [id, imageUrl, caption, displayOrder]
+    );
+
+    // Return fresh slideshow
+    const fresh = await getSlideshowById(id);
+    res.status(201).json({ slideshow: fresh });
+  } catch (error) {
+    console.error('🖼️ ADD_IMAGE: Error details', error);
+    res.status(500).json({ error: 'Failed to add image' });
+  }
+});
+
+app.delete('/api/slideshows/:id/images/:imageId', authenticateToken, async (req, res) => {
+  console.log('🖼️ DELETE_IMAGE: Params', req.params);
+  console.log('🖼️ DELETE_IMAGE: Auth user', req.user);
+  try {
+    const { id, imageId } = req.params;
+
+    // Verify ownership via join
+    const check = await pool.query(
+      `SELECT s.user_id FROM slideshows s
+       JOIN slideshow_images si ON si.slideshow_id = s.id
+       WHERE si.id = $1 AND s.id = $2`,
+      [imageId, id]
+    );
+
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    if (check.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await pool.query('DELETE FROM slideshow_images WHERE id = $1', [imageId]);
+    const fresh = await getSlideshowById(id);
+    res.json({ slideshow: fresh });
+  } catch (error) {
+    console.error('🖼️ DELETE_IMAGE: Error details', error);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// ---------- SLIDESHOW AUDIO ROUTE ----------
+app.patch('/api/slideshows/:id/audio', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { audioUrl } = req.body;
+    if (!audioUrl) {
+      return res.status(400).json({ error: 'audioUrl is required' });
+    }
+
+    // ownership check
+    const check = await pool.query('SELECT user_id FROM slideshows WHERE id = $1', [id]);
+    if (check.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    if (check.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await pool.query('UPDATE slideshows SET audio_url = $1, updated_at = NOW() WHERE id = $2', [audioUrl, id]);
+    const fresh = await getSlideshowById(id);
+    res.json({ slideshow: fresh });
+  } catch (error) {
+    console.error('Error updating slideshow audio:', error);
+    res.status(500).json({ error: 'Failed to update audio' });
+  }
+});
+
+// Helper to fetch slideshow with images in camelCase mapping
+async function getSlideshowById(slideshowId) {
+  const sRes = await pool.query('SELECT * FROM slideshows WHERE id = $1', [slideshowId]);
+  if (sRes.rows.length === 0) return null;
+  const slideshow = sRes.rows[0];
+  const imagesResult = await pool.query(
+    'SELECT * FROM slideshow_images WHERE slideshow_id = $1 ORDER BY display_order',
+    [slideshowId]
+  );
+  return {
+    id: slideshow.id,
+    userId: slideshow.user_id,
+    name: slideshow.name,
+    description: slideshow.description,
+    autoplayInterval: slideshow.autoplay_interval,
+    transition: slideshow.transition,
+    requiresActivationCode: slideshow.requires_activation_code,
+    audioUrl: slideshow.audio_url,
+    isPublic: slideshow.is_public,
+    createdAt: slideshow.created_at,
+    updatedAt: slideshow.updated_at,
+    uniqueId: `slideshow-${slideshow.id}`,
+    images: imagesResult.rows.map(img => ({
+      id: img.id,
+      slideshowId: img.slideshow_id,
+      imageUrl: img.image_url,
+      caption: img.caption,
+      displayOrder: img.display_order,
+      createdAt: img.created_at,
+    }))
+  };
+}
+
+// ---------- SLIDESHOW PRODUCT LINKS API ----------
+// Slideshow product links (moved before startServer)
+app.get('/api/slideshows/:slideshowId/product-links', async (req, res) => {
+  console.log('🔗 [GET] slideshow product links', req.params);
+  try {
+    const { slideshowId } = req.params;
+    const result = await pool.query(
+      `SELECT pl.*, p.name AS product_name, p.description AS product_description, p.images AS product_images, p.price AS product_price
+       FROM product_links pl
+       LEFT JOIN products p ON pl.product_id = p.id
+       WHERE pl.slideshow_id = $1
+       ORDER BY pl.display_order`,
+      [slideshowId]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('🔗 GET slideshow product links error', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/slideshows/:slideshowId/product-links', authenticateToken, async (req, res) => {
+  console.log('🔗 [POST] slideshow product link', req.params, req.body);
+  try {
+    const { slideshowId } = req.params;
+    const { productId } = req.body;
+
+    // Check slideshow ownership
+    const owner = await pool.query('SELECT user_id FROM slideshows WHERE id = $1', [slideshowId]);
+    if (owner.rows.length === 0) return res.status(404).json({ error: 'Slideshow not found' });
+    if (owner.rows[0].user_id !== req.user.userId) return res.status(403).json({ error: 'Not authorized' });
+
+    // Get product information to populate required fields
+    const product = await pool.query('SELECT * FROM products WHERE id = $1', [productId]);
+    if (product.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
+    
+    const productData = product.rows[0];
+    const productUrl = `${getApiBaseUrl(req).replace('/api', '')}/store/product/${productId}`;
+
+    const ins = await pool.query(
+      `INSERT INTO product_links (slideshow_id, product_id, title, url, description, image_url, display_order, is_active) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (slideshow_id, product_id) DO NOTHING RETURNING *`,
+      [slideshowId, productId, productData.name, productUrl, productData.description, productData.image_url, 0, true]
+    );
+
+    res.status(201).json(ins.rows[0] || {});
+  } catch (err) {
+    console.error('🔗 POST slideshow product link error', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.delete('/api/slideshows/:slideshowId/product-links/:productId', authenticateToken, async (req, res) => {
+  console.log('🔗 [DELETE] slideshow product link', req.params);
+  try {
+    const { slideshowId, productId } = req.params;
+
+    const owner = await pool.query('SELECT user_id FROM slideshows WHERE id = $1', [slideshowId]);
+    if (owner.rows.length === 0) return res.status(404).json({ error: 'Slideshow not found' });
+    if (owner.rows[0].user_id !== req.user.userId) return res.status(403).json({ error: 'Not authorized' });
+
+    await pool.query('DELETE FROM product_links WHERE slideshow_id = $1 AND product_id = $2', [slideshowId, productId]);
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('🔗 DELETE slideshow product link error', err);
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ---------- START SERVER ----------
 startServer();
+
+// ---------- ERROR HANDLERS (keep these LAST) ----------
+app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
+app.use((err, req, res, next) => {
+  console.error('🔴 Unhandled Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+

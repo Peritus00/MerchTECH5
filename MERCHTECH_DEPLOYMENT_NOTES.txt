@@ -1,0 +1,220 @@
+MERCHTECH DEPLOYMENT NOTES
+===========================
+
+DOMAIN: www.merchtech.net
+
+QUICK SETUP COMMANDS
+====================
+
+1. MerchTech Quick Setup (Recommended):
+   npm run deploy:merchtech
+
+2. Validate Configuration:
+   npm run deploy:validate
+
+3. Build for Production:
+   npm run build:production
+
+4. Start Production Server:
+   npm run server:prod
+
+5. Check Environment Configuration:
+   npm run env:check
+
+ALTERNATIVE MANUAL SETUP
+=========================
+
+1. Copy template:
+   cp env.merchtech.production .env.production
+
+2. Edit .env.production with your actual values
+
+3. Validate:
+   npm run deploy:validate
+
+WHAT YOU NEED READY
+===================
+
+1. Database URL (PostgreSQL production connection string)
+   Example: postgresql://username:password@your-db-host:5432/merchtech_db
+
+2. Stripe LIVE Keys (from Stripe dashboard):
+   - Secret Key: sk_live_...
+   - Publishable Key: pk_live_...
+   - Webhook Secret: whsec_...
+
+3. Brevo SMTP Key (for sending emails)
+
+4. JWT Secret (32+ characters, secure random string)
+
+5. Expo Project ID (from Expo dashboard)
+
+DOMAIN CONFIGURATION (ALREADY SET)
+===================================
+
+API URL: https://www.merchtech.net/api
+Frontend URL: https://www.merchtech.net
+Android Network Security: merchtech.net domain allowed
+
+DEPLOYMENT STEPS
+================
+
+1. Run MerchTech setup:
+   npm run deploy:merchtech
+
+2. Validate configuration:
+   npm run deploy:validate
+
+3. Build for production:
+   npm run build:production
+
+4. Deploy server:
+   npm run server:prod
+
+MOBILE APP DEPLOYMENT
+======================
+
+1. Build mobile app:
+   eas build --platform all
+
+2. Submit to app stores:
+   eas submit --platform ios
+   eas submit --platform android
+
+STRIPE CONFIGURATION
+=====================
+
+After deployment, update Stripe dashboard:
+
+Webhook Endpoint: https://www.merchtech.net/api/webhooks/stripe
+
+Events to send:
+- payment_intent.succeeded
+- payment_intent.payment_failed
+- checkout.session.completed
+
+PRODUCTION CHECKLIST
+=====================
+
+□ Domain www.merchtech.net points to your server
+□ SSL certificate installed and working
+□ Database is accessible from server
+□ Stripe webhook URL updated
+□ Email sending tested
+□ Push notifications tested
+□ All environment variables validated
+□ Mobile app built and submitted
+
+SERVER REQUIREMENTS
+====================
+
+Your server needs to:
+- Serve the API at https://www.merchtech.net/api
+- Serve the frontend at https://www.merchtech.net
+- Have SSL certificate for www.merchtech.net
+- Run Node.js with production environment variables
+
+IMPORTANT SECURITY NOTES
+=========================
+
+- Use LIVE Stripe keys (never test keys in production)
+- Generate a strong, unique JWT secret (32+ characters)
+- Set up regular database backups
+- Set up error tracking and uptime monitoring
+- All URLs must use HTTPS (never HTTP in production)
+
+TROUBLESHOOTING COMMANDS
+=========================
+
+Check configuration issues:
+npm run deploy:validate
+
+Check environment details:
+npm run env:check
+
+Check server logs for errors
+
+COMMON ISSUES & SOLUTIONS
+==========================
+
+API calls failing?
+- Check if server is running at https://www.merchtech.net/api
+- Verify SSL certificate is valid
+- Check CORS settings
+
+Stripe payments not working?
+- Verify you're using LIVE keys (not test keys)
+- Check webhook URL in Stripe dashboard
+- Verify webhook secret matches
+
+Push notifications not working?
+- Check Expo project ID is correct
+- Verify FCM/APNS certificates for production
+
+ENVIRONMENT VARIABLES TEMPLATE
+===============================
+
+EXPO_PUBLIC_API_URL=https://www.merchtech.net/api
+DATABASE_URL=postgresql://username:password@your-db-host:5432/merchtech_db
+STRIPE_SECRET_KEY=sk_live_your_live_stripe_secret_key_here
+STRIPE_PUBLISHABLE_KEY=pk_live_your_live_stripe_publishable_key_here
+STRIPE_WEBHOOK_SECRET=whsec_your_live_webhook_secret_here
+BREVO_SMTP_KEY=your_production_brevo_smtp_key_here
+JWT_SECRET=your_extremely_secure_production_jwt_secret_minimum_32_characters
+PORT=5001
+NODE_ENV=production
+FRONTEND_URL=https://www.merchtech.net
+EXPO_PROJECT_ID=your-actual-expo-project-id-from-expo-dev
+
+USEFUL NPM SCRIPTS
+===================
+
+npm run deploy:merchtech    # Quick MerchTech setup
+npm run deploy:setup        # General deployment setup
+npm run deploy:validate     # Validate configuration
+npm run env:check          # Show environment config
+npm run build:production   # Build for production
+npm run server:start       # Start server (any environment)
+npm run server:dev         # Start development server
+npm run server:prod        # Start production server
+npm start                  # Start mobile app development
+npm run android            # Start Android development
+npm run ios                # Start iOS development
+npm run web                # Start web development
+
+DEPLOYMENT WORKFLOW
+===================
+
+1. Development:
+   npm install
+   npm run deploy:setup (choose development)
+   npm run server:dev
+   npm start
+
+2. Production:
+   npm run deploy:merchtech
+   npm run deploy:validate
+   npm run build:production
+   npm run server:prod
+
+3. Mobile App Store:
+   eas build --platform all
+   eas submit --platform ios
+   eas submit --platform android
+
+SUPPORT & VALIDATION
+=====================
+
+Before going live, run:
+npm run deploy:validate
+
+This will check:
+- Environment files exist
+- All required variables are set
+- URLs use HTTPS for production
+- Stripe keys are live keys
+- Configuration is valid
+
+If issues are found, the validator will tell you exactly what needs to be fixed.
+
+END OF NOTES 

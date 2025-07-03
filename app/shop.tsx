@@ -21,7 +21,7 @@ export default function ShopScreen() {
   const router = useRouter();
   const { getTotalItems } = useCart();
 
-  const categories = ['All', 'PaintingMusic', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
+  const categories = ['All', 'MUSIC', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
 
   useEffect(() => {
     fetchProducts();

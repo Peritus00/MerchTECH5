@@ -7,6 +7,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   View,
+  Platform,
 } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -15,6 +16,8 @@ import ProductCard from '@/components/ProductCard';
 import { productsAPI } from '@/services/api';
 import ProductEditorModal from '@/components/ProductEditorModal';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 
 // --- Helpers -------------------------------------------------------------
 const normalizeProduct = (p: any): Product => ({
@@ -28,6 +31,8 @@ export default function MasterStoreManager() {
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const router = useRouter();
+  const { user } = useAuth();
+  const { canCreate, usage, limits, tier, isLoading: limitsLoading } = useSubscriptionLimits();
 
   useEffect(() => {
     fetchProducts();
@@ -82,6 +87,48 @@ export default function MasterStoreManager() {
   };
 
   const handleAddNew = () => {
+    // Wait for subscription data to load before checking limits
+    if (limitsLoading) {
+      return;
+    }
+
+    // Check subscription limits before allowing product creation
+    const canCreateProduct = canCreate('products');
+    
+    if (!canCreateProduct.allowed) {
+      const currentCount = usage.products;
+      const maxCount = limits.maxProducts;
+      const tierName = tier.charAt(0).toUpperCase() + tier.slice(1);
+      
+      const alertMessage = `You have reached your limit of ${maxCount} products on the ${tierName} plan.\n\nCurrent usage: ${currentCount}/${maxCount} products\n\nWould you like to upgrade to create more products?`;
+      
+      if (Platform.OS === 'web') {
+        // Use native browser confirm for web
+        const shouldUpgrade = window.confirm(`📦 Product Limit Reached\n\n${alertMessage}`);
+        if (shouldUpgrade) {
+          router.push('/subscription');
+        }
+      } else {
+        // Use React Native Alert for mobile
+        Alert.alert(
+          '📦 Product Limit Reached',
+          alertMessage,
+          [
+            { 
+              text: 'Cancel', 
+              style: 'cancel' 
+            },
+            { 
+              text: 'Upgrade Plan', 
+              style: 'default',
+              onPress: () => router.push('/subscription')
+            }
+          ]
+        );
+      }
+      return;
+    }
+
     setEditing({
       id: 'new',
       name: '',

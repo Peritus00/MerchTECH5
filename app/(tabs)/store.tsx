@@ -38,7 +38,7 @@ export default function StoreScreen() {
   const [error, setError] = useState<string | null>(null);
 
   // Updated categories to align with the new taxonomy
-  const categories = ['All', 'PaintingMusic', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
+  const categories = ['All', 'MUSIC', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
 
   useEffect(() => {
     fetchProducts();

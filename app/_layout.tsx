@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -110,7 +111,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CartProvider>
-        <RootLayoutNav />
+        <NotificationProvider>
+          <RootLayoutNav />
+        </NotificationProvider>
       </CartProvider>
     </AuthProvider>
   );

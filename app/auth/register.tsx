@@ -16,6 +16,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialIcons } from '@expo/vector-icons';
+import { MerchTechLogo } from '@/components/MerchTechLogo';
 
 interface FormErrors {
   email?: string;
@@ -207,6 +208,7 @@ export default function RegisterScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <ThemedView style={styles.content}>
           <View style={styles.header}>
+            <MerchTechLogo size="large" variant="full" style={styles.logo} />
             <ThemedText type="title">Create Account</ThemedText>
             <ThemedText type="subtitle">Join MerchTech today</ThemedText>
           </View>
@@ -435,6 +437,9 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logo: {
+    marginBottom: 24,
   },
   form: {
     width: '100%',

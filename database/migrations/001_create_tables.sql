@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS qr_codes (
   url TEXT NOT NULL,
   qr_code_data TEXT NOT NULL,
   short_url VARCHAR(255),
+  description TEXT,
   options JSONB DEFAULT '{}',
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -62,7 +63,7 @@ CREATE TABLE IF NOT EXISTS qr_scans (
 -- Create products table
 CREATE TABLE IF NOT EXISTS products (
   id SERIAL PRIMARY KEY,
-  owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   description TEXT,
   price DECIMAL(10,2),
@@ -193,12 +194,39 @@ CREATE TABLE IF NOT EXISTS user_achievements (
   UNIQUE(user_id, achievement_level_id)
 );
 
+-- Create product_links table for linking products to playlists
+CREATE TABLE IF NOT EXISTS product_links (
+  id SERIAL PRIMARY KEY,
+  playlist_id INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+  product_id INTEGER REFERENCES products(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  display_order INTEGER DEFAULT 0,
+  is_active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(playlist_id, product_id)
+);
+
+-- Create chat_messages table for playlist discussions
+CREATE TABLE IF NOT EXISTS chat_messages (
+  id SERIAL PRIMARY KEY,
+  playlist_id INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  is_deleted BOOLEAN DEFAULT FALSE
+);
+
 -- Create indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_qr_codes_owner_id ON qr_codes(owner_id);
 CREATE INDEX IF NOT EXISTS idx_qr_codes_active ON qr_codes(is_active);
 CREATE INDEX IF NOT EXISTS idx_qr_scans_qr_code_id ON qr_scans(qr_code_id);
 CREATE INDEX IF NOT EXISTS idx_qr_scans_scanned_at ON qr_scans(scanned_at);
-CREATE INDEX IF NOT EXISTS idx_products_owner_id ON products(owner_id);
+CREATE INDEX IF NOT EXISTS idx_products_user_id ON products(user_id);
 CREATE INDEX IF NOT EXISTS idx_slideshows_owner_id ON slideshows(owner_id);
 CREATE INDEX IF NOT EXISTS idx_slideshow_images_slideshow_id ON slideshow_images(slideshow_id);
 CREATE INDEX IF NOT EXISTS idx_fanmail_owner_id ON fanmail(owner_id);
@@ -213,6 +241,9 @@ CREATE INDEX IF NOT EXISTS idx_activation_codes_slideshow_id ON activation_codes
 CREATE INDEX IF NOT EXISTS idx_activation_codes_created_by ON activation_codes(created_by);
 CREATE INDEX IF NOT EXISTS idx_user_activation_codes_user_id ON user_activation_codes(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_activation_codes_activation_code_id ON user_activation_codes(activation_code_id);
+CREATE INDEX IF NOT EXISTS idx_product_links_playlist_id ON product_links(playlist_id);
+CREATE INDEX IF NOT EXISTS idx_product_links_product_id ON product_links(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_links_active ON product_links(is_active);
 
 -- Insert default achievement levels
 INSERT INTO achievement_levels (level, name, description, scans_required) VALUES
@@ -262,3 +293,13 @@ BEGIN
     CREATE TRIGGER update_playlists_updated_at BEFORE UPDATE ON playlists FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
   END IF;
 END $$;
+
+-- Create index for faster playlist chat queries
+CREATE INDEX IF NOT EXISTS idx_chat_messages_playlist_created 
+ON chat_messages(playlist_id, created_at DESC) 
+WHERE is_deleted = FALSE;
+
+-- Create index for user messages
+CREATE INDEX IF NOT EXISTS idx_chat_messages_user 
+ON chat_messages(user_id, created_at DESC) 
+WHERE is_deleted = FALSE;

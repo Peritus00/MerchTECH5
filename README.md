@@ -1,20 +1,67 @@
-# Welcome to your Expo app 👋
+# MerchTech QR Code Platform 🎯
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A comprehensive React Native application for creating, managing, and tracking QR codes with integrated e-commerce functionality.
 
-## Get started
+Built with [Expo](https://expo.dev) and React Native.
 
-1. Install dependencies
+## 🚀 Quick Start
 
+### Development Setup
+
+1. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
-
+2. **Set up environment variables**
    ```bash
-   npx expo start
+   npm run deploy:setup
    ```
+   Or manually copy and configure:
+   ```bash
+   cp env.example .env
+   # Edit .env with your configuration
+   ```
+
+3. **Start the backend server**
+   ```bash
+   npm run server:dev
+   ```
+
+4. **Start the mobile app**
+   ```bash
+   npm start
+   ```
+
+### Production Deployment (www.merchtech.net)
+
+1. **Quick MerchTech setup** (Recommended)
+   ```bash
+   npm run deploy:merchtech
+   ```
+
+   Or **manual setup**:
+   ```bash
+   npm run deploy:setup
+   # Choose option 2 for production
+   ```
+
+2. **Validate configuration**
+   ```bash
+   npm run deploy:validate
+   ```
+
+3. **Build for production**
+   ```bash
+   npm run build:production
+   ```
+
+4. **Deploy server**
+   ```bash
+   npm run server:prod
+   ```
+
+📖 **See `PRODUCTION_DEPLOYMENT_GUIDE.md` for detailed deployment instructions.**
 
 In the output, you'll find options to open the app in a
 

@@ -46,11 +46,9 @@ export default function CartScreen() {
 
       const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        window.location.href = url;
-      } else {
-        await WebBrowser.openBrowserAsync(url);
-      }
+      // Always use WebBrowser to keep app running in background
+      await WebBrowser.openBrowserAsync(url);
+      console.log('🔗 PAYMENT: Opened Stripe checkout in external browser (Cart)');
     } catch (err: any) {
       console.error('Checkout error', err);
       Alert.alert('Error', err.message || 'Failed to start checkout');

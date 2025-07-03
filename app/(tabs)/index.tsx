@@ -16,6 +16,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { analyticsService } from '@/services/analyticsService';
 import { AnalyticsSummary } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { MerchTechLogo } from '@/components/MerchTechLogo';
 
 interface DashboardData {
   summary: {
@@ -311,13 +312,24 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.welcomeText}>Welcome back!</Text>
-          <Text style={styles.headerTitle}>Dashboard Overview</Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/settings/profile')}>
+        {/* Profile Button - Top Right */}
+        <TouchableOpacity 
+          style={styles.profileButton}
+          onPress={() => router.push('/settings/profile')}
+        >
           <MaterialIcons name="account-circle" size={32} color="#6b7280" />
         </TouchableOpacity>
+        
+        {/* Centered Logo Section */}
+        <View style={styles.logoSection}>
+          <MerchTechLogo size="large" variant="full" />
+        </View>
+        
+        {/* Welcome Text - Centered */}
+        <View style={styles.welcomeSection}>
+          <Text style={styles.welcomeText}>Welcome back, {user?.username || 'User'}!</Text>
+          <Text style={styles.headerTitle}>Dashboard Overview</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -479,24 +491,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    position: 'relative',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+    alignItems: 'center',
+  },
+  profileButton: {
+    position: 'absolute',
+    top: 20,
+    right: 16,
+    zIndex: 10,
+  },
+  logoSection: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  welcomeSection: {
+    alignItems: 'center',
   },
   welcomeText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#6b7280',
-    marginBottom: 2,
+    marginBottom: 4,
+    textAlign: 'center',
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#1f2937',
+    textAlign: 'center',
   },
   scrollView: {
     flex: 1,
