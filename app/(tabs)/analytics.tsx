@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -14,6 +13,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { analyticsService } from '@/services/analyticsService';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -170,6 +170,7 @@ const ChartContainer = ({ title, children, subtitle }: {
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [deviceData, setDeviceData] = useState<DeviceData[]>([]);
@@ -188,79 +189,79 @@ export default function AnalyticsScreen() {
 
   const fetchAllAnalytics = async () => {
     try {
-      // Fetch analytics summary and create mock data based on existing service
+      setIsLoading(true);
+      
+      // Fetch real analytics data
       const analytics = await analyticsService.getAnalyticsSummary();
       
       // Convert analytics data to match expected format
       setSummaryData({
-        totalCodes: 45,
-        totalScans: analytics.totalScans || 1247,
-        scansToday: analytics.todayScans || 89,
-        mostPopular: {
+        totalCodes: 0, // Will be populated from real QR codes count
+        totalScans: analytics.totalScans || 0,
+        scansToday: analytics.todayScans || 0,
+        mostPopular: analytics.recentScans && analytics.recentScans.length > 0 ? {
           id: 1,
-          name: 'Website Homepage QR',
-          scanCount: 456,
-        },
+          name: analytics.recentScans[0].qrName || 'Unknown QR Code',
+          scanCount: analytics.totalScans || 0,
+        } : undefined,
         personalized: true,
       });
 
-      // Mock history data
+      // Set history data from real analytics
       setHistoryData({
-        data: Array.from({ length: selectedTimeRange }, (_, i) => ({
-          date: new Date(Date.now() - (selectedTimeRange - i) * 24 * 60 * 60 * 1000).toISOString(),
-          count: Math.floor(Math.random() * 100) + 20,
-        })),
+        data: analytics.hourlyData ? analytics.hourlyData.map((count, hour) => ({
+          date: new Date(Date.now() - (23 - hour) * 60 * 60 * 1000).toISOString(),
+          count: count || 0,
+        })) : [],
         personalized: true,
       });
 
-      // Mock device data
-      setDeviceData([
-        { device: 'iPhone 15 Pro', count: 234 },
-        { device: 'Samsung Galaxy S24', count: 189 },
-        { device: 'iPhone 14', count: 156 },
-        { device: 'Google Pixel 8', count: 134 },
-        { device: 'OnePlus 12', count: 98 },
-      ]);
+      // Set device data from real analytics
+      setDeviceData(analytics.topDevices || []);
 
-      // Mock geographic data
+      // Set geographic data from real analytics
       setGeoData({
         level: 'country',
-        data: [
-          { country: 'US', location_name: 'United States', count: 456 },
-          { country: 'CA', location_name: 'Canada', count: 234 },
-          { country: 'UK', location_name: 'United Kingdom', count: 189 },
-          { country: 'DE', location_name: 'Germany', count: 167 },
-          { country: 'FR', location_name: 'France', count: 98 },
-        ],
+        data: analytics.topCountries ? analytics.topCountries.map(country => ({
+          country: country.country,
+          location_name: country.country,
+          count: country.count,
+        })) : [],
       });
 
-      // Mock browser data
-      setBrowserData([
-        { browser: 'Safari', count: 345 },
-        { browser: 'Chrome', count: 298 },
-        { browser: 'Firefox', count: 156 },
-        { browser: 'Edge', count: 89 },
-        { browser: 'Opera', count: 34 },
-      ]);
+      // Clear browser and OS data (will be populated when real tracking is implemented)
+      setBrowserData([]);
+      setOSData([]);
+      setTimePatternData([]);
 
-      // Mock OS data
-      setOSData([
-        { os: 'iOS', count: 567 },
-        { os: 'Android', count: 456 },
-        { os: 'Windows', count: 123 },
-        { os: 'macOS', count: 89 },
-        { os: 'Linux', count: 12 },
-      ]);
+      // If user is authenticated, fetch user-specific analytics
+      if (user) {
+        try {
+          const userAnalytics = await analyticsService.getUserAnalytics(user.id);
+          setSummaryData(prev => prev ? {
+            ...prev,
+            totalCodes: userAnalytics.totalQRCodes || 0,
+          } : null);
+        } catch (error) {
+          console.error('Error fetching user analytics:', error);
+        }
+      }
 
-      // Mock time pattern data
-      setTimePatternData(
-        Array.from({ length: 24 }, (_, hour) => ({
-          hour,
-          count: Math.floor(Math.random() * 50) + 5,
-        }))
-      );
     } catch (error) {
       console.error('Error fetching analytics:', error);
+      // Set empty state instead of showing mock data
+      setSummaryData({
+        totalCodes: 0,
+        totalScans: 0,
+        scansToday: 0,
+        personalized: false,
+      });
+      setHistoryData({ data: [], personalized: false });
+      setDeviceData([]);
+      setGeoData({ level: 'country', data: [] });
+      setBrowserData([]);
+      setOSData([]);
+      setTimePatternData([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -273,14 +274,16 @@ export default function AnalyticsScreen() {
   };
 
   const formatHistoryChartData = () => {
-    if (!historyData?.data) return null;
+    if (!historyData?.data || historyData.data.length === 0) return null;
+    
+    const chartData = historyData.data.slice(-7);
     return {
-      labels: historyData.data.slice(-7).map(item => {
+      labels: chartData.map(item => {
         const date = new Date(item.date);
         return `${date.getMonth() + 1}/${date.getDate()}`;
       }),
       datasets: [{
-        data: historyData.data.slice(-7).map(item => item.count),
+        data: chartData.map(item => item.count),
         color: (opacity = 1) => `rgba(59, 130, 246, ${opacity})`,
         strokeWidth: 2,
       }],
@@ -288,8 +291,10 @@ export default function AnalyticsScreen() {
   };
 
   const formatPieChartData = (data: any[], colorPalette: string[]) => {
+    if (!data || data.length === 0) return [];
+    
     return data.slice(0, 5).map((item, index) => ({
-      name: item.device || item.browser || item.os || item.country,
+      name: item.device || item.browser || item.os || item.country || item.location_name,
       population: item.count,
       color: colorPalette[index % colorPalette.length],
       legendFontColor: '#6b7280',
@@ -548,7 +553,7 @@ export default function AnalyticsScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.loadingText}>Loading analytics...</Text>
       </View>
@@ -882,6 +887,16 @@ const styles = StyleSheet.create({
   },
   peakHourCount: {
     fontSize: 14,
+    color: '#6b7280',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 16,
     color: '#6b7280',
   },
 });

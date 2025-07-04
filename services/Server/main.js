@@ -3689,3 +3689,292 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal Server Error' });
 });
 
+// ---------- ANALYTICS API ----------
+
+// Get analytics summary
+app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    // Get total scans for user's QR codes
+    const totalScansResult = await pool.query(`
+      SELECT COUNT(*) as total_scans 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1
+    `, [userId]);
+    
+    // Get today's scans
+    const todayScansResult = await pool.query(`
+      SELECT COUNT(*) as today_scans 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND DATE(qs.scanned_at) = CURRENT_DATE
+    `, [userId]);
+    
+    // Get week scans
+    const weekScansResult = await pool.query(`
+      SELECT COUNT(*) as week_scans 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND qs.scanned_at >= CURRENT_DATE - INTERVAL '7 days'
+    `, [userId]);
+    
+    // Get month scans
+    const monthScansResult = await pool.query(`
+      SELECT COUNT(*) as month_scans 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND qs.scanned_at >= CURRENT_DATE - INTERVAL '30 days'
+    `, [userId]);
+    
+    // Get top countries
+    const topCountriesResult = await pool.query(`
+      SELECT country_name as country, COUNT(*) as count 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND country_name IS NOT NULL
+      GROUP BY country_name 
+      ORDER BY count DESC 
+      LIMIT 5
+    `, [userId]);
+    
+    // Get top devices
+    const topDevicesResult = await pool.query(`
+      SELECT device, COUNT(*) as count 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND device IS NOT NULL
+      GROUP BY device 
+      ORDER BY count DESC 
+      LIMIT 5
+    `, [userId]);
+    
+    // Get hourly data for the last 24 hours
+    const hourlyDataResult = await pool.query(`
+      SELECT EXTRACT(HOUR FROM scanned_at) as hour, COUNT(*) as count
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1 AND scanned_at >= NOW() - INTERVAL '24 hours'
+      GROUP BY EXTRACT(HOUR FROM scanned_at)
+      ORDER BY hour
+    `, [userId]);
+    
+    // Get recent scans
+    const recentScansResult = await pool.query(`
+      SELECT qr.name as qr_name, qs.location, qs.device, qs.scanned_at as timestamp
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1
+      ORDER BY qs.scanned_at DESC 
+      LIMIT 10
+    `, [userId]);
+    
+    // Process hourly data into 24-hour array
+    const hourlyData = Array(24).fill(0);
+    hourlyDataResult.rows.forEach(row => {
+      hourlyData[parseInt(row.hour)] = parseInt(row.count);
+    });
+    
+    const totalScans = parseInt(totalScansResult.rows[0].total_scans) || 0;
+    const todayScans = parseInt(todayScansResult.rows[0].today_scans) || 0;
+    const weekScans = parseInt(weekScansResult.rows[0].week_scans) || 0;
+    const monthScans = parseInt(monthScansResult.rows[0].month_scans) || 0;
+    
+    // Calculate growth rates
+    const avgScansPerDay = weekScans / 7;
+    const scanGrowth = weekScans > 0 ? ((todayScans - avgScansPerDay) / avgScansPerDay * 100) : 0;
+    
+    res.json({
+      totalScans,
+      todayScans,
+      weekScans,
+      monthScans,
+      uniqueVisitors: totalScans, // Simplified - could be enhanced with IP tracking
+      avgScansPerDay: Math.round(avgScansPerDay * 100) / 100,
+      conversionRate: 0, // To be implemented with conversion tracking
+      scanGrowth: Math.round(scanGrowth * 100) / 100,
+      visitorGrowth: 0, // To be implemented
+      dailyGrowth: 0, // To be implemented
+      conversionGrowth: 0, // To be implemented
+      topCountries: topCountriesResult.rows,
+      topDevices: topDevicesResult.rows,
+      hourlyData,
+      recentScans: recentScansResult.rows.map(scan => ({
+        qrName: scan.qr_name,
+        location: scan.location,
+        device: scan.device,
+        timestamp: scan.timestamp,
+      })),
+    });
+  } catch (error) {
+    console.error('Error fetching analytics summary:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics summary' });
+  }
+});
+
+// Get scan data for specific QR code
+app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) => {
+  try {
+    const { qrCodeId } = req.params;
+    const userId = req.user.userId;
+    
+    // Verify QR code belongs to user
+    const qrCodeCheck = await pool.query(
+      'SELECT id FROM qr_codes WHERE id = $1 AND owner_id = $2',
+      [qrCodeId, userId]
+    );
+    
+    if (qrCodeCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found or access denied' });
+    }
+    
+    const result = await pool.query(`
+      SELECT id, qr_code_id as "qrCodeId", scanned_at as timestamp, 
+             location, device, browser_name as browser, ip_address as "ipAddress"
+      FROM qr_scans 
+      WHERE qr_code_id = $1 
+      ORDER BY scanned_at DESC
+    `, [qrCodeId]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching scan data:', error);
+    res.status(500).json({ error: 'Failed to fetch scan data' });
+  }
+});
+
+// Get scans by date range
+app.get('/api/analytics/scans', authenticateToken, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const userId = req.user.userId;
+    
+    const result = await pool.query(`
+      SELECT qs.id, qs.qr_code_id as "qrCodeId", qs.scanned_at as timestamp,
+             qs.location, qs.device, qs.browser_name as browser, qs.ip_address as "ipAddress"
+      FROM qr_scans qs
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id
+      WHERE qr.owner_id = $1 
+        AND qs.scanned_at >= $2 
+        AND qs.scanned_at <= $3
+      ORDER BY qs.scanned_at DESC
+    `, [userId, startDate, endDate]);
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching scans by date range:', error);
+    res.status(500).json({ error: 'Failed to fetch scans by date range' });
+  }
+});
+
+// Get user analytics summary
+app.get('/api/analytics/user/:userId', authenticateToken, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    // Only allow users to access their own analytics or admins to access any
+    if (req.user.userId !== parseInt(userId)) {
+      const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+      if (!userResult.rows[0]?.is_admin) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+    }
+    
+    // Get counts for user's content
+    const [qrCodes, playlists, slideshows, products, activationCodes] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM qr_codes WHERE owner_id = $1', [userId]),
+      pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [userId]),
+      pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [userId]),
+      pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1', [userId]),
+      pool.query('SELECT COUNT(*) FROM activation_codes WHERE created_by = $1', [userId]),
+    ]);
+    
+    // Get total scans for user
+    const totalScansResult = await pool.query(`
+      SELECT COUNT(*) as total_scans 
+      FROM qr_scans qs 
+      JOIN qr_codes qr ON qs.qr_code_id = qr.id 
+      WHERE qr.owner_id = $1
+    `, [userId]);
+    
+    res.json({
+      totalQRCodes: parseInt(qrCodes.rows[0].count) || 0,
+      totalPlaylists: parseInt(playlists.rows[0].count) || 0,
+      totalSlideshows: parseInt(slideshows.rows[0].count) || 0,
+      totalProducts: parseInt(products.rows[0].count) || 0,
+      totalActivationCodes: parseInt(activationCodes.rows[0].count) || 0,
+      totalScans: parseInt(totalScansResult.rows[0].total_scans) || 0,
+      recentActivity: [], // To be implemented with activity tracking
+    });
+  } catch (error) {
+    console.error('Error fetching user analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch user analytics' });
+  }
+});
+
+// Track QR code scan
+app.post('/api/analytics/track-scan', async (req, res) => {
+  try {
+    const {
+      qrCodeId,
+      location,
+      device,
+      countryName,
+      countryCode,
+      deviceType,
+      browserName,
+      operatingSystem,
+      ipAddress,
+    } = req.body;
+    
+    // Insert scan record
+    await pool.query(`
+      INSERT INTO qr_scans (
+        qr_code_id, location, device, country_name, country_code,
+        device_type, browser_name, operating_system, ip_address
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [
+      qrCodeId, location, device, countryName, countryCode,
+      deviceType, browserName, operatingSystem, ipAddress
+    ]);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking QR scan:', error);
+    res.status(500).json({ error: 'Failed to track scan' });
+  }
+});
+
+// Track playlist access
+app.post('/api/analytics/track-playlist-access', async (req, res) => {
+  try {
+    const { playlistId, location, device, userAgent, ipAddress } = req.body;
+    
+    // For now, we'll store playlist access in a simple way
+    // In the future, you might want a dedicated playlist_access table
+    console.log('📊 Playlist access tracked:', { playlistId, location, device, userAgent, ipAddress });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking playlist access:', error);
+    res.status(500).json({ error: 'Failed to track playlist access' });
+  }
+});
+
+// Track slideshow access
+app.post('/api/analytics/track-slideshow-access', async (req, res) => {
+  try {
+    const { slideshowId, location, device, userAgent, ipAddress } = req.body;
+    
+    // For now, we'll store slideshow access in a simple way
+    // In the future, you might want a dedicated slideshow_access table
+    console.log('📊 Slideshow access tracked:', { slideshowId, location, device, userAgent, ipAddress });
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking slideshow access:', error);
+    res.status(500).json({ error: 'Failed to track slideshow access' });
+  }
+});
+

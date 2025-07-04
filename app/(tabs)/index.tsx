@@ -17,6 +17,7 @@ import { analyticsService } from '@/services/analyticsService';
 import { AnalyticsSummary } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
+import { api } from '@/services/api';
 
 interface DashboardData {
   summary: {
@@ -66,53 +67,124 @@ export default function DashboardScreen() {
 
   const fetchDashboardData = async () => {
     try {
-      const data = await analyticsService.getAnalyticsSummary();
+      setIsLoading(true);
+      
+      // Fetch real analytics data
+      const analytics = await analyticsService.getAnalyticsSummary();
+      
+      // Fetch user's actual content counts
+      let userCounts = {
+        totalQRCodes: 0,
+        totalPlaylists: 0,
+        totalSlideshows: 0,
+        totalProducts: 0,
+        activationCodes: 0,
+      };
 
-      // Mock recent activity - replace with actual API call
-      const recentActivity = [
-        {
+      if (user) {
+        try {
+          // Fetch real counts from API
+          const [qrCodes, playlists, slideshows, products, activationCodes] = await Promise.all([
+            api.get('/qr-codes'),
+            api.get('/playlists'),
+            api.get('/slideshows'),
+            api.get('/products'),
+            api.get('/activation-codes'),
+          ]);
+
+          userCounts = {
+            totalQRCodes: qrCodes.data.qrCodes?.length || 0,
+            totalPlaylists: playlists.data.playlists?.length || 0,
+            totalSlideshows: slideshows.data.slideshows?.length || 0,
+            totalProducts: products.data.products?.length || 0,
+            activationCodes: activationCodes.data.activationCodes?.length || 0,
+          };
+        } catch (error) {
+          console.error('Error fetching user content counts:', error);
+        }
+      }
+
+      // Create recent activity from real data
+      const recentActivity: Array<{
+        id: number;
+        type: 'scan' | 'playlist' | 'qrcode' | 'product' | 'achievement';
+        description: string;
+        timestamp: string;
+        metadata?: any;
+      }> = [];
+
+      // Add recent scans from analytics
+      if (analytics.recentScans && analytics.recentScans.length > 0) {
+        analytics.recentScans.forEach((scan, index) => {
+          recentActivity.push({
+            id: index + 1,
+            type: 'scan',
+            description: `QR Code scanned: ${scan.qrName || 'Unknown QR Code'}`,
+            timestamp: scan.timestamp,
+            metadata: scan,
+          });
+        });
+      }
+
+      // If no real activity, show empty state
+      if (recentActivity.length === 0) {
+        recentActivity.push({
           id: 1,
-          type: 'scan' as const,
-          description: 'QR Code scanned: My Playlist',
+          type: 'scan',
+          description: 'No recent activity - create your first QR code to get started!',
           timestamp: new Date().toISOString(),
-        },
-        {
-          id: 2,
-          type: 'playlist' as const,
-          description: 'New playlist created: Summer Hits',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-        },
-      ];
+        });
+      }
 
       setDashboardData({
         summary: {
-          totalScans: data.totalScans || 0,
-          scansToday: data.todayScans || 0,
-          totalQRCodes: 5, // Mock data
-          totalPlaylists: 3, // Mock data
-          totalSlideshows: 2, // Mock data
-          totalProducts: 8, // Mock data
-          activationCodes: 12, // Mock data
-          revenue: 1250, // Mock data
+          totalScans: analytics.totalScans || 0,
+          scansToday: analytics.todayScans || 0,
+          totalQRCodes: userCounts.totalQRCodes,
+          totalPlaylists: userCounts.totalPlaylists,
+          totalSlideshows: userCounts.totalSlideshows,
+          totalProducts: userCounts.totalProducts,
+          activationCodes: userCounts.activationCodes,
+          revenue: 0, // Will be populated from real sales data when implemented
         },
         recentActivity,
         analytics: {
-          scanHistory: [
-            { date: '2024-01-01', count: 10 },
-            { date: '2024-01-02', count: 15 },
-            { date: '2024-01-03', count: 8 },
-            { date: '2024-01-04', count: 22 },
-            { date: '2024-01-05', count: 18 },
-            { date: '2024-01-06', count: 25 },
-            { date: '2024-01-07', count: 30 },
-          ],
-          topQRCodes: data.topQRCodes || [],
-          deviceBreakdown: data.topDevices || [],
+          scanHistory: analytics.hourlyData ? analytics.hourlyData.map((count, hour) => ({
+            date: new Date(Date.now() - (23 - hour) * 60 * 60 * 1000).toISOString(),
+            count: count || 0,
+          })) : [],
+          topQRCodes: [], // Will be populated from real QR code analytics
+          deviceBreakdown: analytics.topDevices || [],
         },
-        achievements: [],
+        achievements: [], // Will be populated when achievement system is implemented
       });
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Set empty state instead of mock data
+      setDashboardData({
+        summary: {
+          totalScans: 0,
+          scansToday: 0,
+          totalQRCodes: 0,
+          totalPlaylists: 0,
+          totalSlideshows: 0,
+          totalProducts: 0,
+          activationCodes: 0,
+          revenue: 0,
+        },
+        recentActivity: [{
+          id: 1,
+          type: 'scan',
+          description: 'Unable to load activity data',
+          timestamp: new Date().toISOString(),
+        }],
+        analytics: {
+          scanHistory: [],
+          topQRCodes: [],
+          deviceBreakdown: [],
+        },
+        achievements: [],
+      });
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -153,7 +225,7 @@ export default function DashboardScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.loadingText}>Loading dashboard...</Text>
       </View>
@@ -535,6 +607,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f8fafc',
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 12,

@@ -1,87 +1,128 @@
 import { AnalyticsSummary, ScanData } from '../types';
+import { api } from './api';
 
 export const analyticsService = {
-  // Get analytics summary
+  // Get analytics summary from real data
   async getAnalyticsSummary(): Promise<AnalyticsSummary> {
-    // Mock data for development
-    return Promise.resolve({
-      totalScans: 1247,
-      todayScans: 89,
-      weekScans: 423,
-      monthScans: 856,
-      uniqueVisitors: 789,
-      avgScansPerDay: 42,
-      conversionRate: 12.5,
-      scanGrowth: 15.2,
-      visitorGrowth: 8.7,
-      dailyGrowth: 22.1,
-      conversionGrowth: 5.3,
-      topCountries: [
-        { country: 'United States', count: 456, flag: '🇺🇸' },
-        { country: 'Canada', count: 234, flag: '🇨🇦' },
-        { country: 'United Kingdom', count: 189, flag: '🇬🇧' },
-        { country: 'Germany', count: 167, flag: '🇩🇪' },
-        { country: 'France', count: 98, flag: '🇫🇷' },
-      ],
-      topDevices: [
-        { device: 'iPhone 15 Pro', count: 234 },
-        { device: 'Samsung Galaxy S24', count: 189 },
-        { device: 'iPhone 14', count: 156 },
-        { device: 'Google Pixel 8', count: 134 },
-        { device: 'OnePlus 12', count: 98 },
-      ],
-      hourlyData: [2, 1, 0, 1, 3, 8, 15, 25, 35, 42, 38, 45, 52, 48, 44, 51, 58, 62, 45, 38, 28, 18, 12, 6],
-      recentScans: [
-        {
-          qrName: 'Website Homepage',
-          location: 'New York, US',
-          device: 'iPhone 15 Pro',
-          timestamp: new Date().toISOString(),
-        },
-        {
-          qrName: 'Product Catalog',
-          location: 'Toronto, CA',
-          device: 'Samsung Galaxy S24',
-          timestamp: new Date(Date.now() - 300000).toISOString(),
-        },
-        {
-          qrName: 'Contact Info',
-          location: 'London, UK',
-          device: 'iPhone 14',
-          timestamp: new Date(Date.now() - 600000).toISOString(),
-        },
-      ],
-    });
+    try {
+      // Fetch real analytics data from server
+      const response = await api.get('/analytics/summary');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching analytics summary:', error);
+      // Return empty/zero state instead of mock data
+      return {
+        totalScans: 0,
+        todayScans: 0,
+        weekScans: 0,
+        monthScans: 0,
+        uniqueVisitors: 0,
+        avgScansPerDay: 0,
+        conversionRate: 0,
+        scanGrowth: 0,
+        visitorGrowth: 0,
+        dailyGrowth: 0,
+        conversionGrowth: 0,
+        topCountries: [],
+        topDevices: [],
+        hourlyData: Array(24).fill(0),
+        recentScans: [],
+      };
+    }
   },
 
-  // Get detailed scan data
+  // Get detailed scan data from real tracking
   async getScanData(qrCodeId: number): Promise<ScanData[]> {
-    // Mock data for development
-    return Promise.resolve([
-      {
-        id: 1,
-        qrCodeId,
-        timestamp: new Date().toISOString(),
-        location: 'New York, NY',
-        device: 'iPhone 15',
-        browser: 'Safari',
-        ipAddress: '192.168.1.1'
-      },
-      {
-        id: 2,
-        qrCodeId,
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        location: 'Los Angeles, CA',
-        device: 'Samsung Galaxy S24',
-        browser: 'Chrome',
-        ipAddress: '192.168.1.2'
-      }
-    ]);
+    try {
+      const response = await api.get(`/analytics/scans/${qrCodeId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching scan data:', error);
+      return [];
+    }
   },
 
-  // Get scan analytics by date range
+  // Get scan analytics by date range from real data
   async getScansByDateRange(startDate: string, endDate: string): Promise<ScanData[]> {
-    // Mock data for development
-    return this.getScanData(1);
-  }
+    try {
+      const response = await api.get(`/analytics/scans?startDate=${startDate}&endDate=${endDate}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching scans by date range:', error);
+      return [];
+    }
+  },
+
+  // Get analytics for specific user's content
+  async getUserAnalytics(userId: number): Promise<any> {
+    try {
+      const response = await api.get(`/analytics/user/${userId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching user analytics:', error);
+      return {
+        totalQRCodes: 0,
+        totalScans: 0,
+        totalPlaylists: 0,
+        totalSlideshows: 0,
+        totalProducts: 0,
+        recentActivity: [],
+      };
+    }
+  },
+
+  // Track QR code scan
+  async trackQRScan(qrCodeId: number, scanData: {
+    location?: string;
+    device?: string;
+    countryName?: string;
+    countryCode?: string;
+    deviceType?: string;
+    browserName?: string;
+    operatingSystem?: string;
+    ipAddress?: string;
+  }): Promise<void> {
+    try {
+      await api.post('/analytics/track-scan', {
+        qrCodeId,
+        ...scanData,
+      });
+    } catch (error) {
+      console.error('Error tracking QR scan:', error);
+    }
+  },
+
+  // Track playlist access
+  async trackPlaylistAccess(playlistId: number, accessData: {
+    location?: string;
+    device?: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<void> {
+    try {
+      await api.post('/analytics/track-playlist-access', {
+        playlistId,
+        ...accessData,
+      });
+    } catch (error) {
+      console.error('Error tracking playlist access:', error);
+    }
+  },
+
+  // Track slideshow access
+  async trackSlideshowAccess(slideshowId: number, accessData: {
+    location?: string;
+    device?: string;
+    userAgent?: string;
+    ipAddress?: string;
+  }): Promise<void> {
+    try {
+      await api.post('/analytics/track-slideshow-access', {
+        slideshowId,
+        ...accessData,
+      });
+    } catch (error) {
+      console.error('Error tracking slideshow access:', error);
+    }
+  },
 };

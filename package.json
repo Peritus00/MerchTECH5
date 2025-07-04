@@ -25,6 +25,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.842.0",
     "@aws-sdk/lib-storage": "^3.842.0",
+    "@aws-sdk/s3-request-presigner": "^3.842.0",
     "@expo/vector-icons": "^14.1.0",
     "@hookform/resolvers": "^5.1.1",
     "@react-native-async-storage/async-storage": "2.1.2",
@@ -93,6 +94,7 @@
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
     "stripe": "^18.2.1",
+    "tslib": "^2.8.1",
     "uuid": "^11.1.0",
     "zod": "^3.25.67"
   },
