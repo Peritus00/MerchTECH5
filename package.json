@@ -23,6 +23,8 @@
     "preset": "jest-expo"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.842.0",
+    "@aws-sdk/lib-storage": "^3.842.0",
     "@expo/vector-icons": "^14.1.0",
     "@hookform/resolvers": "^5.1.1",
     "@react-native-async-storage/async-storage": "2.1.2",
@@ -42,6 +44,7 @@
     "dotenv": "^16.5.0",
     "expo": "53.0.13",
     "expo-audio": "~0.4.7",
+    "expo-av": "~15.1.7",
     "expo-blur": "~14.1.4",
     "expo-clipboard": "^7.1.4",
     "expo-constants": "~17.1.6",
@@ -91,8 +94,7 @@
     "react-native-webview": "13.13.5",
     "stripe": "^18.2.1",
     "uuid": "^11.1.0",
-    "zod": "^3.25.67",
-    "expo-av": "~15.1.7"
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

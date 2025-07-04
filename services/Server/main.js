@@ -7,6 +7,20 @@ const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+const axios = require('axios');
+
+// Import S3 service (will be undefined if not available)
+let s3Service;
+try {
+  const s3Module = require('../s3Service.ts');
+  s3Service = s3Module.s3Service;
+  console.log('✅ S3 service loaded successfully');
+} catch (error) {
+  console.log('⚠️  S3 service not available, using local/base64 storage');
+  s3Service = null;
+}
+
 // Load .env from project root regardless of where the script is run from
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
@@ -671,11 +685,51 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     console.log(`✅ Media upload allowed: User ${req.user.userId} has ${currentCount}/${maxMediaFiles} media files`);
     // END SUBSCRIPTION CHECK
 
+    let finalUrl = url;
+    let s3Key = null;
+
+    // 🌟 S3 UPLOAD LOGIC - Upload to S3 if configured and URL is base64 data
+    if (s3Service && s3Service.isConfigured() && url.startsWith('data:')) {
+      try {
+        console.log('📤 S3: Attempting to upload to S3...');
+        
+        // Extract base64 data from data URL
+        const dataUrlMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+        if (dataUrlMatch) {
+          const [, mimeType, base64Data] = dataUrlMatch;
+          const fileBuffer = Buffer.from(base64Data, 'base64');
+          
+          // Generate filename if not provided
+          const uploadFilename = filename || `media-${Date.now()}.${mimeType.split('/')[1] || 'bin'}`;
+          
+          // Upload to S3
+          const s3Url = await s3Service.uploadFile(fileBuffer, uploadFilename, mimeType, req.user.userId.toString());
+          
+          // Extract S3 key for future reference
+          s3Key = s3Service.extractKeyFromUrl(s3Url);
+          
+          // Use S3 URL instead of base64 data
+          finalUrl = s3Url;
+          
+          console.log('✅ S3: File uploaded successfully to S3');
+          console.log(`📊 S3: File size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+          console.log(`🔗 S3: URL: ${s3Url}`);
+        } else {
+          console.log('⚠️  S3: Invalid data URL format, falling back to base64 storage');
+        }
+      } catch (error) {
+        console.error('❌ S3: Upload failed, falling back to base64 storage:', error);
+        // Continue with base64 storage as fallback
+      }
+    } else if (url.startsWith('data:')) {
+      console.log('📋 Using base64 storage (S3 not configured or not available)');
+    }
+
     const result = await pool.query(
-      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, s3_key) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
-      [req.user.userId, title, filePath || url, url, filename, fileType, contentType, filesize, duration, uniqueId]
+      [req.user.userId, title, filePath || finalUrl, finalUrl, filename, fileType, contentType, filesize, duration, uniqueId, s3Key]
     );
 
     res.status(201).json(result.rows[0]);
@@ -828,6 +882,18 @@ app.delete('/api/media/:id', authenticateToken, async (req, res) => {
     
     if (media.user_id !== req.user.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
+    }
+    
+    // 🗑️ S3 DELETION LOGIC - Delete from S3 if stored there
+    if (s3Service && s3Service.isConfigured() && media.s3_key) {
+      try {
+        console.log(`🗑️ S3: Attempting to delete file from S3: ${media.s3_key}`);
+        await s3Service.deleteFile(media.s3_key);
+        console.log('✅ S3: File deleted successfully from S3');
+      } catch (error) {
+        console.error('❌ S3: Failed to delete file from S3:', error);
+        // Continue with database deletion even if S3 deletion fails
+      }
     }
     
     await pool.query('DELETE FROM media WHERE id = $1', [id]);
