@@ -641,34 +641,34 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
-    let maxAudioFiles;
+    let maxMediaFiles;
     if (user?.max_audio_files !== null && user?.max_audio_files !== undefined) {
-      // Admin has set a custom limit
-      maxAudioFiles = user.max_audio_files;
-      console.log(`📋 Using admin-set custom limit: ${maxAudioFiles} audio files for user ${req.user.userId}`);
+      // Admin has set a custom limit (keeping column name for backward compatibility)
+      maxMediaFiles = user.max_audio_files;
+      console.log(`📋 Using admin-set custom limit: ${maxMediaFiles} media files for user ${req.user.userId}`);
     } else {
       // Use subscription tier limits
       const limits = {
-        free: { maxAudioFiles: 3 },
-        basic: { maxAudioFiles: 10 },
-        premium: { maxAudioFiles: 20 }
+        free: { maxMediaFiles: 3 },
+        basic: { maxMediaFiles: 10 },
+        premium: { maxMediaFiles: 20 }
       };
-      maxAudioFiles = (limits[userTier] || limits.free).maxAudioFiles;
-      console.log(`📋 Using subscription tier limit: ${maxAudioFiles} audio files for ${userTier} plan`);
+      maxMediaFiles = (limits[userTier] || limits.free).maxMediaFiles;
+      console.log(`📋 Using subscription tier limit: ${maxMediaFiles} media files for ${userTier} plan`);
     }
     
-    if (currentCount >= maxAudioFiles) {
-      console.log(`🚫 Media upload blocked: User ${req.user.userId} has ${currentCount}/${maxAudioFiles} audio files`);
+    if (currentCount >= maxMediaFiles) {
+      console.log(`🚫 Media upload blocked: User ${req.user.userId} has ${currentCount}/${maxMediaFiles} media files`);
       return res.status(403).json({ 
-        error: `Audio file limit reached. You have reached your limit of ${maxAudioFiles} audio files. Please contact support if you need to increase your limit.`,
-        limit: maxAudioFiles,
+        error: `Media file limit reached. You have reached your limit of ${maxMediaFiles} media files. Please contact support if you need to increase your limit.`,
+        limit: maxMediaFiles,
         current: currentCount,
         subscriptionTier: userTier,
         isCustomLimit: user?.max_audio_files !== null && user?.max_audio_files !== undefined
       });
     }
 
-    console.log(`✅ Media upload allowed: User ${req.user.userId} has ${currentCount}/${maxAudioFiles} audio files`);
+    console.log(`✅ Media upload allowed: User ${req.user.userId} has ${currentCount}/${maxMediaFiles} media files`);
     // END SUBSCRIPTION CHECK
 
     const result = await pool.query(
@@ -724,10 +724,10 @@ app.get('/api/media/:id', async (req, res) => {
     
     const media = result.rows[0];
     
-    // Create a proper HTTP URL for the audio file
+    // Create a proper HTTP URL for the media file
     let properUrl = media.url;
     if (media.url && media.url.startsWith('data:')) {
-      // If it's base64 data, serve it through our audio streaming endpoint
+      // If it's base64 data, serve it through our media streaming endpoint
       properUrl = `${process.env.API_BASE_URL || 'http://localhost:5001'}/api/media/${id}/stream`;
     } else if (media.filename) {
       // If we have a filename, construct the proper URL
@@ -750,7 +750,7 @@ app.get('/api/media/:id', async (req, res) => {
   }
 });
 
-// Stream audio file from base64 data
+// Stream media file from base64 data
 app.get('/api/media/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
@@ -766,10 +766,11 @@ app.get('/api/media/:id/stream', async (req, res) => {
       return res.status(400).json({ error: 'Media file is not stored as base64 data' });
     }
     
-    // Clean up the data URL - handle potential duplicate prefixes
+    // Clean up the data URL - handle potential duplicate prefixes for any media type
     let cleanUrl = media.url;
-    if (cleanUrl.includes('data:audio/mpeg;base64,data:audio/mpeg;base64,')) {
-      cleanUrl = cleanUrl.replace('data:audio/mpeg;base64,data:audio/mpeg;base64,', 'data:audio/mpeg;base64,');
+    const duplicatePattern = /data:([^;]+);base64,data:([^;]+);base64,/;
+    if (duplicatePattern.test(cleanUrl)) {
+      cleanUrl = cleanUrl.replace(duplicatePattern, 'data:$1;base64,');
     }
     
     // Parse the data URL
@@ -790,16 +791,21 @@ app.get('/api/media/:id/stream', async (req, res) => {
         base64Data = innerMatch[2];
       }
     }
-    const audioBuffer = Buffer.from(base64Data, 'base64');
+    const mediaBuffer = Buffer.from(base64Data, 'base64');
     
-    // Set appropriate headers for audio streaming
-    res.setHeader('Content-Type', mimeType || 'audio/mpeg');
-    res.setHeader('Content-Length', audioBuffer.length);
+    // Set appropriate headers for media streaming (audio/video)
+    res.setHeader('Content-Type', mimeType || 'application/octet-stream');
+    res.setHeader('Content-Length', mediaBuffer.length);
     res.setHeader('Accept-Ranges', 'bytes');
     res.setHeader('Cache-Control', 'public, max-age=3600');
     
-    // Send the audio data
-    res.send(audioBuffer);
+    // Add additional headers for video files
+    if (mimeType && mimeType.startsWith('video/')) {
+      res.setHeader('Content-Disposition', 'inline');
+    }
+    
+    // Send the media data
+    res.send(mediaBuffer);
   } catch (error) {
     console.error('Error streaming media:', error);
     res.status(500).json({ error: 'Failed to stream media file' });

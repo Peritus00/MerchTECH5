@@ -15,10 +15,11 @@ export interface SubscriptionLimitsData {
   tier: string;
   limits: {
     maxProducts: number;
-    maxAudioFiles: number;
+    maxMediaFiles: number;
     maxPlaylists: number;
     maxQrCodes: number;
     maxSlideshows: number;
+    maxVideos: number;
     canEditPlaylists: boolean;
   };
   usage: UsageStats;
@@ -46,7 +47,7 @@ export const useSubscriptionLimits = (): SubscriptionLimitsData => {
   
   const limits = {
     maxProducts: user?.maxProducts ?? tierLimits.maxProducts,
-    maxAudioFiles: user?.maxAudioFiles ?? tierLimits.maxAudioFiles,
+    maxMediaFiles: user?.maxAudioFiles ?? tierLimits.maxAudioFiles,
     maxQrCodes: user?.maxQrCodes ?? tierLimits.maxQrCodes,
     maxSlideshows: user?.maxSlideshows ?? tierLimits.maxSlideshows,
     maxVideos: user?.maxVideos ?? tierLimits.maxVideos,
@@ -90,8 +91,8 @@ export const useSubscriptionLimits = (): SubscriptionLimitsData => {
         contentName = 'products';
         break;
       case 'media':
-        limit = limits.maxAudioFiles;
-        contentName = 'audio files';
+        limit = limits.maxMediaFiles;
+        contentName = 'media files';
         break;
       case 'playlists':
         limit = userTier === 'premium' ? 50 : userTier === 'basic' ? 25 : 10;
@@ -128,7 +129,7 @@ export const useSubscriptionLimits = (): SubscriptionLimitsData => {
         limit = limits.maxProducts;
         break;
       case 'media':
-        limit = limits.maxAudioFiles;
+        limit = limits.maxMediaFiles;
         break;
       case 'playlists':
         limit = userTier === 'premium' ? 50 : userTier === 'basic' ? 25 : 10;
