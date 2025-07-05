@@ -24,7 +24,12 @@
         "backgroundColor": "#ffffff"
       },
       "usesCleartextTraffic": true,
-      "networkSecurityConfig": "network_security_config.xml"
+      "networkSecurityConfig": "network_security_config.xml",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "package": "com.peritus00.merchtech"
     },
     "web": {
       "bundler": "metro",
@@ -41,9 +46,11 @@
       "typedRoutes": true
     },
     "extra": {
+      "router": {},
       "eas": {
-        "projectId": "8f9a3e4c-7b2d-4a1e-9f8c-6d5e4f3a2b1c"
+        "projectId": "90775694-0f94-4a4c-b80f-ee1c26e228fa"
       }
-    }
+    },
+    "owner": "peritus00"
   }
 }
