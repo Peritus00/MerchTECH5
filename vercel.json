@@ -7,6 +7,10 @@
       "config": {
         "maxLambdaSize": "50mb"
       }
+    },
+    {
+      "src": "dist/**/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -15,8 +19,16 @@
       "dest": "services/Server/main.js"
     },
     {
+      "src": "/_expo/(.*)",
+      "dest": "/dist/_expo/$1"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json))",
+      "dest": "/dist/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "services/Server/main.js"
+      "dest": "/dist/index.html"
     }
   ],
   "env": {

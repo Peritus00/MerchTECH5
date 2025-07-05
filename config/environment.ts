@@ -21,14 +21,15 @@ class Environment {
   }
 
   private loadConfig(): EnvironmentConfig {
-    const nodeEnv = (process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
+    // Check both regular and EXPO_PUBLIC_ prefixed environment variables
+    const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
     return {
       API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api',
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: nodeEnv === 'production',
       IS_DEVELOPMENT: nodeEnv === 'development',
-      FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:8081',
+      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:8081',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }
