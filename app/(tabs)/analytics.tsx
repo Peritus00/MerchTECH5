@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { analyticsService } from '@/services/analyticsService';
 import { useAuth } from '@/contexts/AuthContext';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -563,12 +564,12 @@ export default function AnalyticsScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>Analytics</Text>
-        <TouchableOpacity onPress={onRefresh}>
-          <MaterialIcons name="refresh" size={24} color="#3b82f6" />
-        </TouchableOpacity>
-      </View>
+      <HeaderWithLogo
+        title="Analytics"
+        onRightButtonPress={onRefresh}
+        rightButtonIcon="refresh"
+        rightButtonColor="#3b82f6"
+      />
 
       {/* Time Range Selector */}
       <TimeRangeSelector

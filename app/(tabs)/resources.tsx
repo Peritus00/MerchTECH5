@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import ResourceCard from '@/components/ResourceCard';
 import QuickAccessCard from '@/components/QuickAccessCard';
 
@@ -146,15 +147,13 @@ const ResourcesScreen = () => {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>Resources</Text>
-          <Text style={styles.headerSubtitle}>Tools & Services for Artists</Text>
-        </View>
-        <TouchableOpacity onPress={() => router.push('/settings/profile')}>
-          <MaterialIcons name="account-circle" size={32} color="#6b7280" />
-        </TouchableOpacity>
-      </View>
+      <HeaderWithLogo
+        title="Resources"
+        subtitle="Tools & Services for Artists"
+        onRightButtonPress={() => router.push('/settings/profile')}
+        rightButtonIcon="account-circle"
+        rightButtonColor="#6b7280"
+      />
 
       <ScrollView 
         style={styles.scrollView} 

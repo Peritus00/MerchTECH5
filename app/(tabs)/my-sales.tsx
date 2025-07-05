@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { useAuth } from '@/contexts/AuthContext';
 
 const { width: screenWidth } = Dimensions.get('window');
@@ -384,12 +385,12 @@ export default function MySalesScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <ThemedView style={styles.header}>
-        <ThemedText style={styles.title}>My Sales</ThemedText>
-        <TouchableOpacity onPress={exportData} style={styles.exportButton}>
-          <Ionicons name="download" size={20} color="#3b82f6" />
-        </TouchableOpacity>
-      </ThemedView>
+      <HeaderWithLogo
+        title="My Sales"
+        onRightButtonPress={exportData}
+        rightButtonIcon="download"
+        rightButtonColor="#3b82f6"
+      />
 
       {/* Tab Navigation */}
       <ScrollView 

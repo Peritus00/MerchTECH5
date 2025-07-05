@@ -14,6 +14,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import SlideshowCard from '@/components/SlideshowCard';
 import CreateSlideshowModal from '@/components/CreateSlideshowModal';
 import SlideshowImageManager from '@/components/SlideshowImageManager';
@@ -149,12 +150,12 @@ export default function SlideshowsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Slideshows</Text>
-        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-          <MaterialIcons name="add" size={24} color="#3b82f6" />
-        </TouchableOpacity>
-      </View>
+      <HeaderWithLogo
+        title="Slideshows"
+        onRightButtonPress={() => setShowCreateModal(true)}
+        rightButtonIcon="add"
+        rightButtonColor="#3b82f6"
+      />
 
       <ScrollView
         style={styles.scrollView}

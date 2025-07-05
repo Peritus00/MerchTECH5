@@ -19,6 +19,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { activationCodesAPI, playlistAPI, slideshowAPI } from '@/services/api';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 
 type TabType = 'generate' | 'myAccess' | 'allGenerated';
 
@@ -1171,9 +1172,7 @@ const ActivationCodesScreen = () => {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <ThemedText style={styles.title}>Activation Codes</ThemedText>
-      </View>
+      <HeaderWithLogo title="Activation Codes" />
 
       <View style={styles.tabContainer}>
         {renderTabButton('generate', 'Generate')}
