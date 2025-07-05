@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
@@ -63,7 +63,7 @@ export default function ForgotPasswordScreen() {
         <ThemedView style={styles.container}>
           <View style={styles.content}>
             <View style={styles.successContainer}>
-              <MaterialIcons name="check-circle" size={64} color="#22c55e" />
+              <MaterialIconWithFallback name="check-circle" size={64} color="#22c55e" />
               <ThemedText type="title" style={styles.successTitle}>
                 Check Your Email
               </ThemedText>
@@ -113,7 +113,7 @@ export default function ForgotPasswordScreen() {
       >
         <ThemedView style={styles.content}>
           <View style={styles.header}>
-            <MaterialIcons name="lock-reset" size={48} color="#3b82f6" />
+            <MaterialIconWithFallback name="lock-reset" size={48} color="#3b82f6" />
             <ThemedText type="title">Forgot Password?</ThemedText>
             <ThemedText type="subtitle" style={styles.subtitle}>
               Enter your email address and we'll send you a link to reset your password.
@@ -123,7 +123,7 @@ export default function ForgotPasswordScreen() {
           <View style={styles.form}>
             {error && (
               <View style={styles.errorContainer}>
-                <MaterialIcons name="error" size={16} color="#ef4444" />
+                <MaterialIconWithFallback name="error" size={16} color="#ef4444" />
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             )}
@@ -131,7 +131,7 @@ export default function ForgotPasswordScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Email Address</ThemedText>
               <View style={[styles.inputContainer, error && styles.inputError]}>
-                <MaterialIcons name="email" size={20} color="#6b7280" style={styles.inputIcon} />
+                <MaterialIconWithFallback name="email" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={email}

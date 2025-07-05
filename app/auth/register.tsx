@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 
 interface FormErrors {
@@ -216,7 +216,7 @@ export default function RegisterScreen() {
           <View style={styles.form}>
             {errors.general && (
               <View style={styles.errorContainer}>
-                <MaterialIcons name="error" size={16} color="#ef4444" />
+                <MaterialIconWithFallback name="error" size={16} color="#ef4444" />
                 <Text style={styles.errorText}>{errors.general}</Text>
               </View>
             )}
@@ -224,7 +224,7 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Email Address</ThemedText>
               <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                <MaterialIcons name="email" size={20} color="#6b7280" style={styles.inputIcon} />
+                <MaterialIconWithFallback name="email" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={formData.email}
@@ -243,7 +243,7 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Username</ThemedText>
               <View style={[styles.inputContainer, errors.username && styles.inputError]}>
-                <MaterialIcons name="person" size={20} color="#6b7280" style={styles.inputIcon} />
+                <MaterialIconWithFallback name="person" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={formData.username}
@@ -261,7 +261,7 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Password</ThemedText>
               <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-                <MaterialIcons name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
+                <MaterialIconWithFallback name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={formData.password}
@@ -276,7 +276,7 @@ export default function RegisterScreen() {
                   onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                   style={styles.eyeIcon}
                 >
-                  <MaterialIcons 
+                  <MaterialIconWithFallback 
                     name={isPasswordVisible ? 'visibility' : 'visibility-off'} 
                     size={20} 
                     color="#6b7280" 
@@ -321,7 +321,7 @@ export default function RegisterScreen() {
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Confirm Password</ThemedText>
               <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
-                <MaterialIcons name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
+                <MaterialIconWithFallback name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={formData.confirmPassword}
@@ -336,7 +336,7 @@ export default function RegisterScreen() {
                   onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
                   style={styles.eyeIcon}
                 >
-                  <MaterialIcons 
+                  <MaterialIconWithFallback 
                     name={isConfirmPasswordVisible ? 'visibility' : 'visibility-off'} 
                     size={20} 
                     color="#6b7280" 
@@ -353,7 +353,7 @@ export default function RegisterScreen() {
                   onPress={() => setAgreeToTerms(!agreeToTerms)}
                 >
                   {agreeToTerms && (
-                    <MaterialIcons name="check" size={16} color="#fff" />
+                    <MaterialIconWithFallback name="check" size={16} color="#fff" />
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>
@@ -373,7 +373,7 @@ export default function RegisterScreen() {
                   onPress={() => setAgreeToPrivacy(!agreeToPrivacy)}
                 >
                   {agreeToPrivacy && (
-                    <MaterialIcons name="check" size={16} color="#fff" />
+                    <MaterialIconWithFallback name="check" size={16} color="#fff" />
                   )}
                 </TouchableOpacity>
                 <View style={styles.checkboxTextContainer}>

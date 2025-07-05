@@ -12,7 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
@@ -213,13 +213,13 @@ export default function MediaScreen() {
       >
         {filteredFiles.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="library-music" size={64} color="#9ca3af" />
+            <MaterialIconWithFallback name="library-music" size={64} color="#9ca3af" />
             <ThemedText style={styles.emptyText}>No media files found</ThemedText>
             <ThemedText style={styles.emptySubtext}>
               Upload your first {selectedTab === 'all' ? 'media' : selectedTab} file to get started
             </ThemedText>
             <TouchableOpacity style={styles.createButton} onPress={handleUpload}>
-              <MaterialIcons name="cloud-upload" size={20} color="#fff" />
+              <MaterialIconWithFallback name="cloud-upload" size={20} color="#fff" />
               <Text style={styles.createButtonText}>Upload File</Text>
             </TouchableOpacity>
           </View>
@@ -251,7 +251,7 @@ export default function MediaScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.dialogContainer}>
             <View style={styles.dialogHeader}>
-              <MaterialIcons name="delete-forever" size={32} color="#ef4444" />
+              <MaterialIconWithFallback name="delete-forever" size={32} color="#ef4444" />
               <Text style={styles.dialogTitle}>Delete File</Text>
             </View>
             

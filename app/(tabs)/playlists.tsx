@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { router } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -229,7 +229,7 @@ export default function PlaylistsScreen() {
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
-        <MaterialIcons name="search" size={20} color="#6b7280" />
+                      <MaterialIconWithFallback name="search" size={20} color="#6b7280" />
         <TextInput
           style={styles.searchInput}
           placeholder="Search playlists..."
@@ -239,7 +239,7 @@ export default function PlaylistsScreen() {
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery('')}>
-            <MaterialIcons name="clear" size={20} color="#6b7280" />
+            <MaterialIconWithFallback name="clear" size={20} color="#6b7280" />
           </TouchableOpacity>
         )}
       </View>
@@ -278,7 +278,7 @@ export default function PlaylistsScreen() {
       >
         {filteredPlaylists.length === 0 ? (
           <View style={styles.emptyContainer}>
-            <MaterialIcons name="queue-music" size={64} color="#9ca3af" />
+            <MaterialIconWithFallback name="queue-music" size={64} color="#9ca3af" />
             <ThemedText style={styles.emptyText}>
               {searchQuery ? 'No playlists found' : 'No playlists yet'}
             </ThemedText>
@@ -295,7 +295,7 @@ export default function PlaylistsScreen() {
                 style={styles.createButton} 
                 onPress={() => setShowCreateModal(true)}
               >
-                <MaterialIcons name="add" size={20} color="#fff" />
+                <MaterialIconWithFallback name="add" size={20} color="#fff" />
                 <Text style={styles.createButtonText}>Create Playlist</Text>
               </TouchableOpacity>
             )}

@@ -9,7 +9,7 @@ import {
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
@@ -66,9 +66,9 @@ export default function VerifyEmailScreen() {
   const renderSuccessView = () => (
     <View style={styles.centerContainer}>
       <View style={styles.iconContainer}>
-        <MaterialIcons name="check-circle" size={100} color="#22c55e" />
+        <MaterialIconWithFallback name="check-circle" size={100} color="#22c55e" />
         <View style={styles.successBadge}>
-          <MaterialIcons name="verified" size={24} color="#fff" />
+          <MaterialIconWithFallback name="verified" size={24} color="#fff" />
         </View>
       </View>
 
@@ -87,27 +87,27 @@ export default function VerifyEmailScreen() {
 
         <View style={styles.featuresList}>
           <View style={styles.featureItem}>
-            <MaterialIcons name="qr-code" size={20} color="#22c55e" />
+            <MaterialIconWithFallback name="qr-code" size={20} color="#22c55e" />
             <ThemedText style={styles.featureText}>QR Code Generation & Management</ThemedText>
           </View>
 
           <View style={styles.featureItem}>
-            <MaterialIcons name="analytics" size={20} color="#22c55e" />
+            <MaterialIconWithFallback name="analytics" size={20} color="#22c55e" />
             <ThemedText style={styles.featureText}>Analytics Dashboard</ThemedText>
           </View>
 
           <View style={styles.featureItem}>
-            <MaterialIcons name="cloud-upload" size={20} color="#22c55e" />
+            <MaterialIconWithFallback name="cloud-upload" size={20} color="#22c55e" />
             <ThemedText style={styles.featureText}>Media Upload & Management</ThemedText>
           </View>
 
           <View style={styles.featureItem}>
-            <MaterialIcons name="store" size={20} color="#22c55e" />
+            <MaterialIconWithFallback name="store" size={20} color="#22c55e" />
             <ThemedText style={styles.featureText}>Store Integration</ThemedText>
           </View>
 
           <View style={styles.featureItem}>
-            <MaterialIcons name="star" size={20} color="#22c55e" />
+            <MaterialIconWithFallback name="star" size={20} color="#22c55e" />
             <ThemedText style={styles.featureText}>Premium Features</ThemedText>
           </View>
         </View>
@@ -117,7 +117,7 @@ export default function VerifyEmailScreen() {
         style={styles.continueButton}
         onPress={handleContinue}
       >
-        <MaterialIcons name="dashboard" size={20} color="#fff" style={styles.buttonIcon} />
+        <MaterialIconWithFallback name="dashboard" size={20} color="#fff" style={styles.buttonIcon} />
         <ThemedText style={styles.continueButtonText}>
           Start Using MerchTech QR
         </ThemedText>
@@ -131,7 +131,7 @@ export default function VerifyEmailScreen() {
 
   const renderAlreadyVerifiedView = () => (
     <View style={styles.centerContainer}>
-      <MaterialIcons name="verified-user" size={80} color="#3b82f6" />
+      <MaterialIconWithFallback name="verified-user" size={80} color="#3b82f6" />
       <ThemedText type="title" style={styles.infoTitle}>
         Already Verified
       </ThemedText>
@@ -152,7 +152,7 @@ export default function VerifyEmailScreen() {
 
   const renderErrorView = () => (
     <View style={styles.centerContainer}>
-      <MaterialIcons name="error" size={80} color="#ef4444" />
+      <MaterialIconWithFallback name="error" size={80} color="#ef4444" />
       <ThemedText type="title" style={styles.errorTitle}>
         Verification Failed
       </ThemedText>
@@ -184,7 +184,7 @@ export default function VerifyEmailScreen() {
 
   const renderLoadingView = () => (
     <View style={styles.centerContainer}>
-      <MaterialIcons name="hourglass-empty" size={80} color="#6b7280" />
+      <MaterialIconWithFallback name="hourglass-empty" size={80} color="#6b7280" />
       <ThemedText style={styles.loadingText}>
         Processing verification...
       </ThemedText>
