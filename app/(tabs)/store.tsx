@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { useCart } from '@/contexts/CartContext';
 import { Product } from '@/shared/product-schema';
 import ProductCard from '@/components/ProductCard';
@@ -183,18 +184,18 @@ export default function StoreScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <ThemedView style={styles.header}>
-        <ThemedView style={styles.headerLeft}>
-          <ThemedText type="title" style={styles.headerTitle}>
-            {user ? `${user.firstName || user.username || 'My'} Store` : 'Store'}
-          </ThemedText>
-          <ThemedText style={styles.headerSubtitle}>
-            {user ? `Support ${user.firstName || user.username || 'this creator'} by buying a product today :)` : 'Browse our products and services'}
-          </ThemedText>
-        </ThemedView>
-
-        {/* Central Share Button */}
-        <View style={styles.headerCenter}>
+      <HeaderWithLogo
+        title={user ? `${user.firstName || user.username || 'My'} Store` : 'Store'}
+        subtitle={user ? `Support ${user.firstName || user.username || 'this creator'} by buying a product today :)` : 'Browse our products and services'}
+        onRightButtonPress={handleCartPress}
+        rightButtonIcon="shopping-cart"
+        rightButtonColor="#3b82f6"
+        logoVariant="gold"
+      />
+      
+      {/* Additional Store Actions */}
+      <ThemedView style={styles.storeActions}>
+        <View style={styles.shareButtonContainer}>
           <ShareButton
             url={getStoreUrl()}
             title={getStoreTitle()}
@@ -203,21 +204,10 @@ export default function StoreScreen() {
             compact={false}
           />
         </View>
-
-        <ThemedView style={styles.headerRight}>
-          <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
-            <ThemedText style={styles.publicShopButtonText}>MERCHTECH OFFICIAL STORE ↗️</ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
-            <ThemedText style={styles.cartIcon}>🛍</ThemedText>
-            {getTotalItems() > 0 && (
-              <ThemedView style={styles.cartBadge}>
-                <ThemedText style={styles.cartBadgeText}>{getTotalItems()}</ThemedText>
-              </ThemedView>
-            )}
-          </TouchableOpacity>
-        </ThemedView>
+        
+        <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
+          <ThemedText style={styles.publicShopButtonText}>MERCHTECH OFFICIAL STORE ↗️</ThemedText>
+        </TouchableOpacity>
       </ThemedView>
 
       {/* Search and Filters */}
@@ -286,38 +276,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.7,
   },
-  header: {
+  storeActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  headerLeft: {
+  shareButtonContainer: {
     flex: 1,
-  },
-  headerCenter: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 8,
-  },
-  headerRight: {
-    flex: 1,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    gap: 8,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    alignItems: 'flex-start',
   },
   publicShopButton: {
     paddingHorizontal: 12,
@@ -332,30 +302,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#3b82f6',
   },
-  cartButton: {
-    position: 'relative',
-    padding: 8,
-  },
-  cartIcon: {
-    fontSize: 24,
-    color: '#ffffff',
-  },
-  cartBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cartBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
+
   filtersContainer: {
     paddingHorizontal: 20,
     paddingBottom: 16,

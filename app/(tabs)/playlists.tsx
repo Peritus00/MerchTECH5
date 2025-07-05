@@ -14,6 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { Playlist, MediaFile } from '@/shared/media-schema';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
@@ -218,12 +219,13 @@ export default function PlaylistsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <ThemedText type="title">Playlists</ThemedText>
-        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
-          <MaterialIcons name="add" size={24} color="#3b82f6" />
-        </TouchableOpacity>
-      </View>
+      <HeaderWithLogo
+        title="Playlists"
+        onRightButtonPress={() => setShowCreateModal(true)}
+        rightButtonIcon="add"
+        rightButtonColor="#3b82f6"
+        logoVariant="gold"
+      />
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>

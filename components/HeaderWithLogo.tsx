@@ -9,6 +9,7 @@ interface HeaderWithLogoProps {
   rightButtonIcon?: string;
   rightButtonColor?: string;
   showLogo?: boolean;
+  logoVariant?: 'black' | 'gold';
 }
 
 export default function HeaderWithLogo({
@@ -18,6 +19,7 @@ export default function HeaderWithLogo({
   rightButtonIcon,
   rightButtonColor = '#3b82f6',
   showLogo = true,
+  logoVariant = 'black',
 }: HeaderWithLogoProps) {
   return (
     <View style={styles.header}>
@@ -31,7 +33,10 @@ export default function HeaderWithLogo({
       {showLogo && (
         <View style={styles.centerSection}>
           <Image
-            source={require('../assets/images/merchtechlogonoBgBlack.png')}
+            source={logoVariant === 'gold' 
+              ? require('../assets/images/merchtechlogogoldnoBgColor.png')
+              : require('../assets/images/merchtechlogonoBgBlack.png')
+            }
             style={styles.logo}
             resizeMode="contain"
           />

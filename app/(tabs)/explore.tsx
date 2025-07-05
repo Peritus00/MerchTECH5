@@ -7,6 +7,7 @@ import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { IconSymbol } from '@/components/ui/IconSymbol';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ScrollView, RefreshControl, View, TouchableOpacity, Alert, TextInput } from 'react-native';
@@ -323,22 +324,22 @@ export default function QRCodesScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-      }
-    >
-      <ThemedView style={styles.header}>
-        <View style={styles.titleRow}>
-          <ThemedText type="title">My QR Codes</ThemedText>
-          <TouchableOpacity 
-            style={styles.createButton}
-            onPress={() => setCreateModalVisible(true)}
-          >
-            <ThemedText style={styles.createButtonText}>+ Create New</ThemedText>
-          </TouchableOpacity>
-        </View>
+    <ThemedView style={styles.container}>
+      <HeaderWithLogo
+        title="My QR Codes"
+        onRightButtonPress={() => setCreateModalVisible(true)}
+        rightButtonIcon="add"
+        rightButtonColor="#3b82f6"
+        logoVariant="gold"
+      />
+      
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <ThemedView style={styles.header}>
 
         {/* Active Screensaver Banner */}
         {currentScreensaverQRCode && (
@@ -613,6 +614,7 @@ export default function QRCodesScreen() {
         }}
       />
     </ScrollView>
+    </ThemedView>
   );
 }
 
@@ -628,6 +630,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   container: {
+    flex: 1,
+  },
+  scrollView: {
     flex: 1,
     padding: 20,
   },

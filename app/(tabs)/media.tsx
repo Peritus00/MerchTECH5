@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { MediaFile } from '@/shared/media-schema';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { mediaAPI } from '@/services/api';
@@ -170,13 +171,13 @@ export default function MediaScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <ThemedText type="title">Media Library</ThemedText>
-        <TouchableOpacity onPress={handleUpload} disabled={isUploading} style={styles.uploadButton}>
-          <MaterialIcons name="cloud-upload" size={20} color="#fff" />
-          <Text style={styles.uploadButtonText}>Upload</Text>
-        </TouchableOpacity>
-      </View>
+      <HeaderWithLogo
+        title="Media Library"
+        onRightButtonPress={handleUpload}
+        rightButtonIcon="cloud-upload"
+        rightButtonColor="#3b82f6"
+        logoVariant="gold"
+      />
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
