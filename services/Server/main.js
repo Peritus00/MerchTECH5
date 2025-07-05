@@ -3679,14 +3679,117 @@ app.delete('/api/slideshows/:slideshowId/product-links/:productId', authenticate
   }
 });
 
-// ---------- START SERVER ----------
-startServer();
-
-// ---------- ERROR HANDLERS (keep these LAST) ----------
-app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
-app.use((err, req, res, next) => {
-  console.error('🔴 Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
+// ---------- WEB INTERFACE ----------
+// Root route - serve a simple web interface
+app.get('/', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>MerchTech - QR Code Platform</title>
+        <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+            }
+            .container {
+                text-align: center;
+                max-width: 600px;
+                padding: 2rem;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 20px;
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            h1 { font-size: 3rem; margin-bottom: 1rem; }
+            .subtitle { font-size: 1.2rem; margin-bottom: 2rem; opacity: 0.9; }
+            .features {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 1rem;
+                margin: 2rem 0;
+            }
+            .feature {
+                background: rgba(255, 255, 255, 0.1);
+                padding: 1rem;
+                border-radius: 10px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            .feature-title { font-weight: bold; margin-bottom: 0.5rem; }
+            .api-info {
+                background: rgba(0, 0, 0, 0.2);
+                padding: 1rem;
+                border-radius: 10px;
+                margin-top: 2rem;
+                text-align: left;
+            }
+            .api-info h3 { margin-bottom: 0.5rem; }
+            .api-info code { 
+                background: rgba(255, 255, 255, 0.1);
+                padding: 0.2rem 0.5rem;
+                border-radius: 5px;
+                font-family: 'Monaco', 'Menlo', monospace;
+            }
+            .status { 
+                display: inline-block;
+                background: #4CAF50;
+                color: white;
+                padding: 0.3rem 1rem;
+                border-radius: 20px;
+                font-size: 0.9rem;
+                margin: 1rem 0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🎯 MerchTech</h1>
+            <p class="subtitle">Advanced QR Code & Media Platform</p>
+            <div class="status">🟢 API Server Online</div>
+            
+            <div class="features">
+                <div class="feature">
+                    <div class="feature-title">📱 QR Codes</div>
+                    <div>Dynamic QR generation</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">🎵 Media</div>
+                    <div>Audio & Video streaming</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">📊 Analytics</div>
+                    <div>Real-time tracking</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-title">🛍️ E-commerce</div>
+                    <div>Product management</div>
+                </div>
+            </div>
+            
+            <div class="api-info">
+                <h3>📡 API Endpoints</h3>
+                <p><strong>Health Check:</strong> <code>GET /api/health</code></p>
+                <p><strong>Authentication:</strong> <code>POST /api/auth/login</code></p>
+                <p><strong>QR Codes:</strong> <code>GET /api/qr-codes</code></p>
+                <p><strong>Analytics:</strong> <code>GET /api/analytics/summary</code></p>
+                <p><strong>Media:</strong> <code>POST /api/media/upload</code></p>
+            </div>
+            
+            <p style="margin-top: 2rem; opacity: 0.8;">
+                Download the mobile app to get started!
+            </p>
+        </div>
+    </body>
+    </html>
+  `);
 });
 
 // ---------- ANALYTICS API ----------
@@ -3976,5 +4079,15 @@ app.post('/api/analytics/track-slideshow-access', async (req, res) => {
     console.error('Error tracking slideshow access:', error);
     res.status(500).json({ error: 'Failed to track slideshow access' });
   }
+});
+
+// ---------- START SERVER ----------
+startServer();
+
+// ---------- ERROR HANDLERS (keep these LAST) ----------
+app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
+app.use((err, req, res, next) => {
+  console.error('🔴 Unhandled Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
 });
 
