@@ -27,8 +27,16 @@
       "dest": "dist/auth/login.html"
     },
     {
-      "src": "/(.*)",
+      "src": "/auth/login",
+      "dest": "dist/auth/login.html"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))$",
       "dest": "dist/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "dist/index.html"
     }
   ],
   "env": {
