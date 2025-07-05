@@ -19,8 +19,12 @@
       "dest": "services/Server/main.js"
     },
     {
+      "src": "/_expo/(.*)",
+      "dest": "dist/_expo/$1"
+    },
+    {
       "src": "/(.*)",
-      "dest": "dist/$1"
+      "dest": "dist/index.html"
     }
   ],
   "env": {

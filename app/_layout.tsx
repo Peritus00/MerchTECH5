@@ -32,8 +32,6 @@ function RootLayoutNav() {
   });
 
   useEffect(() => {
-    if (isLoading) return;
-
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
@@ -57,11 +55,17 @@ function RootLayoutNav() {
             router.replace('/subscription');
           }
         }
-      } else {
-        // User is not signed in
+      } else if (!isLoading) {
+        // User is not signed in and we're done loading
         if (!inAuthGroup && !inNotFoundGroup) {
+          console.log('🔴 No user found, redirecting to login');
           router.replace('/auth/login');
         }
+      } else if (isLoading && !inAuthGroup && !inNotFoundGroup) {
+        // Still loading but not in auth group - redirect to login immediately
+        // This prevents the loading screen from showing on the main app
+        console.log('🔴 Still loading and not in auth, redirecting to login immediately');
+        router.replace('/auth/login');
       }
     }, 100);
 

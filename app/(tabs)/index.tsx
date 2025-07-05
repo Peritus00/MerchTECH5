@@ -55,15 +55,43 @@ const { width } = Dimensions.get('window');
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'7d' | '30d' | '90d'>('7d');
 
+  // Redirect to login if not authenticated
   useEffect(() => {
-    fetchDashboardData();
-  }, [selectedTimeframe]);
+    if (!authLoading && !user) {
+      console.log('🔴 Dashboard: No user found, redirecting to login');
+      router.replace('/auth/login');
+      return;
+    }
+  }, [user, authLoading, router]);
+
+  useEffect(() => {
+    if (user && !authLoading) {
+      fetchDashboardData();
+    }
+  }, [selectedTimeframe, user, authLoading]);
+
+  // Show loading while checking authentication
+  if (authLoading) {
+    return (
+      <ThemedView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text style={styles.loadingText}>Checking authentication...</Text>
+        </View>
+      </ThemedView>
+    );
+  }
+
+  // If no user, don't render anything (will redirect)
+  if (!user) {
+    return null;
+  }
 
   const fetchDashboardData = async () => {
     try {
