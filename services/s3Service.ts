@@ -75,7 +75,7 @@ export class S3Service {
       return fileUrl;
     } catch (error) {
       console.error('❌ S3 upload failed:', error);
-      throw new Error(`Failed to upload file to S3: ${error.message}`);
+      throw new Error(`Failed to upload file to S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -94,7 +94,7 @@ export class S3Service {
       return signedUrl;
     } catch (error) {
       console.error('❌ Failed to generate signed URL:', error);
-      throw new Error(`Failed to generate signed URL: ${error.message}`);
+      throw new Error(`Failed to generate signed URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -112,7 +112,7 @@ export class S3Service {
       console.log(`🗑️  File deleted from S3: ${key}`);
     } catch (error) {
       console.error('❌ Failed to delete file from S3:', error);
-      throw new Error(`Failed to delete file from S3: ${error.message}`);
+      throw new Error(`Failed to delete file from S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -129,7 +129,7 @@ export class S3Service {
       await s3Client.send(command);
       return true;
     } catch (error) {
-      if (error.name === 'NotFound') {
+      if ((error as any)?.name === 'NotFound') {
         return false;
       }
       throw error;
@@ -155,7 +155,7 @@ export class S3Service {
       };
     } catch (error) {
       console.error('❌ Failed to get file metadata:', error);
-      throw new Error(`Failed to get file metadata: ${error.message}`);
+      throw new Error(`Failed to get file metadata: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 

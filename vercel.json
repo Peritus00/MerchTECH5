@@ -1,6 +1,5 @@
 {
   "version": 2,
-  "name": "merchtech-server",
   "builds": [
     {
       "src": "services/Server/main.js",
@@ -22,10 +21,5 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "services/Server/main.js": {
-      "maxDuration": 30
-    }
   }
 } 

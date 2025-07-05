@@ -16,7 +16,11 @@
       "androidCollapsedTitle": "#{unread_notifications} new notifications"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.peritus00.merchtech",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

@@ -45,3 +45,4 @@ expo-env.d.ts
 
 app-example
 .env.backup
+.vercel
