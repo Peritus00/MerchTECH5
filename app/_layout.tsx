@@ -4,6 +4,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import 'react-native-reanimated';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
@@ -99,9 +100,16 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
+  
+  // Configure fonts based on platform
+  const fontConfig = {
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+    ...(Platform.OS === 'web' ? {
+      Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
+    } : {}),
+  };
+  
+  const [loaded] = useFonts(fontConfig);
 
   useEffect(() => {
     if (loaded) {
