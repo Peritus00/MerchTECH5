@@ -482,7 +482,7 @@ export default function DashboardScreen() {
                 activeOpacity={0.8}
               >
                 <Text style={styles.upgradeButtonText}>
-                  {user?.subscriptionTier === 'basic' ? 'Upgrade Now' : 'Start Free Trial'}
+                  {user?.subscriptionTier === 'basic' ? 'Upgrade Now' : 'START TODAY!'}
                 </Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#fff" />
               </TouchableOpacity>
