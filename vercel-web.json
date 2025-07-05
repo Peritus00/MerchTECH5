@@ -23,8 +23,12 @@
       "dest": "dist/_expo/$1"
     },
     {
+      "src": "^/$",
+      "dest": "dist/auth/login.html"
+    },
+    {
       "src": "/(.*)",
-      "dest": "dist/index.html"
+      "dest": "dist/$1"
     }
   ],
   "env": {
