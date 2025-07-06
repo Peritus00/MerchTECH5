@@ -1,4 +1,3 @@
-
 import { Stack } from 'expo-router';
 
 export default function AuthLayout() {
@@ -8,6 +7,7 @@ export default function AuthLayout() {
       <Stack.Screen name="register" options={{ headerShown: false }} />
       <Stack.Screen name="forgot-password" options={{ headerShown: false }} />
       <Stack.Screen name="verify-email" options={{ headerShown: false }} />
+      <Stack.Screen name="verification-success" options={{ headerShown: false }} />
     </Stack>
   );
 }
