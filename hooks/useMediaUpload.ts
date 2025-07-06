@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { MediaFile } from '@/shared/media-schema';
 import { mediaAPI } from '@/services/api';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
@@ -64,15 +64,41 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
-      // Read file as base64 for storage
       let fileBase64 = '';
-      try {
-        fileBase64 = await FileSystem.readAsStringAsync(asset.uri, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-      } catch (error) {
-        console.warn('Could not read file as base64, using URI:', error);
-        fileBase64 = asset.uri;
+      
+      // Handle file reading differently for web vs mobile
+      if (Platform.OS === 'web') {
+        // For web, use the File API
+        try {
+          const response = await fetch(asset.uri);
+          const blob = await response.blob();
+          
+          // Convert blob to base64
+          const reader = new FileReader();
+          fileBase64 = await new Promise((resolve, reject) => {
+            reader.onload = () => {
+              const result = reader.result as string;
+              // Extract base64 data from data URL
+              const base64Data = result.split(',')[1];
+              resolve(base64Data);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        } catch (error) {
+          console.error('Web file reading failed:', error);
+          throw new Error('Failed to read file on web');
+        }
+      } else {
+        // For mobile, use FileSystem
+        try {
+          fileBase64 = await FileSystem.readAsStringAsync(asset.uri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+        } catch (error) {
+          console.error('Mobile file reading failed:', error);
+          throw new Error('Failed to read file on mobile');
+        }
       }
 
       // Prepare media data for API
@@ -88,7 +114,15 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         uniqueId: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       };
 
-      console.log('🔴 UPLOAD: Uploading media to database:', mediaData);
+      console.log('🔴 UPLOAD: Uploading media to database:', {
+        title: mediaData.title,
+        filename: mediaData.filename,
+        fileType: mediaData.fileType,
+        contentType: mediaData.contentType,
+        filesize: mediaData.filesize,
+        platform: Platform.OS,
+        dataUrlLength: mediaData.url.length
+      });
 
       // Upload to database via API
       const uploadedFile = await mediaAPI.upload(mediaData);
