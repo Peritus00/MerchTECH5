@@ -30,7 +30,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
   onCreateCode,
   playlistName,
 }) => {
-  const [hasUsageLimit, setHasUsageLimit] = useState(false);
+  const [hasUsageLimit, setHasUsageLimit] = useState(true);
   const [maxUses, setMaxUses] = useState('1');
   const [hasExpiration, setHasExpiration] = useState(false);
   const [expirationDate, setExpirationDate] = useState(new Date());
@@ -68,7 +68,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
   };
 
   const resetForm = () => {
-    setHasUsageLimit(false);
+    setHasUsageLimit(true);
     setMaxUses('1');
     setHasExpiration(false);
     setExpirationDate(new Date());
@@ -142,7 +142,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
                   placeholderTextColor="#9ca3af"
                 />
                 <Text style={styles.inputHelp}>
-                  How many times this code can be used before it becomes invalid
+                  How many times this code can be used before it becomes invalid. Toggle off for unlimited uses.
                 </Text>
               </View>
             )}

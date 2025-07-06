@@ -82,7 +82,7 @@ const ActivationCodesScreen = () => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [selectedSlideshowId, setSelectedSlideshowId] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [maxUses, setMaxUses] = useState('');
+  const [maxUses, setMaxUses] = useState('1');
   const [expiresInDays, setExpiresInDays] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   
@@ -247,7 +247,7 @@ const ActivationCodesScreen = () => {
       }
       Alert.alert('Success', `${quantity} activation codes created successfully!`);
       setShowBatchModal(false);
-      setMaxUses('');
+      setMaxUses('1');
       setExpiresInDays('');
       setBatchQuantity('1');
       setSelectedPlaylistId(null);
@@ -295,7 +295,7 @@ const ActivationCodesScreen = () => {
       await activationCodesAPI.create(createParams);
       Alert.alert('Success', 'Activation code created successfully!');
       setShowCreateModal(false);
-      setMaxUses('');
+      setMaxUses('1');
       setExpiresInDays('');
       setSelectedPlaylistId(null);
       setSelectedSlideshowId(null);
@@ -667,12 +667,12 @@ const ActivationCodesScreen = () => {
               </>
             )}
 
-            <Text style={styles.label}>Max Uses (optional):</Text>
+            <Text style={styles.label}>Max Uses:</Text>
             <TextInput
               style={styles.input}
               value={maxUses}
               onChangeText={setMaxUses}
-              placeholder="Leave empty for unlimited"
+              placeholder="1 (leave empty for unlimited)"
               keyboardType="numeric"
             />
 
@@ -762,12 +762,12 @@ const ActivationCodesScreen = () => {
 
             {selectedContentType === 'playlist' && (
               <>
-                <Text style={styles.label}>Max Uses per code (optional):</Text>
+                <Text style={styles.label}>Max Uses per code:</Text>
                 <TextInput
                   style={styles.input}
                   value={maxUses}
                   onChangeText={setMaxUses}
-                  placeholder="Leave empty for unlimited"
+                  placeholder="1 (leave empty for unlimited)"
                   keyboardType="numeric"
                 />
               </>
@@ -775,12 +775,12 @@ const ActivationCodesScreen = () => {
 
             {selectedContentType === 'slideshow' && (
               <>
-                <Text style={styles.label}>Max Uses per code (optional):</Text>
+                <Text style={styles.label}>Max Uses per code:</Text>
                 <TextInput
                   style={styles.input}
                   value={maxUses}
                   onChangeText={setMaxUses}
-                  placeholder="Leave empty for unlimited"
+                  placeholder="1 (leave empty for unlimited)"
                   keyboardType="numeric"
                 />
               </>
@@ -1014,12 +1014,12 @@ const ActivationCodesScreen = () => {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.label}>Max Uses (optional):</Text>
+              <Text style={styles.label}>Max Uses:</Text>
               <TextInput
                 style={styles.input}
                 value={editMaxUses}
                 onChangeText={setEditMaxUses}
-                placeholder="Leave empty for unlimited"
+                placeholder="1 (leave empty for unlimited)"
                 keyboardType="numeric"
               />
 
