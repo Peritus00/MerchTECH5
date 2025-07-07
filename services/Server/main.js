@@ -249,6 +249,152 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// Forgot Password endpoint
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    const result = await pool.query('SELECT id, email, username FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    if (result.rows.length === 0) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    }
+    
+    const user = result.rows[0];
+    const resetToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+    
+    // Store reset token in database (you might want to add a reset_token field to users table)
+    await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL \'1 hour\' WHERE id = $2', [resetToken, user.id]);
+    
+    // For now, just return success (in production, you'd send an email)
+    res.json({ 
+      message: 'Password reset link sent to your email',
+      resetToken: resetToken // Remove this in production - only for testing
+    });
+  } catch (error) {
+    console.error('🔴 FORGOT PASSWORD ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset Password endpoint
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+    
+    // Verify token
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.userId) return res.status(400).json({ error: 'Invalid reset token' });
+    
+    // Check if token exists and is not expired in database
+    const result = await pool.query(
+      'SELECT id FROM users WHERE id = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
+      [decoded.userId, token]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+    
+    // Hash new password and update
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await pool.query(
+      'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
+      [hashedPassword, decoded.userId]
+    );
+    
+    res.json({ message: 'Password reset successfully' });
+  } catch (error) {
+    console.error('🔴 RESET PASSWORD ERROR:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Verify Email endpoint
+app.post('/api/auth/verify-email', async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) return res.status(400).json({ error: 'Verification token is required' });
+    
+    const decoded = jwt.verify(token, JWT_SECRET);
+    if (!decoded.userId) return res.status(400).json({ error: 'Invalid verification token' });
+    
+    await pool.query('UPDATE users SET email_verified = true WHERE id = $1', [decoded.userId]);
+    
+    res.json({ message: 'Email verified successfully' });
+  } catch (error) {
+    console.error('🔴 VERIFY EMAIL ERROR:', error);
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(400).json({ error: 'Invalid verification token' });
+    }
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get user profile endpoint
+app.get('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, email, username, is_admin, subscription_tier, max_audio_files, created_at FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error('🔴 GET PROFILE ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update user profile endpoint
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const { username, email } = req.body;
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+    
+    if (username) {
+      updates.push(`username = $${paramCount}`);
+      values.push(username);
+      paramCount++;
+    }
+    
+    if (email) {
+      updates.push(`email = $${paramCount}`);
+      values.push(email);
+      paramCount++;
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+    
+    values.push(req.user.userId);
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING id, email, username, is_admin`;
+    
+    const result = await pool.query(query, values);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    res.json({ user: result.rows[0] });
+  } catch (error) {
+    console.error('🔴 UPDATE PROFILE ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // S3 Presigned URL generation endpoint
 app.post('/api/upload/presigned', authenticateToken, async (req, res) => {
   try {
