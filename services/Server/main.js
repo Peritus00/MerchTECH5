@@ -153,6 +153,16 @@ app.get('/', (req, res) => {
   res.json({ status: 'ok', message: 'Backend is running!' });
 });
 
+// --- HEALTH ENDPOINT ---
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.json({ status: 'healthy', database: 'connected' });
+  } catch (error) {
+    res.status(503).json({ status: 'unhealthy', database: 'disconnected' });
+  }
+});
+
 // --- AUTH MIDDLEWARE ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
