@@ -4566,40 +4566,7 @@ app.post('/api/analytics/track-slideshow-access', async (req, res) => {
   }
 });
 
-// ---------- START SERVER ----------
-startServer();
-
-// 🔒 ENHANCED SECURITY ERROR HANDLERS - FREE ERROR PROTECTION
-app.use((req, res, next) => {
-  securityLogger.warn({
-    type: 'route_not_found',
-    ip: req.ip,
-    url: req.url,
-    method: req.method,
-    userAgent: req.get('User-Agent'),
-    timestamp: new Date().toISOString()
-  });
-  res.status(404).json({ error: 'Route not found' });
-});
-
-app.use((err, req, res, next) => {
-  securityLogger.error({
-    type: 'application_error',
-    ip: req.ip,
-    url: req.url,
-    error: err.message,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    timestamp: new Date().toISOString()
-  });
-
-  // Don't leak error details in production
-  if (process.env.NODE_ENV === 'production') {
-    res.status(500).json({ error: 'Internal server error' });
-  } else {
-    res.status(500).json({ error: err.message, stack: err.stack });
-  }
-});
-
+// Password reset endpoints
 app.post('/api/auth/forgot-password', [
   body('email').isEmail().normalizeEmail().trim(),
   validateInput
@@ -4686,26 +4653,39 @@ app.post('/api/auth/reset-password', [
   }
 });
 
-app.get('/api/auth/verify-email/:token', async (req, res) => {
-  try {
-    const { token } = req.params;
-    const decoded = jwt.verify(token, JWT_SECRET);
+// ---------- START SERVER ----------
+startServer();
 
-    const result = await pool.query(
-      `UPDATE users SET is_email_verified = true, verification_token = null WHERE id = $1 AND is_email_verified = false RETURNING id`,
-      [decoded.userId]
-    );
+// 🔒 ENHANCED SECURITY ERROR HANDLERS - FREE ERROR PROTECTION
+app.use((req, res, next) => {
+  securityLogger.warn({
+    type: 'route_not_found',
+    ip: req.ip,
+    url: req.url,
+    method: req.method,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  });
+  res.status(404).json({ error: 'Route not found' });
+});
 
-    if (result.rowCount === 0) {
-      return res.status(400).json({ error: 'Token is invalid or user is already verified.' });
-    }
+app.use((err, req, res, next) => {
+  securityLogger.error({
+    type: 'application_error',
+    ip: req.ip,
+    url: req.url,
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
-    res.redirect(`${frontendUrl}/auth/verification-success`);
-
-  } catch (error) {
-    console.error('🔴 VERIFY EMAIL ERROR:', error);
-    res.status(400).json({ error: 'Invalid or expired verification token.' });
+  // Don't leak error details in production
+  if (process.env.NODE_ENV === 'production') {
+    res.status(500).json({ error: 'Internal server error' });
+  } else {
+    res.status(500).json({ error: err.message, stack: err.stack });
   }
 });
+
+
 
