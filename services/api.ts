@@ -267,23 +267,90 @@ export const checkoutAPI = {
 
 // Media API
 export const mediaAPI = {
+  async getAll() {
+    console.log('🔴 MediaAPI: Fetching all media files');
+    const res = await api.get('/media?mine=true');
+    console.log('🔴 MediaAPI: Loaded media files:', res.data.media?.length || 0);
+    return res.data.media || [];
+  },
+  
+  async getById(id: string) {
+    console.log('🔴 MediaAPI: Fetching media file by ID:', id);
+    const res = await api.get(`/media/${id}`);
+    console.log('🔴 MediaAPI: Media file data:', res.data);
+    return res.data.media;
+  },
+  
   async upload(mediaData: any) {
-    console.log('📤 MediaAPI: Uploading media file (using extended timeout)');
+    console.log('🔴 MediaAPI: Uploading media file (legacy method)');
     const res = await uploadAPI.post('/media', mediaData);
+    console.log('🔴 MediaAPI: Upload response:', res.data);
     return res.data;
   },
-  async getMyMedia() {
-    const res = await api.get('/media?mine=true');
-    return res.data.media;
+
+  async getPresignedUrl(filename: string, contentType: string, fileSize?: number) {
+    console.log('🔗 MediaAPI: Getting presigned URL for direct S3 upload');
+    console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
+    const res = await api.post('/media/presigned-url', {
+      filename,
+      contentType,
+      fileSize
+    });
+    console.log('🔗 MediaAPI: Presigned URL response:', res.data);
+    return res.data;
   },
-  async getAllMedia() {
-    const res = await api.get('/media/all');
-    return res.data.media;
+
+  async uploadToS3(presignedUrl: string, file: File | Blob, contentType: string, onProgress?: (progress: number) => void) {
+    console.log('📤 MediaAPI: Uploading directly to S3');
+    console.log('📤 MediaAPI: File size:', file.size, 'bytes');
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable && onProgress) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          onProgress(progress);
+        }
+      });
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          console.log('✅ MediaAPI: S3 upload successful');
+          resolve(xhr.response);
+        } else {
+          console.error('❌ MediaAPI: S3 upload failed:', xhr.status, xhr.statusText);
+          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
+        }
+      });
+      
+      xhr.addEventListener('error', () => {
+        console.error('❌ MediaAPI: S3 upload error');
+        reject(new Error('S3 upload failed'));
+      });
+      
+      xhr.open('PUT', presignedUrl);
+      xhr.setRequestHeader('Content-Type', contentType);
+      xhr.send(file);
+    });
   },
-  async getById(id: string) {
-    const res = await api.get(`/media/${id}`);
-    return res.data.media;
+
+  async confirmUpload(uploadData: {
+    title: string;
+    fileUrl: string;
+    filename: string;
+    fileType: string;
+    contentType: string;
+    filesize: number;
+    duration?: number;
+    s3Key: string;
+  }) {
+    console.log('✅ MediaAPI: Confirming S3 upload');
+    const res = await api.post('/media/confirm-upload', uploadData);
+    console.log('✅ MediaAPI: Upload confirmation response:', res.data);
+    return res.data;
   },
+
   async delete(mediaId: string) {
     console.log('🗑️ MediaAPI: Deleting media file:', mediaId);
     const res = await api.delete(`/media/${mediaId}`);
@@ -293,10 +360,6 @@ export const mediaAPI = {
   async deleteMedia(mediaId: string) {
     // Legacy method - redirect to delete
     return this.delete(mediaId);
-  },
-  async getAll() {
-    const res = await api.get('/media');
-    return res.data.media;
   },
 };
 

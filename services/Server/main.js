@@ -985,6 +985,101 @@ app.post('/api/upload', uploadLimiter, authenticateToken, upload.single('file'),
 });
 
 // ---------- MEDIA ROUTES ----------
+
+// Generate presigned URL for direct S3 upload
+app.post('/api/media/presigned-url', authenticateToken, async (req, res) => {
+  try {
+    const { filename, contentType, fileSize } = req.body;
+    
+    if (!filename || !contentType) {
+      return res.status(400).json({ error: 'Filename and content type are required' });
+    }
+
+    // 🔒 SUBSCRIPTION LIMIT CHECK
+    const userResult = await pool.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const userTier = user?.subscription_tier || 'free';
+    
+    const countResult = await pool.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [req.user.userId]);
+    const currentCount = parseInt(countResult.rows[0].count);
+
+    // Check for admin-set custom limit first, then fall back to subscription tier limits
+    let maxMediaFiles;
+    if (user?.max_audio_files !== null && user?.max_audio_files !== undefined) {
+      // Admin has set a custom limit (keeping column name for backward compatibility)
+      maxMediaFiles = user.max_audio_files;
+      console.log(`📋 Using admin-set custom limit: ${maxMediaFiles} media files for user ${req.user.userId}`);
+    } else {
+      // Use subscription tier limits
+      const limits = {
+        free: { maxMediaFiles: 3 },
+        basic: { maxMediaFiles: 10 },
+        premium: { maxMediaFiles: 20 }
+      };
+      maxMediaFiles = (limits[userTier] || limits.free).maxMediaFiles;
+      console.log(`📋 Using subscription tier limit: ${maxMediaFiles} media files for ${userTier} plan`);
+    }
+    
+    if (currentCount >= maxMediaFiles) {
+      console.log(`🚫 Media upload blocked: User ${req.user.userId} has ${currentCount}/${maxMediaFiles} media files`);
+      return res.status(403).json({ 
+        error: `Media file limit reached. You have reached your limit of ${maxMediaFiles} media files. Please contact support if you need to increase your limit.`,
+        limit: maxMediaFiles,
+        current: currentCount,
+        subscriptionTier: userTier,
+        isCustomLimit: user?.max_audio_files !== null && user?.max_audio_files !== undefined
+      });
+    }
+
+    console.log(`✅ Media upload allowed: User ${req.user.userId} has ${currentCount}/${maxMediaFiles} media files`);
+    // END SUBSCRIPTION CHECK
+
+    // Check if S3 is configured
+    if (!s3Service || !s3Service.isConfigured()) {
+      return res.status(500).json({ error: 'S3 storage not configured' });
+    }
+
+    // Generate presigned URL for direct upload
+    const presignedData = await s3Service.getPresignedUploadUrl(
+      filename,
+      contentType,
+      req.user.userId.toString(),
+      fileSize
+    );
+
+    console.log('🔗 Generated presigned URL for direct S3 upload');
+    res.json(presignedData);
+  } catch (error) {
+    console.error('Error generating presigned URL:', error);
+    res.status(500).json({ error: 'Failed to generate presigned URL' });
+  }
+});
+
+// Confirm successful S3 upload and save to database
+app.post('/api/media/confirm-upload', authenticateToken, async (req, res) => {
+  try {
+    const { title, fileUrl, filename, fileType, contentType, filesize, duration, s3Key } = req.body;
+    
+    if (!title || !fileUrl || !s3Key) {
+      return res.status(400).json({ error: 'Title, file URL, and S3 key are required' });
+    }
+
+    // Save media record to database
+    const result = await pool.query(
+      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, s3_key) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
+       RETURNING *`,
+      [req.user.userId, title, fileUrl, fileUrl, filename, fileType, contentType, filesize, duration, `s3-${Date.now()}`, s3Key]
+    );
+
+    console.log('✅ Media record saved to database after S3 upload');
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Error confirming media upload:', error);
+    res.status(500).json({ error: 'Failed to confirm media upload' });
+  }
+});
+
 app.post('/api/media', authenticateToken, async (req, res) => {
   try {
     const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId } = req.body;

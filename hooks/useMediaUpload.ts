@@ -232,34 +232,36 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
   const selectAndUploadFile = async (): Promise<MediaFile | null> => {
     try {
-      setIsUploading(true);
-      updateProgress(0, 100, 'selecting');
-
       console.log('🔴 UPLOAD: Starting file selection...');
+      setUploadProgress({ loaded: 0, total: 0, percentage: 0, stage: 'selecting' });
 
-      // Step 1: File Selection
-      const result = await DocumentPicker.getDocumentAsync({
+      // Configure document picker for different platforms
+      const documentPickerOptions = {
         type: Platform.OS === 'web' 
           ? [
-              // Audio formats
-              'audio/mpeg', 'audio/wav', 'audio/mp4', 'audio/aac', 'audio/ogg', 'audio/flac',
-              // Video formats - Web explicit MIME types
+              'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/flac',
               'video/mp4', 'video/webm', 'video/ogg', 'video/avi', 'video/mov', 'video/wmv',
-              'video/flv', 'video/mkv', 'video/3gpp', 'video/3gpp2', 'video/quicktime',
+              'video/flv', 'video/mkv', 'video/3gpp', 'video/3gp2', 'video/quicktime',
               'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska',
-              'video/hevc', 'video/h264', 'video/h265', 'video/mp2t', 'video/x-ms-asf'
+              'video/mp2t', 'video/x-ms-asf', 'video/x-m4v', 'video/x-ms-wmx',
+              'video/x-ms-wvx', 'video/x-ms-wm', 'video/x-ms-wmp'
             ]
           : [
-              // Mobile - use wildcards for better native picker support
-              'audio/*', 'video/*'
+              'audio/*', 'video/*',
+              'video/3gpp', 'video/3gp2', 'video/mp4', 'video/webm', 'video/ogg',
+              'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
+              'video/quicktime', 'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv',
+              'video/x-matroska', 'video/mp2t', 'video/x-ms-asf', 'video/x-m4v',
+              'video/x-ms-wmx', 'video/x-ms-wvx', 'video/x-ms-wm', 'video/x-ms-wmp'
             ],
-        copyToCacheDirectory: Platform.OS !== 'web', // Disable cache copying on web
+        copyToCacheDirectory: Platform.OS !== 'web',
         multiple: false,
-      });
+      };
 
+      const result = await DocumentPicker.getDocumentAsync(documentPickerOptions);
+      
       if (result.canceled) {
-        console.log('🔴 UPLOAD: File selection cancelled');
-        setIsUploading(false);
+        console.log('🔴 UPLOAD: File selection canceled');
         return null;
       }
 
@@ -271,126 +273,122 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         uri: asset.uri?.substring(0, 50) + '...'
       });
 
-      updateProgress(20, 100, 'reading');
-
-      // Step 2: File Size Validation
+      // Validate file size
       const maxSize = Platform.OS === 'web' ? MAX_FILE_SIZE_WEB : MAX_FILE_SIZE_MOBILE;
       if (asset.size && asset.size > maxSize) {
-        const sizeMB = Math.round(asset.size / (1024 * 1024));
         const maxSizeMB = Math.round(maxSize / (1024 * 1024));
-        throw new Error(`File too large: ${sizeMB}MB. Maximum size is ${maxSizeMB}MB.`);
+        const fileSizeMB = Math.round(asset.size / (1024 * 1024));
+        throw new Error(`File too large: ${fileSizeMB}MB. Maximum allowed: ${maxSizeMB}MB`);
       }
 
-      // Show warning for large files
+      // Show file size warning for large files
       if (asset.size && asset.size > 100 * 1024 * 1024) { // 100MB
-        const sizeMB = Math.round(asset.size / (1024 * 1024));
-        console.warn(`🔴 UPLOAD: Large file detected (${sizeMB}MB). Upload may take several minutes.`);
+        const fileSizeMB = Math.round(asset.size / (1024 * 1024));
+        console.log(`⚠️ UPLOAD: Large file detected (${fileSizeMB}MB). This may take several minutes to upload.`);
       }
 
-      updateProgress(40, 100, 'reading');
+      setUploadProgress({ loaded: 0, total: asset.size || 0, percentage: 0, stage: 'reading' });
 
-      // Step 3: Read File Content
-      let fileContent: string;
-      let actualMimeType = asset.mimeType || 'application/octet-stream';
+      // Use direct S3 upload flow
+      return await uploadDirectToS3(asset);
 
-      if (Platform.OS === 'web') {
-        // Web file handling
-        if (asset.file) {
-          // Newer Expo versions provide file property directly
-          const file = asset.file as File;
-          actualMimeType = file.type || actualMimeType;
-          
-          const arrayBuffer = await file.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
-          fileContent = `data:${actualMimeType};base64,${base64}`;
-        } else if (asset.uri && asset.uri.startsWith('blob:')) {
-          // Handle blob URLs
-          const response = await fetch(asset.uri);
-          const arrayBuffer = await response.arrayBuffer();
-          const uint8Array = new Uint8Array(arrayBuffer);
-          const base64 = btoa(String.fromCharCode.apply(null, Array.from(uint8Array)));
-          fileContent = `data:${actualMimeType};base64,${base64}`;
-        } else {
-          throw new Error('Unable to read file on web platform');
-        }
-      } else {
-        // Mobile file handling
-        try {
-          fileContent = await FileSystem.readAsStringAsync(asset.uri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          fileContent = `data:${actualMimeType};base64,${fileContent}`;
-        } catch (error) {
-          console.error('🔴 UPLOAD: FileSystem read failed:', error);
-          throw new Error('Failed to read file content');
-        }
-      }
-
-      updateProgress(60, 100, 'uploading');
-
-      // Step 4: Check if chunked upload is needed
-      const fileSizeBytes = fileContent.length;
-      const needsChunking = fileSizeBytes > CHUNK_SIZE;
-
-      console.log('🔴 UPLOAD: File processing:', {
-        originalSize: asset.size,
-        base64Size: fileSizeBytes,
-        needsChunking,
-        chunks: needsChunking ? Math.ceil(fileSizeBytes / CHUNK_SIZE) : 1
-      });
-
-      let uploadedFile;
-
-      if (needsChunking) {
-        // Chunked upload for large files
-        uploadedFile = await uploadFileInChunks(fileContent, asset, actualMimeType);
-      } else {
-        // Direct upload for small files
-        uploadedFile = await uploadFileDirect(fileContent, asset, actualMimeType);
-      }
-
-      updateProgress(100, 100, 'complete');
-      console.log('🔴 UPLOAD: Upload completed successfully:', uploadedFile);
-
-      return uploadedFile;
-
-    } catch (error: any) {
+    } catch (error) {
       console.error('🔴 UPLOAD: Upload failed:', error);
-      updateProgress(0, 100, 'selecting');
+      setUploadProgress({ loaded: 0, total: 0, percentage: 0, stage: 'selecting' });
       throw error;
-    } finally {
-      setIsUploading(false);
     }
   };
 
-  const uploadFileDirect = async (fileContent: string, asset: any, mimeType: string) => {
-    const mediaData = {
-      title: asset.name.replace(/\.[^/.]+$/, ''), // Remove file extension
-      url: fileContent,
-      filename: asset.name,
-      fileType: mimeType.startsWith('audio/') ? 'audio' : mimeType.startsWith('video/') ? 'video' : 'file',
-      contentType: mimeType,
-      filesize: asset.size,
-      duration: null,
-      uniqueId: `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    };
-
-    return await mediaAPI.upload(mediaData);
-  };
-
-  const uploadFileInChunks = async (fileContent: string, asset: any, mimeType: string) => {
-    // For chunked uploads, we'll need to implement a chunked upload API
-    // For now, let's try to compress the file or use a different approach
-    console.log('🔴 UPLOAD: File too large for direct upload, attempting compression...');
-    
-    // Try to upload anyway - the server might handle it better than expected
+  const uploadDirectToS3 = async (asset: any) => {
     try {
-      return await uploadFileDirect(fileContent, asset, mimeType);
-    } catch (error: any) {
-      if (error.response?.status === 413) {
-        throw new Error(`File too large for upload. Please use a file smaller than 4MB or contact support for assistance with large file uploads.`);
+      console.log('🔗 UPLOAD: Starting direct S3 upload flow');
+      
+      // Get the file as a blob/file object
+      let file: File | Blob;
+      
+      if (Platform.OS === 'web') {
+        if (asset.file) {
+          // Newer Expo versions provide file directly
+          file = asset.file;
+        } else {
+          // Fallback: fetch the file from the URI
+          const response = await fetch(asset.uri);
+          file = await response.blob();
+        }
+      } else {
+        // Mobile: read file as blob
+        const fileInfo = await FileSystem.getInfoAsync(asset.uri);
+        if (!fileInfo.exists) {
+          throw new Error('File not found');
+        }
+        
+        const fileContent = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        // Convert base64 to blob
+        const byteCharacters = atob(fileContent);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        file = new Blob([byteArray], { type: asset.mimeType });
       }
+
+      console.log('📤 UPLOAD: File prepared for S3 upload, size:', file.size);
+
+      // Step 1: Get presigned URL from server
+      setUploadProgress(prev => ({ ...prev, stage: 'processing', percentage: 10 }));
+      
+      const presignedData = await mediaAPI.getPresignedUrl(
+        asset.name,
+        asset.mimeType,
+        file.size
+      );
+
+      console.log('🔗 UPLOAD: Got presigned URL');
+
+      // Step 2: Upload directly to S3
+      setUploadProgress(prev => ({ ...prev, stage: 'uploading', percentage: 20 }));
+      
+      await mediaAPI.uploadToS3(
+        presignedData.uploadUrl,
+        file,
+        asset.mimeType,
+        (progress) => {
+          setUploadProgress(prev => ({ 
+            ...prev, 
+            percentage: 20 + (progress * 0.7), // 20% to 90%
+            loaded: (file.size * progress) / 100,
+            total: file.size
+          }));
+        }
+      );
+
+      console.log('✅ UPLOAD: S3 upload completed');
+
+      // Step 3: Confirm upload with server
+      setUploadProgress(prev => ({ ...prev, stage: 'processing', percentage: 95 }));
+      
+      const mediaRecord = await mediaAPI.confirmUpload({
+        title: asset.name,
+        fileUrl: presignedData.fileUrl,
+        filename: asset.name,
+        fileType: getFileType(asset.mimeType),
+        contentType: asset.mimeType,
+        filesize: file.size,
+        duration: undefined, // Could be extracted for audio/video files
+        s3Key: presignedData.key
+      });
+
+      setUploadProgress(prev => ({ ...prev, stage: 'complete', percentage: 100 }));
+      
+      console.log('✅ UPLOAD: Upload process completed successfully');
+      return mediaRecord;
+
+    } catch (error) {
+      console.error('❌ UPLOAD: Direct S3 upload failed:', error);
       throw error;
     }
   };

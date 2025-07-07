@@ -30,6 +30,58 @@ export class S3Service {
   }
 
   /**
+   * Generate presigned URL for direct upload from frontend to S3
+   */
+  async getPresignedUploadUrl(fileName: string, contentType: string, userId: string, fileSize?: number): Promise<{
+    uploadUrl: string;
+    fileUrl: string;
+    key: string;
+    fields?: Record<string, string>;
+  }> {
+    try {
+      // Generate unique key with user folder structure
+      const key = `users/${userId}/media/${Date.now()}-${fileName}`;
+      
+      console.log(`🔗 Generating presigned upload URL for: ${key}`);
+      console.log(`📁 Content type: ${contentType}`);
+      if (fileSize) {
+        console.log(`📊 File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
+      }
+
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        ContentType: contentType,
+        CacheControl: 'max-age=31536000', // 1 year
+        Metadata: {
+          userId: userId,
+          uploadedAt: new Date().toISOString(),
+          originalName: fileName,
+        },
+      });
+
+      // Generate presigned URL (valid for 1 hour)
+      const uploadUrl = await getSignedUrl(s3Client, command, { 
+        expiresIn: 3600 // 1 hour
+      });
+      
+      // Generate the final file URL
+      const fileUrl = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`;
+      
+      console.log(`✅ Presigned upload URL generated successfully`);
+      
+      return {
+        uploadUrl,
+        fileUrl,
+        key,
+      };
+    } catch (error) {
+      console.error('❌ Failed to generate presigned upload URL:', error);
+      throw new Error(`Failed to generate presigned upload URL: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Upload file to S3 with multipart upload support for large files
    */
   async uploadFile(fileBuffer: Buffer, fileName: string, contentType: string, userId: string): Promise<string> {
