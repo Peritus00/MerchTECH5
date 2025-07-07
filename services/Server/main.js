@@ -249,10 +249,8 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Explicitly handle CORS pre-flight requests so that the browser gets the
-// correct Access-Control-Allow-Origin header even when no route is defined
-// for OPTIONS (e.g. /api/auth/login).
-app.options('/*', cors(corsOptions));
+// Use a Regex to match any path so path-to-regexp doesn't try to parse '*' or '/*'.
+app.options(/^\/.*$/, cors(corsOptions));
 
 // Apply rate limiting and monitoring
 app.use(speedLimiter);
