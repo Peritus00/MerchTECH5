@@ -35,6 +35,7 @@ console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
+app.use(express.json());
 const PORT = process.env.PORT || 5001;
 
 const pool = new Pool({
