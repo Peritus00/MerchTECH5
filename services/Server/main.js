@@ -42,17 +42,10 @@ const app = express();
 
 // 🔒 CORS CONFIGURATION - ALLOW CUSTOM DOMAIN
 const corsOptions = {
-  origin: [
-    'https://app.merchtech.net',
-    'https://merchtech-server-cwt114j5s-perrie-bentons-projects.vercel.app',
-    'http://localhost:3000',
-    'http://localhost:5001',
-    'http://localhost:8081',
-    'exp://localhost:8081'
-  ],
+  origin: true, // Allow all origins for now
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
 };
 
 app.use(cors(corsOptions));
@@ -60,16 +53,7 @@ app.use(express.json());
 
 // 🔒 SECURITY HEADERS
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://merchtech5-production.up.railway.app", "https://app.merchtech.net"]
-    }
-  }
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // Handle preflight requests
