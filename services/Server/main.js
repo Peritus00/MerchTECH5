@@ -39,7 +39,42 @@ console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
+
+// 🔒 CORS CONFIGURATION - ALLOW CUSTOM DOMAIN
+const corsOptions = {
+  origin: [
+    'https://app.merchtech.net',
+    'https://merchtech-server-cwt114j5s-perrie-bentons-projects.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:5001',
+    'http://localhost:8081',
+    'exp://localhost:8081'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
+
+// 🔒 SECURITY HEADERS
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "https://merchtech5-production.up.railway.app", "https://app.merchtech.net"]
+    }
+  }
+}));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 const PORT = process.env.PORT || 5001;
 
 const pool = new Pool({
