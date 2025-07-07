@@ -366,6 +366,287 @@ app.delete('/api/media/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ---------- PRODUCT ROUTES ----------
+
+// Get products – supports ?mine=true to return only caller's items
+app.get('/api/products', authenticateToken, async (req, res) => {
+  try {
+    const mine = req.query.mine === 'true';
+    let result;
+    if (mine) {
+      result = await pool.query('SELECT * FROM products WHERE user_id = $1 AND is_deleted = false', [req.user.userId]);
+    } else {
+      result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+    }
+    const productsWithPrices = result.rows.map(p => {
+      let pricesArr = p.prices;
+      if (!pricesArr || !pricesArr.length) {
+        const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
+        pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
+      }
+      return { ...p, prices: pricesArr };
+    });
+    res.json({ products: productsWithPrices });
+  } catch (err) {
+    console.error('Error fetching products:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Public all-products route (no auth)
+app.get('/api/products/all', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+    const productsWithPrices = result.rows.map(p => {
+      let pricesArr = p.prices;
+      if (!pricesArr || !pricesArr.length) {
+        const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
+        pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
+      }
+      return { ...p, prices: pricesArr };
+    });
+    res.json({ products: productsWithPrices });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---------- PLAYLIST ROUTES ----------
+
+// Helper function to get playlist with media files
+async function getPlaylistWithMedia(playlistId) {
+  console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
+  
+  const playlistResult = await pool.query(
+    `SELECT p.*, u.username 
+     FROM playlists p 
+     JOIN users u ON p.user_id = u.id 
+     WHERE p.id = $1`,
+    [playlistId]
+  );
+
+  if (playlistResult.rows.length === 0) {
+    console.log('🔴 GET_PLAYLIST: Playlist not found:', playlistId);
+    return null;
+  }
+
+  const playlist = playlistResult.rows[0];
+  console.log('🔴 GET_PLAYLIST: Raw playlist data:', playlist);
+
+  // Get media files for this playlist
+  const mediaResult = await pool.query(
+    `SELECT m.*, pm.display_order 
+     FROM media m 
+     JOIN playlist_media pm ON m.id = pm.media_id 
+     WHERE pm.playlist_id = $1 
+     ORDER BY pm.display_order`,
+    [playlistId]
+  );
+
+  playlist.mediaFiles = mediaResult.rows.map(media => ({
+    id: media.id,
+    title: media.title,
+    filePath: `/uploads/${media.filename}`,
+    fileType: media.file_type,
+    contentType: media.content_type,
+    url: `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${media.filename}`,
+  }));
+
+  // Convert snake_case fields to camelCase for frontend compatibility
+  const convertedPlaylist = {
+    ...playlist,
+    requiresActivationCode: playlist.requires_activation_code,
+    isPublic: playlist.is_public,
+    userId: playlist.user_id,
+    createdAt: playlist.created_at,
+    updatedAt: playlist.updated_at
+  };
+  
+  console.log('🔴 GET_PLAYLIST: Converted playlist data:', {
+    id: convertedPlaylist.id,
+    name: convertedPlaylist.name,
+    requiresActivationCode: convertedPlaylist.requiresActivationCode,
+    requires_activation_code: playlist.requires_activation_code,
+    isPublic: convertedPlaylist.isPublic,
+    is_public: playlist.is_public
+  });
+  
+  return convertedPlaylist;
+}
+
+app.get('/api/playlists', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.*, u.username 
+       FROM playlists p 
+       JOIN users u ON p.user_id = u.id 
+       WHERE p.user_id = $1 
+       ORDER BY p.created_at DESC`,
+      [req.user.userId]
+    );
+
+    const playlists = await Promise.all(
+      result.rows.map(async (playlist) => {
+        return await getPlaylistWithMedia(playlist.id);
+      })
+    );
+
+    res.json({ playlists });
+  } catch (error) {
+    console.error('Error fetching playlists:', error);
+    res.status(500).json({ error: 'Failed to fetch playlists' });
+  }
+});
+
+app.get('/api/playlists/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const playlist = await getPlaylistWithMedia(id);
+    
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    res.json({ playlist });
+  } catch (error) {
+    console.error('Error fetching playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
+
+// ---------- QR CODES ROUTES ----------
+
+app.get('/api/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT qr.*, COUNT(qs.id) as scan_count
+       FROM qr_codes qr
+       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       WHERE qr.owner_id = $1 AND qr.is_active = true
+       GROUP BY qr.id
+       ORDER BY qr.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    const qrCodes = result.rows.map(qr => ({
+      ...qr,
+      options: typeof qr.options === 'string' ? JSON.parse(qr.options) : qr.options,
+      scanCount: parseInt(qr.scan_count) || 0
+    }));
+    
+    console.log('📱 QR_CODES: Found', qrCodes.length, 'QR codes');
+    res.json({ qrCodes });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR codes:', error);
+    res.status(500).json({ error: 'Failed to fetch QR codes' });
+  }
+});
+
+// ---------- SLIDESHOWS ROUTES ----------
+
+app.get('/api/slideshows', authenticateToken, async (req, res) => {
+  try {
+    console.log('🎬 SLIDESHOWS: Fetching slideshows for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT s.* FROM slideshows s 
+       WHERE s.user_id = $1 
+       ORDER BY s.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    // Get images for each slideshow
+    const slideshows = await Promise.all(
+      result.rows.map(async (slideshow) => {
+        const imagesResult = await pool.query(
+          `SELECT * FROM slideshow_images 
+           WHERE slideshow_id = $1 
+           ORDER BY display_order`,
+          [slideshow.id]
+        );
+        
+        return {
+          ...slideshow,
+          images: imagesResult.rows.map(img => ({
+            id: img.id,
+            slideshowId: img.slideshow_id,
+            url: img.image_url,
+            caption: img.caption,
+            position: img.display_order,
+            createdAt: img.created_at
+          }))
+        };
+      })
+    );
+    
+    console.log('🎬 SLIDESHOWS: Found', slideshows.length, 'slideshows');
+    res.json({ slideshows });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error fetching slideshows:', error);
+    res.status(500).json({ error: 'Failed to fetch slideshows' });
+  }
+});
+
+// ---------- ACTIVATION CODES ROUTES ----------
+
+app.get('/api/activation-codes/generated', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔑 ACTIVATION_CODES: Fetching all generated codes for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name,
+              'playlist' as content_type
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.created_by = $1
+       ORDER BY ac.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'generated codes');
+    res.json({ activationCodes: result.rows });
+    
+  } catch (error) {
+    console.error('🔑 ACTIVATION_CODES: Error fetching generated codes:', error);
+    res.status(500).json({ error: 'Failed to fetch activation codes' });
+  }
+});
+
+app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔑 ACTIVATION_CODES: Fetching access codes for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT ac.*, uac.attached_at,
+              p.name as playlist_name,
+              s.name as slideshow_name,
+              CASE WHEN ac.playlist_id IS NOT NULL THEN 'playlist' ELSE 'slideshow' END as content_type
+       FROM user_activation_codes uac
+       JOIN activation_codes ac ON uac.activation_code_id = ac.id
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE uac.user_id = $1 AND ac.is_active = true
+       ORDER BY uac.attached_at DESC`,
+      [req.user.userId]
+    );
+    
+    console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'access codes');
+    res.json({ accessCodes: result.rows });
+    
+  } catch (error) {
+    console.error('🔑 ACTIVATION_CODES: Error fetching access codes:', error);
+    res.status(500).json({ error: 'Failed to fetch access codes' });
+  }
+});
+
 // Ensure the app listens on process.env.PORT
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
