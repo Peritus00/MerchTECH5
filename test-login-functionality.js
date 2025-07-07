@@ -111,6 +111,7 @@ async function testWebApp() {
       console.log(`   Response: ${loginResponse.body.substring(0, 200)}`);
     } else {
       console.log(`❌ Unexpected login response (Status: ${loginResponse.statusCode})`);
+      console.log(`   Response Body: ${loginResponse.body}`);
     }
   } catch (error) {
     console.log(`❌ Error testing login: ${error.message}`);
@@ -140,6 +141,7 @@ async function testWebApp() {
       console.log(`   Response: ${healthResponse.body.substring(0, 100)}`);
     } else {
       console.log(`❌ API health check failed (Status: ${healthResponse.statusCode})`);
+      console.log(`   Response Body: ${healthResponse.body}`);
     }
   } catch (error) {
     console.log(`❌ Error testing API health: ${error.message}`);

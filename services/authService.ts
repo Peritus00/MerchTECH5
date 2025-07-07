@@ -397,33 +397,21 @@ class AuthService {
 
   async forgotPassword(email: string): Promise<{ success: boolean; message: string }> {
     try {
-      await authAPI.forgotPassword(email);
-      return {
-        success: true,
-        message: 'Password reset email sent successfully'
-      };
+      const response = await authAPI.forgotPassword(email);
+      return { success: true, message: response.message };
     } catch (error: any) {
-      console.error('Forgot password error:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to send password reset email'
-      };
+      console.error('🔴 AuthService: Forgot Password error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to send password reset email.');
     }
   }
 
   async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     try {
-      await authAPI.resetPassword(token, newPassword);
-      return {
-        success: true,
-        message: 'Password reset successfully'
-      };
+      const response = await authAPI.resetPassword(token, newPassword);
+      return { success: true, message: response.message };
     } catch (error: any) {
-      console.error('Password reset error:', error);
-      return {
-        success: false,
-        message: error.message || 'Failed to reset password'
-      };
+      console.error('🔴 AuthService: Reset Password error:', error);
+      throw new Error(error.response?.data?.error || 'Failed to reset password.');
     }
   }
 

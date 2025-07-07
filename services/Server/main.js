@@ -38,7 +38,7 @@ try {
 }
 
 // Load .env from project root regardless of where the script is run from
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+// require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5001;
@@ -211,6 +211,11 @@ const upload = multer({
 });
 
 // --- CONFIGURATION ---
+console.log('--- VERCEL ENV DEBUG ---');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'Set (first 10 chars): ' + process.env.DATABASE_URL.substring(0, 10) : 'Not Set');
+console.log('--- END VERCEL ENV DEBUG ---');
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
@@ -4592,6 +4597,115 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error' });
   } else {
     res.status(500).json({ error: err.message, stack: err.stack });
+  }
+});
+
+app.post('/api/auth/forgot-password', [
+  body('email').isEmail().normalizeEmail().trim(),
+  validateInput
+], async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    const userResult = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    if (userResult.rows.length === 0) {
+      // Intentionally send a success response to prevent user enumeration
+      return res.status(200).json({ message: 'If an account with this email exists, a password reset link has been sent.' });
+    }
+    
+    const user = userResult.rows[0];
+    const resetToken = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '1h' });
+    const expires = new Date(Date.now() + 3600000); // 1 hour from now
+
+    await pool.query(
+      'UPDATE users SET password_reset_token = $1, password_reset_expires = $2 WHERE id = $3',
+      [resetToken, expires, user.id]
+    );
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
+
+    await transporter.sendMail({
+      from: '"MerchTech QR" <help@merchtech.net>',
+      to: user.email,
+      subject: 'Your MerchTech Password Reset Request',
+      html: `
+        <p>You requested a password reset for your MerchTech account.</p>
+        <p>Please click the link below to set a new password. This link will expire in 1 hour.</p>
+        <a href="${resetUrl}">Reset Your Password</a>
+        <p>If you did not request this, please ignore this email.</p>
+      `,
+    });
+
+    res.status(200).json({ message: 'If an account with this email exists, a password reset link has been sent.' });
+
+  } catch (error) {
+    console.error('🔴 FORGOT PASSWORD ERROR:', error);
+    // Do not reveal specific errors to the client
+    res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
+  }
+});
+
+app.post('/api/auth/reset-password', [
+  body('token').notEmpty().trim(),
+  body('newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters long.'),
+  validateInput
+], async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    let decoded;
+
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (jwtError) {
+      return res.status(400).json({ error: 'Invalid or expired password reset link.' });
+    }
+
+    const userResult = await pool.query(
+      'SELECT * FROM users WHERE id = $1 AND password_reset_token = $2 AND password_reset_expires > NOW()',
+      [decoded.userId, token]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid or expired password reset link.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await pool.query(
+      'UPDATE users SET password_hash = $1, password_reset_token = NULL, password_reset_expires = NULL WHERE id = $2',
+      [hashedPassword, decoded.userId]
+    );
+
+    res.status(200).json({ message: 'Your password has been reset successfully. Please log in.' });
+
+  } catch (error) {
+    console.error('🔴 RESET PASSWORD ERROR:', error);
+    res.status(500).json({ error: 'An unexpected error occurred. Please try again later.' });
+  }
+});
+
+app.get('/api/auth/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const result = await pool.query(
+      `UPDATE users SET is_email_verified = true, verification_token = null WHERE id = $1 AND is_email_verified = false RETURNING id`,
+      [decoded.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({ error: 'Token is invalid or user is already verified.' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    res.redirect(`${frontendUrl}/auth/verification-success`);
+
+  } catch (error) {
+    console.error('🔴 VERIFY EMAIL ERROR:', error);
+    res.status(400).json({ error: 'Invalid or expired verification token.' });
   }
 });
 

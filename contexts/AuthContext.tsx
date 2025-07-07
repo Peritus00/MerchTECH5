@@ -13,6 +13,8 @@ interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
+  forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (password: string, token: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -153,6 +155,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const forgotPassword = async (email: string) => {
+    setIsLoading(true);
+    try {
+      await authService.forgotPassword(email);
+      return { success: true, message: "Password reset link sent." };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'An unexpected error occurred.' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const resetPassword = async (password: string, token: string) => {
+    setIsLoading(true);
+    try {
+      const result = await authService.resetPassword(password, token);
+      return { success: true, message: result.message };
+    } catch (error: any) {
+      return { success: false, message: error.message || 'An unexpected error occurred.' };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const refreshUser = async () => {
     try {
       const currentUser = await authService.getCurrentUser();
@@ -188,6 +214,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       logout,
       refreshUser,
       updateProfile,
+      forgotPassword,
+      resetPassword,
     }}>
       {children}
     </AuthContext.Provider>
