@@ -154,20 +154,7 @@ const initializeDatabase = async () => {
   }
 };
 
-const startServer = async () => {
-  console.log('DEBUG: Entered startServer');
-  try {
-    await initializeDatabase();
-    console.log('DEBUG: Database initialized, starting Express app...');
-    app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Full server with email logic running on port ${PORT}`));
-    console.log('DEBUG: Express app should now be running.');
-  } catch (error) {
-    console.error('DEBUG: Failed to start server:', error);
-    console.error('DEBUG: Error stack:', error.stack);
-    process.exit(1);
-  }
-};
+// Remove app.listen() and startServer for Vercel serverless
+// Instead, export the Express app as a handler
 
-console.log('DEBUG: About to call startServer()');
-startServer();
-console.log('DEBUG: startServer() called');
+module.exports = app;
