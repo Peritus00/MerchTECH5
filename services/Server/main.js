@@ -20,7 +20,7 @@ const winston = require('winston');
 // Import S3 service (will be undefined if not available)
 let s3Service;
 try {
-  const s3Module = require('../s3Service.js');
+  const s3Module = require('./s3Service.js');
   s3Service = s3Module.S3Service;
   console.log('✅ S3 service loaded successfully (JS)');
 } catch (jsError) {
