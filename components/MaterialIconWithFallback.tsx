@@ -20,6 +20,7 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'add': '➕',
   'cloud-upload': '☁️⬆️',
   'qr-code': '📱',
+  'qr-code-scanner': '📱',
   'analytics': '📊',
   'store': '🏪',
   'star': '⭐',
@@ -28,7 +29,25 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'delete-forever': '🗑️',
   'search': '🔍',
   'clear': '✖️',
+  'close': '✖️',
   'queue-music': '🎵',
+  'audiotrack': '🎵',
+  'videocam': '🎬',
+  'insert-drive-file': '📄',
+  'warning': '⚠️',
+  'contrast': '🌓',
+  'gradient': '🌈',
+  'crop-free': '⚡',
+  'photo-size-select-small': '🔍',
+  'brightness-7': '☀️',
+  'arrow-back': '←',
+  'account-circle': '👤',
+  'support-agent': '🎧',
+  'description': '📝',
+  'play-circle-filled': '▶️',
+  'forum': '💬',
+  'home': '🏠',
+  'settings': '⚙️',
 };
 
 interface MaterialIconWithFallbackProps extends IconProps<ComponentProps<typeof MaterialIcons>['name']> {
@@ -41,7 +60,7 @@ export function MaterialIconWithFallback({
   style, 
   name, 
   size = 24, 
-  color,
+  color = '#000',
   ...rest 
 }: MaterialIconWithFallbackProps) {
   // On web, use emoji fallback if available
@@ -53,6 +72,15 @@ export function MaterialIconWithFallback({
     );
   }
   
-  // Default to MaterialIcons
-  return <MaterialIcons size={size} style={style} name={name} color={color} {...rest} />;
+  // Default to MaterialIcons with error boundary
+  try {
+    return <MaterialIcons size={size} style={style} name={name} color={color} {...rest} />;
+  } catch (error) {
+    console.warn(`MaterialIcon "${name}" failed to load, using fallback`);
+    return (
+      <Text style={[{ fontSize: size, color }, style]}>
+        {WEB_MATERIAL_ICON_MAP[name as string] || '❓'}
+      </Text>
+    );
+  }
 } 

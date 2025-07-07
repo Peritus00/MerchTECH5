@@ -284,9 +284,15 @@ export const mediaAPI = {
     const res = await api.get(`/media/${id}`);
     return res.data.media;
   },
-  async deleteMedia(mediaId: string) {
+  async delete(mediaId: string) {
+    console.log('🗑️ MediaAPI: Deleting media file:', mediaId);
     const res = await api.delete(`/media/${mediaId}`);
+    console.log('🗑️ MediaAPI: Delete response:', res.data);
     return res.data;
+  },
+  async deleteMedia(mediaId: string) {
+    // Legacy method - redirect to delete
+    return this.delete(mediaId);
   },
   async getAll() {
     const res = await api.get('/media');
