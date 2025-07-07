@@ -227,12 +227,98 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// S3 Presigned URL generation endpoint
+app.post('/api/upload/presigned', authenticateToken, async (req, res) => {
+  try {
+    const { fileName, contentType, fileSize } = req.body;
+    
+    if (!fileName || !contentType) {
+      return res.status(400).json({ error: 'fileName and contentType are required' });
+    }
+
+    if (!s3Service) {
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+
+    const { uploadUrl, fileUrl, key } = await s3Service.getPresignedUploadUrl(
+      fileName, 
+      contentType, 
+      req.user.userId, 
+      fileSize
+    );
+
+    res.json({ uploadUrl, fileUrl, key });
+  } catch (error) {
+    console.error('❌ Presigned URL generation error:', error);
+    res.status(500).json({ error: 'Failed to generate presigned URL' });
+  }
+});
+
+// S3 Direct upload endpoint (for smaller files)
+app.post('/api/upload/s3', authenticateToken, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    if (!s3Service) {
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+
+    const { originalname, mimetype, buffer, size } = req.file;
+    
+    const fileUrl = await s3Service.uploadFile(
+      buffer,
+      originalname,
+      mimetype,
+      req.user.userId
+    );
+
+    res.json({ 
+      fileUrl,
+      fileName: originalname,
+      contentType: mimetype,
+      fileSize: size
+    });
+  } catch (error) {
+    console.error('❌ S3 upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file to S3' });
+  }
+});
+
+// Legacy upload endpoint (for backward compatibility)
 app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
   const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
   res.json({ imageUrl: fileUrl });
+});
+
+// S3 Signed URL for file access
+app.post('/api/media/signed-url', authenticateToken, async (req, res) => {
+  try {
+    const { fileUrl, expiresIn = 3600 } = req.body;
+    
+    if (!fileUrl) {
+      return res.status(400).json({ error: 'fileUrl is required' });
+    }
+
+    if (!s3Service) {
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+
+    const key = s3Service.extractKeyFromUrl(fileUrl);
+    if (!key) {
+      return res.status(400).json({ error: 'Invalid S3 file URL' });
+    }
+
+    const signedUrl = await s3Service.getSignedUrl(key, expiresIn);
+    res.json({ signedUrl });
+  } catch (error) {
+    console.error('❌ Signed URL generation error:', error);
+    res.status(500).json({ error: 'Failed to generate signed URL' });
+  }
 });
 
 // ---------- MEDIA ROUTES ----------
@@ -345,6 +431,43 @@ app.get('/api/media/:id/stream', async (req, res) => {
   }
 });
 
+// Get signed URL for S3 file access
+app.get('/api/media/:id/signed-url', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { expiresIn = 3600 } = req.query; // Default 1 hour
+
+    const mediaResult = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    if (mediaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+
+    const media = mediaResult.rows[0];
+    
+    // Check permissions
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin;
+    if (media.user_id !== req.user.userId && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // If it's an S3 URL, generate a signed URL
+    if (media.url && media.url.includes('amazonaws.com') && s3Service) {
+      const key = s3Service.extractKeyFromUrl(media.url);
+      if (key) {
+        const signedUrl = await s3Service.getSignedUrl(key, parseInt(expiresIn));
+        return res.json({ signedUrl, expiresIn: parseInt(expiresIn) });
+      }
+    }
+
+    // If not S3 or no key found, return the original URL
+    res.json({ url: media.url });
+  } catch (error) {
+    console.error('Error generating signed URL:', error);
+    res.status(500).json({ error: 'Failed to generate signed URL' });
+  }
+});
+
 app.delete('/api/media/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -358,6 +481,21 @@ app.delete('/api/media/:id', authenticateToken, async (req, res) => {
     if (media.user_id !== req.user.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }
+
+    // If it's an S3 file, delete it from S3 as well
+    if (media.url && media.url.includes('amazonaws.com') && s3Service) {
+      const key = s3Service.extractKeyFromUrl(media.url);
+      if (key) {
+        try {
+          await s3Service.deleteFile(key);
+          console.log(`🗑️ Deleted S3 file: ${key}`);
+        } catch (s3Error) {
+          console.error('⚠️ Failed to delete S3 file:', s3Error);
+          // Continue with database deletion even if S3 deletion fails
+        }
+      }
+    }
+
     await pool.query('DELETE FROM media WHERE id = $1', [id]);
     res.json({ message: 'Media deleted successfully' });
   } catch (error) {
