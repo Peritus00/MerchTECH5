@@ -189,6 +189,7 @@ app.post('/api/auth/login', async (req, res) => {
     const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.is_admin }, JWT_SECRET, { expiresIn: '24h' });
     res.json({ user, token });
   } catch (error) {
+    console.error('🔴 LOGIN ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -208,6 +209,7 @@ app.post('/api/auth/register', async (req, res) => {
     const token = jwt.sign({ userId: newUser.id, email: newUser.email, isAdmin: newUser.is_admin }, JWT_SECRET, { expiresIn: '24h' });
     res.status(201).json({ user: newUser, token });
   } catch (error) {
+    console.error('🔴 REGISTER ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
