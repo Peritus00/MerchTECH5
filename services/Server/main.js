@@ -226,6 +226,14 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).send('No file uploaded.');
+  }
+  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ imageUrl: fileUrl });
+});
+
 // Ensure the app listens on process.env.PORT
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
