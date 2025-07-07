@@ -68,12 +68,35 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       
       // Handle file reading differently for web vs mobile
       if (Platform.OS === 'web') {
-        // For web, use the File API
+        // For web, handle the file directly from the asset
         try {
-          const response = await fetch(asset.uri);
-          const blob = await response.blob();
+          console.log('🔴 WEB UPLOAD: Processing file:', {
+            name: asset.name,
+            size: asset.size,
+            type: asset.mimeType,
+            uri: asset.uri?.substring(0, 50) + '...'
+          });
+
+          // On web, the asset might already be a File object or have a file property
+          let fileToRead: File;
           
-          // Convert blob to base64
+          if ((asset as any).file instanceof File) {
+            // If asset has a file property (newer Expo versions)
+            fileToRead = (asset as any).file;
+          } else if (typeof window !== 'undefined' && asset.uri) {
+            // Try to get the file from the URI if it's a blob URL
+            if (asset.uri.startsWith('blob:')) {
+              const response = await fetch(asset.uri);
+              const blob = await response.blob();
+              fileToRead = new File([blob], asset.name || 'upload', { type: asset.mimeType });
+            } else {
+              throw new Error('Unsupported file URI format');
+            }
+          } else {
+            throw new Error('Could not access file on web');
+          }
+          
+          // Convert file to base64
           const reader = new FileReader();
           fileBase64 = await new Promise((resolve, reject) => {
             reader.onload = () => {
@@ -82,12 +105,18 @@ export const useMediaUpload = (): UseMediaUploadResult => {
               const base64Data = result.split(',')[1];
               resolve(base64Data);
             };
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
+            reader.onerror = (error) => {
+              console.error('FileReader error:', error);
+              reject(new Error('Failed to read file'));
+            };
+            reader.readAsDataURL(fileToRead);
           });
+
+          console.log('🔴 WEB UPLOAD: File read successfully, base64 length:', fileBase64.length);
+          
         } catch (error) {
-          console.error('Web file reading failed:', error);
-          throw new Error('Failed to read file on web');
+          console.error('🔴 WEB UPLOAD: File reading failed:', error);
+          throw new Error(`Failed to read file on web: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       } else {
         // For mobile, use FileSystem
