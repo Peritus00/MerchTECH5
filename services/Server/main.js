@@ -31,6 +31,7 @@ try {
 
 console.log('DEBUG: Server script starting...');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
