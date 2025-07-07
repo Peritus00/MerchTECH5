@@ -33,5 +33,13 @@
   ],
   "env": {
     "NODE_ENV": "production"
+  },
+  "functions": {
+    "services/Server/main.js": {
+      "maxDuration": 300
+    }
+  },
+  "limits": {
+    "duration": 300000
   }
 } 

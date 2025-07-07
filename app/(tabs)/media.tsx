@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -62,9 +61,27 @@ export default function MediaScreen() {
         // Refresh the media list to ensure consistency
         await fetchMediaFiles();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔴 MEDIA: Upload error:', error);
-      Alert.alert('Upload Failed', 'Please try again');
+      
+      // Provide specific error messages based on error type
+      let errorMessage = 'Please try again';
+      
+      if (error.message?.includes('File too large')) {
+        errorMessage = error.message;
+      } else if (error.response?.status === 413) {
+        errorMessage = 'File too large for upload. Please use a smaller file (under 4MB) or contact support for assistance.';
+      } else if (error.message?.includes('Network Error') || error.code === 'NETWORK_ERROR') {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Upload limit reached. Please upgrade your plan or contact support.';
+      } else if (error.message?.includes('Unable to read file')) {
+        errorMessage = 'Unable to read the selected file. Please try a different file.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      Alert.alert('Upload Failed', errorMessage);
     }
   };
 
