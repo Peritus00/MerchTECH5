@@ -20,21 +20,13 @@ const winston = require('winston');
 // Import S3 service (will be undefined if not available)
 let s3Service;
 try {
-  // Try to require the TypeScript file directly (Node.js with ts-node or similar)
-  const s3Module = require('../s3Service.ts');
-  s3Service = s3Module.s3Service;
-  console.log('✅ S3 service loaded successfully');
-} catch (error) {
-  try {
-    // Fallback to compiled JavaScript version
-    const s3Module = require('../s3Service.js');
-    s3Service = s3Module.s3Service;
-    console.log('✅ S3 service loaded successfully (JS fallback)');
-  } catch (jsError) {
-    console.log('⚠️  S3 service not available, using local/base64 storage');
-    console.log('   Error:', error.message);
-    s3Service = null;
-  }
+  const s3Module = require('../s3Service.js');
+  s3Service = s3Module.S3Service;
+  console.log('✅ S3 service loaded successfully (JS)');
+} catch (jsError) {
+  console.log('⚠️  S3 service not available, using local/base64 storage');
+  console.log('   Error:', jsError.message);
+  s3Service = null;
 }
 
 console.log('DEBUG: Server script starting...');
