@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MerchTech Media Upload Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .info { background-color: #d1ecf1; border-color: #bee5eb; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #e9ecef;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background-color: #28a745;
+            transition: width 0.3s ease;
+        }
+        .log {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 3px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 MerchTech Media Upload Test</h1>
+        <p>This page tests the media upload functionality of your MerchTech application.</p>
+        
+        <div class="test-section info">
+            <h3>📋 Test Instructions</h3>
+            <ol>
+                <li>Make sure you're logged in to <a href="https://app.merchtech.net" target="_blank">app.merchtech.net</a></li>
+                <li>Open browser developer tools (F12) to see detailed logs</li>
+                <li>Select a file to upload (images, audio, video, or documents)</li>
+                <li>Click "Test Upload" to simulate the upload process</li>
+                <li>Check the results and verify the file appears in your media list</li>
+            </ol>
+        </div>
+
+        <div class="test-section">
+            <h3>🔧 Upload Test</h3>
+            <input type="file" id="fileInput" accept="*/*">
+            <br>
+            <button onclick="testUpload()" id="uploadBtn">Test Upload</button>
+            <button onclick="clearLog()">Clear Log</button>
+            
+            <div class="progress" id="progressContainer" style="display: none;">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            
+            <div id="results"></div>
+            <div class="log" id="logContainer"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Quick Tests</h3>
+            <button onclick="testAPI()">Test API Health</button>
+            <button onclick="testAuth()">Test Authentication</button>
+            <button onclick="testMediaList()">Test Media List</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://app.merchtech.net/api';
+        let authToken = null;
+
+        function log(message, type = 'info') {
+            const logContainer = document.getElementById('logContainer');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.innerHTML = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Also log to console
+            console.log(`[${timestamp}] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+        }
+
+        function showProgress(percentage) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            
+            if (percentage === 0) {
+                progressContainer.style.display = 'none';
+            } else {
+                progressContainer.style.display = 'block';
+                progressBar.style.width = percentage + '%';
+            }
+        }
+
+        function showResult(message, isSuccess = true) {
+            const results = document.getElementById('results');
+            results.className = 'test-section ' + (isSuccess ? 'success' : 'error');
+            results.innerHTML = `<h4>${isSuccess ? '✅' : '❌'} Result</h4><p>${message}</p>`;
+        }
+
+        async function testAPI() {
+            log('Testing API health...');
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                log(`✅ API Health: ${response.status} - ${JSON.stringify(data)}`);
+            } catch (error) {
+                log(`❌ API Health failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAuth() {
+            log('Testing authentication...');
+            try {
+                // Try to get current user info (this will fail if not logged in)
+                const response = await fetch(`${API_BASE}/auth/me`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const user = await response.json();
+                    log(`✅ Authentication: Logged in as ${user.email}`);
+                    authToken = 'session_based'; // We're using session-based auth
+                } else {
+                    log(`❌ Authentication: Not logged in (${response.status})`);
+                }
+            } catch (error) {
+                log(`❌ Authentication test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testMediaList() {
+            log('Testing media list...');
+            try {
+                const response = await fetch(`${API_BASE}/media`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const mediaList = await response.json();
+                    log(`✅ Media list: ${mediaList.length} files found`);
+                } else {
+                    log(`❌ Media list failed: ${response.status}`);
+                }
+            } catch (error) {
+                log(`❌ Media list test failed: ${error.message}`, 'error');
+            }
+        }
+
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadBtn = document.getElementById('uploadBtn');
+            
+            if (!fileInput.files.length) {
+                showResult('Please select a file first', false);
+                return;
+            }
+
+            const file = fileInput.files[0];
+            uploadBtn.disabled = true;
+            showProgress(0);
+            
+            log(`🔄 Starting upload test for: ${file.name} (${file.size} bytes, ${file.type})`);
+
+            try {
+                // Simulate progress
+                for (let i = 10; i <= 90; i += 10) {
+                    showProgress(i);
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+                // Convert file to base64
+                log('📁 Converting file to base64...');
+                const fileBase64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const result = reader.result;
+                        const base64Data = result.split(',')[1];
+                        resolve(base64Data);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                log(`✅ File conversion complete: ${fileBase64.length} characters`);
+
+                // Prepare media data
+                const mediaData = {
+                    title: file.name,
+                    filePath: `data:${file.type};base64,${fileBase64}`,
+                    url: `data:${file.type};base64,${fileBase64}`,
+                    filename: file.name,
+                    fileType: getFileType(file.type),
+                    contentType: file.type,
+                    filesize: file.size,
+                    duration: null,
+                    uniqueId: `media-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+                };
+
+                log('📤 Uploading to server...');
+                
+                // Upload to server
+                const response = await fetch(`${API_BASE}/media`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(mediaData)
+                });
+
+                showProgress(100);
+
+                if (response.ok) {
+                    const result = await response.json();
+                    log(`✅ Upload successful! File ID: ${result.id}`);
+                    showResult(`Upload successful! File "${file.name}" has been uploaded with ID: ${result.id}`, true);
+                } else {
+                    const errorText = await response.text();
+                    log(`❌ Upload failed: ${response.status} - ${errorText}`, 'error');
+                    showResult(`Upload failed: ${response.status} - ${errorText}`, false);
+                }
+
+            } catch (error) {
+                log(`❌ Upload test failed: ${error.message}`, 'error');
+                showResult(`Upload test failed: ${error.message}`, false);
+            } finally {
+                uploadBtn.disabled = false;
+                setTimeout(() => showProgress(0), 1000);
+            }
+        }
+
+        function getFileType(mimeType) {
+            if (mimeType.startsWith('audio/')) return 'audio';
+            if (mimeType.startsWith('video/')) return 'video';
+            if (mimeType.startsWith('image/')) return 'image';
+            return 'other';
+        }
+
+        // Initialize
+        window.onload = function() {
+            log('🚀 Media Upload Test Page Loaded');
+            testAPI();
+        };
+    </script>
+</body>
+</html> 

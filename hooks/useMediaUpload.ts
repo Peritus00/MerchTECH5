@@ -47,10 +47,12 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     setIsUploading(true);
     setUploadProgress({ loaded: 0, total: asset.size || 0, percentage: 0 });
 
-    // Check file size (limit to 1GB)
-    const maxSize = 1024 * 1024 * 1024; // 1GB
+    // Check file size (limit based on platform and base64 encoding overhead)
+    const maxSize = Platform.OS === 'web' ? 50 * 1024 * 1024 : 1024 * 1024 * 1024; // 50MB for web, 1GB for mobile
     if (asset.size && asset.size > maxSize) {
-      throw new Error(`File too large. Maximum size is 1GB, but your file is ${Math.round((asset.size / 1024 / 1024) * 100) / 100}MB`);
+      const sizeMB = Math.round((asset.size / 1024 / 1024) * 100) / 100;
+      const maxSizeMB = Math.round((maxSize / 1024 / 1024) * 100) / 100;
+      throw new Error(`File too large. Maximum size is ${maxSizeMB}MB, but your file is ${sizeMB}MB. Base64 encoding increases file size by ~33%, so please use a smaller file.`);
     }
 
     try {
@@ -74,7 +76,8 @@ export const useMediaUpload = (): UseMediaUploadResult => {
             name: asset.name,
             size: asset.size,
             type: asset.mimeType,
-            uri: asset.uri?.substring(0, 50) + '...'
+            uri: asset.uri?.substring(0, 50) + '...',
+            hasFile: !!(asset as any).file
           });
 
           // On web, the asset might already be a File object or have a file property
@@ -83,9 +86,11 @@ export const useMediaUpload = (): UseMediaUploadResult => {
           if ((asset as any).file instanceof File) {
             // If asset has a file property (newer Expo versions)
             fileToRead = (asset as any).file;
+            console.log('🔴 WEB UPLOAD: Using asset.file property');
           } else if (typeof window !== 'undefined' && asset.uri) {
             // Try to get the file from the URI if it's a blob URL
             if (asset.uri.startsWith('blob:')) {
+              console.log('🔴 WEB UPLOAD: Fetching blob from URI');
               const response = await fetch(asset.uri);
               const blob = await response.blob();
               fileToRead = new File([blob], asset.name || 'upload', { type: asset.mimeType });
@@ -116,7 +121,18 @@ export const useMediaUpload = (): UseMediaUploadResult => {
           
         } catch (error) {
           console.error('🔴 WEB UPLOAD: File reading failed:', error);
-          throw new Error(`Failed to read file on web: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          // Fallback: try to use the URI directly if it's a data URL
+          if (asset.uri && asset.uri.startsWith('data:')) {
+            console.log('🔴 WEB UPLOAD: Fallback - using data URL directly');
+            const base64Part = asset.uri.split(',')[1];
+            if (base64Part) {
+              fileBase64 = base64Part;
+            } else {
+              throw new Error('Invalid data URL format');
+            }
+          } else {
+            throw new Error(`Failed to read file on web: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
         }
       } else {
         // For mobile, use FileSystem
@@ -126,7 +142,18 @@ export const useMediaUpload = (): UseMediaUploadResult => {
           });
         } catch (error) {
           console.error('Mobile file reading failed:', error);
-          throw new Error('Failed to read file on mobile');
+          // Fallback: try to use the URI directly if it's a data URL
+          if (asset.uri && asset.uri.startsWith('data:')) {
+            console.log('🔴 MOBILE UPLOAD: Fallback - using data URL directly');
+            const base64Part = asset.uri.split(',')[1];
+            if (base64Part) {
+              fileBase64 = base64Part;
+            } else {
+              throw new Error('Invalid data URL format');
+            }
+          } else {
+            throw new Error('Failed to read file on mobile');
+          }
         }
       }
 
@@ -181,7 +208,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: ['audio/*', 'video/*'],
-        copyToCacheDirectory: true,
+        copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
       });
 
       if (!result.canceled) {
@@ -197,21 +224,21 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   const selectAudioFile = async () => {
     return await DocumentPicker.getDocumentAsync({
       type: 'audio/*',
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
 
   const selectVideoFile = async () => {
     return await DocumentPicker.getDocumentAsync({
       type: 'video/*',
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
 
   const selectImageFile = async () => {
     return await DocumentPicker.getDocumentAsync({
       type: 'image/*',
-      copyToCacheDirectory: true,
+      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
 

@@ -10,6 +10,13 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
 
+// 🔒 SECURITY IMPORTS - FREE SECURITY HARDENING
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const slowDown = require('express-slow-down');
+const { body, validationResult } = require('express-validator');
+const winston = require('winston');
+
 // Import S3 service (will be undefined if not available)
 let s3Service;
 try {
@@ -27,6 +34,70 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// 🔒 SECURITY LOGGER SETUP - FREE MONITORING
+const securityLogger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: path.join(__dirname, '../../logs/security.log') }),
+    new winston.transports.Console({ level: 'error' })
+  ]
+});
+
+// 🔒 RATE LIMITING - FREE DDOS & BRUTE FORCE PROTECTION
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 login attempts per windowMs
+  message: { error: 'Too many login attempts, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    securityLogger.warn({
+      type: 'rate_limit_exceeded',
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      url: req.url,
+      timestamp: new Date().toISOString()
+    });
+    res.status(429).json({ error: 'Too many login attempts, please try again later.' });
+  }
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    securityLogger.warn({
+      type: 'rate_limit_exceeded',
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      url: req.url,
+      timestamp: new Date().toISOString()
+    });
+    res.status(429).json({ error: 'Too many requests from this IP, please try again later.' });
+  }
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 20, // 20 uploads per hour
+  message: { error: 'Too many file uploads, please try again later.' }
+});
+
+// 🔒 SLOW DOWN REPEATED REQUESTS - FREE PROTECTION
+const speedLimiter = slowDown({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  delayAfter: 10, // allow 10 requests per window without delay
+  delayMs: () => 500, // add 500ms delay per request after delayAfter
+  maxDelayMs: 20000, // maximum delay of 20 seconds
+});
+
 // Use a single uploads directory at the project root so that static
 // file URLs work consistently in all deployment / execution contexts.
 // __dirname here is   services/Server  so we go two levels up.
@@ -40,17 +111,52 @@ if (!fs.existsSync(uploadsDir)) {
   console.log(`📂 Uploads directory already exists: ${uploadsDir}`);
 }
 
+// 🔒 SECURE FILE UPLOAD CONFIGURATION - FREE FILE PROTECTION
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
   }
 });
 
-const upload = multer({ storage: storage });
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'audio/mpeg': '.mp3',
+    'audio/wav': '.wav',
+    'audio/mp4': '.m4a',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm'
+  };
+
+  if (allowedTypes[file.mimetype]) {
+    cb(null, true);
+  } else {
+    securityLogger.warn({
+      type: 'invalid_file_upload',
+      ip: req.ip,
+      filename: file.originalname,
+      mimetype: file.mimetype,
+      timestamp: new Date().toISOString()
+    });
+    cb(new Error('Invalid file type. Only images, audio, and video files are allowed.'), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+    files: 1, // Maximum 1 file per request
+  },
+  fileFilter: fileFilter,
+});
 
 // --- CONFIGURATION ---
 const pool = new Pool({
@@ -76,9 +182,94 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+// 🔒 SECURITY MIDDLEWARE - FREE COMPREHENSIVE PROTECTION
+// Apply security headers first
+app.use(helmet());
+
+// CORS with security
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://app.merchtech.net', 'https://merchtech.net']
+    : true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
+
+// Apply rate limiting and monitoring
+app.use(speedLimiter);
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+app.use('/api/upload', uploadLimiter);
+
+// Security event logging
+app.use((req, res, next) => {
+  const startTime = Date.now();
+  
+  res.on('finish', () => {
+    const duration = Date.now() - startTime;
+    const logData = {
+      type: 'api_request',
+      ip: req.ip,
+      method: req.method,
+      url: req.url,
+      statusCode: res.statusCode,
+      duration: duration,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    };
+
+    // Log suspicious activity
+    if (res.statusCode >= 400 || duration > 5000) {
+      securityLogger.warn(logData);
+    } else {
+      securityLogger.info(logData);
+    }
+  });
+
+  next();
+});
+
+// Suspicious activity detection
+app.use((req, res, next) => {
+  const suspiciousPatterns = [
+    /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|UNION|SCRIPT|JAVASCRIPT|VBSCRIPT|ONLOAD|ONERROR)\b)/i,
+    /<script[^>]*>.*?<\/script>/gi,
+    /(\b(eval|setTimeout|setInterval|Function|XMLHttpRequest)\s*\()/i,
+  ];
+
+  const checkForSuspiciousContent = (obj) => {
+    if (typeof obj === 'string') {
+      return suspiciousPatterns.some(pattern => pattern.test(obj));
+    }
+    if (typeof obj === 'object' && obj !== null) {
+      return Object.values(obj).some(value => checkForSuspiciousContent(value));
+    }
+    return false;
+  };
+
+  if (checkForSuspiciousContent(req.body) || checkForSuspiciousContent(req.query)) {
+    securityLogger.error({
+      type: 'suspicious_activity',
+      ip: req.ip,
+      url: req.url,
+      method: req.method,
+      body: req.body,
+      query: req.query,
+      timestamp: new Date().toISOString()
+    });
+    return res.status(400).json({ error: 'Suspicious activity detected' });
+  }
+
+  next();
+});
+
 // --- MIDDLEWARE ---
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '50mb' }));
+// Different limits for different endpoints
+app.use('/api/media', express.json({ limit: '100mb' })); // Higher limit for media uploads
+app.use('/api/upload', express.json({ limit: '100mb' })); // Higher limit for file uploads
+app.use(express.json({ limit: '10mb' })); // Standard limit for other endpoints
+app.use(express.urlencoded({ limit: '100mb', extended: true })); // Higher limit for form data
 app.use('/uploads', express.static(uploadsDir));
 
 const authenticateToken = (req, res, next) => {
@@ -154,39 +345,152 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+// 🔒 INPUT VALIDATION MIDDLEWARE - FREE INJECTION PROTECTION
+const validateInput = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    securityLogger.warn({
+      type: 'validation_error',
+      ip: req.ip,
+      url: req.url,
+      errors: errors.array(),
+      timestamp: new Date().toISOString()
+    });
+    return res.status(400).json({
+      error: 'Invalid input data',
+      details: errors.array()
+    });
+  }
+  next();
+};
+
+app.post('/api/auth/login', [
+  body('email').isEmail().normalizeEmail().trim(),
+  body('password').isLength({ min: 1 }).trim(),
+  validateInput
+], async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+    
+    // Log login attempt
+    securityLogger.info({
+      type: 'login_attempt',
+      ip: req.ip,
+      email: email,
+      timestamp: new Date().toISOString()
+    });
+    
     // Case-insensitive email lookup using LOWER()
     const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    if (result.rows.length === 0) {
+      securityLogger.warn({
+        type: 'login_failed',
+        ip: req.ip,
+        email: email,
+        reason: 'user_not_found',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
     const user = result.rows[0];
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
-    if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
+    if (!isValidPassword) {
+      securityLogger.warn({
+        type: 'login_failed',
+        ip: req.ip,
+        email: email,
+        reason: 'invalid_password',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    // Log successful login
+    securityLogger.info({
+      type: 'login_success',
+      ip: req.ip,
+      email: email,
+      userId: user.id,
+      timestamp: new Date().toISOString()
+    });
+    
     const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.is_admin }, JWT_SECRET, { expiresIn: '24h' });
     res.json({ user, token });
   } catch (error) {
+    securityLogger.error({
+      type: 'login_error',
+      ip: req.ip,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', [
+  body('email').isEmail().normalizeEmail().trim(),
+  body('password')
+    .isLength({ min: 8 })
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/)
+    .withMessage('Password must contain at least 8 characters including uppercase, lowercase, number, and special character'),
+  body('username').isLength({ min: 3, max: 20 }).isAlphanumeric().trim(),
+  validateInput
+], async (req, res) => {
   try {
     const { email, password, username } = req.body;
     if (!email || !password || !username) return res.status(400).json({ error: 'Email, password, and username are required' });
+    
+    // Log registration attempt
+    securityLogger.info({
+      type: 'registration_attempt',
+      ip: req.ip,
+      email: email,
+      username: username,
+      timestamp: new Date().toISOString()
+    });
+    
     // Case-insensitive email check
     const existingUser = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
-    if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
+    if (existingUser.rows.length > 0) {
+      securityLogger.warn({
+        type: 'registration_failed',
+        ip: req.ip,
+        email: email,
+        username: username,
+        reason: 'user_exists',
+        timestamp: new Date().toISOString()
+      });
+      return res.status(409).json({ error: 'Email or username already exists' });
+    }
+    
     const hashedPassword = await bcrypt.hash(password, 12);
     const result = await pool.query(
       `INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, is_admin`,
       [email, username, hashedPassword]
     );
     const newUser = result.rows[0];
+    
+    // Log successful registration
+    securityLogger.info({
+      type: 'registration_success',
+      ip: req.ip,
+      email: email,
+      username: username,
+      userId: newUser.id,
+      timestamp: new Date().toISOString()
+    });
+    
     const token = jwt.sign({ userId: newUser.id, email: newUser.email, isAdmin: newUser.is_admin }, JWT_SECRET, { expiresIn: '24h' });
     res.status(201).json({ user: newUser, token });
   } catch (error) {
+    securityLogger.error({
+      type: 'registration_error',
+      ip: req.ip,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -624,7 +928,7 @@ app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
-app.post('/api/upload', authenticateToken, upload.single('file'), (req, res) => {
+app.post('/api/upload', uploadLimiter, authenticateToken, upload.single('file'), (req, res) => {
   console.log('🖼️ UPLOAD: headers', req.headers['content-type']);
   console.log('🖼️ UPLOAD: req.body keys', Object.keys(req.body||{}));
   console.log('🖼️ UPLOAD: req.file', req.file);
@@ -4084,10 +4388,34 @@ app.post('/api/analytics/track-slideshow-access', async (req, res) => {
 // ---------- START SERVER ----------
 startServer();
 
-// ---------- ERROR HANDLERS (keep these LAST) ----------
-app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
+// 🔒 ENHANCED SECURITY ERROR HANDLERS - FREE ERROR PROTECTION
+app.use((req, res, next) => {
+  securityLogger.warn({
+    type: 'route_not_found',
+    ip: req.ip,
+    url: req.url,
+    method: req.method,
+    userAgent: req.get('User-Agent'),
+    timestamp: new Date().toISOString()
+  });
+  res.status(404).json({ error: 'Route not found' });
+});
+
 app.use((err, req, res, next) => {
-  console.error('🔴 Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
+  securityLogger.error({
+    type: 'application_error',
+    ip: req.ip,
+    url: req.url,
+    error: err.message,
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
+
+  // Don't leak error details in production
+  if (process.env.NODE_ENV === 'production') {
+    res.status(500).json({ error: 'Internal server error' });
+  } else {
+    res.status(500).json({ error: err.message, stack: err.stack });
+  }
 });
 
