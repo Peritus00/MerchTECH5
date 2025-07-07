@@ -146,7 +146,14 @@ const initializeDatabase = async () => {
   }
 };
 
-// Remove app.listen() and startServer for Vercel serverless
-// Instead, export the Express app as a handler
+// Health check route for root
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'Backend is running!' });
+});
+
+// Ensure the app listens on process.env.PORT
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 module.exports = app;
