@@ -233,8 +233,36 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
   const selectAndUploadFile = async (): Promise<MediaFile | null> => {
     try {
+      const audioTypes = Platform.OS === 'web'
+        ? [
+            // Standard audio formats
+            'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/aac',
+            // Mobile formats
+            'audio/3gpp', 'audio/x-m4a',
+            // Other common formats
+            'audio/ogg', 'audio/flac', 'audio/webm'
+          ]
+        : ['audio/*'];
+
+      const videoTypes = Platform.OS === 'web' 
+        ? [
+            // Standard video formats
+            'video/mp4', 'video/webm', 'video/ogg',
+            // Mobile formats
+            'video/3gpp', 'video/3gpp2', 'video/quicktime',
+            // Common formats
+            'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
+            // Alternative MIME types
+            'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska',
+            // High efficiency formats
+            'video/hevc', 'video/h264', 'video/h265',
+            // Streaming formats
+            'video/mp2t', 'video/x-ms-asf'
+          ]
+        : ['video/*'];
+
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['audio/*', 'video/*'],
+        type: [...audioTypes, ...videoTypes],
         copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
       });
 
@@ -250,21 +278,52 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
   const selectAudioFile = async () => {
     return await DocumentPicker.getDocumentAsync({
-      type: 'audio/*',
+      type: Platform.OS === 'web'
+        ? [
+            // Standard audio formats
+            'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/aac',
+            // Mobile formats
+            'audio/3gpp', 'audio/x-m4a',
+            // Other common formats
+            'audio/ogg', 'audio/flac', 'audio/webm'
+          ]
+        : 'audio/*', // Mobile uses wildcard for better compatibility
       copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
 
   const selectVideoFile = async () => {
     return await DocumentPicker.getDocumentAsync({
-      type: 'video/*',
+      type: Platform.OS === 'web' 
+        ? [
+            // Standard video formats
+            'video/mp4', 'video/webm', 'video/ogg',
+            // Mobile formats
+            'video/3gpp', 'video/3gpp2', 'video/quicktime',
+            // Common formats
+            'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
+            // Alternative MIME types
+            'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska',
+            // High efficiency formats
+            'video/hevc', 'video/h264', 'video/h265',
+            // Streaming formats
+            'video/mp2t', 'video/x-ms-asf'
+          ]
+        : 'video/*', // Mobile uses wildcard for better compatibility
       copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
 
   const selectImageFile = async () => {
     return await DocumentPicker.getDocumentAsync({
-      type: 'image/*',
+      type: Platform.OS === 'web'
+        ? [
+            // Standard image formats
+            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            // Mobile formats
+            'image/heic', 'image/heif'
+          ]
+        : 'image/*', // Mobile uses wildcard for better compatibility
       copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
     });
   };
@@ -273,6 +332,12 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     if (mimeType.startsWith('audio/')) return 'audio';
     if (mimeType.startsWith('video/')) return 'video';
     if (mimeType.startsWith('image/')) return 'image';
+    
+    // Handle specific document types
+    if (mimeType === 'application/pdf') return 'document';
+    if (mimeType === 'text/plain') return 'document';
+    if (mimeType.includes('word') || mimeType.includes('doc')) return 'document';
+    
     return 'other';
   };
 

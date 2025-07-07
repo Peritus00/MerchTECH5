@@ -125,14 +125,57 @@ const storage = multer.diskStorage({
 
 const fileFilter = (req, file, cb) => {
   const allowedTypes = {
+    // Images
     'image/jpeg': '.jpg',
     'image/png': '.png',
     'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/heic': '.heic',
+    'image/heif': '.heif',
+    
+    // Audio
     'audio/mpeg': '.mp3',
     'audio/wav': '.wav',
     'audio/mp4': '.m4a',
+    'audio/aac': '.aac',
+    'audio/ogg': '.ogg',
+    'audio/flac': '.flac',
+    'audio/x-m4a': '.m4a',
+    'audio/3gpp': '.3gp',
+    
+    // Video - Standard formats
     'video/mp4': '.mp4',
-    'video/webm': '.webm'
+    'video/webm': '.webm',
+    'video/ogg': '.ogv',
+    'video/avi': '.avi',
+    'video/mov': '.mov',
+    'video/wmv': '.wmv',
+    'video/flv': '.flv',
+    'video/mkv': '.mkv',
+    
+    // Video - Mobile specific formats
+    'video/3gpp': '.3gp',        // Android/iOS 3GP
+    'video/3gpp2': '.3g2',       // Android/iOS 3G2
+    'video/quicktime': '.mov',   // iOS QuickTime
+    'video/x-msvideo': '.avi',   // Android AVI
+    'video/x-ms-wmv': '.wmv',    // Windows Media
+    'video/x-flv': '.flv',       // Flash Video
+    'video/x-matroska': '.mkv',  // Matroska
+    
+    // Video - High efficiency formats
+    'video/hevc': '.hevc',       // H.265/HEVC
+    'video/h264': '.h264',       // H.264
+    'video/h265': '.h265',       // H.265
+    
+    // Video - Streaming formats
+    'video/mp2t': '.ts',         // MPEG-2 Transport Stream
+    'video/x-ms-asf': '.asf',    // Advanced Systems Format
+    
+    // Documents (common types)
+    'application/pdf': '.pdf',
+    'text/plain': '.txt',
+    'application/msword': '.doc',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx'
   };
 
   if (allowedTypes[file.mimetype]) {
@@ -145,14 +188,14 @@ const fileFilter = (req, file, cb) => {
       mimetype: file.mimetype,
       timestamp: new Date().toISOString()
     });
-    cb(new Error('Invalid file type. Only images, audio, and video files are allowed.'), false);
+    cb(new Error(`Invalid file type: ${file.mimetype}. Only images, audio, video, and document files are allowed.`), false);
   }
 };
 
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
+    fileSize: 1024 * 1024 * 1024, // 1GB limit to match our media upload limits
     files: 1, // Maximum 1 file per request
   },
   fileFilter: fileFilter,
