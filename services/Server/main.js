@@ -235,6 +235,137 @@ app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) =>
   res.json({ imageUrl: fileUrl });
 });
 
+// ---------- MEDIA ROUTES ----------
+app.post('/api/media', authenticateToken, async (req, res) => {
+  try {
+    const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId } = req.body;
+    if (!title || !url) {
+      return res.status(400).json({ error: 'Title and URL are required' });
+    }
+    // SUBSCRIPTION LIMIT CHECK
+    const userResult = await pool.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const userTier = user?.subscription_tier || 'free';
+    const countResult = await pool.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [req.user.userId]);
+    const currentCount = parseInt(countResult.rows[0].count);
+    let maxAudioFiles;
+    if (user?.max_audio_files !== null && user?.max_audio_files !== undefined) {
+      maxAudioFiles = user.max_audio_files;
+    } else {
+      const limits = { free: { maxAudioFiles: 3 }, basic: { maxAudioFiles: 10 }, premium: { maxAudioFiles: 20 } };
+      maxAudioFiles = (limits[userTier] || limits.free).maxAudioFiles;
+    }
+    if (currentCount >= maxAudioFiles) {
+      return res.status(403).json({ error: `Audio file limit reached. You have reached your limit of ${maxAudioFiles} audio files. Please contact support if you need to increase your limit.`, limit: maxAudioFiles, current: currentCount, subscriptionTier: userTier, isCustomLimit: user?.max_audio_files !== null && user?.max_audio_files !== undefined });
+    }
+    const result = await pool.query(
+      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+      [req.user.userId, title, filePath || url, url, filename, fileType, contentType, filesize, duration, uniqueId]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('Media upload error:', error);
+    res.status(500).json({ error: 'Failed to upload media' });
+  }
+});
+
+app.get('/api/media', authenticateToken, async (req, res) => {
+  try {
+    const mine = req.query.mine === 'true';
+    let result;
+    if (mine) {
+      result = await pool.query('SELECT * FROM media WHERE user_id = $1 ORDER BY created_at DESC', [req.user.userId]);
+    } else {
+      result = await pool.query('SELECT * FROM media ORDER BY created_at DESC');
+    }
+    res.json({ media: result.rows });
+  } catch (error) {
+    console.error('Error fetching media:', error);
+    res.status(500).json({ error: 'Failed to fetch media' });
+  }
+});
+
+app.get('/api/media/all', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM media ORDER BY created_at DESC');
+    res.json({ media: result.rows });
+  } catch (error) {
+    console.error('Error fetching all media:', error);
+    res.status(500).json({ error: 'Failed to fetch media' });
+  }
+});
+
+app.get('/api/media/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+    const media = result.rows[0];
+    let properUrl = media.url;
+    if (media.url && media.url.startsWith('data:')) {
+      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/api/media/${id}/stream`;
+    } else if (media.filename) {
+      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/uploads/${media.filename}`;
+    }
+    const mediaResponse = { ...media, url: properUrl, title: media.title, fileType: media.file_type, contentType: media.content_type };
+    res.json({ media: mediaResponse });
+  } catch (error) {
+    console.error('Error fetching media by ID:', error);
+    res.status(500).json({ error: 'Failed to fetch media file' });
+  }
+});
+
+app.get('/api/media/:id/stream', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+    const media = result.rows[0];
+    if (!media.url || !media.url.startsWith('data:')) {
+      return res.status(400).json({ error: 'Media file is not stored as base64 data' });
+    }
+    const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
+    if (!dataUrlMatch) {
+      return res.status(400).json({ error: 'Invalid base64 data format' });
+    }
+    const [, mimeType, base64Data] = dataUrlMatch;
+    const audioBuffer = Buffer.from(base64Data, 'base64');
+    res.setHeader('Content-Type', mimeType || 'audio/mpeg');
+    res.setHeader('Content-Length', audioBuffer.length);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error('Error streaming media:', error);
+    res.status(500).json({ error: 'Failed to stream media file' });
+  }
+});
+
+app.delete('/api/media/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const mediaResult = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    if (mediaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Media not found' });
+    }
+    const media = mediaResult.rows[0];
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin;
+    if (media.user_id !== req.user.userId && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    await pool.query('DELETE FROM media WHERE id = $1', [id]);
+    res.json({ message: 'Media deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting media:', error);
+    res.status(500).json({ error: 'Failed to delete media' });
+  }
+});
+
 // Ensure the app listens on process.env.PORT
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
