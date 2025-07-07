@@ -24,11 +24,9 @@ class Environment {
     // Check both regular and EXPO_PUBLIC_ prefixed environment variables
     const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
-    // Always use the app.merchtech.net domain in production so that
-    // CORS matches the allowed origins list. If someone sets a custom
-    // EXPO_PUBLIC_API_URL during development it will still be honoured.
+    // Use Railway backend in production, fallback to localhost for development
     const apiBaseUrl = nodeEnv === 'production'
-      ? 'https://app.merchtech.net/api'
+      ? 'https://merchtech5-production.up.railway.app/api'
       : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api');
     
     return {
@@ -36,7 +34,7 @@ class Environment {
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: nodeEnv === 'production',
       IS_DEVELOPMENT: nodeEnv === 'development',
-      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://app.merchtech.net',
+      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }

@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // Test configuration
-const API_BASE_URL = 'http://localhost:5001/api';
+const API_BASE_URL = 'https://app.merchtech.net/api';
 const TEST_FILE_PATH = path.join(__dirname, 'test-files', 'test-audio.mp3');
 
 // Create a small test file if it doesn't exist
@@ -31,8 +31,8 @@ async function testS3UploadFlow() {
     // Step 1: Login to get auth token
     console.log('\n1️⃣ Logging in...');
     const loginResponse = await axios.post(`${API_BASE_URL}/auth/login`, {
-      email: 'djjetfuel@gmail.com', // Replace with your test email
-      password: 'test123' // Replace with your test password
+      email: 'DJJETFUEL@GMAIL.COM', // Replace with your test email
+      password: 'GIZMO321$' // Replace with your test password
     });
     
     const token = loginResponse.data.token;
