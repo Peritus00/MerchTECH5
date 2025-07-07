@@ -132,6 +132,7 @@ const storage = multer.diskStorage({
     cb(null, file.fieldname + '-' + uniqueSuffix + ext);
   },
 });
+const upload = multer({ storage: storage });
 
 const initializeDatabase = async () => {
   console.log('DEBUG: Entered initializeDatabase');
