@@ -17,7 +17,8 @@
     "build:production": "NODE_ENV=production expo export",
     "server:start": "node ./services/Server/main.js",
     "server:dev": "NODE_ENV=development node ./services/Server/main.js",
-    "server:prod": "NODE_ENV=production node ./services/Server/main.js"
+    "server:prod": "NODE_ENV=production node ./services/Server/main.js",
+    "build": "expo export --platform web --minify --no-source-map --output-dir dist"
   },
   "jest": {
     "preset": "jest-expo"

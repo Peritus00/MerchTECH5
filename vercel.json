@@ -2,8 +2,11 @@
   "version": 2,
   "builds": [
     {
-      "src": "dist/**/*",
-      "use": "@vercel/static"
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "dist"
+      }
     },
     {
       "src": "services/Server/main.js",
@@ -20,23 +23,23 @@
     },
     {
       "src": "/_expo/(.*)",
-      "dest": "/dist/_expo/$1"
+      "dest": "/_expo/$1"
     },
     {
       "src": "^/$",
-      "dest": "dist/auth/login.html"
+      "dest": "/auth/login.html"
     },
     {
       "src": "/auth/login",
-      "dest": "dist/auth/login.html"
+      "dest": "/auth/login.html"
     },
     {
       "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))$",
-      "dest": "/dist/$1"
+      "dest": "/$1"
     },
     {
       "src": "/(.*)",
-      "dest": "/dist/index.html"
+      "dest": "/index.html"
     }
   ],
   "env": {
