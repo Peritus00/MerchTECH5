@@ -238,15 +238,21 @@ const transporter = nodemailer.createTransport({
 // Apply security headers first
 app.use(helmet());
 
-// CORS with security
-app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production'
     ? ['https://app.merchtech.net', 'https://www.merchtech.net', 'https://merchtech.net']
     : true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+};
+
+app.use(cors(corsOptions));
+
+// Explicitly handle CORS pre-flight requests so that the browser gets the
+// correct Access-Control-Allow-Origin header even when no route is defined
+// for OPTIONS (e.g. /api/auth/login).
+app.options('*', cors(corsOptions));
 
 // Apply rate limiting and monitoring
 app.use(speedLimiter);
