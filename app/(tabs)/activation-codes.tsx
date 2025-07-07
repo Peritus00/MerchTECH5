@@ -13,13 +13,16 @@ import {
   Share,
   Platform,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { activationCodesAPI, playlistAPI, slideshowAPI } from '@/services/api';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
+import ActivationCodeCard from '@/components/ActivationCodeCard';
+import UserActivationCodeCard from '@/components/UserActivationCodeCard';
+import CreateCodeModal from '@/components/CreateCodeModal';
 
 type TabType = 'generate' | 'myAccess' | 'allGenerated';
 
@@ -539,7 +542,7 @@ const ActivationCodesScreen = () => {
           setShowCreateModal(true);
         }}
       >
-        <MaterialIcons name="add" size={20} color="#fff" />
+        <MaterialIconWithFallback name="add" size={20} color="#fff" />
         <Text style={styles.createButtonText}>Create Single Code</Text>
       </TouchableOpacity>
 
@@ -548,7 +551,7 @@ const ActivationCodesScreen = () => {
         style={[styles.createButton, styles.batchButton]}
         onPress={() => setShowBatchModal(true)}
       >
-        <MaterialIcons name="add-circle-outline" size={20} color="#fff" />
+        <MaterialIconWithFallback name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.createButtonText}>Create Multiple Codes</Text>
       </TouchableOpacity>
 
@@ -843,7 +846,7 @@ const ActivationCodesScreen = () => {
           {isAttaching ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <MaterialIcons name="add" size={20} color="#fff" />
+            <MaterialIconWithFallback name="add" size={20} color="#fff" />
           )}
         </TouchableOpacity>
       </View>
@@ -851,7 +854,7 @@ const ActivationCodesScreen = () => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {myAccessCodes.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="vpn-key" size={48} color="#ccc" />
+            <MaterialIconWithFallback name="vpn-key" size={48} color="#ccc" />
             <Text style={styles.emptyStateText}>No access codes attached</Text>
             <Text style={styles.emptyStateSubtext}>
               Enter an activation code above to unlock content
@@ -867,19 +870,19 @@ const ActivationCodesScreen = () => {
                     style={styles.copyButton}
                     onPress={() => handleCopyToClipboard(code.code)}
                   >
-                    <MaterialIcons name="content-copy" size={18} color="#007AFF" />
+                    <MaterialIconWithFallback name="content-copy" size={18} color="#007AFF" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.shareButton}
                     onPress={() => handleShareCode(code)}
                   >
-                    <MaterialIcons name="share" size={18} color="#4CAF50" />
+                    <MaterialIconWithFallback name="share" size={18} color="#4CAF50" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.removeButton}
                     onPress={() => handleDetachCode(code.id)}
                   >
-                    <MaterialIcons name="remove" size={18} color="#ff4444" />
+                    <MaterialIconWithFallback name="remove" size={18} color="#ff4444" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -910,7 +913,7 @@ const ActivationCodesScreen = () => {
       <ScrollView showsVerticalScrollIndicator={false}>
         {allGeneratedCodes.length === 0 ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="code" size={48} color="#ccc" />
+            <MaterialIconWithFallback name="code" size={48} color="#ccc" />
             <Text style={styles.emptyStateText}>No codes generated yet</Text>
             <Text style={styles.emptyStateSubtext}>
               Use the Generate tab to create activation codes for your content
@@ -931,13 +934,13 @@ const ActivationCodesScreen = () => {
                     style={styles.copyButton}
                     onPress={() => handleCopyToClipboard(code.code)}
                   >
-                    <MaterialIcons name="content-copy" size={18} color="#007AFF" />
+                    <MaterialIconWithFallback name="content-copy" size={18} color="#007AFF" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.shareButton}
                     onPress={() => handleShareCode(code)}
                   >
-                    <MaterialIcons name="share" size={18} color="#4CAF50" />
+                    <MaterialIconWithFallback name="share" size={18} color="#4CAF50" />
                   </TouchableOpacity>
                   <View style={[
                     styles.statusBadge,
@@ -951,13 +954,13 @@ const ActivationCodesScreen = () => {
                     style={styles.editButton}
                     onPress={() => handleEditCode(code)}
                   >
-                    <MaterialIcons name="edit" size={18} color="#007AFF" />
+                    <MaterialIconWithFallback name="edit" size={18} color="#007AFF" />
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
                     onPress={() => handleDeleteCode(code.id)}
                   >
-                    <MaterialIcons name="delete" size={18} color="#ff4444" />
+                    <MaterialIconWithFallback name="delete" size={18} color="#ff4444" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1088,7 +1091,7 @@ const ActivationCodesScreen = () => {
               style={styles.closeButton}
               onPress={() => setShowShareModal(false)}
             >
-              <MaterialIcons name="close" size={24} color="#666" />
+              <MaterialIconWithFallback name="close" size={24} color="#666" />
             </TouchableOpacity>
           </View>
           
@@ -1112,7 +1115,7 @@ const ActivationCodesScreen = () => {
                   style={[styles.shareOptionButton, styles.primaryShareButton]}
                   onPress={() => shareViaBuiltIn(`🎵 Here's your activation code: ${sharingCode.code}\n\nUse this code to access: ${sharingCode.content_type === 'playlist' ? sharingCode.playlist_name : sharingCode.slideshow_name}\n\nEnjoy your content!`)}
                 >
-                  <MaterialIcons name="share" size={24} color="#fff" />
+                  <MaterialIconWithFallback name="share" size={24} color="#fff" />
                   <Text style={[styles.shareOptionText, styles.primaryShareText]}>Share via Apps</Text>
                   <Text style={styles.shareOptionSubtext}>Email, Messages, WhatsApp, etc.</Text>
                 </TouchableOpacity>
@@ -1121,7 +1124,7 @@ const ActivationCodesScreen = () => {
                   style={styles.shareOptionButton}
                   onPress={() => handleCopyToClipboard(`🎵 Here's your activation code: ${sharingCode.code}\n\nUse this code to access: ${sharingCode.content_type === 'playlist' ? sharingCode.playlist_name : sharingCode.slideshow_name}\n\nEnjoy your content!`)}
                 >
-                  <MaterialIcons name="content-copy" size={24} color="#4CAF50" />
+                  <MaterialIconWithFallback name="content-copy" size={24} color="#4CAF50" />
                   <Text style={styles.shareOptionText}>Copy Full Message</Text>
                   <Text style={styles.shareOptionSubtext}>Copy and paste anywhere</Text>
                 </TouchableOpacity>
@@ -1130,14 +1133,14 @@ const ActivationCodesScreen = () => {
                   style={styles.shareOptionButton}
                   onPress={() => handleCopyToClipboard(sharingCode.code)}
                 >
-                  <MaterialIcons name="vpn-key" size={24} color="#FF9500" />
+                  <MaterialIconWithFallback name="vpn-key" size={24} color="#FF9500" />
                   <Text style={styles.shareOptionText}>Copy Code Only</Text>
                   <Text style={styles.shareOptionSubtext}>Just the activation code</Text>
                 </TouchableOpacity>
               </View>
 
               <View style={styles.shareHint}>
-                <MaterialIcons name="info" size={16} color="#666" />
+                <MaterialIconWithFallback name="info" size={16} color="#666" />
                 <Text style={styles.shareHintText}>
                   Available apps depend on what's installed on your device. 
                   Make sure you have Mail app configured for email sharing.

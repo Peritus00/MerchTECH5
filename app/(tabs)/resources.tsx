@@ -1,20 +1,22 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Linking,
   Alert,
   TextInput,
+  Linking,
+  Platform,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
+import { ThemedText } from '@/components/ThemedText';
+import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
-import ResourceCard from '@/components/ResourceCard';
 import QuickAccessCard from '@/components/QuickAccessCard';
+import ResourceCard from '@/components/ResourceCard';
+import { router } from 'expo-router';
 
 interface Resource {
   url: string;
@@ -185,7 +187,7 @@ const ResourcesScreen = () => {
 
         {/* Search */}
         <View style={styles.searchContainer}>
-          <MaterialIcons name="search" size={20} color="#6b7280" />
+          <MaterialIconWithFallback name="search" size={20} color="#6b7280" />
           <TextInput
             style={styles.searchInput}
             placeholder="Search resources..."
@@ -195,7 +197,7 @@ const ResourcesScreen = () => {
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <MaterialIcons name="clear" size={20} color="#6b7280" />
+              <MaterialIconWithFallback name="clear" size={20} color="#6b7280" />
             </TouchableOpacity>
           )}
         </View>
@@ -216,7 +218,7 @@ const ResourcesScreen = () => {
               ]}
               onPress={() => setActiveCategory(category.key)}
             >
-              <MaterialIcons
+              <MaterialIconWithFallback
                 name={category.icon as any}
                 size={20}
                 color={activeCategory === category.key ? '#fff' : '#6b7280'}
@@ -269,7 +271,7 @@ const ResourcesScreen = () => {
             </View>
           ) : (
             <View style={styles.emptyContainer}>
-              <MaterialIcons name="search-off" size={64} color="#9ca3af" />
+              <MaterialIconWithFallback name="search-off" size={64} color="#9ca3af" />
               <Text style={styles.emptyText}>No resources found</Text>
               <Text style={styles.emptySubtext}>
                 Try adjusting your search terms or browse different categories
@@ -285,7 +287,7 @@ const ResourcesScreen = () => {
             Can't find what you're looking for? Our support team is here to help you succeed.
           </Text>
           <TouchableOpacity style={styles.contactButton} onPress={handleContactSupport}>
-            <MaterialIcons name="email" size={20} color="#fff" />
+            <MaterialIconWithFallback name="email" size={20} color="#fff" />
             <Text style={styles.contactButtonText}>Contact Support</Text>
           </TouchableOpacity>
         </View>

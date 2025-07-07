@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 
 interface HeaderWithLogoProps {
   title: string;
@@ -47,7 +47,7 @@ export default function HeaderWithLogo({
       <View style={styles.rightSection}>
         {onRightButtonPress && rightButtonIcon && (
           <TouchableOpacity onPress={onRightButtonPress} style={styles.rightButton}>
-            <MaterialIcons name={rightButtonIcon as any} size={24} color={rightButtonColor} />
+            <MaterialIconWithFallback name={rightButtonIcon as any} size={24} color={rightButtonColor} />
           </TouchableOpacity>
         )}
       </View>

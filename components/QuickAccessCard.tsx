@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Dimensions,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 
 const { width } = Dimensions.get('window');
 const cardWidth = (width - 48) / 2; // 16px padding on each side + 16px gap
@@ -43,7 +43,7 @@ const QuickAccessCard: React.FC<QuickAccessCardProps> = ({
         styles.iconContainer,
         { backgroundColor: getIconColor(icon) + '20' }
       ]}>
-        <MaterialIcons
+        <MaterialIconWithFallback
           name={icon as any}
           size={24}
           color={getIconColor(icon)}

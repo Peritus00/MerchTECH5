@@ -18,6 +18,7 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'hourglass-empty': '⏳',
   'lock-reset': '🔓',
   'add': '➕',
+  'add-circle-outline': '⊕',
   'cloud-upload': '☁️⬆️',
   'qr-code': '📱',
   'qr-code-scanner': '📱',
@@ -27,7 +28,9 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'dashboard': '📊',
   'library-music': '🎵',
   'delete-forever': '🗑️',
+  'delete': '🗑️',
   'search': '🔍',
+  'search-off': '🔍❌',
   'clear': '✖️',
   'close': '✖️',
   'queue-music': '🎵',
@@ -48,6 +51,14 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'forum': '💬',
   'home': '🏠',
   'settings': '⚙️',
+  'slideshow': '🖼️',
+  'content-copy': '📋',
+  'share': '📤',
+  'remove': '➖',
+  'code': '💻',
+  'edit': '✏️',
+  'vpn-key': '🔑',
+  'info': 'ℹ️',
 };
 
 interface MaterialIconWithFallbackProps extends IconProps<ComponentProps<typeof MaterialIcons>['name']> {
