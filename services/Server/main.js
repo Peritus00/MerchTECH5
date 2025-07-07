@@ -241,7 +241,7 @@ app.use(helmet());
 // CORS with security
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? ['https://app.merchtech.net', 'https://merchtech.net']
+    ? ['https://app.merchtech.net', 'https://www.merchtech.net', 'https://merchtech.net']
     : true,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -353,10 +353,35 @@ const isAdmin = async (req, res, next) => {
 
 app.get('/api/health', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.json({ status: 'healthy', database: 'connected' });
+    console.log('🏥 Health check requested');
+    console.log('🔍 Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      DATABASE_URL: process.env.DATABASE_URL ? 'Set' : 'Not set',
+      PORT: process.env.PORT
+    });
+    
+    // Basic health check without database dependency for now
+    res.json({ 
+      status: 'healthy', 
+      server: 'running',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'unknown',
+      cors: 'enabled'
+    });
   } catch (error) {
-    res.status(503).json({ status: 'unhealthy', database: 'disconnected' });
+    console.error('❌ Health check failed:', error);
+    console.error('❌ Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      server: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 

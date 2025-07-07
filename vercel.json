@@ -2,15 +2,15 @@
   "version": 2,
   "builds": [
     {
+      "src": "dist/**/*",
+      "use": "@vercel/static"
+    },
+    {
       "src": "services/Server/main.js",
       "use": "@vercel/node",
       "config": {
         "maxLambdaSize": "50mb"
       }
-    },
-    {
-      "src": "dist/**/*",
-      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -23,7 +23,15 @@
       "dest": "/dist/_expo/$1"
     },
     {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot|json))",
+      "src": "^/$",
+      "dest": "dist/auth/login.html"
+    },
+    {
+      "src": "/auth/login",
+      "dest": "dist/auth/login.html"
+    },
+    {
+      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))$",
       "dest": "/dist/$1"
     },
     {
@@ -33,13 +41,5 @@
   ],
   "env": {
     "NODE_ENV": "production"
-  },
-  "functions": {
-    "services/Server/main.js": {
-      "maxDuration": 300
-    }
-  },
-  "limits": {
-    "duration": 300000
   }
 } 

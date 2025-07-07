@@ -25,11 +25,11 @@ class Environment {
     const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
     return {
-      API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api',
+      API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'https://app.merchtech.net/api',
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: nodeEnv === 'production',
       IS_DEVELOPMENT: nodeEnv === 'development',
-      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'http://localhost:8081',
+      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://app.merchtech.net',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }
