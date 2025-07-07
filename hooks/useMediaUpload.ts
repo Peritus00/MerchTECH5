@@ -47,24 +47,37 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     setIsUploading(true);
     setUploadProgress({ loaded: 0, total: asset.size || 0, percentage: 0 });
 
-    // Check file size (limit based on platform and base64 encoding overhead)
-    const maxSize = Platform.OS === 'web' ? 50 * 1024 * 1024 : 1024 * 1024 * 1024; // 50MB for web, 1GB for mobile
+    // Check file size (1GB limit for both web and mobile)
+    const maxSize = 1024 * 1024 * 1024; // 1GB for both platforms
     if (asset.size && asset.size > maxSize) {
       const sizeMB = Math.round((asset.size / 1024 / 1024) * 100) / 100;
       const maxSizeMB = Math.round((maxSize / 1024 / 1024) * 100) / 100;
-      throw new Error(`File too large. Maximum size is ${maxSizeMB}MB, but your file is ${sizeMB}MB. Base64 encoding increases file size by ~33%, so please use a smaller file.`);
+      throw new Error(`File too large. Maximum size is ${maxSizeMB}MB, but your file is ${sizeMB}MB. Note: Base64 encoding increases file size by ~33%.`);
+    }
+    
+    // Show warning for large files
+    if (asset.size && asset.size > 100 * 1024 * 1024) { // 100MB+
+      const sizeMB = Math.round((asset.size / 1024 / 1024) * 100) / 100;
+      console.log(`⚠️ Large file upload: ${sizeMB}MB - This may take several minutes to upload`);
+      Alert.alert(
+        'Large File Upload',
+        `You're uploading a ${sizeMB}MB file. This may take several minutes to complete. Please keep the app open during upload.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => { throw new Error('Upload cancelled by user'); } },
+          { text: 'Continue', style: 'default' }
+        ]
+      );
     }
 
     try {
-      // Simulate upload progress
-      for (let i = 0; i <= 90; i += 10) {
-        setUploadProgress({
-          loaded: (asset.size || 0) * (i / 100),
-          total: asset.size || 0,
-          percentage: i,
-        });
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
+      // Show initial progress for file preparation
+      setUploadProgress({
+        loaded: 0,
+        total: asset.size || 0,
+        percentage: 10,
+      });
+      
+      console.log('🔄 Starting file processing for upload...');
 
       let fileBase64 = '';
       
@@ -118,6 +131,13 @@ export const useMediaUpload = (): UseMediaUploadResult => {
           });
 
           console.log('🔴 WEB UPLOAD: File read successfully, base64 length:', fileBase64.length);
+          
+          // Update progress after file reading
+          setUploadProgress({
+            loaded: (asset.size || 0) * 0.3,
+            total: asset.size || 0,
+            percentage: 30,
+          });
           
         } catch (error) {
           console.error('🔴 WEB UPLOAD: File reading failed:', error);
@@ -180,6 +200,13 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         dataUrlLength: mediaData.url.length
       });
 
+      // Update progress before upload
+      setUploadProgress({
+        loaded: (asset.size || 0) * 0.5,
+        total: asset.size || 0,
+        percentage: 50,
+      });
+      
       // Upload to database via API
       const uploadedFile = await mediaAPI.upload(mediaData);
 

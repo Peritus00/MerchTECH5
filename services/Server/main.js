@@ -266,10 +266,10 @@ app.use((req, res, next) => {
 
 // --- MIDDLEWARE ---
 // Different limits for different endpoints
-app.use('/api/media', express.json({ limit: '100mb' })); // Higher limit for media uploads
-app.use('/api/upload', express.json({ limit: '100mb' })); // Higher limit for file uploads
+app.use('/api/media', express.json({ limit: '1.5gb' })); // 1.5GB limit for media uploads (1GB file + 33% base64 overhead)
+app.use('/api/upload', express.json({ limit: '1.5gb' })); // 1.5GB limit for file uploads
 app.use(express.json({ limit: '10mb' })); // Standard limit for other endpoints
-app.use(express.urlencoded({ limit: '100mb', extended: true })); // Higher limit for form data
+app.use(express.urlencoded({ limit: '1.5gb', extended: true })); // Higher limit for form data
 app.use('/uploads', express.static(uploadsDir));
 
 const authenticateToken = (req, res, next) => {

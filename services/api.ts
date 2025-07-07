@@ -17,8 +17,52 @@ if (env.isDevelopment) {
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // Increased timeout for Android
+  timeout: 60000, // Standard timeout for most requests
 });
+
+// Create a separate instance for large file uploads
+export const uploadAPI = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 300000, // 5 minutes for large uploads
+});
+
+// Add interceptors for upload API
+uploadAPI.interceptors.response.use(
+  (response) => {
+    console.log('✅ Upload API Response successful:', response.config.url);
+    return response;
+  },
+  (error) => {
+    console.error('❌ Upload API Request failed:', {
+      url: error.config?.url,
+      method: error.config?.method,
+      timeout: error.config?.timeout,
+      message: error.message,
+      status: error.response?.status,
+    });
+    return Promise.reject(error);
+  }
+);
+
+uploadAPI.interceptors.request.use(
+  async (config) => {
+    const token = await AsyncStorage.getItem('authToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    if (
+      config.data &&
+      typeof config.data === 'object' &&
+      !(typeof window !== 'undefined' && config.data instanceof FormData)
+    ) {
+      config.headers['Content-Type'] = 'application/json';
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 // Add response interceptor for better error handling
 api.interceptors.response.use(
@@ -224,8 +268,8 @@ export const checkoutAPI = {
 // Media API
 export const mediaAPI = {
   async upload(mediaData: any) {
-    console.log('📤 MediaAPI: Uploading media file');
-    const res = await api.post('/media', mediaData);
+    console.log('📤 MediaAPI: Uploading media file (using extended timeout)');
+    const res = await uploadAPI.post('/media', mediaData);
     return res.data;
   },
   async getMyMedia() {
