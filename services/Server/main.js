@@ -21,8 +21,11 @@ const winston = require('winston');
 let s3Service;
 try {
   const s3Module = require('./s3Service.js');
-  s3Service = s3Module.S3Service;
-  console.log('✅ S3 service loaded successfully (JS)');
+  s3Service = new s3Module.S3Service();
+  console.log('✅ S3 service loaded and instantiated successfully');
+  console.log('   AWS Region:', process.env.AWS_REGION);
+  console.log('   S3 Bucket:', process.env.AWS_S3_BUCKET_NAME);
+  console.log('   AWS Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Configured' : 'Missing');
 } catch (jsError) {
   console.log('⚠️  S3 service not available, using local/base64 storage');
   console.log('   Error:', jsError.message);
