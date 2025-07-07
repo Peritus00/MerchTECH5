@@ -24,8 +24,15 @@ class Environment {
     // Check both regular and EXPO_PUBLIC_ prefixed environment variables
     const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
+    // Always use the app.merchtech.net domain in production so that
+    // CORS matches the allowed origins list. If someone sets a custom
+    // EXPO_PUBLIC_API_URL during development it will still be honoured.
+    const apiBaseUrl = nodeEnv === 'production'
+      ? 'https://app.merchtech.net/api'
+      : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api');
+    
     return {
-      API_BASE_URL: process.env.EXPO_PUBLIC_API_URL || 'https://app.merchtech.net/api',
+      API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: nodeEnv === 'production',
       IS_DEVELOPMENT: nodeEnv === 'development',
