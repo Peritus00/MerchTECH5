@@ -369,14 +369,23 @@ app.post('/api/auth/reset-password', async (req, res) => {
     console.log('Token received:', token ? token.substring(0, 20) + '...' : 'null');
     console.log('Token length:', token ? token.length : 0);
     
+    // Decode URL-encoded token if needed
+    let decodedToken = token;
+    try {
+      decodedToken = decodeURIComponent(token);
+      console.log('Token after URL decode:', decodedToken.substring(0, 20) + '...');
+    } catch (e) {
+      console.log('Token was not URL-encoded, using as-is');
+    }
+    
     // Verify token
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(decodedToken, JWT_SECRET);
     if (!decoded.userId) return res.status(400).json({ error: 'Invalid reset token' });
     
     // Check if token exists and is not expired in database
     const result = await pool.query(
       'SELECT id FROM users WHERE id = $1 AND reset_token = $2 AND reset_token_expires > NOW()',
-      [decoded.userId, token]
+      [decoded.userId, decodedToken]
     );
     
     if (result.rows.length === 0) {
