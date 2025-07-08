@@ -1,0 +1,86 @@
+# Node modules - will be installed fresh
+node_modules/
+
+# Expo and React Native frontend files
+app/
+components/
+assets/
+constants/
+contexts/
+hooks/
+types/
+shared/
+
+# Build outputs
+dist/
+.expo/
+build/
+
+# Large asset directories
+attached_assets/
+uploads/
+
+# Test files
+test-*.js
+*.test.js
+*.spec.js
+test-files/
+
+# Documentation
+*.md
+docs/
+
+# Development files
+.env
+.env.local
+.env.development
+.env.production.example
+env.merchtech.production
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+.DS_Store
+*.tmp
+*.temp
+
+# IDE files
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Other platforms
+vercel.json
+vercel-web.json
+.vercel/
+.elasticbeanstalk/
+
+# Large files
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mp3
+*.wav
+*.avi
+*.mov
+
+# Package files (will be installed fresh)
+package-lock.json
+
+# Scripts (not needed for production)
+scripts/
+*.sh
+
+# AWS and deployment files
+AWS_*.json
+AWS_*.md
+*_GUIDE.md
+*_SETUP_*.md
+*_DEPLOYMENT*.md 
