@@ -1091,14 +1091,21 @@ app.get('/api/slideshows/:id', authenticateToken, async (req, res) => {
 // Upload image for slideshow
 app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image'), async (req, res) => {
   try {
+    console.log('🎬 SLIDESHOW_UPLOAD: Starting image upload process');
     const { id } = req.params;
     const { caption, position } = req.body;
     
-    console.log('🎬 SLIDESHOW_UPLOAD: Uploading image for slideshow:', { 
+    console.log('🎬 SLIDESHOW_UPLOAD: Parameters received:', { 
       id, 
       caption, 
       position,
-      hasFile: !!req.file 
+      hasFile: !!req.file,
+      fileInfo: req.file ? {
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : null
     });
     
     if (!req.file) {
@@ -1130,21 +1137,27 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     // Get next position if not provided
     let displayOrder = position;
     if (!displayOrder) {
+      console.log('🎬 SLIDESHOW_UPLOAD: Getting next position for slideshow:', id);
       const maxPositionResult = await pool.query(
         'SELECT MAX(display_order) as max_pos FROM slideshow_images WHERE slideshow_id = $1',
         [id]
       );
       displayOrder = (maxPositionResult.rows[0].max_pos || 0) + 1;
+      console.log('🎬 SLIDESHOW_UPLOAD: Next position calculated:', displayOrder);
     }
     
     // Save image record to database
     const imageUrl = `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${filename}`;
+    console.log('🎬 SLIDESHOW_UPLOAD: About to save image record with URL:', imageUrl);
+    
     const imageResult = await pool.query(
       `INSERT INTO slideshow_images (slideshow_id, image_url, caption, display_order, created_at)
        VALUES ($1, $2, $3, $4, NOW())
        RETURNING *`,
       [id, imageUrl, caption || '', displayOrder]
     );
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Image record saved successfully:', imageResult.rows[0]);
     
     const image = {
       id: imageResult.rows[0].id,
@@ -1165,7 +1178,11 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     
   } catch (error) {
     console.error('🎬 SLIDESHOW_UPLOAD: Error uploading image:', error);
-    res.status(500).json({ error: 'Failed to upload image' });
+    console.error('🎬 SLIDESHOW_UPLOAD: Error message:', error.message);
+    if (error.stack) {
+      console.error('🎬 SLIDESHOW_UPLOAD: Error stack:', error.stack);
+    }
+    res.status(500).json({ error: 'Failed to upload image', details: error.message });
   }
 });
 
