@@ -867,7 +867,7 @@ async function getPlaylistWithMedia(playlistId) {
     filePath: `/uploads/${media.filename}`,
     fileType: media.file_type,
     contentType: media.content_type,
-    url: `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${media.filename}`,
+    url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`,
   }));
 
   // Convert snake_case fields to camelCase for frontend compatibility
