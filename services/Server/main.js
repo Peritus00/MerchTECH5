@@ -1465,42 +1465,60 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
 
 // ---------- ACTIVATION CODE VALIDATION ROUTES ----------
 
-// Validate activation code for slideshow access
+// Validate activation code for playlist/slideshow access
 app.post('/api/activation-codes/validate', async (req, res) => {
   try {
-    const { code, slideshowId } = req.body;
+    const { code, playlistId, slideshowId } = req.body;
     
-    if (!code || !slideshowId) {
-      console.log('🔑 ACTIVATION_VALIDATE: Missing required fields:', { code, slideshowId });
-      return res.status(400).json({ error: 'Code and slideshow ID required' });
+    if (!code || (!playlistId && !slideshowId)) {
+      console.log('🔑 ACTIVATION_VALIDATE: Missing required fields:', { code, playlistId, slideshowId });
+      return res.status(400).json({ error: 'Code and either playlistId or slideshowId required' });
     }
     
-    console.log('🔑 ACTIVATION_VALIDATE: Validating code for slideshow:', { code, slideshowId });
-    
-    // Check if slideshow exists and requires activation
-    const slideshowResult = await pool.query(
-      'SELECT requires_activation_code FROM slideshows WHERE id = $1',
-      [slideshowId]
-    );
-    
-    if (slideshowResult.rows.length === 0) {
-      console.log('🔑 ACTIVATION_VALIDATE: Slideshow not found:', slideshowId);
-      return res.status(404).json({ error: 'Slideshow not found' });
+    if (playlistId && slideshowId) {
+      return res.status(400).json({ error: 'Provide either playlistId or slideshowId, not both' });
     }
     
-    if (!slideshowResult.rows[0].requires_activation_code) {
-      console.log('🔑 ACTIVATION_VALIDATE: Slideshow does not require activation code');
-      return res.status(400).json({ error: 'This slideshow does not require an activation code' });
+    let contentType, contentId, contentCheckQuery, contentCheckParams, codeCheckQuery, codeCheckParams;
+    if (playlistId) {
+      contentType = 'playlist';
+      contentId = playlistId;
+      contentCheckQuery = 'SELECT requires_activation_code FROM playlists WHERE id = $1';
+      contentCheckParams = [playlistId];
+      codeCheckQuery = `SELECT * FROM activation_codes 
+                       WHERE code = $1 AND playlist_id = $2 AND is_active = true 
+                       AND (expires_at IS NULL OR expires_at > NOW())
+                       AND (max_uses IS NULL OR uses_count < max_uses)`;
+      codeCheckParams = [code, playlistId];
+    } else {
+      contentType = 'slideshow';
+      contentId = slideshowId;
+      contentCheckQuery = 'SELECT requires_activation_code FROM slideshows WHERE id = $1';
+      contentCheckParams = [slideshowId];
+      codeCheckQuery = `SELECT * FROM activation_codes 
+                       WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
+                       AND (expires_at IS NULL OR expires_at > NOW())
+                       AND (max_uses IS NULL OR uses_count < max_uses)`;
+      codeCheckParams = [code, slideshowId];
+    }
+    
+    console.log('🔑 ACTIVATION_VALIDATE: Validating code for', contentType, ':', { code, contentId });
+    
+    // Check if content exists and requires activation
+    const contentResult = await pool.query(contentCheckQuery, contentCheckParams);
+    
+    if (contentResult.rows.length === 0) {
+      console.log('🔑 ACTIVATION_VALIDATE:', contentType, 'not found:', contentId);
+      return res.status(404).json({ error: `${contentType.charAt(0).toUpperCase() + contentType.slice(1)} not found` });
+    }
+    
+    if (!contentResult.rows[0].requires_activation_code) {
+      console.log('🔑 ACTIVATION_VALIDATE:', contentType, 'does not require activation code');
+      return res.status(400).json({ error: `This ${contentType} does not require an activation code` });
     }
     
     // Validate activation code
-    const codeResult = await pool.query(
-      `SELECT * FROM activation_codes 
-       WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
-       AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)`,
-      [code, slideshowId]
-    );
+    const codeResult = await pool.query(codeCheckQuery, codeCheckParams);
     
     if (codeResult.rows.length === 0) {
       console.log('🔑 ACTIVATION_VALIDATE: Invalid or expired code:', code);
@@ -1511,7 +1529,7 @@ app.post('/api/activation-codes/validate', async (req, res) => {
     }
     
     const activationCode = codeResult.rows[0];
-    console.log('🔑 ACTIVATION_VALIDATE: Code validated successfully:', {
+    console.log('🔑 ACTIVATION_VALIDATE: Code validated successfully for', contentType, ':', {
       codeId: activationCode.id,
       usesCount: activationCode.uses_count,
       maxUses: activationCode.max_uses,
