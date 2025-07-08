@@ -1573,6 +1573,48 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
   }
 });
 
+// Temporary migration endpoint to fix playlists table
+app.post('/api/migrate-playlists', async (req, res) => {
+  try {
+    console.log('🔧 Running playlists table migration...');
+    
+    // Add missing updated_at column to playlists table
+    await pool.query('ALTER TABLE playlists ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
+    console.log('✅ Added updated_at column to playlists table');
+    
+    // Add trigger for playlists updated_at if it doesn't exist
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'update_playlists_updated_at') THEN
+          CREATE TRIGGER update_playlists_updated_at BEFORE UPDATE ON playlists FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+        END IF;
+      END $$;
+    `);
+    console.log('✅ Added trigger for playlists updated_at');
+    
+    // Check the current table structure
+    const tableInfo = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default 
+      FROM information_schema.columns 
+      WHERE table_name = 'playlists' 
+      ORDER BY ordinal_position
+    `);
+    
+    console.log('📋 Current playlists table structure:', tableInfo.rows);
+    
+    console.log('✅ Playlists table migration completed successfully!');
+    res.json({ 
+      message: 'Playlists table migration completed successfully',
+      tableStructure: tableInfo.rows
+    });
+    
+  } catch (error) {
+    console.error('❌ Playlists migration failed:', error);
+    res.status(500).json({ error: 'Playlists migration failed: ' + error.message });
+  }
+});
+
 // Ensure the app listens on process.env.PORT
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
