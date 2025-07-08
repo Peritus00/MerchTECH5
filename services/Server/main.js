@@ -254,7 +254,7 @@ const createTransporter = () => {
   // Check if we have Brevo SMTP key configured
   if (process.env.BREVO_SMTP_KEY) {
     console.log('✅ Using Brevo email service');
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       host: 'smtp-relay.brevo.com',
       port: 587,
       secure: false,
@@ -266,7 +266,7 @@ const createTransporter = () => {
   } else {
     console.log('⚠️ Brevo SMTP key not configured. Using test account.');
     // For testing - create a test account
-    return nodemailer.createTransporter({
+    return nodemailer.createTransport({
       host: 'smtp.ethereal.email',
       port: 587,
       secure: false,
