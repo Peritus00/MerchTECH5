@@ -362,6 +362,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Reset Password endpoint
 app.post('/api/auth/reset-password', async (req, res) => {
   console.log('🚨 RESET PASSWORD ENDPOINT CALLED!');
+  res.setHeader('X-Debug', 'Endpoint called');
   try {
     console.log('🔍 RESET PASSWORD DEBUG - FULL REQUEST:');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
