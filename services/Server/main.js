@@ -1028,43 +1028,404 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
       [req.user.userId]
     );
     
-    console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'generated codes');
-    res.json({ activationCodes: result.rows });
-    
+    console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'codes');
+    res.json(result.rows);
   } catch (error) {
-    console.error('🔑 ACTIVATION_CODES: Error fetching generated codes:', error);
+    console.error('🔴 ACTIVATION_CODES ERROR:', error);
     res.status(500).json({ error: 'Failed to fetch activation codes' });
   }
 });
 
 app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) => {
   try {
-    console.log('🔑 ACTIVATION_CODES: Fetching access codes for user:', req.user.userId);
+    console.log('🔑 ACTIVATION_CODES: Fetching user access codes for user:', req.user.userId);
     
     const result = await pool.query(
-      `SELECT ac.*, uac.attached_at,
+      `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
-              CASE WHEN ac.playlist_id IS NOT NULL THEN 'playlist' ELSE 'slideshow' END as content_type
-       FROM user_activation_codes uac
-       JOIN activation_codes ac ON uac.activation_code_id = ac.id
+              'playlist' as content_type
+       FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE uac.user_id = $1 AND ac.is_active = true
-       ORDER BY uac.attached_at DESC`,
+       WHERE ac.used_by = $1
+       ORDER BY ac.used_at DESC`,
       [req.user.userId]
     );
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'access codes');
-    res.json({ accessCodes: result.rows });
-    
+    res.json(result.rows);
   } catch (error) {
-    console.error('🔑 ACTIVATION_CODES: Error fetching access codes:', error);
+    console.error('🔴 ACTIVATION_CODES ERROR:', error);
     res.status(500).json({ error: 'Failed to fetch access codes' });
   }
 });
 
-// ---------- ADMIN ROUTES ----------
+// ---------- MISSING CRITICAL ENDPOINTS ----------
+
+// Send verification email
+app.post('/api/auth/send-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const userResult = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+
+    const user = userResult.rows[0];
+    if (user.is_email_verified) return res.status(400).json({ error: 'Email is already verified' });
+
+    const verificationToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
+
+    await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
+
+    const verificationUrl = `${process.env.FRONTEND_URL || 'https://merchtech-server-c37xiap81-perrie-bentons-projects.vercel.app'}/auth/verify?token=${verificationToken}`;
+
+    await transporter.sendMail({
+      from: '"MerchTech QR" <help@merchtech.net>',
+      to: email,
+      subject: 'Verify Your MerchTech Account',
+      html: `<p>Please click the link below to verify your email address:</p><a href="${verificationUrl}">Verify Email</a>`,
+    });
+
+    res.status(200).json({ message: 'Verification email sent successfully.' });
+
+  } catch (error) {
+    console.error('🔴 SEND VERIFICATION ERROR:', error);
+    res.status(500).json({ error: 'Failed to send verification email.' });
+  }
+});
+
+// Verify email with token
+app.get('/api/auth/verify-email/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const decoded = jwt.verify(token, JWT_SECRET);
+
+    const result = await pool.query(
+      `UPDATE users SET is_email_verified = true, verification_token = null WHERE id = $1 AND is_email_verified = false RETURNING id`,
+      [decoded.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(400).json({ error: 'Token is invalid or user is already verified.' });
+    }
+
+    res.redirect(`${process.env.FRONTEND_URL || 'https://merchtech-server-c37xiap81-perrie-bentons-projects.vercel.app'}/auth/verification-success`);
+
+  } catch (error) {
+    console.error('🔴 VERIFY EMAIL ERROR:', error);
+    res.status(400).json({ error: 'Invalid or expired verification token.' });
+  }
+});
+
+// Create product
+app.post('/api/products', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, price, metadata, stripe_product_id } = req.body;
+    
+    if (!name || !price) {
+      return res.status(400).json({ error: 'Name and price are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO products (user_id, name, description, price, metadata, stripe_product_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [req.user.userId, name, description, price, metadata, stripe_product_id]
+    );
+
+    console.log('✅ Product created:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 CREATE PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to create product' });
+  }
+});
+
+// Update product
+app.patch('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, price, metadata, stripe_product_id } = req.body;
+
+    const result = await pool.query(
+      `UPDATE products 
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           price = COALESCE($3, price),
+           metadata = COALESCE($4, metadata),
+           stripe_product_id = COALESCE($5, stripe_product_id),
+           updated_at = NOW()
+       WHERE id = $6 AND user_id = $7 AND is_deleted = false
+       RETURNING *`,
+      [name, description, price, metadata, stripe_product_id, id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    console.log('✅ Product updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 UPDATE PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
+});
+
+// Delete product
+app.delete('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `UPDATE products SET is_deleted = true, updated_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND is_deleted = false
+       RETURNING id`,
+      [id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    console.log('✅ Product deleted:', id);
+    res.json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('🔴 DELETE PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
+});
+
+// Create playlist
+app.post('/api/playlists', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, is_public } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO playlists (user_id, name, description, is_public, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       RETURNING *`,
+      [req.user.userId, name, description, is_public || false]
+    );
+
+    console.log('✅ Playlist created:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 CREATE PLAYLIST ERROR:', error);
+    res.status(500).json({ error: 'Failed to create playlist' });
+  }
+});
+
+// Update playlist
+app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, is_public } = req.body;
+
+    const result = await pool.query(
+      `UPDATE playlists 
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           is_public = COALESCE($3, is_public),
+           updated_at = NOW()
+       WHERE id = $4 AND user_id = $5
+       RETURNING *`,
+      [name, description, is_public, id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    console.log('✅ Playlist updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 UPDATE PLAYLIST ERROR:', error);
+    res.status(500).json({ error: 'Failed to update playlist' });
+  }
+});
+
+// Delete playlist
+app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM playlists WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    console.log('✅ Playlist deleted:', id);
+    res.json({ message: 'Playlist deleted successfully' });
+  } catch (error) {
+    console.error('🔴 DELETE PLAYLIST ERROR:', error);
+    res.status(500).json({ error: 'Failed to delete playlist' });
+  }
+});
+
+// Create QR code
+app.post('/api/qr-codes', authenticateToken, async (req, res) => {
+  try {
+    const { name, url, playlist_id, slideshow_id, metadata } = req.body;
+    
+    if (!name || !url) {
+      return res.status(400).json({ error: 'Name and URL are required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO qr_codes (user_id, name, url, playlist_id, slideshow_id, metadata, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+       RETURNING *`,
+      [req.user.userId, name, url, playlist_id, slideshow_id, metadata]
+    );
+
+    console.log('✅ QR code created:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 CREATE QR CODE ERROR:', error);
+    res.status(500).json({ error: 'Failed to create QR code' });
+  }
+});
+
+// Update QR code
+app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, url, playlist_id, slideshow_id, metadata } = req.body;
+
+    const result = await pool.query(
+      `UPDATE qr_codes 
+       SET name = COALESCE($1, name),
+           url = COALESCE($2, url),
+           playlist_id = COALESCE($3, playlist_id),
+           slideshow_id = COALESCE($4, slideshow_id),
+           metadata = COALESCE($5, metadata),
+           updated_at = NOW()
+       WHERE id = $6 AND user_id = $7
+       RETURNING *`,
+      [name, url, playlist_id, slideshow_id, metadata, id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    console.log('✅ QR code updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 UPDATE QR CODE ERROR:', error);
+    res.status(500).json({ error: 'Failed to update QR code' });
+  }
+});
+
+// Delete QR code
+app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM qr_codes WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    console.log('✅ QR code deleted:', id);
+    res.json({ message: 'QR code deleted successfully' });
+  } catch (error) {
+    console.error('🔴 DELETE QR CODE ERROR:', error);
+    res.status(500).json({ error: 'Failed to delete QR code' });
+  }
+});
+
+// Create slideshow
+app.post('/api/slideshows', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, is_public } = req.body;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO slideshows (user_id, name, description, is_public, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       RETURNING *`,
+      [req.user.userId, name, description, is_public || false]
+    );
+
+    console.log('✅ Slideshow created:', result.rows[0]);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 CREATE SLIDESHOW ERROR:', error);
+    res.status(500).json({ error: 'Failed to create slideshow' });
+  }
+});
+
+// Update slideshow
+app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, is_public } = req.body;
+
+    const result = await pool.query(
+      `UPDATE slideshows 
+       SET name = COALESCE($1, name),
+           description = COALESCE($2, description),
+           is_public = COALESCE($3, is_public),
+           updated_at = NOW()
+       WHERE id = $4 AND user_id = $5
+       RETURNING *`,
+      [name, description, is_public, id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    console.log('✅ Slideshow updated:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('🔴 UPDATE SLIDESHOW ERROR:', error);
+    res.status(500).json({ error: 'Failed to update slideshow' });
+  }
+});
+
+// Delete slideshow
+app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `DELETE FROM slideshows WHERE id = $1 AND user_id = $2 RETURNING id`,
+      [id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    console.log('✅ Slideshow deleted:', id);
+    res.json({ message: 'Slideshow deleted successfully' });
+  } catch (error) {
+    console.error('🔴 DELETE SLIDESHOW ERROR:', error);
+    res.status(500).json({ error: 'Failed to delete slideshow' });
+  }
+});
+
+// ---------- ADMIN ENDPOINTS ----------
 
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
   try {
