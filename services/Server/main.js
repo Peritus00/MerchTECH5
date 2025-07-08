@@ -1401,62 +1401,56 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
 // Create activation code
 app.post('/api/activation-codes', authenticateToken, async (req, res) => {
   try {
-    const { slideshowId, maxUses, expiresAt } = req.body;
+    const { playlistId, slideshowId, maxUses, expiresAt } = req.body;
     
-    if (!slideshowId) {
-      console.log('🔑 ACTIVATION_CREATE: Missing slideshow ID');
-      return res.status(400).json({ error: 'Slideshow ID is required' });
+    if ((!playlistId && !slideshowId) || (playlistId && slideshowId)) {
+      return res.status(400).json({ error: 'Either playlistId or slideshowId is required, but not both.' });
     }
     
-    console.log('🔑 ACTIVATION_CREATE: Creating activation code for slideshow:', { 
-      slideshowId, 
-      maxUses, 
-      expiresAt 
-    });
-    
-    // Check if user owns the slideshow
-    const slideshowResult = await pool.query(
-      'SELECT user_id FROM slideshows WHERE id = $1',
-      [slideshowId]
-    );
-    
-    if (slideshowResult.rows.length === 0) {
-      console.log('🔑 ACTIVATION_CREATE: Slideshow not found:', slideshowId);
-      return res.status(404).json({ error: 'Slideshow not found' });
+    let contentType, contentId, ownerCheckQuery, ownerCheckParams;
+    if (playlistId) {
+      contentType = 'playlist';
+      contentId = playlistId;
+      ownerCheckQuery = 'SELECT user_id FROM playlists WHERE id = $1';
+      ownerCheckParams = [playlistId];
+    } else {
+      contentType = 'slideshow';
+      contentId = slideshowId;
+      ownerCheckQuery = 'SELECT user_id FROM slideshows WHERE id = $1';
+      ownerCheckParams = [slideshowId];
     }
     
-    if (slideshowResult.rows[0].user_id !== req.user.userId) {
-      console.log('🔑 ACTIVATION_CREATE: User not authorized:', req.user.userId);
-      return res.status(403).json({ error: 'Not authorized to create codes for this slideshow' });
+    // Check if user owns the playlist or slideshow
+    const ownerResult = await pool.query(ownerCheckQuery, ownerCheckParams);
+    if (ownerResult.rows.length === 0) {
+      return res.status(404).json({ error: `${contentType.charAt(0).toUpperCase() + contentType.slice(1)} not found` });
+    }
+    if (ownerResult.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: `Not authorized to create codes for this ${contentType}` });
     }
     
     // Generate unique activation code
     const code = 'ACCESS-' + Math.random().toString(36).substring(2, 15).toUpperCase();
     
-    // Create activation code
-    const result = await pool.query(
-      `INSERT INTO activation_codes (code, slideshow_id, created_by, max_uses, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, NOW())
-       RETURNING *`,
-      [
-        code,
-        slideshowId,
-        req.user.userId,
-        maxUses || null,
-        expiresAt || null
-      ]
-    );
+    // Insert activation code for the correct type
+    let insertQuery, insertParams;
+    if (playlistId) {
+      insertQuery = `INSERT INTO activation_codes (code, playlist_id, created_by, max_uses, expires_at, created_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`;
+      insertParams = [code, playlistId, req.user.userId, maxUses || null, expiresAt || null];
+    } else {
+      insertQuery = `INSERT INTO activation_codes (code, slideshow_id, created_by, max_uses, expires_at, created_at)
+                     VALUES ($1, $2, $3, $4, $5, NOW()) RETURNING *`;
+      insertParams = [code, slideshowId, req.user.userId, maxUses || null, expiresAt || null];
+    }
     
+    const result = await pool.query(insertQuery, insertParams);
     const activationCode = result.rows[0];
-    console.log('🔑 ACTIVATION_CREATE: Activation code created successfully:', {
-      codeId: activationCode.id,
-      code: activationCode.code,
-      slideshowId: activationCode.slideshow_id
-    });
     
     res.status(201).json({
       id: activationCode.id,
       code: activationCode.code,
+      playlist_id: activationCode.playlist_id,
       slideshow_id: activationCode.slideshow_id,
       max_uses: activationCode.max_uses,
       expires_at: activationCode.expires_at,
