@@ -963,6 +963,40 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   }
 });
 
+// Get single QR code
+app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('📱 QR_CODES: Fetching QR code:', id);
+    
+    const result = await pool.query(
+      `SELECT qr.*, COUNT(qs.id) as scan_count
+       FROM qr_codes qr
+       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       WHERE qr.id = $1 AND qr.owner_id = $2
+       GROUP BY qr.id`,
+      [id, req.user.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
+      scanCount: parseInt(result.rows[0].scan_count) || 0
+    };
+    
+    console.log('📱 QR_CODES: QR code found:', qrCode.name);
+    res.json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR code:', error);
+    res.status(500).json({ error: 'Failed to fetch QR code' });
+  }
+});
+
 // ---------- SLIDESHOWS ROUTES ----------
 
 app.get('/api/slideshows', authenticateToken, async (req, res) => {
