@@ -1201,24 +1201,45 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 // Create playlist
 app.post('/api/playlists', authenticateToken, async (req, res) => {
   try {
+    console.log('🎵 PLAYLIST CREATE: Starting playlist creation');
+    console.log('🎵 Request body:', req.body);
+    console.log('🎵 User ID:', req.user.userId);
+    console.log('🎵 User email:', req.user.email);
+    
     const { name, description, is_public } = req.body;
     
     if (!name) {
+      console.log('❌ PLAYLIST CREATE: Name is missing');
       return res.status(400).json({ error: 'Name is required' });
     }
 
-    const result = await pool.query(
-      `INSERT INTO playlists (user_id, name, description, is_public, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
-       RETURNING *`,
-      [req.user.userId, name, description, is_public || false]
-    );
+    console.log('🎵 PLAYLIST CREATE: Parameters prepared:', {
+      userId: req.user.userId,
+      name,
+      description,
+      is_public: is_public || false
+    });
 
-    console.log('✅ Playlist created:', result.rows[0]);
+    const query = `INSERT INTO playlists (user_id, name, description, is_public, created_at, updated_at)
+                   VALUES ($1, $2, $3, $4, NOW(), NOW())
+                   RETURNING *`;
+    
+    console.log('🎵 PLAYLIST CREATE: SQL Query:', query);
+    console.log('🎵 PLAYLIST CREATE: Query parameters:', [req.user.userId, name, description, is_public || false]);
+
+    const result = await pool.query(query, [req.user.userId, name, description, is_public || false]);
+
+    console.log('✅ PLAYLIST CREATE: Success! Created playlist:', result.rows[0]);
     res.status(201).json(result.rows[0]);
   } catch (error) {
-    console.error('🔴 CREATE PLAYLIST ERROR:', error);
-    res.status(500).json({ error: 'Failed to create playlist' });
+    console.error('🔴 PLAYLIST CREATE ERROR:');
+    console.error('🔴 Error message:', error.message);
+    console.error('🔴 Error code:', error.code);
+    console.error('🔴 Error detail:', error.detail);
+    console.error('🔴 Error hint:', error.hint);
+    console.error('🔴 Error where:', error.where);
+    console.error('🔴 Full error object:', error);
+    res.status(500).json({ error: 'Failed to create playlist', details: error.message });
   }
 });
 
