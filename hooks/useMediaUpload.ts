@@ -347,13 +347,17 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         file.size
       );
 
-      console.log('🔗 UPLOAD: Got presigned URL');
+      // Debug log for presignedData
+      console.log('🔎 DEBUG: presignedData from getPresignedUrl:', presignedData);
+      if (!presignedData || !presignedData.presignedUrl) {
+        throw new Error('Presigned URL is missing or undefined!');
+      }
 
       // Step 2: Upload directly to S3
       setUploadProgress(prev => ({ ...prev, stage: 'uploading', percentage: 20 }));
       
       await mediaAPI.uploadToS3(
-        presignedData.uploadUrl,
+        presignedData.presignedUrl,
         file,
         asset.mimeType,
         (progress) => {
