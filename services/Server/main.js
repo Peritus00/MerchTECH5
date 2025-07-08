@@ -1343,6 +1343,79 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
   }
 });
 
+// ---------- ACTIVATION CODE MANAGEMENT ROUTES ----------
+
+// Create activation code
+app.post('/api/activation-codes', authenticateToken, async (req, res) => {
+  try {
+    const { slideshowId, maxUses, expiresAt } = req.body;
+    
+    if (!slideshowId) {
+      console.log('🔑 ACTIVATION_CREATE: Missing slideshow ID');
+      return res.status(400).json({ error: 'Slideshow ID is required' });
+    }
+    
+    console.log('🔑 ACTIVATION_CREATE: Creating activation code for slideshow:', { 
+      slideshowId, 
+      maxUses, 
+      expiresAt 
+    });
+    
+    // Check if user owns the slideshow
+    const slideshowResult = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🔑 ACTIVATION_CREATE: Slideshow not found:', slideshowId);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      console.log('🔑 ACTIVATION_CREATE: User not authorized:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to create codes for this slideshow' });
+    }
+    
+    // Generate unique activation code
+    const code = 'ACCESS-' + Math.random().toString(36).substring(2, 15).toUpperCase();
+    
+    // Create activation code
+    const result = await pool.query(
+      `INSERT INTO activation_codes (code, slideshow_id, created_by, max_uses, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING *`,
+      [
+        code,
+        slideshowId,
+        req.user.userId,
+        maxUses || null,
+        expiresAt || null
+      ]
+    );
+    
+    const activationCode = result.rows[0];
+    console.log('🔑 ACTIVATION_CREATE: Activation code created successfully:', {
+      codeId: activationCode.id,
+      code: activationCode.code,
+      slideshowId: activationCode.slideshow_id
+    });
+    
+    res.status(201).json({
+      id: activationCode.id,
+      code: activationCode.code,
+      slideshow_id: activationCode.slideshow_id,
+      max_uses: activationCode.max_uses,
+      expires_at: activationCode.expires_at,
+      created_at: activationCode.created_at
+    });
+    
+  } catch (error) {
+    console.error('🔑 ACTIVATION_CREATE: Error creating activation code:', error);
+    res.status(500).json({ error: 'Failed to create activation code' });
+  }
+});
+
 // ---------- ACTIVATION CODE VALIDATION ROUTES ----------
 
 // Validate activation code for slideshow access
