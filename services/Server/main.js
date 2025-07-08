@@ -249,19 +249,22 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-// Email configuration
+// Email configuration - Brevo/SendinBlue
 const createTransporter = () => {
-  // Check if we have email credentials
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  // Check if we have Brevo SMTP key configured
+  if (process.env.BREVO_SMTP_KEY) {
+    console.log('✅ Using Brevo email service');
     return nodemailer.createTransporter({
-      service: 'gmail',
+      host: 'smtp-relay.brevo.com',
+      port: 587,
+      secure: false,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        user: '8e773a002@smtp-brevo.com', // Your Brevo SMTP user
+        pass: process.env.BREVO_SMTP_KEY
       }
     });
   } else {
-    console.log('⚠️ Email credentials not configured. Using test account.');
+    console.log('⚠️ Brevo SMTP key not configured. Using test account.');
     // For testing - create a test account
     return nodemailer.createTransporter({
       host: 'smtp.ethereal.email',
@@ -283,7 +286,7 @@ const sendPasswordResetEmail = async (email, resetToken, username) => {
     const resetUrl = `https://app.merchtech.net/auth/reset-password?token=${resetToken}`;
     
     const mailOptions = {
-      from: process.env.EMAIL_USER || 'noreply@merchtech.net',
+      from: process.env.BREVO_SMTP_KEY ? 'noreply@merchtech.net' : 'test@ethereal.email',
       to: email,
       subject: 'MerchTech - Password Reset Request',
       html: `
