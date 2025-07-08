@@ -9,7 +9,6 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // 🔒 SECURITY IMPORTS - FREE SECURITY HARDENING
 const helmet = require('helmet');
@@ -17,6 +16,15 @@ const rateLimit = require('express-rate-limit');
 const slowDown = require('express-slow-down');
 const { body, validationResult } = require('express-validator');
 const winston = require('winston');
+
+console.log('DEBUG: Server script starting...');
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
+console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
+console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
+
+// Initialize Stripe after loading environment variables
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // Import S3 service (will be undefined if not available)
 let s3Service;
@@ -32,12 +40,6 @@ try {
   console.log('   Error:', jsError.message);
   s3Service = null;
 }
-
-console.log('DEBUG: Server script starting...');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
-const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
-console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
-console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
 
