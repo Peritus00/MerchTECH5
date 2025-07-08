@@ -2342,4 +2342,63 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
   }
 });
 
+// ---------- STRIPE CHECKOUT SESSION ENDPOINT ----------
+const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+app.post('/api/checkout/session', authenticateToken, async (req, res) => {
+  try {
+    const { items, successUrl, cancelUrl } = req.body;
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'No items provided' });
+    }
+
+    // Fetch product info from DB for each item
+    const line_items = [];
+    for (const item of items) {
+      const { productId, quantity } = item;
+      const result = await pool.query('SELECT * FROM products WHERE id = $1', [productId]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: `Product not found: ${productId}` });
+      }
+      const product = result.rows[0];
+      // Use Stripe price/product ID if available, else fallback to price in cents
+      if (product.stripe_product_id && product.stripe_price_id) {
+        line_items.push({
+          price: product.stripe_price_id,
+          quantity: quantity || 1,
+        });
+      } else {
+        line_items.push({
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: product.name,
+              description: product.description,
+            },
+            unit_amount: product.price,
+          },
+          quantity: quantity || 1,
+        });
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      line_items,
+      success_url: successUrl || `${req.protocol}://${req.get('host')}/store/checkout-success`,
+      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/store/checkout-cancel`,
+      metadata: {
+        userId: req.user.userId,
+      },
+    });
+
+    res.json({ url: session.url, sessionId: session.id, success: true });
+  } catch (err) {
+    console.error('Checkout session error', err);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
 module.exports = app;
