@@ -1250,6 +1250,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       `SELECT s.* FROM slideshows s WHERE s.id = $1`,
       [id]
     );
+    console.log('🎬 SLIDESHOW_ACCESS: slideshowResult:', slideshowResult.rows);
     
     if (slideshowResult.rows.length === 0) {
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow not found:', id);
@@ -1282,6 +1283,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
          AND (max_uses IS NULL OR uses_count < max_uses)`,
         [activationCode, id]
       );
+      console.log('🎬 SLIDESHOW_ACCESS: codeResult:', codeResult.rows);
       
       if (codeResult.rows.length === 0) {
         console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code:', activationCode);
@@ -1316,6 +1318,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
        ORDER BY display_order`,
       [id]
     );
+    console.log('🎬 SLIDESHOW_ACCESS: imagesResult:', imagesResult.rows);
     
     const slideshowWithImages = {
       ...slideshow,
@@ -1339,7 +1342,10 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     
   } catch (error) {
     console.error('🎬 SLIDESHOW_ACCESS: Error accessing slideshow:', error);
-    res.status(500).json({ error: 'Failed to access slideshow' });
+    if (error.stack) {
+      console.error('🎬 SLIDESHOW_ACCESS: Error stack:', error.stack);
+    }
+    res.status(500).json({ error: 'Failed to access slideshow', details: error.message });
   }
 });
 
