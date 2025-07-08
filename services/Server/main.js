@@ -672,7 +672,40 @@ app.get('/api/media', authenticateToken, async (req, res) => {
     } else {
       result = await pool.query('SELECT * FROM media ORDER BY created_at DESC');
     }
-    res.json({ media: result.rows });
+    
+    // Process media files to handle S3 URLs properly
+    const processedMedia = await Promise.all(result.rows.map(async (media) => {
+      let properUrl = media.url;
+      
+      // Handle S3 files
+      if (media.s3_key && s3Service) {
+        try {
+          // Generate signed URL for S3 files
+          const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600); // 1 hour
+          properUrl = signedUrl;
+        } catch (error) {
+          console.error('❌ Failed to generate signed URL for S3 file:', media.s3_key, error);
+          // Fallback to direct S3 URL (may not work without proper permissions)
+          properUrl = media.url;
+        }
+      } else if (media.url && media.url.startsWith('data:')) {
+        // Handle base64 files - use streaming endpoint
+        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`;
+      } else if (media.filename && !media.s3_key) {
+        // Handle local files
+        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
+      }
+      
+      return {
+        ...media,
+        url: properUrl,
+        title: media.title,
+        fileType: media.file_type,
+        contentType: media.content_type
+      };
+    }));
+    
+    res.json({ media: processedMedia });
   } catch (error) {
     console.error('Error fetching media:', error);
     res.status(500).json({ error: 'Failed to fetch media' });
@@ -697,13 +730,35 @@ app.get('/api/media/:id', async (req, res) => {
       return res.status(404).json({ error: 'Media file not found' });
     }
     const media = result.rows[0];
+    
     let properUrl = media.url;
-    if (media.url && media.url.startsWith('data:')) {
+    
+    // Handle S3 files
+    if (media.s3_key && s3Service) {
+      try {
+        // Generate signed URL for S3 files
+        const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600); // 1 hour
+        properUrl = signedUrl;
+      } catch (error) {
+        console.error('❌ Failed to generate signed URL for S3 file:', media.s3_key, error);
+        // Fallback to direct S3 URL (may not work without proper permissions)
+        properUrl = media.url;
+      }
+    } else if (media.url && media.url.startsWith('data:')) {
+      // Handle base64 files - use streaming endpoint
       properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${id}/stream`;
-    } else if (media.filename) {
+    } else if (media.filename && !media.s3_key) {
+      // Handle local files
       properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
     }
-    const mediaResponse = { ...media, url: properUrl, title: media.title, fileType: media.file_type, contentType: media.content_type };
+    
+    const mediaResponse = { 
+      ...media, 
+      url: properUrl, 
+      title: media.title, 
+      fileType: media.file_type, 
+      contentType: media.content_type 
+    };
     res.json({ media: mediaResponse });
   } catch (error) {
     console.error('Error fetching media by ID:', error);
@@ -890,13 +945,37 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
-  playlist.mediaFiles = mediaResult.rows.map(media => ({
-    id: media.id,
-    title: media.title,
-    filePath: `/uploads/${media.filename}`,
-    fileType: media.file_type,
-    contentType: media.content_type,
-    url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`,
+  // Process media files to handle S3 URLs properly
+  playlist.mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => {
+    let properUrl = media.url;
+    
+    // Handle S3 files
+    if (media.s3_key && s3Service) {
+      try {
+        // Generate signed URL for S3 files
+        const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600); // 1 hour
+        properUrl = signedUrl;
+      } catch (error) {
+        console.error('❌ Failed to generate signed URL for S3 file in playlist:', media.s3_key, error);
+        // Fallback to direct S3 URL
+        properUrl = media.url;
+      }
+    } else if (media.url && media.url.startsWith('data:')) {
+      // Handle base64 files - use streaming endpoint
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`;
+    } else if (media.filename && !media.s3_key) {
+      // Handle local files
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
+    }
+    
+    return {
+      id: media.id,
+      title: media.title,
+      filePath: `/uploads/${media.filename}`,
+      fileType: media.file_type,
+      contentType: media.content_type,
+      url: properUrl,
+    };
   }));
 
   // Convert snake_case fields to camelCase for frontend compatibility
