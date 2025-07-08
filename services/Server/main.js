@@ -365,6 +365,10 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
     
+    console.log('🔍 RESET PASSWORD DEBUG:');
+    console.log('Token received:', token ? token.substring(0, 20) + '...' : 'null');
+    console.log('Token length:', token ? token.length : 0);
+    
     // Verify token
     const decoded = jwt.verify(token, JWT_SECRET);
     if (!decoded.userId) return res.status(400).json({ error: 'Invalid reset token' });
