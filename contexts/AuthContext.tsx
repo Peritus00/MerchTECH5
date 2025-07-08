@@ -170,7 +170,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const resetPassword = async (password: string, token: string) => {
     setIsLoading(true);
     try {
-      const result = await authService.resetPassword(password, token);
+      const result = await authService.resetPassword(token, password);
       return { success: true, message: result.message };
     } catch (error: any) {
       return { success: false, message: error.message || 'An unexpected error occurred.' };

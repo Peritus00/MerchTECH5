@@ -16,7 +16,9 @@ async function runMigrations() {
     // Run migrations in order
     const migrations = [
       '001_create_tables.sql',
-      '002_add_slideshow_fields.sql'
+      '002_add_slideshow_fields.sql',
+      '003_add_audio_url.sql',
+      '004_add_password_reset_fields.sql'
     ];
     
     for (const migrationFile of migrations) {

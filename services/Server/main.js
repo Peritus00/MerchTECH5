@@ -362,6 +362,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Reset Password endpoint
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
+    console.log('🔍 RESET PASSWORD DEBUG - FULL REQUEST:');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+    
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
     
