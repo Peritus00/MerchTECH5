@@ -577,6 +577,32 @@ app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) =>
   res.json({ imageUrl: fileUrl });
 });
 
+// S3 Presigned URL for file upload
+app.post('/api/media/presigned-url', authenticateToken, async (req, res) => {
+  try {
+    const { filename, contentType, fileSize } = req.body;
+    
+    if (!filename || !contentType) {
+      return res.status(400).json({ error: 'filename and contentType are required' });
+    }
+
+    if (!s3Service) {
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+
+    const result = await s3Service.getPresignedUploadUrl(filename, contentType, req.user.userId, fileSize);
+    res.json({ 
+      presignedUrl: result.uploadUrl, 
+      fileUrl: result.fileUrl,
+      key: result.key,
+      expiresIn: 3600
+    });
+  } catch (error) {
+    console.error('❌ Presigned URL generation error:', error);
+    res.status(500).json({ error: 'Failed to generate presigned URL' });
+  }
+});
+
 // S3 Signed URL for file access
 app.post('/api/media/signed-url', authenticateToken, async (req, res) => {
   try {
