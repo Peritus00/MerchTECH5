@@ -27,7 +27,6 @@ interface Resource {
 }
 
 const ResourcesScreen = () => {
-  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
 

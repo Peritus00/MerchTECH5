@@ -18,7 +18,7 @@ export default function TermsOfServiceScreen() {
 
           <ThemedText type="subtitle" style={styles.sectionTitle}>AGREEMENT TO OUR LEGAL TERMS</ThemedText>
           <ThemedText style={styles.bodyText}>
-            We are Samona Technologies, a company registered in Louisiana, United States at 46 Robert Road, Westwego, LA 70094.
+            We are Samona Technologies, a company registered in Louisiana, United States.
           </ThemedText>
 
           <ThemedText style={styles.bodyText}>
@@ -30,7 +30,7 @@ export default function TermsOfServiceScreen() {
           </ThemedText>
 
           <ThemedText style={styles.bodyText}>
-            You can contact us by phone at 7577695882, email at help@samona.io, or by mail to 46 Robert Road, Westwego, LA 70094, United States.
+            You can contact us by email at help@samona.io.
           </ThemedText>
 
           <ThemedText style={styles.bodyText}>
@@ -67,10 +67,6 @@ export default function TermsOfServiceScreen() {
           </ThemedText>
           <ThemedText style={styles.bodyText}>
             Samona Technologies{'\n'}
-            46 Robert Road{'\n'}
-            Westwego, LA 70094{'\n'}
-            United States{'\n'}
-            Phone: 7577695882{'\n'}
             Email: help@samona.io
           </ThemedText>
         </View>
