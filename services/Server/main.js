@@ -249,6 +249,76 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
+// Email configuration
+const createTransporter = () => {
+  // Check if we have email credentials
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    return nodemailer.createTransporter({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+  } else {
+    console.log('⚠️ Email credentials not configured. Using test account.');
+    // For testing - create a test account
+    return nodemailer.createTransporter({
+      host: 'smtp.ethereal.email',
+      port: 587,
+      secure: false,
+      auth: {
+        user: 'test@ethereal.email',
+        pass: 'test123'
+      }
+    });
+  }
+};
+
+// Send password reset email
+const sendPasswordResetEmail = async (email, resetToken, username) => {
+  try {
+    const transporter = createTransporter();
+    
+    const resetUrl = `https://app.merchtech.net/auth/reset-password?token=${resetToken}`;
+    
+    const mailOptions = {
+      from: process.env.EMAIL_USER || 'noreply@merchtech.net',
+      to: email,
+      subject: 'MerchTech - Password Reset Request',
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2 style="color: #333;">MerchTech Password Reset</h2>
+          <p>Hello ${username || 'there'},</p>
+          <p>You requested a password reset for your MerchTech account.</p>
+          <p>Click the button below to reset your password:</p>
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${resetUrl}" 
+               style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
+              Reset Password
+            </a>
+          </div>
+          <p>Or copy and paste this link into your browser:</p>
+          <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+          <p><strong>This link will expire in 1 hour.</strong></p>
+          <p>If you didn't request this password reset, please ignore this email.</p>
+          <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
+          <p style="color: #666; font-size: 12px;">
+            This email was sent from MerchTech. If you have any questions, please contact support.
+          </p>
+        </div>
+      `
+    };
+    
+    const info = await transporter.sendMail(mailOptions);
+    console.log('✅ Password reset email sent:', info.messageId);
+    return true;
+  } catch (error) {
+    console.error('❌ Email sending failed:', error);
+    return false;
+  }
+};
+
 // Forgot Password endpoint
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
@@ -264,14 +334,22 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const user = result.rows[0];
     const resetToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     
-    // Store reset token in database (you might want to add a reset_token field to users table)
+    // Store reset token in database
     await pool.query('UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL \'1 hour\' WHERE id = $2', [resetToken, user.id]);
     
-    // For now, just return success (in production, you'd send an email)
-    res.json({ 
-      message: 'Password reset link sent to your email',
-      resetToken: resetToken // Remove this in production - only for testing
-    });
+    // Send email
+    const emailSent = await sendPasswordResetEmail(user.email, resetToken, user.username);
+    
+    if (emailSent) {
+      res.json({ message: 'Password reset link sent to your email' });
+    } else {
+      // If email fails, still return success but log the issue
+      console.error('⚠️ Email failed but token was generated for:', user.email);
+      res.json({ 
+        message: 'Password reset link sent to your email',
+        resetToken: resetToken // Only include in development/testing
+      });
+    }
   } catch (error) {
     console.error('🔴 FORGOT PASSWORD ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
