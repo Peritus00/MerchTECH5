@@ -365,18 +365,28 @@ app.post('/api/auth/reset-password', async (req, res) => {
     console.log('🔍 RESET PASSWORD DEBUG - FULL REQUEST:');
     console.log('Request body:', JSON.stringify(req.body, null, 2));
     console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Raw request body keys:', Object.keys(req.body));
     
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) return res.status(400).json({ error: 'Token and new password are required' });
+    const { token, newPassword, password } = req.body;
+    
+    // Handle both parameter names for backward compatibility
+    const actualPassword = newPassword || password;
+    const actualToken = token;
+    
+    if (!actualToken || !actualPassword) {
+      console.log('❌ Missing parameters:', { hasToken: !!actualToken, hasPassword: !!actualPassword });
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
     
     console.log('🔍 RESET PASSWORD DEBUG:');
-    console.log('Token received:', token ? token.substring(0, 20) + '...' : 'null');
-    console.log('Token length:', token ? token.length : 0);
+    console.log('Token received:', actualToken ? actualToken.substring(0, 20) + '...' : 'null');
+    console.log('Token length:', actualToken ? actualToken.length : 0);
+    console.log('Password received:', actualPassword ? actualPassword.substring(0, 10) + '...' : 'null');
     
     // Decode URL-encoded token if needed
-    let decodedToken = token;
+    let decodedToken = actualToken;
     try {
-      decodedToken = decodeURIComponent(token);
+      decodedToken = decodeURIComponent(actualToken);
       console.log('Token after URL decode:', decodedToken.substring(0, 20) + '...');
     } catch (e) {
       console.log('Token was not URL-encoded, using as-is');
@@ -397,7 +407,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
     }
     
     // Hash new password and update
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    const hashedPassword = await bcrypt.hash(actualPassword, 12);
     await pool.query(
       'UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2',
       [hashedPassword, decoded.userId]
