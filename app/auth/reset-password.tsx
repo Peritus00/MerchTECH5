@@ -53,7 +53,7 @@ export default function ResetPasswordScreen() {
     setError('');
 
     try {
-      const result = await resetPassword(password, token);
+      const result = await resetPassword(token, password);
       
       if (result.success) {
         setSuccess(true);

@@ -14,7 +14,7 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
   forgotPassword: (email: string) => Promise<{ success: boolean; message: string }>;
-  resetPassword: (password: string, token: string) => Promise<{ success: boolean; message: string }>;
+  resetPassword: (token: string, password: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -167,7 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const resetPassword = async (password: string, token: string) => {
+  const resetPassword = async (token: string, password: string) => {
     setIsLoading(true);
     try {
       const result = await authService.resetPassword(token, password);
