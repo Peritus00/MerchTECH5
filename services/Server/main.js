@@ -1778,21 +1778,35 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 // Create playlist
 app.post('/api/playlists', authenticateToken, async (req, res) => {
   try {
-    const { name, description, is_public } = req.body;
+    const { name, description, is_public, requires_activation_code } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
+    console.log('🎵 PLAYLIST_CREATE: Creating playlist:', { 
+      name, 
+      description, 
+      is_public, 
+      requires_activation_code 
+    });
+
     const result = await pool.query(
-      `INSERT INTO playlists (user_id, name, description, is_public, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
+      `INSERT INTO playlists (user_id, name, description, is_public, requires_activation_code, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
        RETURNING *`,
-      [req.user.userId, name, description, is_public || false]
+      [req.user.userId, name, description, is_public || false, requires_activation_code || false]
     );
 
-    console.log('✅ Playlist created:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
+    const playlist = result.rows[0];
+    console.log('🎵 PLAYLIST_CREATE: Playlist created successfully:', {
+      id: playlist.id,
+      name: playlist.name,
+      requiresActivation: playlist.requires_activation_code,
+      isPublic: playlist.is_public
+    });
+    
+    res.status(201).json(playlist);
   } catch (error) {
     console.error('🔴 CREATE PLAYLIST ERROR:', error);
     res.status(500).json({ error: 'Failed to create playlist' });
@@ -1803,25 +1817,41 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
 app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, is_public } = req.body;
+    const { name, description, is_public, requires_activation_code } = req.body;
+
+    console.log('🎵 PLAYLIST_UPDATE: Updating playlist:', { 
+      id, 
+      name, 
+      description, 
+      is_public, 
+      requires_activation_code 
+    });
 
     const result = await pool.query(
       `UPDATE playlists 
        SET name = COALESCE($1, name),
            description = COALESCE($2, description),
            is_public = COALESCE($3, is_public),
+           requires_activation_code = COALESCE($4, requires_activation_code),
            updated_at = NOW()
-       WHERE id = $4 AND user_id = $5
+       WHERE id = $5 AND user_id = $6
        RETURNING *`,
-      [name, description, is_public, id, req.user.userId]
+      [name, description, is_public, requires_activation_code, id, req.user.userId]
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
-    console.log('✅ Playlist updated:', result.rows[0]);
-    res.json(result.rows[0]);
+    const playlist = result.rows[0];
+    console.log('🎵 PLAYLIST_UPDATE: Playlist updated successfully:', {
+      id: playlist.id,
+      name: playlist.name,
+      requiresActivation: playlist.requires_activation_code,
+      isPublic: playlist.is_public
+    });
+    
+    res.json(playlist);
   } catch (error) {
     console.error('🔴 UPDATE PLAYLIST ERROR:', error);
     res.status(500).json({ error: 'Failed to update playlist' });
