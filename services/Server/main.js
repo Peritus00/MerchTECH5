@@ -942,7 +942,7 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
       `SELECT qr.*, COUNT(qs.id) as scan_count
        FROM qr_codes qr
        LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
-       WHERE qr.owner_id = $1 AND qr.is_active = true
+       WHERE qr.user_id = $1 AND qr.is_active = true
        GROUP BY qr.id
        ORDER BY qr.created_at DESC`,
       [req.user.userId]
@@ -973,7 +973,7 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       `SELECT qr.*, COUNT(qs.id) as scan_count
        FROM qr_codes qr
        LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
-       WHERE qr.id = $1 AND qr.owner_id = $2
+       WHERE qr.id = $1 AND qr.user_id = $2
        GROUP BY qr.id`,
       [id, req.user.userId]
     );
