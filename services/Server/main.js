@@ -1865,23 +1865,48 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
 // Create slideshow
 app.post('/api/slideshows', authenticateToken, async (req, res) => {
   try {
-    const { name, description, is_public } = req.body;
+    const { name, description, is_public, requires_activation_code, autoplay_interval, transition } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
     }
 
+    console.log('🎬 SLIDESHOW_CREATE: Creating slideshow:', { 
+      name, 
+      description, 
+      is_public, 
+      requires_activation_code,
+      autoplay_interval,
+      transition 
+    });
+
     const result = await pool.query(
-      `INSERT INTO slideshows (user_id, name, description, is_public, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, NOW(), NOW())
+      `INSERT INTO slideshows (user_id, name, description, is_public, requires_activation_code, 
+                              autoplay_interval, transition, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
        RETURNING *`,
-      [req.user.userId, name, description, is_public || false]
+      [
+        req.user.userId, 
+        name, 
+        description || '', 
+        is_public || false,
+        requires_activation_code || false,
+        autoplay_interval || 5000,
+        transition || 'fade'
+      ]
     );
 
-    console.log('✅ Slideshow created:', result.rows[0]);
-    res.status(201).json(result.rows[0]);
+    const slideshow = result.rows[0];
+    console.log('🎬 SLIDESHOW_CREATE: Slideshow created successfully:', {
+      id: slideshow.id,
+      name: slideshow.name,
+      requiresActivation: slideshow.requires_activation_code,
+      isPublic: slideshow.is_public
+    });
+    
+    res.status(201).json(slideshow);
   } catch (error) {
-    console.error('🔴 CREATE SLIDESHOW ERROR:', error);
+    console.error('🎬 SLIDESHOW_CREATE: Error creating slideshow:', error);
     res.status(500).json({ error: 'Failed to create slideshow' });
   }
 });
@@ -1890,27 +1915,47 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
 app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, is_public } = req.body;
+    const { name, description, is_public, requires_activation_code, autoplay_interval, transition } = req.body;
+
+    console.log('🎬 SLIDESHOW_UPDATE: Updating slideshow:', { 
+      id, 
+      name, 
+      description, 
+      is_public, 
+      requires_activation_code,
+      autoplay_interval,
+      transition 
+    });
 
     const result = await pool.query(
       `UPDATE slideshows 
        SET name = COALESCE($1, name),
            description = COALESCE($2, description),
            is_public = COALESCE($3, is_public),
+           requires_activation_code = COALESCE($4, requires_activation_code),
+           autoplay_interval = COALESCE($5, autoplay_interval),
+           transition = COALESCE($6, transition),
            updated_at = NOW()
-       WHERE id = $4 AND user_id = $5
+       WHERE id = $7 AND user_id = $8
        RETURNING *`,
-      [name, description, is_public, id, req.user.userId]
+      [name, description, is_public, requires_activation_code, autoplay_interval, transition, id, req.user.userId]
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Slideshow not found' });
     }
 
-    console.log('✅ Slideshow updated:', result.rows[0]);
-    res.json(result.rows[0]);
+    const slideshow = result.rows[0];
+    console.log('🎬 SLIDESHOW_UPDATE: Slideshow updated successfully:', {
+      id: slideshow.id,
+      name: slideshow.name,
+      requiresActivation: slideshow.requires_activation_code,
+      isPublic: slideshow.is_public
+    });
+    
+    res.json(slideshow);
   } catch (error) {
-    console.error('🔴 UPDATE SLIDESHOW ERROR:', error);
+    console.error('🎬 SLIDESHOW_UPDATE: Error updating slideshow:', error);
     res.status(500).json({ error: 'Failed to update slideshow' });
   }
 });
