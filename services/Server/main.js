@@ -1064,6 +1064,120 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
   }
 });
 
+// ---------- ADMIN ROUTES ----------
+
+app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, email, username, is_admin, subscription_tier, created_at, updated_at, is_suspended,
+             max_products, max_audio_files, max_playlists, max_qr_codes, max_slideshows, 
+             max_videos, max_activation_codes
+      FROM users 
+      ORDER BY created_at DESC
+    `);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const deleteResult = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+        if (deleteResult.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        console.error(`Error deleting user ${id}:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
+    const { id } = req.params;
+    const {
+        subscriptionTier,
+        isAdmin: adminStatus,
+        isSuspended,
+        maxProducts,
+        maxAudioFiles,
+        maxPlaylists,
+        maxQrCodes,
+        maxSlideshows,
+        maxVideos,
+        maxActivationCodes
+    } = req.body;
+
+    try {
+        // Build dynamic update query
+        const updates = [];
+        const values = [];
+        let paramCount = 1;
+
+        if (subscriptionTier !== undefined) {
+            updates.push(`subscription_tier = $${paramCount++}`);
+            values.push(subscriptionTier);
+        }
+        if (adminStatus !== undefined) {
+            updates.push(`is_admin = $${paramCount++}`);
+            values.push(adminStatus);
+        }
+        if (isSuspended !== undefined) {
+            updates.push(`is_suspended = $${paramCount++}`);
+            values.push(isSuspended);
+        }
+        if (maxProducts !== undefined) {
+            updates.push(`max_products = $${paramCount++}`);
+            values.push(maxProducts === 0 ? null : maxProducts);
+        }
+        if (maxAudioFiles !== undefined) {
+            updates.push(`max_audio_files = $${paramCount++}`);
+            values.push(maxAudioFiles === 0 ? null : maxAudioFiles);
+        }
+        if (maxPlaylists !== undefined) {
+            updates.push(`max_playlists = $${paramCount++}`);
+            values.push(maxPlaylists === 0 ? null : maxPlaylists);
+        }
+        if (maxQrCodes !== undefined) {
+            updates.push(`max_qr_codes = $${paramCount++}`);
+            values.push(maxQrCodes === 0 ? null : maxQrCodes);
+        }
+        if (maxSlideshows !== undefined) {
+            updates.push(`max_slideshows = $${paramCount++}`);
+            values.push(maxSlideshows === 0 ? null : maxSlideshows);
+        }
+        if (maxVideos !== undefined) {
+            updates.push(`max_videos = $${paramCount++}`);
+            values.push(maxVideos === 0 ? null : maxVideos);
+        }
+        if (maxActivationCodes !== undefined) {
+            updates.push(`max_activation_codes = $${paramCount++}`);
+            values.push(maxActivationCodes === 0 ? null : maxActivationCodes);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No fields to update' });
+        }
+
+        values.push(id);
+        const query = `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount} RETURNING *`;
+        
+        const result = await pool.query(query, values);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ user: result.rows[0] });
+    } catch (error) {
+        console.error(`Error updating user ${id}:`, error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Ensure the app listens on process.env.PORT
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
