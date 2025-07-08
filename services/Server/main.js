@@ -1578,6 +1578,18 @@ app.post('/api/migrate-playlists', async (req, res) => {
   try {
     console.log('🔧 Running playlists table migration...');
     
+    // First, create the update_updated_at_column function if it doesn't exist
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION update_updated_at_column()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        NEW.updated_at = CURRENT_TIMESTAMP;
+        RETURN NEW;
+      END;
+      $$ language 'plpgsql';
+    `);
+    console.log('✅ Created update_updated_at_column function');
+    
     // Add missing updated_at column to playlists table
     await pool.query('ALTER TABLE playlists ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP');
     console.log('✅ Added updated_at column to playlists table');
