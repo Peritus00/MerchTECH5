@@ -81,6 +81,7 @@ function RootLayoutNav() {
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
         <Stack.Screen name="store" options={{ headerShown: false }} />
+        <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="media-player/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="preview-player/[id]" options={{ headerShown: false }} />
