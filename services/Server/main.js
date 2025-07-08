@@ -1429,114 +1429,183 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
 
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT id, email, username, is_admin, subscription_tier, created_at, updated_at, is_suspended,
-             max_products, max_audio_files, max_playlists, max_qr_codes, max_slideshows, 
-             max_videos, max_activation_codes
-      FROM users 
-      ORDER BY created_at DESC
-    `);
+    console.log('👥 ADMIN: Fetching all users');
+    const result = await pool.query(
+      `SELECT id, email, username, subscription_tier, is_admin, is_suspended,
+              max_products, max_audio_files, max_playlists, max_qr_codes, 
+              max_slideshows, max_videos, max_activation_codes, created_at, updated_at
+       FROM users 
+       ORDER BY created_at DESC`
+    );
+    
+    console.log('👥 ADMIN: Found', result.rows.length, 'users');
     res.json(result.rows);
   } catch (error) {
-    console.error('Error fetching all users:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('🔴 ADMIN ERROR:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
 app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const deleteResult = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
-        if (deleteResult.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-        res.status(200).json({ message: 'User deleted successfully' });
-    } catch (error) {
-        console.error(`Error deleting user ${id}:`, error);
-        res.status(500).json({ error: 'Internal server error' });
+  const { id } = req.params;
+  try {
+    const deleteResult = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+    if (deleteResult.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
     }
+    res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.error(`Error deleting user ${id}:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
-    const { id } = req.params;
-    const {
-        subscriptionTier,
-        isAdmin: adminStatus,
-        isSuspended,
-        maxProducts,
-        maxAudioFiles,
-        maxPlaylists,
-        maxQrCodes,
-        maxSlideshows,
-        maxVideos,
-        maxActivationCodes
-    } = req.body;
+  const { id } = req.params;
+  const {
+    subscriptionTier,
+    isAdmin: adminStatus,
+    isSuspended,
+    maxProducts,
+    maxAudioFiles,
+    maxPlaylists,
+    maxQrCodes,
+    maxSlideshows,
+    maxVideos,
+    maxActivationCodes
+  } = req.body;
 
-    try {
-        // Build dynamic update query
-        const updates = [];
-        const values = [];
-        let paramCount = 1;
+  try {
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
 
-        if (subscriptionTier !== undefined) {
-            updates.push(`subscription_tier = $${paramCount++}`);
-            values.push(subscriptionTier);
-        }
-        if (adminStatus !== undefined) {
-            updates.push(`is_admin = $${paramCount++}`);
-            values.push(adminStatus);
-        }
-        if (isSuspended !== undefined) {
-            updates.push(`is_suspended = $${paramCount++}`);
-            values.push(isSuspended);
-        }
-        if (maxProducts !== undefined) {
-            updates.push(`max_products = $${paramCount++}`);
-            values.push(maxProducts === 0 ? null : maxProducts);
-        }
-        if (maxAudioFiles !== undefined) {
-            updates.push(`max_audio_files = $${paramCount++}`);
-            values.push(maxAudioFiles === 0 ? null : maxAudioFiles);
-        }
-        if (maxPlaylists !== undefined) {
-            updates.push(`max_playlists = $${paramCount++}`);
-            values.push(maxPlaylists === 0 ? null : maxPlaylists);
-        }
-        if (maxQrCodes !== undefined) {
-            updates.push(`max_qr_codes = $${paramCount++}`);
-            values.push(maxQrCodes === 0 ? null : maxQrCodes);
-        }
-        if (maxSlideshows !== undefined) {
-            updates.push(`max_slideshows = $${paramCount++}`);
-            values.push(maxSlideshows === 0 ? null : maxSlideshows);
-        }
-        if (maxVideos !== undefined) {
-            updates.push(`max_videos = $${paramCount++}`);
-            values.push(maxVideos === 0 ? null : maxVideos);
-        }
-        if (maxActivationCodes !== undefined) {
-            updates.push(`max_activation_codes = $${paramCount++}`);
-            values.push(maxActivationCodes === 0 ? null : maxActivationCodes);
-        }
-
-        if (updates.length === 0) {
-            return res.status(400).json({ error: 'No fields to update' });
-        }
-
-        values.push(id);
-        const query = `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE id = $${paramCount} RETURNING *`;
-        
-        const result = await pool.query(query, values);
-        
-        if (result.rowCount === 0) {
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        res.json({ user: result.rows[0] });
-    } catch (error) {
-        console.error(`Error updating user ${id}:`, error);
-        res.status(500).json({ error: 'Internal server error' });
+    if (subscriptionTier !== undefined) {
+      updates.push(`subscription_tier = $${paramCount++}`);
+      values.push(subscriptionTier);
     }
+    if (adminStatus !== undefined) {
+      updates.push(`is_admin = $${paramCount++}`);
+      values.push(adminStatus);
+    }
+    if (isSuspended !== undefined) {
+      updates.push(`is_suspended = $${paramCount++}`);
+      values.push(isSuspended);
+    }
+    if (maxProducts !== undefined) {
+      updates.push(`max_products = $${paramCount++}`);
+      values.push(maxProducts === 0 ? null : maxProducts);
+    }
+    if (maxAudioFiles !== undefined) {
+      updates.push(`max_audio_files = $${paramCount++}`);
+      values.push(maxAudioFiles === 0 ? null : maxAudioFiles);
+    }
+    if (maxPlaylists !== undefined) {
+      updates.push(`max_playlists = $${paramCount++}`);
+      values.push(maxPlaylists === 0 ? null : maxPlaylists);
+    }
+    if (maxQrCodes !== undefined) {
+      updates.push(`max_qr_codes = $${paramCount++}`);
+      values.push(maxQrCodes === 0 ? null : maxQrCodes);
+    }
+    if (maxSlideshows !== undefined) {
+      updates.push(`max_slideshows = $${paramCount++}`);
+      values.push(maxSlideshows === 0 ? null : maxSlideshows);
+    }
+    if (maxVideos !== undefined) {
+      updates.push(`max_videos = $${paramCount++}`);
+      values.push(maxVideos === 0 ? null : maxVideos);
+    }
+    if (maxActivationCodes !== undefined) {
+      updates.push(`max_activation_codes = $${paramCount++}`);
+      values.push(maxActivationCodes === 0 ? null : maxActivationCodes);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const query = `
+      UPDATE users 
+      SET ${updates.join(', ')} 
+      WHERE id = $${paramCount} 
+      RETURNING id, email, username, subscription_tier, is_admin, is_suspended, 
+               max_products, max_audio_files, max_playlists, max_qr_codes, 
+               max_slideshows, max_videos, max_activation_codes, created_at, updated_at
+    `;
+
+    const result = await pool.query(query, values);
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    console.log(`✅ Admin updated user ${id} permissions:`, req.body);
+    res.json({ user: result.rows[0], message: 'User permissions updated successfully' });
+  } catch (error) {
+    console.error(`Error updating user ${id} permissions:`, error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Temporary migration endpoint
+app.post('/api/migrate', async (req, res) => {
+  try {
+    console.log('🔧 Running database migration...');
+    
+    const migrationSQL = `
+      -- Add missing columns to products table for Stripe integration
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS stripe_product_id VARCHAR(255);
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+
+      -- Add missing columns to users table for admin permissions
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_suspended BOOLEAN DEFAULT FALSE;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_products INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_audio_files INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_playlists INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_qr_codes INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_slideshows INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_videos INTEGER DEFAULT NULL;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS max_activation_codes INTEGER DEFAULT NULL;
+
+      -- Add missing columns to qr_codes table
+      ALTER TABLE qr_codes ADD COLUMN IF NOT EXISTS playlist_id INTEGER REFERENCES playlists(id) ON DELETE SET NULL;
+      ALTER TABLE qr_codes ADD COLUMN IF NOT EXISTS slideshow_id INTEGER REFERENCES slideshows(id) ON DELETE SET NULL;
+      ALTER TABLE qr_codes ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+
+      -- Add missing columns to slideshows table
+      ALTER TABLE slideshows ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
+      ALTER TABLE slideshows ADD COLUMN IF NOT EXISTS audio_url TEXT;
+
+      -- Add missing columns to playlists table
+      ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE;
+
+      -- Add missing columns to activation_codes table
+      ALTER TABLE activation_codes ADD COLUMN IF NOT EXISTS used_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+      ALTER TABLE activation_codes ADD COLUMN IF NOT EXISTS used_at TIMESTAMP DEFAULT NULL;
+    `;
+    
+    const statements = migrationSQL.split(';').filter(stmt => stmt.trim());
+    
+    for (const statement of statements) {
+      if (statement.trim()) {
+        console.log('🔧 Executing:', statement.trim().substring(0, 50) + '...');
+        await pool.query(statement);
+      }
+    }
+    
+    console.log('✅ Migration completed successfully!');
+    res.json({ message: 'Migration completed successfully' });
+    
+  } catch (error) {
+    console.error('❌ Migration failed:', error);
+    res.status(500).json({ error: 'Migration failed: ' + error.message });
+  }
 });
 
 // Ensure the app listens on process.env.PORT
