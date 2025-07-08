@@ -1143,6 +1143,39 @@ app.post('/api/products', authenticateToken, async (req, res) => {
   }
 });
 
+// Get single product
+app.get('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await pool.query(
+      `SELECT * FROM products WHERE id = $1 AND user_id = $2 AND is_deleted = false`,
+      [id, req.user.userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const product = result.rows[0];
+    
+    // Format prices array
+    let pricesArr = product.prices;
+    if (!pricesArr || !pricesArr.length) {
+      const amount = product.price || (product.metadata && (product.metadata.price || product.metadata.unit_amount)) || 0;
+      pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
+    }
+
+    const productWithPrices = { ...product, prices: pricesArr };
+    
+    console.log('✅ Product fetched:', productWithPrices);
+    res.json(productWithPrices);
+  } catch (error) {
+    console.error('🔴 GET PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to fetch product' });
+  }
+});
+
 // Update product
 app.patch('/api/products/:id', authenticateToken, async (req, res) => {
   try {
