@@ -1043,6 +1043,49 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
   }
 });
 
+// Get single slideshow
+app.get('/api/slideshows/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎬 SLIDESHOWS: Fetching slideshow:', id);
+    
+    const result = await pool.query(
+      `SELECT s.* FROM slideshows s WHERE s.id = $1 AND s.user_id = $2`,
+      [id, req.user.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = result.rows[0];
+    
+    // Get images for the slideshow
+    const imagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [id]
+    );
+    
+    slideshow.images = imagesResult.rows.map(img => ({
+      id: img.id,
+      slideshowId: img.slideshow_id,
+      url: img.image_url,
+      caption: img.caption,
+      position: img.display_order,
+      createdAt: img.created_at
+    }));
+    
+    console.log('🎬 SLIDESHOWS: Slideshow found:', slideshow.name);
+    res.json({ slideshow });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: Error fetching slideshow:', error);
+    res.status(500).json({ error: 'Failed to fetch slideshow' });
+  }
+});
+
 // ---------- ACTIVATION CODES ROUTES ----------
 
 app.get('/api/activation-codes/generated', authenticateToken, async (req, res) => {
