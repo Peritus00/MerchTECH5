@@ -1086,6 +1086,335 @@ app.get('/api/slideshows/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ---------- SLIDESHOW IMAGE UPLOAD ROUTES ----------
+
+// Upload image for slideshow
+app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { caption, position } = req.body;
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Uploading image for slideshow:', { 
+      id, 
+      caption, 
+      position,
+      hasFile: !!req.file 
+    });
+    
+    if (!req.file) {
+      console.log('🎬 SLIDESHOW_UPLOAD: No file provided');
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    // Check if user owns the slideshow
+    const slideshowResult = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [id]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_UPLOAD: Slideshow not found:', id);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      console.log('🎬 SLIDESHOW_UPLOAD: User not authorized:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to upload to this slideshow' });
+    }
+    
+    // Generate unique filename
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const fileExtension = req.file.originalname.split('.').pop();
+    const filename = `slideshow-${id}-${timestamp}-${randomString}.${fileExtension}`;
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Generated filename:', filename);
+    
+    // Save file to uploads directory
+    const filePath = path.join(__dirname, 'uploads', filename);
+    fs.writeFileSync(filePath, req.file.buffer);
+    
+    // Get next position if not provided
+    let displayOrder = position;
+    if (!displayOrder) {
+      const maxPositionResult = await pool.query(
+        'SELECT MAX(display_order) as max_pos FROM slideshow_images WHERE slideshow_id = $1',
+        [id]
+      );
+      displayOrder = (maxPositionResult.rows[0].max_pos || 0) + 1;
+    }
+    
+    // Save image record to database
+    const imageUrl = `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${filename}`;
+    const imageResult = await pool.query(
+      `INSERT INTO slideshow_images (slideshow_id, image_url, caption, display_order, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING *`,
+      [id, imageUrl, caption || '', displayOrder]
+    );
+    
+    const image = {
+      id: imageResult.rows[0].id,
+      slideshowId: imageResult.rows[0].slideshow_id,
+      url: imageResult.rows[0].image_url,
+      caption: imageResult.rows[0].caption,
+      position: imageResult.rows[0].display_order,
+      createdAt: imageResult.rows[0].created_at
+    };
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Image uploaded successfully:', {
+      imageId: image.id,
+      filename,
+      url: image.url
+    });
+    
+    res.status(201).json({ image });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_UPLOAD: Error uploading image:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
+// Delete image from slideshow
+app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, async (req, res) => {
+  try {
+    const { slideshowId, imageId } = req.params;
+    
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Deleting image:', { slideshowId, imageId });
+    
+    // Check if user owns the slideshow
+    const slideshowResult = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Slideshow not found:', slideshowId);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: User not authorized:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to delete from this slideshow' });
+    }
+    
+    // Get image details for file deletion
+    const imageResult = await pool.query(
+      'SELECT * FROM slideshow_images WHERE id = $1 AND slideshow_id = $2',
+      [imageId, slideshowId]
+    );
+    
+    if (imageResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image not found:', imageId);
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // Delete image record
+    await pool.query(
+      'DELETE FROM slideshow_images WHERE id = $1',
+      [imageId]
+    );
+    
+    // Delete file from filesystem
+    const imageUrl = imageResult.rows[0].image_url;
+    const filename = imageUrl.split('/').pop();
+    const filePath = path.join(__dirname, 'uploads', filename);
+    
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: File deleted from filesystem:', filename);
+    }
+    
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image deleted successfully');
+    res.json({ message: 'Image deleted successfully' });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_DELETE_IMAGE: Error deleting image:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// ---------- SLIDESHOW ACCESS ROUTES ----------
+
+// Public slideshow access endpoint
+app.get('/api/slideshow-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { activationCode } = req.query;
+    
+    console.log('🎬 SLIDESHOW_ACCESS: Accessing slideshow:', { id, activationCode });
+    
+    // Get slideshow details
+    const slideshowResult = await pool.query(
+      `SELECT s.* FROM slideshows s WHERE s.id = $1`,
+      [id]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow not found:', id);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = slideshowResult.rows[0];
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow found:', { 
+      id: slideshow.id, 
+      name: slideshow.name, 
+      requiresActivation: slideshow.requires_activation_code,
+      isPublic: slideshow.is_public 
+    });
+    
+    // Check if slideshow requires activation code
+    if (slideshow.requires_activation_code) {
+      if (!activationCode) {
+        console.log('🎬 SLIDESHOW_ACCESS: Activation code required but not provided');
+        return res.status(403).json({ 
+          error: 'Activation code required',
+          requiresActivation: true 
+        });
+      }
+      
+      // Validate activation code
+      const codeResult = await pool.query(
+        `SELECT * FROM activation_codes 
+         WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)`,
+        [activationCode, id]
+      );
+      
+      if (codeResult.rows.length === 0) {
+        console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code:', activationCode);
+        return res.status(403).json({ 
+          error: 'Invalid activation code',
+          requiresActivation: true 
+        });
+      }
+      
+      // Increment usage count
+      await pool.query(
+        `UPDATE activation_codes 
+         SET uses_count = uses_count + 1, 
+             last_used_at = NOW() 
+         WHERE id = $1`,
+        [codeResult.rows[0].id]
+      );
+      
+      console.log('🎬 SLIDESHOW_ACCESS: Activation code validated and usage incremented');
+    }
+    
+    // Check if slideshow is public or user has access
+    if (!slideshow.is_public && !slideshow.requires_activation_code) {
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow is private and no activation code provided');
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    // Get images for the slideshow
+    const imagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [id]
+    );
+    
+    const slideshowWithImages = {
+      ...slideshow,
+      images: imagesResult.rows.map(img => ({
+        id: img.id,
+        slideshowId: img.slideshow_id,
+        url: img.image_url,
+        caption: img.caption,
+        position: img.display_order,
+        createdAt: img.created_at
+      }))
+    };
+    
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow access granted:', {
+      id: slideshowWithImages.id,
+      name: slideshowWithImages.name,
+      imagesCount: slideshowWithImages.images.length
+    });
+    
+    res.json({ slideshow: slideshowWithImages });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_ACCESS: Error accessing slideshow:', error);
+    res.status(500).json({ error: 'Failed to access slideshow' });
+  }
+});
+
+// ---------- ACTIVATION CODE VALIDATION ROUTES ----------
+
+// Validate activation code for slideshow access
+app.post('/api/activation-codes/validate', async (req, res) => {
+  try {
+    const { code, slideshowId } = req.body;
+    
+    if (!code || !slideshowId) {
+      console.log('🔑 ACTIVATION_VALIDATE: Missing required fields:', { code, slideshowId });
+      return res.status(400).json({ error: 'Code and slideshow ID required' });
+    }
+    
+    console.log('🔑 ACTIVATION_VALIDATE: Validating code for slideshow:', { code, slideshowId });
+    
+    // Check if slideshow exists and requires activation
+    const slideshowResult = await pool.query(
+      'SELECT requires_activation_code FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🔑 ACTIVATION_VALIDATE: Slideshow not found:', slideshowId);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (!slideshowResult.rows[0].requires_activation_code) {
+      console.log('🔑 ACTIVATION_VALIDATE: Slideshow does not require activation code');
+      return res.status(400).json({ error: 'This slideshow does not require an activation code' });
+    }
+    
+    // Validate activation code
+    const codeResult = await pool.query(
+      `SELECT * FROM activation_codes 
+       WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
+       AND (expires_at IS NULL OR expires_at > NOW())
+       AND (max_uses IS NULL OR uses_count < max_uses)`,
+      [code, slideshowId]
+    );
+    
+    if (codeResult.rows.length === 0) {
+      console.log('🔑 ACTIVATION_VALIDATE: Invalid or expired code:', code);
+      return res.status(400).json({ 
+        error: 'Invalid or expired activation code',
+        requiresActivation: true 
+      });
+    }
+    
+    const activationCode = codeResult.rows[0];
+    console.log('🔑 ACTIVATION_VALIDATE: Code validated successfully:', {
+      codeId: activationCode.id,
+      usesCount: activationCode.uses_count,
+      maxUses: activationCode.max_uses,
+      expiresAt: activationCode.expires_at
+    });
+    
+    res.json({ 
+      valid: true, 
+      message: 'Activation code is valid',
+      activationCode: {
+        id: activationCode.id,
+        usesCount: activationCode.uses_count,
+        maxUses: activationCode.max_uses,
+        expiresAt: activationCode.expires_at
+      }
+    });
+    
+  } catch (error) {
+    console.error('🔑 ACTIVATION_VALIDATE: Error validating code:', error);
+    res.status(500).json({ error: 'Failed to validate activation code' });
+  }
+});
+
 // ---------- ACTIVATION CODES ROUTES ----------
 
 app.get('/api/activation-codes/generated', authenticateToken, async (req, res) => {
