@@ -2845,6 +2845,34 @@ app.delete('/api/playlists/:id/messages/:messageId', authenticateToken, async (r
   }
 });
 
+// Media confirm upload endpoint
+app.post('/api/media/confirm-upload', authenticateToken, async (req, res) => {
+  try {
+    const { title, fileUrl, filename, fileType, contentType, filesize, duration, s3Key } = req.body;
+    
+    if (!title || !fileUrl || !filename || !fileType || !contentType || !filesize || !s3Key) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log('✅ Confirming S3 upload:', { title, filename, fileType, filesize, s3Key });
+
+    // Create media record in database
+    const result = await pool.query(`
+      INSERT INTO media (user_id, title, url, filename, file_type, content_type, filesize, duration, s3_key, created_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+      RETURNING *
+    `, [req.user.userId, title, fileUrl, filename, fileType, contentType, filesize, duration || null, s3Key]);
+
+    const mediaRecord = result.rows[0];
+    console.log('✅ Media record created:', mediaRecord.id);
+
+    res.status(201).json(mediaRecord);
+  } catch (error) {
+    console.error('❌ Confirm upload error:', error);
+    res.status(500).json({ error: 'Failed to confirm upload' });
+  }
+});
+
 // User info endpoint
 app.get('/api/users/:id', async (req, res) => {
   try {

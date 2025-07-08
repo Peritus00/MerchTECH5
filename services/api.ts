@@ -279,21 +279,21 @@ export const checkoutAPI = {
 export const mediaAPI = {
   async getAll() {
     console.log('🔴 MediaAPI: Fetching all media files');
-    const res = await api.get('/media?mine=true');
+    const res = await api.get('/api/media?mine=true');
     console.log('🔴 MediaAPI: Loaded media files:', res.data.media?.length || 0);
     return res.data.media || [];
   },
   
   async getById(id: string) {
     console.log('🔴 MediaAPI: Fetching media file by ID:', id);
-    const res = await api.get(`/media/${id}`);
+    const res = await api.get(`/api/media/${id}`);
     console.log('🔴 MediaAPI: Media file data:', res.data);
     return res.data.media;
   },
   
   async upload(mediaData: any) {
     console.log('🔴 MediaAPI: Uploading media file (legacy method)');
-    const res = await uploadAPI.post('/media', mediaData);
+    const res = await uploadAPI.post('/api/media', mediaData);
     console.log('🔴 MediaAPI: Upload response:', res.data);
     return res.data;
   },
@@ -301,7 +301,7 @@ export const mediaAPI = {
   async getPresignedUrl(filename: string, contentType: string, fileSize?: number) {
     console.log('🔗 MediaAPI: Getting presigned URL for direct S3 upload');
     console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
-    const res = await api.post('/media/presigned-url', {
+    const res = await api.post('/api/media/presigned-url', {
       filename,
       contentType,
       fileSize
@@ -356,14 +356,14 @@ export const mediaAPI = {
     s3Key: string;
   }) {
     console.log('✅ MediaAPI: Confirming S3 upload');
-    const res = await api.post('/media/confirm-upload', uploadData);
+    const res = await api.post('/api/media/confirm-upload', uploadData);
     console.log('✅ MediaAPI: Upload confirmation response:', res.data);
     return res.data;
   },
 
   async delete(mediaId: string) {
     console.log('🗑️ MediaAPI: Deleting media file:', mediaId);
-    const res = await api.delete(`/media/${mediaId}`);
+    const res = await api.delete(`/api/media/${mediaId}`);
     console.log('🗑️ MediaAPI: Delete response:', res.data);
     return res.data;
   },
