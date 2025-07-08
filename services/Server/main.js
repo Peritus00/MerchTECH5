@@ -2428,4 +2428,446 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
   }
 });
 
+// ---------- ADDITIONAL MISSING ENDPOINTS ----------
+
+// Stripe create checkout session (alternative endpoint)
+app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
+  try {
+    const { tier, newUser } = req.body;
+    
+    if (!tier) {
+      return res.status(400).json({ error: 'Tier is required' });
+    }
+
+    // Get user info
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = userResult.rows[0];
+
+    // Define subscription tiers
+    const tiers = {
+      basic: { price: 999, name: 'Basic Plan' },
+      pro: { price: 1999, name: 'Pro Plan' },
+      enterprise: { price: 4999, name: 'Enterprise Plan' }
+    };
+
+    const selectedTier = tiers[tier];
+    if (!selectedTier) {
+      return res.status(400).json({ error: 'Invalid tier' });
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: selectedTier.name,
+            description: `Subscription to ${selectedTier.name}`,
+          },
+          unit_amount: selectedTier.price,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/subscription`,
+      customer_email: user.email,
+      metadata: {
+        userId: user.id.toString(),
+        tier,
+        newUser: newUser || 'false',
+      },
+    });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error('❌ Stripe checkout session error:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// Test email endpoint
+app.post('/api/test/send-email', async (req, res) => {
+  try {
+    const { to, subject, message } = req.body;
+    
+    if (!to || !subject || !message) {
+      return res.status(400).json({ error: 'to, subject, and message are required' });
+    }
+
+    // For testing purposes, just log the email
+    console.log('📧 Test email would be sent:');
+    console.log('   To:', to);
+    console.log('   Subject:', subject);
+    console.log('   Message:', message);
+
+    res.json({ success: true, message: 'Test email logged successfully' });
+  } catch (error) {
+    console.error('❌ Test email error:', error);
+    res.status(500).json({ error: 'Failed to send test email' });
+  }
+});
+
+// Product links endpoints
+app.get('/api/playlists/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT pl.*, p.name as product_name, p.price, p.image_url 
+      FROM playlist_product_links pl
+      JOIN products p ON pl.product_id = p.id
+      WHERE pl.playlist_id = $1
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Get playlist product links error:', error);
+    res.status(500).json({ error: 'Failed to get product links' });
+  }
+});
+
+app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productId } = req.body;
+    
+    if (!productId) {
+      return res.status(400).json({ error: 'productId is required' });
+    }
+
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    // Check if product exists
+    const productResult = await pool.query('SELECT * FROM products WHERE id = $1', [productId]);
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Add link
+    const result = await pool.query(`
+      INSERT INTO playlist_product_links (playlist_id, product_id)
+      VALUES ($1, $2) RETURNING *
+    `, [id, productId]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Add playlist product link error:', error);
+    res.status(500).json({ error: 'Failed to add product link' });
+  }
+});
+
+app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, async (req, res) => {
+  try {
+    const { id, productId } = req.params;
+    
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    // Remove link
+    const result = await pool.query(`
+      DELETE FROM playlist_product_links 
+      WHERE playlist_id = $1 AND product_id = $2 RETURNING *
+    `, [id, productId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Remove playlist product link error:', error);
+    res.status(500).json({ error: 'Failed to remove product link' });
+  }
+});
+
+// Slideshow product links endpoints
+app.get('/api/slideshows/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT sl.*, p.name as product_name, p.price, p.image_url 
+      FROM slideshow_product_links sl
+      JOIN products p ON sl.product_id = p.id
+      WHERE sl.slideshow_id = $1
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Get slideshow product links error:', error);
+    res.status(500).json({ error: 'Failed to get product links' });
+  }
+});
+
+app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productId } = req.body;
+    
+    if (!productId) {
+      return res.status(400).json({ error: 'productId is required' });
+    }
+
+    // Check if slideshow exists and user owns it
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    // Check if product exists
+    const productResult = await pool.query('SELECT * FROM products WHERE id = $1', [productId]);
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    // Add link
+    const result = await pool.query(`
+      INSERT INTO slideshow_product_links (slideshow_id, product_id)
+      VALUES ($1, $2) RETURNING *
+    `, [id, productId]);
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Add slideshow product link error:', error);
+    res.status(500).json({ error: 'Failed to add product link' });
+  }
+});
+
+app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, async (req, res) => {
+  try {
+    const { id, productId } = req.params;
+    
+    // Check if slideshow exists and user owns it
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    // Remove link
+    const result = await pool.query(`
+      DELETE FROM slideshow_product_links 
+      WHERE slideshow_id = $1 AND product_id = $2 RETURNING *
+    `, [id, productId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Remove slideshow product link error:', error);
+    res.status(500).json({ error: 'Failed to remove product link' });
+  }
+});
+
+// Sales endpoints
+app.get('/api/sales/my', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.*, p.name as product_name, p.price
+      FROM sales s
+      JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
+      ORDER BY s.created_at DESC
+    `, [req.user.userId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Get my sales error:', error);
+    res.status(500).json({ error: 'Failed to get sales' });
+  }
+});
+
+app.get('/api/sales/all', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.*, p.name as product_name, p.price, u.email as user_email
+      FROM sales s
+      JOIN products p ON s.product_id = p.id
+      JOIN users u ON s.user_id = u.id
+      ORDER BY s.created_at DESC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Get all sales error:', error);
+    res.status(500).json({ error: 'Failed to get sales' });
+  }
+});
+
+// Sales CSV download endpoints
+app.get('/api/sales/my/csv', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT p.name as product_name, p.price, s.quantity, s.total_amount, s.created_at
+      FROM sales s
+      JOIN products p ON s.product_id = p.id
+      WHERE s.user_id = $1
+      ORDER BY s.created_at DESC
+    `, [req.user.userId]);
+
+    // Create CSV content
+    const csvContent = [
+      'Product Name,Price,Quantity,Total Amount,Date',
+      ...result.rows.map(sale => 
+        `"${sale.product_name}",${sale.price},${sale.quantity},${sale.total_amount},"${sale.created_at}"`
+      )
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="my-sales.csv"');
+    res.send(csvContent);
+  } catch (error) {
+    console.error('❌ Download my sales CSV error:', error);
+    res.status(500).json({ error: 'Failed to download CSV' });
+  }
+});
+
+app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT u.email as user_email, p.name as product_name, p.price, s.quantity, s.total_amount, s.created_at
+      FROM sales s
+      JOIN products p ON s.product_id = p.id
+      JOIN users u ON s.user_id = u.id
+      ORDER BY s.created_at DESC
+    `);
+
+    // Create CSV content
+    const csvContent = [
+      'User Email,Product Name,Price,Quantity,Total Amount,Date',
+      ...result.rows.map(sale => 
+        `"${sale.user_email}","${sale.product_name}",${sale.price},${sale.quantity},${sale.total_amount},"${sale.created_at}"`
+      )
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="all-sales.csv"');
+    res.send(csvContent);
+  } catch (error) {
+    console.error('❌ Download all sales CSV error:', error);
+    res.status(500).json({ error: 'Failed to download CSV' });
+  }
+});
+
+// Chat/messages endpoints
+app.get('/api/playlists/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if playlist exists
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1', [id]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const result = await pool.query(`
+      SELECT m.*, u.email as user_email
+      FROM playlist_messages m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.playlist_id = $1
+      ORDER BY m.created_at ASC
+    `, [id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('❌ Get playlist messages error:', error);
+    res.status(500).json({ error: 'Failed to get messages' });
+  }
+});
+
+app.post('/api/playlists/:id/messages', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+    
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    // Check if playlist exists
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1', [id]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const result = await pool.query(`
+      INSERT INTO playlist_messages (playlist_id, user_id, message)
+      VALUES ($1, $2, $3) RETURNING *
+    `, [id, req.user.userId, message.trim()]);
+
+    const newMessageResult = await pool.query(`
+      SELECT m.*, u.email as user_email
+      FROM playlist_messages m
+      JOIN users u ON m.user_id = u.id
+      WHERE m.id = $1
+    `, [result.rows[0].id]);
+
+    res.json(newMessageResult.rows[0]);
+  } catch (error) {
+    console.error('❌ Send playlist message error:', error);
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
+app.delete('/api/playlists/:id/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { id, messageId } = req.params;
+    
+    // Check if message exists and user owns it
+    const messageResult = await pool.query(`
+      SELECT * FROM playlist_messages 
+      WHERE id = $1 AND playlist_id = $2 AND user_id = $3
+    `, [messageId, id, req.user.userId]);
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    await pool.query('DELETE FROM playlist_messages WHERE id = $1', [messageId]);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Delete playlist message error:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// User info endpoint
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT id, email, username, created_at, 
+             (SELECT COUNT(*) FROM products WHERE user_id = users.id) as product_count,
+             (SELECT COUNT(*) FROM playlists WHERE user_id = users.id) as playlist_count,
+             (SELECT COUNT(*) FROM slideshows WHERE user_id = users.id) as slideshow_count
+      FROM users 
+      WHERE id = $1
+    `, [id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Get user info error:', error);
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
 module.exports = app;
