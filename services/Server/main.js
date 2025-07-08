@@ -9,6 +9,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const axios = require('axios');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // 🔒 SECURITY IMPORTS - FREE SECURITY HARDENING
 const helmet = require('helmet');
@@ -2343,8 +2344,6 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
 });
 
 // ---------- STRIPE CHECKOUT SESSION ENDPOINT ----------
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 app.post('/api/checkout/session', authenticateToken, async (req, res) => {
   try {
