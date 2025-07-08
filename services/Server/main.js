@@ -2209,4 +2209,137 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
+// ---------- CONTENT TYPE DETECTION ----------
+
+// Detect content type (playlist, media, or unknown)
+app.get('/api/content/:id/type', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔍 CONTENT_TYPE: Detecting type for ID:', id);
+    
+    // Check if it's a playlist
+    const playlistResult = await pool.query('SELECT id FROM playlists WHERE id = $1', [id]);
+    if (playlistResult.rows.length > 0) {
+      console.log('🔍 CONTENT_TYPE: Found playlist');
+      return res.json({ type: 'playlist' });
+    }
+    
+    // Check if it's a media file
+    const mediaResult = await pool.query('SELECT id FROM media WHERE id = $1', [id]);
+    if (mediaResult.rows.length > 0) {
+      console.log('🔍 CONTENT_TYPE: Found media file');
+      return res.json({ type: 'media' });
+    }
+    
+    // Check if it's a slideshow
+    const slideshowResult = await pool.query('SELECT id FROM slideshows WHERE id = $1', [id]);
+    if (slideshowResult.rows.length > 0) {
+      console.log('🔍 CONTENT_TYPE: Found slideshow');
+      return res.json({ type: 'slideshow' });
+    }
+    
+    console.log('🔍 CONTENT_TYPE: Content not found');
+    return res.status(404).json({ error: 'Content not found' });
+    
+  } catch (error) {
+    console.error('🔍 CONTENT_TYPE: Error detecting content type:', error);
+    res.status(500).json({ error: 'Failed to detect content type' });
+  }
+});
+
+// ---------- PLAYLIST-MEDIA ASSOCIATION ----------
+
+// Add media to playlist
+app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mediaId, displayOrder = 1 } = req.body;
+    
+    if (!mediaId) {
+      return res.status(400).json({ error: 'Media ID is required' });
+    }
+    
+    console.log('🎵 PLAYLIST_MEDIA: Adding media to playlist:', { playlistId: id, mediaId, displayOrder });
+    
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query(
+      'SELECT id FROM playlists WHERE id = $1 AND user_id = $2',
+      [id, req.user.userId]
+    );
+    
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    // Check if media exists and user owns it
+    const mediaResult = await pool.query(
+      'SELECT id FROM media WHERE id = $1 AND user_id = $2',
+      [mediaId, req.user.userId]
+    );
+    
+    if (mediaResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Media file not found' });
+    }
+    
+    // Check if association already exists
+    const existingResult = await pool.query(
+      'SELECT id FROM playlist_media WHERE playlist_id = $1 AND media_id = $2',
+      [id, mediaId]
+    );
+    
+    if (existingResult.rows.length > 0) {
+      return res.status(400).json({ error: 'Media is already in this playlist' });
+    }
+    
+    // Add media to playlist
+    const result = await pool.query(
+      'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3) RETURNING *',
+      [id, mediaId, displayOrder]
+    );
+    
+    console.log('🎵 PLAYLIST_MEDIA: Media added to playlist successfully');
+    res.status(201).json(result.rows[0]);
+    
+  } catch (error) {
+    console.error('🎵 PLAYLIST_MEDIA: Error adding media to playlist:', error);
+    res.status(500).json({ error: 'Failed to add media to playlist' });
+  }
+});
+
+// Remove media from playlist
+app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+    
+    console.log('🎵 PLAYLIST_MEDIA: Removing media from playlist:', { playlistId: id, mediaId });
+    
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query(
+      'SELECT id FROM playlists WHERE id = $1 AND user_id = $2',
+      [id, req.user.userId]
+    );
+    
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    // Remove media from playlist
+    const result = await pool.query(
+      'DELETE FROM playlist_media WHERE playlist_id = $1 AND media_id = $2 RETURNING *',
+      [id, mediaId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Media not found in playlist' });
+    }
+    
+    console.log('🎵 PLAYLIST_MEDIA: Media removed from playlist successfully');
+    res.json({ message: 'Media removed from playlist' });
+    
+  } catch (error) {
+    console.error('🎵 PLAYLIST_MEDIA: Error removing media from playlist:', error);
+    res.status(500).json({ error: 'Failed to remove media from playlist' });
+  }
+});
+
 module.exports = app;
