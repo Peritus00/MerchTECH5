@@ -670,9 +670,9 @@ app.get('/api/media/:id', async (req, res) => {
     const media = result.rows[0];
     let properUrl = media.url;
     if (media.url && media.url.startsWith('data:')) {
-      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/api/media/${id}/stream`;
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${id}/stream`;
     } else if (media.filename) {
-      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/uploads/${media.filename}`;
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
     }
     const mediaResponse = { ...media, url: properUrl, title: media.title, fileType: media.file_type, contentType: media.content_type };
     res.json({ media: mediaResponse });
