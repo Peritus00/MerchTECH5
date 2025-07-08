@@ -1240,17 +1240,26 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
 // Public slideshow access endpoint
 app.get('/api/slideshow-access/:id', async (req, res) => {
   try {
+    console.log('🎬 SLIDESHOW_ACCESS: Starting endpoint execution');
     const { id } = req.params;
     const { activationCode } = req.query;
     
-    console.log('🎬 SLIDESHOW_ACCESS: Accessing slideshow:', { id, activationCode });
+    console.log('🎬 SLIDESHOW_ACCESS: Parameters received:', { id, activationCode });
     
     // Get slideshow details
-    const slideshowResult = await pool.query(
-      `SELECT s.* FROM slideshows s WHERE s.id = $1`,
-      [id]
-    );
-    console.log('🎬 SLIDESHOW_ACCESS: slideshowResult:', slideshowResult.rows);
+    console.log('🎬 SLIDESHOW_ACCESS: About to query slideshow with ID:', id);
+    let slideshowResult;
+    try {
+      slideshowResult = await pool.query(
+        `SELECT s.* FROM slideshows s WHERE s.id = $1`,
+        [id]
+      );
+      console.log('🎬 SLIDESHOW_ACCESS: slideshowResult query successful, rows:', slideshowResult.rows.length);
+      console.log('🎬 SLIDESHOW_ACCESS: slideshowResult data:', slideshowResult.rows);
+    } catch (queryError) {
+      console.error('🎬 SLIDESHOW_ACCESS: Error in slideshow query:', queryError);
+      throw queryError;
+    }
     
     if (slideshowResult.rows.length === 0) {
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow not found:', id);
@@ -1267,6 +1276,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     
     // Check if slideshow requires activation code
     if (slideshow.requires_activation_code) {
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow requires activation code');
       if (!activationCode) {
         console.log('🎬 SLIDESHOW_ACCESS: Activation code required but not provided');
         return res.status(403).json({ 
@@ -1276,14 +1286,22 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
       
       // Validate activation code
-      const codeResult = await pool.query(
-        `SELECT * FROM activation_codes 
-         WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
-         AND (expires_at IS NULL OR expires_at > NOW())
-         AND (max_uses IS NULL OR uses_count < max_uses)`,
-        [activationCode, id]
-      );
-      console.log('🎬 SLIDESHOW_ACCESS: codeResult:', codeResult.rows);
+      console.log('🎬 SLIDESHOW_ACCESS: About to validate activation code:', activationCode);
+      let codeResult;
+      try {
+        codeResult = await pool.query(
+          `SELECT * FROM activation_codes 
+           WHERE code = $1 AND slideshow_id = $2 AND is_active = true 
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND (max_uses IS NULL OR uses_count < max_uses)`,
+          [activationCode, id]
+        );
+        console.log('🎬 SLIDESHOW_ACCESS: codeResult query successful, rows:', codeResult.rows.length);
+        console.log('🎬 SLIDESHOW_ACCESS: codeResult data:', codeResult.rows);
+      } catch (queryError) {
+        console.error('🎬 SLIDESHOW_ACCESS: Error in activation code query:', queryError);
+        throw queryError;
+      }
       
       if (codeResult.rows.length === 0) {
         console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code:', activationCode);
@@ -1294,13 +1312,20 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
       
       // Increment usage count
-      await pool.query(
-        `UPDATE activation_codes 
-         SET uses_count = uses_count + 1, 
-             last_used_at = NOW() 
-         WHERE id = $1`,
-        [codeResult.rows[0].id]
-      );
+      console.log('🎬 SLIDESHOW_ACCESS: About to increment usage count for code ID:', codeResult.rows[0].id);
+      try {
+        await pool.query(
+          `UPDATE activation_codes 
+           SET uses_count = uses_count + 1, 
+               last_used_at = NOW() 
+           WHERE id = $1`,
+          [codeResult.rows[0].id]
+        );
+        console.log('🎬 SLIDESHOW_ACCESS: Usage count incremented successfully');
+      } catch (queryError) {
+        console.error('🎬 SLIDESHOW_ACCESS: Error incrementing usage count:', queryError);
+        throw queryError;
+      }
       
       console.log('🎬 SLIDESHOW_ACCESS: Activation code validated and usage incremented');
     }
@@ -1312,14 +1337,23 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     }
     
     // Get images for the slideshow
-    const imagesResult = await pool.query(
-      `SELECT * FROM slideshow_images 
-       WHERE slideshow_id = $1 
-       ORDER BY display_order`,
-      [id]
-    );
-    console.log('🎬 SLIDESHOW_ACCESS: imagesResult:', imagesResult.rows);
+    console.log('🎬 SLIDESHOW_ACCESS: About to query images for slideshow ID:', id);
+    let imagesResult;
+    try {
+      imagesResult = await pool.query(
+        `SELECT * FROM slideshow_images 
+         WHERE slideshow_id = $1 
+         ORDER BY display_order`,
+        [id]
+      );
+      console.log('🎬 SLIDESHOW_ACCESS: imagesResult query successful, rows:', imagesResult.rows.length);
+      console.log('🎬 SLIDESHOW_ACCESS: imagesResult data:', imagesResult.rows);
+    } catch (queryError) {
+      console.error('🎬 SLIDESHOW_ACCESS: Error in images query:', queryError);
+      throw queryError;
+    }
     
+    console.log('🎬 SLIDESHOW_ACCESS: About to create slideshowWithImages object');
     const slideshowWithImages = {
       ...slideshow,
       images: imagesResult.rows.map(img => ({
@@ -1332,16 +1366,19 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }))
     };
     
-    console.log('🎬 SLIDESHOW_ACCESS: Slideshow access granted:', {
+    console.log('🎬 SLIDESHOW_ACCESS: slideshowWithImages created successfully:', {
       id: slideshowWithImages.id,
       name: slideshowWithImages.name,
       imagesCount: slideshowWithImages.images.length
     });
     
+    console.log('🎬 SLIDESHOW_ACCESS: About to send response');
     res.json({ slideshow: slideshowWithImages });
+    console.log('🎬 SLIDESHOW_ACCESS: Response sent successfully');
     
   } catch (error) {
     console.error('🎬 SLIDESHOW_ACCESS: Error accessing slideshow:', error);
+    console.error('🎬 SLIDESHOW_ACCESS: Error message:', error.message);
     if (error.stack) {
       console.error('🎬 SLIDESHOW_ACCESS: Error stack:', error.stack);
     }
