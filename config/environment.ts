@@ -26,9 +26,15 @@ class Environment {
     
     // Force development mode for local development
     // Use Railway backend ONLY if explicitly set to production
-    const apiBaseUrl = nodeEnv === 'production' && process.env.EXPO_PUBLIC_NODE_ENV === 'production'
+    let apiBaseUrl = nodeEnv === 'production' && process.env.EXPO_PUBLIC_NODE_ENV === 'production'
       ? 'https://merchtech5-production.up.railway.app/api'
       : (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.70:5001/api');
+    
+    // Force local server if running on localhost (web development)
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+      apiBaseUrl = 'http://192.168.1.70:5001/api';
+      console.log('🔧 Forced local API URL for localhost development:', apiBaseUrl);
+    }
     
     return {
       API_BASE_URL: apiBaseUrl,
@@ -133,7 +139,15 @@ export const {
   expoProjectId
 } = env;
 
-// Log configuration on import (only in development)
-if (isDevelopment) {
-  env.logConfiguration();
+// Always log configuration for debugging
+console.log('🔧 Environment Configuration Loading...');
+console.log('🔧 process.env.NODE_ENV:', process.env.NODE_ENV);
+console.log('🔧 process.env.EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
+console.log('🔧 process.env.EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+
+env.logConfiguration();
+
+// Force development mode if we're on localhost
+if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  console.log('🔧 Detected localhost - forcing development mode');
 } 
