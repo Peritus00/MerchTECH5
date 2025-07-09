@@ -24,10 +24,11 @@ class Environment {
     // Check both regular and EXPO_PUBLIC_ prefixed environment variables
     const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
-    // Use Railway backend in production, fallback to localhost for development
-    const apiBaseUrl = nodeEnv === 'production'
+    // Force development mode for local development
+    // Use Railway backend ONLY if explicitly set to production
+    const apiBaseUrl = nodeEnv === 'production' && process.env.EXPO_PUBLIC_NODE_ENV === 'production'
       ? 'https://merchtech5-production.up.railway.app/api'
-      : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api');
+      : (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.70:5001/api');
     
     return {
       API_BASE_URL: apiBaseUrl,
