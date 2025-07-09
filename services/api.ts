@@ -7,24 +7,36 @@ import { env } from '@/config/environment';
 const API_BASE_URL = env.apiBaseUrl;
 
 console.log('✅ API configured with centralized environment config');
-if (env.isDevelopment) {
-  console.log('🔍 Environment details:', {
-    environment: env.nodeEnv,
-    apiUrl: API_BASE_URL,
-    isProduction: env.isProduction
-  });
+console.log('🔍 DETAILED Environment details:', {
+  environment: env.nodeEnv,
+  apiUrl: API_BASE_URL,
+  isProduction: env.isProduction,
+  isDevelopment: env.isDevelopment,
+  windowLocation: typeof window !== 'undefined' ? window.location.href : 'not available',
+  hostname: typeof window !== 'undefined' ? window.location.hostname : 'not available'
+});
+
+// Force localhost override if needed
+let FINAL_API_BASE_URL = API_BASE_URL;
+if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
+  console.log('🔧 FORCED localhost override - API URL changed to:', FINAL_API_BASE_URL);
+} else {
+  console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
 }
 
 export const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: FINAL_API_BASE_URL,
   timeout: 60000, // Standard timeout for most requests
 });
 
 // Create a separate instance for large file uploads
 export const uploadAPI = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: FINAL_API_BASE_URL,
   timeout: 300000, // 5 minutes for large uploads
 });
+
+console.log('🔧 API instances created with baseURL:', FINAL_API_BASE_URL);
 
 // Add interceptors for upload API
 uploadAPI.interceptors.response.use(
@@ -685,22 +697,39 @@ export const chatAPI = {
 
 export const fileUploadAPI = {
   async upload(file: any) {
+    console.log('🔧 fileUploadAPI.upload called with:', {
+      fileName: file.name,
+      fileType: file.type,
+      isFile: file instanceof File,
+      hasUri: !!file.uri
+    });
+    
+    console.log('🔧 Current API baseURL:', api.defaults.baseURL);
+    console.log('🔧 Upload will go to:', `${api.defaults.baseURL}/upload`);
+    
     const formData = new FormData();
     let payload: any;
     if (file instanceof File) {
       payload = file; // Web direct
+      console.log('🔧 Using File directly');
     } else if (typeof window !== 'undefined') {
+      console.log('🔧 Converting URI to File object');
       const response = await fetch(file.uri);
       const blob = await response.blob();
       payload = new File([blob], file.name, { type: file.type });
     } else {
+      console.log('🔧 Using URI payload for native');
       payload = { uri: file.uri, name: file.name, type: file.type } as any;
     }
+    
     // Use 'image' field name to match server expectation
     formData.append('image', payload, file.name ?? (payload.name || 'upload'));
+    console.log('🔧 FormData prepared, making request to /upload');
+    
     // Let axios set the correct multipart boundary; specifying the header manually
     // can omit the boundary and lead to 400 errors on some environments.
     const res = await api.post('/upload', formData);
+    console.log('🔧 Upload response:', res.data);
     // Server returns 'imageUrl' but we want to return 'fileUrl' for consistency
     return res.data.imageUrl as string;
   },

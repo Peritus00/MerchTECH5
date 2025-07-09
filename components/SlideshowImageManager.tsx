@@ -102,9 +102,17 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     if (!slideshow) return;
 
     try {
+      console.log('📤 SLIDESHOW uploadImage: Starting upload for slideshow', slideshow.id);
+      console.log('📤 SLIDESHOW uploadImage: filePayload', {
+        name: filePayload.name,
+        type: filePayload.type,
+        hasUri: !!filePayload.uri,
+        isFile: filePayload instanceof File
+      });
+      
       const fileUrl = await fileUploadAPI.upload(filePayload);
-      console.log('📤 uploadImage: fileUrl', fileUrl);
-      console.log('📤 uploadImage: calling addImage for slideshow', slideshow.id);
+      console.log('📤 SLIDESHOW uploadImage: fileUrl received', fileUrl);
+      console.log('📤 SLIDESHOW uploadImage: calling addImage for slideshow', slideshow.id);
 
       const updatedSlideshow = await slideshowAPI.addImage(slideshow.id, {
         imageUrl: fileUrl,
@@ -171,6 +179,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
 
   const handleAddAudio = async () => {
     try {
+      console.log('🎵 SLIDESHOW handleAddAudio: Starting audio selection');
       const result = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
         type: 'audio/*',
@@ -180,10 +189,19 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       if (result.canceled || !slideshow) return;
 
       const file = result.assets[0];
+      console.log('🎵 SLIDESHOW handleAddAudio: File selected', {
+        name: file.name,
+        uri: file.uri,
+        mimeType: file.mimeType,
+        size: file.size
+      });
+      
       setAudioUploading(true);
 
       const filename = file.name || `audio_${Date.now()}.mp3`;
+      console.log('🎵 SLIDESHOW handleAddAudio: About to upload with filename', filename);
       const audioUrlServer = await fileUploadAPI.upload({ uri: file.uri, name: filename, type: file.mimeType || 'audio/mpeg' });
+      console.log('🎵 SLIDESHOW handleAddAudio: Upload successful, audioUrl', audioUrlServer);
 
       const updatedSlideshow = await slideshowAPI.updateAudio(slideshow.id, audioUrlServer);
 
