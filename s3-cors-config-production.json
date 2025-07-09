@@ -1,0 +1,29 @@
+{
+    "CORSRules": [
+        {
+            "AllowedHeaders": [
+                "*"
+            ],
+            "AllowedMethods": [
+                "GET",
+                "HEAD",
+                "POST",
+                "PUT"
+            ],
+            "AllowedOrigins": [
+                "https://your-production-domain.com",
+                "https://your-app-domain.com",
+                "https://merchtech5-production.up.railway.app",
+                "http://localhost:8081",
+                "http://localhost:3000"
+            ],
+            "ExposeHeaders": [
+                "Content-Length",
+                "Content-Type",
+                "Accept-Ranges",
+                "ETag"
+            ],
+            "MaxAgeSeconds": 3600
+        }
+    ]
+} 

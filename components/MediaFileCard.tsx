@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
+import InlineMediaPlayer from './InlineMediaPlayer';
 
 interface MediaFileCardProps {
   file: MediaFile;
@@ -65,7 +66,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
   };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPlay} activeOpacity={0.7}>
+    <View style={styles.card}>
       <View style={styles.content}>
         <View style={[styles.iconContainer, { backgroundColor: getFileTypeColor() + '20' }]}>
           <MaterialIcons
@@ -93,20 +94,18 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
           </Text>
         </View>
         <View style={styles.actions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              onPlay();
-            }}
-          >
-            <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />
-          </TouchableOpacity>
+          {/* Use InlineMediaPlayer instead of navigation */}
+          <View style={styles.actionButton}>
+            <InlineMediaPlayer 
+              file={file}
+              size={20}
+              color="#3b82f6"
+            />
+          </View>
           <TouchableOpacity
             style={styles.actionButton}
             onPress={(e) => {
               console.log('🔴 MediaFileCard: Delete button touched for file:', file.id);
-              e.stopPropagation();
               handleDelete();
             }}
           >
@@ -114,7 +113,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
           </TouchableOpacity>
         </View>
       </View>
-    </TouchableOpacity>
+    </View>
   );
 };
 

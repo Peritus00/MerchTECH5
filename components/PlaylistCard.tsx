@@ -178,7 +178,13 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => {
+                  console.log('🔴 PLAYLIST_CARD: Edit button pressed for playlist:', {
+                    id: playlist.id,
+                    name: playlist.name
+                  });
+                  console.log('🔴 PLAYLIST_CARD: Calling onEdit function...');
                   onEdit();
+                  console.log('🔴 PLAYLIST_CARD: onEdit function called');
                 }}
               >
                 <MaterialIcons name="edit" size={20} color="#6b7280" />
@@ -188,7 +194,13 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
               <TouchableOpacity
                 style={styles.actionButton}
                 onPress={() => {
+                  console.log('🔴 PLAYLIST_CARD: Delete button pressed for playlist:', {
+                    id: playlist.id,
+                    name: playlist.name
+                  });
+                  console.log('🔴 PLAYLIST_CARD: Calling onDelete function...');
                   onDelete();
+                  console.log('🔴 PLAYLIST_CARD: onDelete function called');
                 }}
               >
                 <MaterialIcons name="delete" size={20} color="#ef4444" />

@@ -498,7 +498,7 @@ export default function PlaylistAccessScreen() {
     const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
       id: file.id,
       title: file.title,
-      url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${file.id}/stream`,
+              url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${file.id}/stream`,
       fileType: file.fileType,
       contentType: file.contentType,
     })) || [];

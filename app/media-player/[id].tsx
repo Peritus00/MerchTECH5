@@ -164,7 +164,7 @@ export default function MediaPlayerScreen() {
     const formattedFile = {
       id: mediaFile.id,
       title: mediaFile.title,
-      url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${mediaFile.id}/stream`,
+              url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${mediaFile.id}/stream`,
       fileType: mediaFile.fileType || mediaFile.file_type,
       contentType: mediaFile.contentType || mediaFile.content_type,
     };

@@ -301,7 +301,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
   const uploadDirectToS3 = async (asset: any) => {
     try {
-      console.log('🔗 UPLOAD: Starting direct S3 upload flow');
+      console.log('🔗 UPLOAD: Starting direct S3 upload flow using POST policy');
       
       // Get the file as a blob/file object
       let file: File | Blob;
@@ -338,28 +338,27 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
       console.log('📤 UPLOAD: File prepared for S3 upload, size:', file.size);
 
-      // Step 1: Get presigned URL from server
+      // Step 1: Get POST policy from server
       setUploadProgress(prev => ({ ...prev, stage: 'processing', percentage: 10 }));
       
-      const presignedData = await mediaAPI.getPresignedUrl(
+      const postPolicyData = await mediaAPI.getPostPolicy(
         asset.name,
         asset.mimeType,
         file.size
       );
 
-      // Debug log for presignedData
-      console.log('🔎 DEBUG: presignedData from getPresignedUrl:', presignedData);
-      if (!presignedData || !presignedData.presignedUrl) {
-        throw new Error('Presigned URL is missing or undefined!');
+      // Debug log for postPolicyData
+      console.log('🔎 DEBUG: postPolicyData from getPostPolicy:', postPolicyData);
+      if (!postPolicyData || !postPolicyData.url) {
+        throw new Error('POST policy data is missing or undefined!');
       }
 
-      // Step 2: Upload directly to S3
+      // Step 2: Upload directly to S3 using POST policy
       setUploadProgress(prev => ({ ...prev, stage: 'uploading', percentage: 20 }));
       
-      await mediaAPI.uploadToS3(
-        presignedData.presignedUrl,
+      await mediaAPI.uploadToS3WithPostPolicy(
+        postPolicyData,
         file,
-        asset.mimeType,
         (progress) => {
           setUploadProgress(prev => ({ 
             ...prev, 
@@ -370,20 +369,20 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         }
       );
 
-      console.log('✅ UPLOAD: S3 upload completed');
+      console.log('✅ UPLOAD: S3 POST upload completed');
 
       // Step 3: Confirm upload with server
       setUploadProgress(prev => ({ ...prev, stage: 'processing', percentage: 95 }));
       
       const mediaRecord = await mediaAPI.confirmUpload({
         title: asset.name,
-        fileUrl: presignedData.fileUrl,
+        fileUrl: postPolicyData.fileUrl,
         filename: asset.name,
         fileType: getFileType(asset.mimeType),
         contentType: asset.mimeType,
         filesize: file.size,
         duration: undefined, // Could be extracted for audio/video files
-        s3Key: presignedData.key
+        s3Key: postPolicyData.key
       });
 
       setUploadProgress(prev => ({ ...prev, stage: 'complete', percentage: 100 }));

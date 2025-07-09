@@ -13,28 +13,27 @@ async function testBasicUpload() {
     const healthResponse = await axios.get(`${API_BASE_URL}/health`);
     console.log('✅ Server is healthy:', healthResponse.data);
 
-    // Step 2: Create test user
-    console.log('\n2️⃣ Creating/using test user...');
-    const testEmail = 'test@example.com';
-    const testPassword = 'testpassword123';
+    // Step 2: Create a new unique test user
+    console.log('\n2️⃣ Creating a new unique test user...');
+    const timestamp = Date.now();
+    const testEmail = `testuser_${timestamp}@example.com`;
+    const testPassword = 'password123';
+    const testUsername = `testuser_${timestamp}`;
     
     try {
       await axios.post(`${API_BASE_URL}/auth/register`, {
         email: testEmail,
         password: testPassword,
-        username: 'testuser'
+        username: testUsername,
       });
-      console.log('✅ Test user created');
+      console.log(`✅ New test user created: ${testEmail}`);
     } catch (error) {
-      if (error.response?.status === 409 || error.response?.status === 400) {
-        console.log('✅ Test user already exists');
-      } else {
+        console.error('❌ Failed to create new test user:', error.response?.data || error.message);
         throw error;
-      }
     }
 
-    // Step 3: Login
-    console.log('\n3️⃣ Logging in...');
+    // Step 3: Login with the new user
+    console.log('\n3️⃣ Logging in with new user...');
     const loginResponse = await axios.post(`${API_BASE_URL}/auth/login`, {
       email: testEmail,
       password: testPassword
@@ -57,7 +56,7 @@ async function testBasicUpload() {
       console.log('✅ S3 presigned URL endpoint works');
       console.log('🔗 Response keys:', Object.keys(presignedResponse.data));
       
-      if (presignedResponse.data.uploadUrl && presignedResponse.data.fileUrl) {
+      if (presignedResponse.data.presignedUrl && presignedResponse.data.fileUrl) {
         console.log('✅ S3 is properly configured');
         return await testS3Upload(headers, presignedResponse.data);
       } else {
@@ -94,7 +93,7 @@ async function testS3Upload(headers, presignedData) {
   
   try {
     // Upload to S3
-    const s3Response = await axios.put(presignedData.uploadUrl, testData, {
+    const s3Response = await axios.put(presignedData.presignedUrl, testData, {
       headers: {
         'Content-Type': 'audio/mpeg',
         'Content-Length': testData.length

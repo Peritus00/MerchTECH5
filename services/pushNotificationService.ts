@@ -294,6 +294,10 @@ class PushNotificationService {
   // Set badge count
   async setBadgeCount(count: number): Promise<void> {
     try {
+      if (Platform.OS === 'web') {
+        // Do nothing on web to avoid errors
+        return;
+      }
       await Notifications.setBadgeCountAsync(count);
     } catch (error) {
       console.error('Error setting badge count:', error);

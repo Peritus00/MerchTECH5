@@ -53,7 +53,7 @@ const app = express();
 const corsOptions = {
   origin: true, // Allow all origins for now
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Origin', 'Accept']
 };
 
@@ -746,23 +746,16 @@ app.get('/api/media', authenticateToken, async (req, res) => {
     const processedMedia = await Promise.all(result.rows.map(async (media) => {
       let properUrl = media.url;
       
-      // Handle S3 files
+      // Handle S3 files - use streaming endpoint for consistency
       if (media.s3_key && s3Service) {
-        try {
-          // Generate signed URL for S3 files
-          const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600); // 1 hour
-          properUrl = signedUrl;
-        } catch (error) {
-          console.error('❌ Failed to generate signed URL for S3 file:', media.s3_key, error);
-          // Fallback to direct S3 URL (may not work without proper permissions)
-          properUrl = media.url;
-        }
+        // Use streaming endpoint for S3 files to ensure consistent playback
+        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${media.id}/stream`;
       } else if (media.url && media.url.startsWith('data:')) {
         // Handle base64 files - use streaming endpoint
-        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`;
+        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${media.id}/stream`;
       } else if (media.filename && !media.s3_key) {
         // Handle local files
-        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
+        properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/uploads/${media.filename}`;
       }
       
       return {
@@ -1123,23 +1116,16 @@ async function getPlaylistWithMedia(playlistId) {
   playlist.mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => {
     let properUrl = media.url;
     
-    // Handle S3 files
+    // Handle S3 files - use streaming endpoint for consistency
     if (media.s3_key && s3Service) {
-      try {
-        // Generate signed URL for S3 files
-        const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600); // 1 hour
-        properUrl = signedUrl;
-      } catch (error) {
-        console.error('❌ Failed to generate signed URL for S3 file in playlist:', media.s3_key, error);
-        // Fallback to direct S3 URL
-        properUrl = media.url;
-      }
+      // Use streaming endpoint for S3 files to ensure consistent playback
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${media.id}/stream`;
     } else if (media.url && media.url.startsWith('data:')) {
       // Handle base64 files - use streaming endpoint
-      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${media.id}/stream`;
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${media.id}/stream`;
     } else if (media.filename && !media.s3_key) {
       // Handle local files
-      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`;
+      properUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/uploads/${media.filename}`;
     }
     
     return {
@@ -2063,7 +2049,7 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 // Create playlist
 app.post('/api/playlists', authenticateToken, async (req, res) => {
   try {
-    const { name, description, is_public, requires_activation_code } = req.body;
+    const { name, description, is_public, requires_activation_code, mediaFileIds } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
@@ -2073,7 +2059,8 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
       name, 
       description, 
       is_public, 
-      requires_activation_code 
+      requires_activation_code,
+      mediaFileIds: mediaFileIds?.length || 0
     });
 
     const result = await pool.query(
@@ -2090,8 +2077,22 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
       requiresActivation: playlist.requires_activation_code,
       isPublic: playlist.is_public
     });
-    
-    res.status(201).json(playlist);
+
+    // Add media files to playlist if provided
+    if (mediaFileIds && mediaFileIds.length > 0) {
+      console.log('🎵 PLAYLIST_CREATE: Adding media files to playlist:', mediaFileIds);
+      for (let i = 0; i < mediaFileIds.length; i++) {
+        await pool.query(
+          `INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)`,
+          [playlist.id, mediaFileIds[i], i + 1]
+        );
+        console.log(`🎵 PLAYLIST_CREATE: Added media ${mediaFileIds[i]} to playlist at position ${i + 1}`);
+      }
+    }
+
+    // Fetch complete playlist with media files
+    const completePlaylist = await getPlaylistWithMedia(playlist.id);
+    res.status(201).json({ playlist: completePlaylist });
   } catch (error) {
     console.error('🔴 CREATE PLAYLIST ERROR:', error);
     res.status(500).json({ error: 'Failed to create playlist' });
@@ -2337,6 +2338,36 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('🎬 SLIDESHOW_UPDATE: Error updating slideshow:', error);
     res.status(500).json({ error: 'Failed to update slideshow' });
+  }
+});
+
+// Update slideshow audio
+app.patch('/api/slideshows/:id/audio', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { audioUrl } = req.body;
+
+    console.log('🎵 SLIDESHOW_AUDIO: Updating audio for slideshow:', id, 'with URL:', audioUrl);
+
+    const result = await pool.query(
+      `UPDATE slideshows 
+       SET audio_url = $1, updated_at = NOW()
+       WHERE id = $2 AND user_id = $3
+       RETURNING *`,
+      [audioUrl, id, req.user.userId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    const slideshow = result.rows[0];
+    console.log('🎵 SLIDESHOW_AUDIO: Audio updated successfully for slideshow:', slideshow.name);
+    
+    res.json(slideshow);
+  } catch (error) {
+    console.error('🎵 SLIDESHOW_AUDIO: Error updating audio:', error);
+    res.status(500).json({ error: 'Failed to update slideshow audio' });
   }
 });
 
@@ -2854,10 +2885,10 @@ app.get('/api/slideshows/:id/product-links', authenticateToken, async (req, res)
     const { id } = req.params;
     
     const result = await pool.query(`
-      SELECT sl.*, p.name as product_name, p.price, p.image_url 
-      FROM slideshow_product_links sl
-      JOIN products p ON sl.product_id = p.id
-      WHERE sl.slideshow_id = $1
+      SELECT pl.*, p.name as product_name, p.price, p.image_url 
+      FROM product_links pl
+      JOIN products p ON pl.product_id = p.id
+      WHERE pl.slideshow_id = $1
     `, [id]);
 
     res.json(result.rows);
@@ -2890,9 +2921,9 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
 
     // Add link
     const result = await pool.query(`
-      INSERT INTO slideshow_product_links (slideshow_id, product_id)
-      VALUES ($1, $2) RETURNING *
-    `, [id, productId]);
+      INSERT INTO product_links (slideshow_id, product_id, title, url, description)
+      VALUES ($1, $2, $3, $4, $5) RETURNING *
+    `, [id, productId, 'Product Link', '', '']);
 
     res.json(result.rows[0]);
   } catch (error) {
@@ -2913,7 +2944,7 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
 
     // Remove link
     const result = await pool.query(`
-      DELETE FROM slideshow_product_links 
+      DELETE FROM product_links 
       WHERE slideshow_id = $1 AND product_id = $2 RETURNING *
     `, [id, productId]);
 

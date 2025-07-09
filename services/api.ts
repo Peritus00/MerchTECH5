@@ -279,29 +279,93 @@ export const checkoutAPI = {
 export const mediaAPI = {
   async getAll() {
     console.log('🔴 MediaAPI: Fetching all media files');
-    const res = await api.get('/api/media?mine=true');
+    const res = await api.get('/media?mine=true');
     console.log('🔴 MediaAPI: Loaded media files:', res.data.media?.length || 0);
     return res.data.media || [];
   },
   
   async getById(id: string) {
     console.log('🔴 MediaAPI: Fetching media file by ID:', id);
-    const res = await api.get(`/api/media/${id}`);
+    const res = await api.get(`/media/${id}`);
     console.log('🔴 MediaAPI: Media file data:', res.data);
     return res.data.media;
   },
   
   async upload(mediaData: any) {
     console.log('🔴 MediaAPI: Uploading media file (legacy method)');
-    const res = await uploadAPI.post('/api/media', mediaData);
+    const res = await uploadAPI.post('/media', mediaData);
     console.log('🔴 MediaAPI: Upload response:', res.data);
     return res.data;
   },
 
-  async getPresignedUrl(filename: string, contentType: string, fileSize?: number) {
-    console.log('🔗 MediaAPI: Getting presigned URL for direct S3 upload');
+  async getPostPolicy(filename: string, contentType: string, fileSize?: number) {
+    console.log('🔗 MediaAPI: Getting S3 POST policy for browser upload');
     console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
-    const res = await api.post('/api/media/presigned-url', {
+    const res = await api.post('/media/post-policy', {
+      filename,
+      contentType,
+      fileSize
+    });
+    console.log('🔗 MediaAPI: POST policy response:', res.data);
+    return res.data;
+  },
+
+  async uploadToS3WithPostPolicy(postPolicyData: any, file: File | Blob, onProgress?: (progress: number) => void) {
+    console.log('📤 MediaAPI: Uploading to S3 using POST policy');
+    console.log('📤 MediaAPI: File size:', file.size, 'bytes');
+    
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable && onProgress) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          onProgress(progress);
+        }
+      });
+      
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200 || xhr.status === 204) {
+          console.log('✅ MediaAPI: S3 POST upload successful');
+          resolve(xhr.response);
+        } else {
+          console.error('❌ MediaAPI: S3 POST upload failed:', xhr.status, xhr.statusText);
+          // Log the S3 error response body for debugging
+          console.error('❌ S3 Error Response:', xhr.responseText);
+          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
+        }
+      });
+      
+      xhr.addEventListener('error', () => {
+        console.error('❌ MediaAPI: S3 POST upload error');
+        // Log the S3 error response body for debugging
+        console.error('❌ S3 Error Response:', xhr.responseText);
+        reject(new Error('S3 upload failed'));
+      });
+      
+      // Create FormData with all the required fields as strings
+      const formData = new FormData();
+      Object.entries(postPolicyData.fields).forEach(([k, v]) => {
+        formData.append(k, String(v));
+      });
+      formData.append('file', file);
+      
+      // Debug: log all FormData keys/values
+      for (let pair of formData.entries()) {
+        console.log('FormData:', pair[0], pair[1]);
+      }
+      
+      xhr.open('POST', postPolicyData.url);
+      // Don't set Content-Type header - let the browser set it with the boundary
+      xhr.send(formData);
+    });
+  },
+
+  // Legacy method - kept for compatibility
+  async getPresignedUrl(filename: string, contentType: string, fileSize?: number) {
+    console.log('🔗 MediaAPI: Getting presigned URL for direct S3 upload (legacy)');
+    console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
+    const res = await api.post('/media/presigned-url', {
       filename,
       contentType,
       fileSize
@@ -311,7 +375,7 @@ export const mediaAPI = {
   },
 
   async uploadToS3(presignedUrl: string, file: File | Blob, contentType: string, onProgress?: (progress: number) => void) {
-    console.log('📤 MediaAPI: Uploading directly to S3');
+    console.log('📤 MediaAPI: Uploading directly to S3 (legacy method)');
     console.log('📤 MediaAPI: File size:', file.size, 'bytes');
     
     return new Promise((resolve, reject) => {
@@ -341,6 +405,9 @@ export const mediaAPI = {
       
       xhr.open('PUT', presignedUrl);
       xhr.setRequestHeader('Content-Type', contentType);
+      // Only set Cache-Control if you know it was included in the presigned URL
+      // xhr.setRequestHeader('Cache-Control', 'max-age=31536000');
+      // Do NOT set any x-amz-meta-* headers here
       xhr.send(file);
     });
   },
@@ -356,14 +423,14 @@ export const mediaAPI = {
     s3Key: string;
   }) {
     console.log('✅ MediaAPI: Confirming S3 upload');
-    const res = await api.post('/api/media/confirm-upload', uploadData);
+    const res = await api.post('/media/confirm-upload', uploadData);
     console.log('✅ MediaAPI: Upload confirmation response:', res.data);
     return res.data;
   },
 
   async delete(mediaId: string) {
     console.log('🗑️ MediaAPI: Deleting media file:', mediaId);
-    const res = await api.delete(`/api/media/${mediaId}`);
+    const res = await api.delete(`/media/${mediaId}`);
     console.log('🗑️ MediaAPI: Delete response:', res.data);
     return res.data;
   },
@@ -395,6 +462,40 @@ export const playlistAPI = {
   async delete(id: string) {
     const res = await api.delete(`/playlists/${id}`);
     return res.data;
+  },
+  async addMedia(playlistId: string, mediaId: number, displayOrder?: number) {
+    console.log('📤 PlaylistAPI: Adding media to playlist');
+    const res = await api.post(`/playlists/${playlistId}/media`, { mediaId, displayOrder });
+    return res.data;
+  },
+  async removeMedia(playlistId: string, mediaId: number) {
+    console.log('📤 PlaylistAPI: Removing media from playlist');
+    const res = await api.delete(`/playlists/${playlistId}/media/${mediaId}`);
+    return res.data;
+  },
+  async updateMedia(playlistId: string, mediaIds: number[]) {
+    console.log('📤 PlaylistAPI: Updating playlist media files');
+    
+    // Get current playlist to compare
+    const currentPlaylist = await this.getById(playlistId);
+    const currentMediaIds = currentPlaylist.mediaFiles?.map((f: any) => f.id) || [];
+    
+    // Remove media files that are no longer in the list
+    const toRemove = currentMediaIds.filter((id: number) => !mediaIds.includes(id));
+    for (const mediaId of toRemove) {
+      await this.removeMedia(playlistId, mediaId);
+    }
+    
+    // Add new media files
+    const toAdd = mediaIds.filter((id: number) => !currentMediaIds.includes(id));
+    for (let i = 0; i < toAdd.length; i++) {
+      await this.addMedia(playlistId, toAdd[i], currentMediaIds.length + i + 1);
+    }
+    
+    // Note: This doesn't handle reordering of existing files
+    // For full reordering, we'd need to remove all and re-add in order
+    
+    return { message: 'Media files updated successfully' };
   },
 };
 
@@ -595,11 +696,13 @@ export const fileUploadAPI = {
     } else {
       payload = { uri: file.uri, name: file.name, type: file.type } as any;
     }
-    formData.append('file', payload, file.name ?? (payload.name || 'upload'));
+    // Use 'image' field name to match server expectation
+    formData.append('image', payload, file.name ?? (payload.name || 'upload'));
     // Let axios set the correct multipart boundary; specifying the header manually
     // can omit the boundary and lead to 400 errors on some environments.
     const res = await api.post('/upload', formData);
-    return res.data.fileUrl as string;
+    // Server returns 'imageUrl' but we want to return 'fileUrl' for consistency
+    return res.data.imageUrl as string;
   },
 };
 

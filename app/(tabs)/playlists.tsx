@@ -18,6 +18,8 @@ import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { Playlist, MediaFile } from '@/shared/media-schema';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
+import CustomAlert from '@/components/CustomAlert';
+import EditPlaylistModal from '@/components/EditPlaylistModal';
 
 export default function PlaylistsScreen() {
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -25,8 +27,25 @@ export default function PlaylistsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [selectedTab, setSelectedTab] = useState<'my-playlists' | 'public'>('my-playlists');
   const [searchQuery, setSearchQuery] = useState('');
+  const [alertConfig, setAlertConfig] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    buttons: Array<{
+      text: string;
+      onPress: () => void;
+      style?: 'default' | 'cancel' | 'destructive';
+    }>;
+  }>({
+    visible: false,
+    title: '',
+    message: '',
+    buttons: [],
+  });
 
   useEffect(() => {
     fetchData();
@@ -64,6 +83,9 @@ export default function PlaylistsScreen() {
 
       setPlaylists(validPlaylists);
       setMediaFiles(realMediaFiles || []);
+      
+      console.log('🔴 PLAYLISTS: State updated successfully, new playlists count:', validPlaylists.length);
+      console.log('🔴 PLAYLISTS: State updated successfully, new media files count:', (realMediaFiles || []).length);
     } catch (error: any) {
       console.error('🔴 PLAYLISTS: Error fetching data:', error);
       console.error('🔴 PLAYLISTS: Error details:', {
@@ -100,27 +122,95 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const handleUpdatePlaylist = async (updatedPlaylist: Playlist) => {
+    try {
+      console.log('🔴 PLAYLISTS: Updating playlist in state:', updatedPlaylist);
+      
+      // Update the playlist in the state
+      setPlaylists(prev => prev.map(p => 
+        p.id === updatedPlaylist.id ? updatedPlaylist : p
+      ));
+      
+      setShowEditModal(false);
+      setEditingPlaylist(null);
+      
+      console.log('🔴 PLAYLISTS: Playlist updated successfully in state');
+      
+      // Also refresh the data to ensure we have the latest from server
+      console.log('🔴 PLAYLISTS: Refreshing data from server to ensure consistency');
+      await fetchData();
+      
+    } catch (error) {
+      console.error('Error handling updated playlist:', error);
+      Alert.alert('Error', 'Failed to update playlist');
+    }
+  };
+
   const handleDeletePlaylist = async (playlistId: string) => {
-    Alert.alert(
-      'Delete Playlist',
-      'Are you sure you want to delete this playlist?',
-      [
-        { text: 'Cancel', style: 'cancel' },
+    console.log('🔴 PLAYLISTS: Delete playlist function called for ID:', playlistId);
+    
+    const playlistToDelete = playlists.find(p => p.id === playlistId);
+    console.log('🔴 PLAYLISTS: Found playlist to delete:', {
+      id: playlistToDelete?.id,
+      name: playlistToDelete?.name,
+      mediaFiles: playlistToDelete?.mediaFiles?.length || 0
+    });
+    
+    console.log('🔴 PLAYLISTS: Showing delete confirmation alert...');
+    setAlertConfig({
+      visible: true,
+      title: 'Delete Playlist',
+      message: 'Are you sure you want to delete this playlist?',
+      buttons: [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('🔴 PLAYLISTS: Delete cancelled by user');
+          }
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
+            console.log('🔴 PLAYLISTS: User confirmed delete, removing from state...');
             setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-            Alert.alert('Success', 'Playlist deleted successfully');
+            console.log('🔴 PLAYLISTS: Playlist removed from state, showing success alert...');
+            
+            // Show success message
+            setTimeout(() => {
+              setAlertConfig({
+                visible: true,
+                title: 'Success',
+                message: 'Playlist deleted successfully',
+                buttons: [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      console.log('🔴 PLAYLISTS: Delete operation completed');
+                    },
+                  },
+                ],
+              });
+            }, 100);
           },
         },
-      ]
-    );
+      ],
+    });
   };
 
   const handleEditPlaylist = (playlist: Playlist) => {
-    Alert.alert('Edit Playlist', `Editing: ${playlist.name}`);
-    // Navigate to playlist editor when implemented
+    console.log('🔴 PLAYLISTS: Edit playlist function called for:', {
+      id: playlist.id,
+      name: playlist.name,
+      mediaFiles: playlist.mediaFiles?.length || 0
+    });
+    
+    console.log('🔴 PLAYLISTS: Opening edit modal...');
+    setEditingPlaylist(playlist);
+    setShowEditModal(true);
+    
+    console.log('🔴 PLAYLISTS: Edit playlist function completed');
   };
 
   const handleViewPlaylist = (playlist: Playlist) => {
@@ -180,7 +270,7 @@ export default function PlaylistsScreen() {
       
       // Update the playlist protection status
       const updatedPlaylist = await playlistAPI.update(playlist.id, {
-        requiresActivationCode: newProtectionStatus
+        requires_activation_code: newProtectionStatus
       });
       
       console.log('🔴 PLAYLISTS: Protection toggled successfully. New status:', newProtectionStatus);
@@ -247,6 +337,20 @@ export default function PlaylistsScreen() {
         rightButtonColor="#3b82f6"
         logoVariant="gold"
       />
+
+      {/* Refresh Button */}
+      <View style={styles.refreshContainer}>
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={() => {
+            console.log('🔴 PLAYLISTS: Manual refresh triggered');
+            onRefresh();
+          }}
+        >
+          <MaterialIconWithFallback name="refresh" size={20} color="#3b82f6" />
+          <Text style={styles.refreshText}>Refresh</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -343,6 +447,27 @@ export default function PlaylistsScreen() {
         onClose={() => setShowCreateModal(false)}
         onCreatePlaylist={handleCreatePlaylist}
         mediaFiles={mediaFiles}
+      />
+
+      {/* Edit Playlist Modal */}
+      <EditPlaylistModal
+        visible={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingPlaylist(null);
+        }}
+        onUpdatePlaylist={handleUpdatePlaylist}
+        playlist={editingPlaylist}
+        allMediaFiles={mediaFiles}
+      />
+
+      {/* Custom Alert */}
+      <CustomAlert
+        visible={alertConfig.visible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        buttons={alertConfig.buttons}
+        onClose={() => setAlertConfig(prev => ({ ...prev, visible: false }))}
       />
     </ThemedView>
   );

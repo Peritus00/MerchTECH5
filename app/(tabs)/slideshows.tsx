@@ -64,7 +64,26 @@ export default function SlideshowsScreen() {
     try {
       const serverSlideshows = await slideshowAPI.getAll();
       console.log('📥 Fetched slideshows from server:', serverSlideshows);
-      setSlideshows(serverSlideshows);
+      
+      // Filter out any invalid slideshow objects
+      const validSlideshows = (serverSlideshows || []).filter((slideshow: any) => {
+        if (!slideshow) {
+          console.warn('🎬 SLIDESHOWS: Found null/undefined slideshow, filtering out');
+          return false;
+        }
+        if (!slideshow.name) {
+          console.warn('🎬 SLIDESHOWS: Found slideshow without name, filtering out:', slideshow);
+          return false;
+        }
+        if (!slideshow.id) {
+          console.warn('🎬 SLIDESHOWS: Found slideshow without id, filtering out:', slideshow);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('📥 Valid slideshows after filtering:', validSlideshows.length, validSlideshows);
+      setSlideshows(validSlideshows);
     } catch (error) {
       console.error('Error fetching slideshows:', error);
       Alert.alert('Error', 'Failed to load slideshows');
@@ -142,10 +161,16 @@ export default function SlideshowsScreen() {
     fetchSlideshows();
   };
 
-  const filteredSlideshows = slideshows.filter(slideshow =>
-    slideshow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    slideshow.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredSlideshows = slideshows.filter(slideshow => {
+    // Ensure slideshow has required properties
+    if (!slideshow || !slideshow.name) {
+      console.warn('🎬 SLIDESHOWS: Found slideshow with missing name, filtering out:', slideshow);
+      return false;
+    }
+    
+    return slideshow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           slideshow.description?.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <ThemedView style={styles.container}>
@@ -173,7 +198,10 @@ export default function SlideshowsScreen() {
           </View>
           <View style={styles.statCard}>
             <Text style={styles.statNumber}>
-              {slideshows.reduce((total, slideshow) => total + (slideshow.images?.length || 0), 0)}
+              {slideshows.reduce((total, slideshow) => {
+                if (!slideshow || !slideshow.images) return total;
+                return total + (slideshow.images.length || 0);
+              }, 0)}
             </Text>
             <Text style={styles.statLabel}>Total Images</Text>
           </View>
