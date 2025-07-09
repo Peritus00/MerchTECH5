@@ -23,6 +23,12 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL);
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
+// Log AWS key suffixes for deployment debugging (do not log full secrets)
+const accessKey = process.env.AWS_ACCESS_KEY_ID || '';
+const secretKey = process.env.AWS_SECRET_ACCESS_KEY || '';
+console.log('AWS Access Key Suffix:', accessKey ? accessKey.slice(-4) : 'Not set');
+console.log('AWS Secret Key Suffix:', secretKey ? secretKey.slice(-4) : 'Not set');
+
 // Initialize Stripe after loading environment variables
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
@@ -511,6 +517,11 @@ app.put('/api/auth/profile', authenticateToken, async (req, res) => {
 
 // S3 Presigned URL generation endpoint
 app.post('/api/upload/presigned', authenticateToken, async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   try {
     const { fileName, contentType, fileSize } = req.body;
     
@@ -538,24 +549,30 @@ app.post('/api/upload/presigned', authenticateToken, async (req, res) => {
 
 // S3 Direct upload endpoint (for smaller files)
 app.post('/api/upload/s3', authenticateToken, upload.single('file'), async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  console.log('🔎 [DEBUG] /api/upload/s3 called');
   try {
     if (!req.file) {
+      console.log('❌ [DEBUG] No file uploaded');
       return res.status(400).json({ error: 'No file uploaded' });
     }
-
     if (!s3Service) {
+      console.log('❌ [DEBUG] S3 service not configured');
       return res.status(500).json({ error: 'S3 service not configured' });
     }
-
     const { originalname, mimetype, buffer, size } = req.file;
-    
+    console.log('🔎 [DEBUG] File info:', { originalname, mimetype, size });
     const fileUrl = await s3Service.uploadFile(
       buffer,
       originalname,
       mimetype,
       req.user.userId
     );
-
+    console.log('✅ [DEBUG] File uploaded to S3:', fileUrl);
     res.json({ 
       fileUrl,
       fileName: originalname,
@@ -563,13 +580,18 @@ app.post('/api/upload/s3', authenticateToken, upload.single('file'), async (req,
       fileSize: size
     });
   } catch (error) {
-    console.error('❌ S3 upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file to S3' });
+    console.error('❌ [DEBUG] S3 upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file to S3', details: error.message });
   }
 });
 
 // Legacy upload endpoint (for backward compatibility)
 app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   if (!req.file) {
     return res.status(400).send('No file uploaded.');
   }
@@ -577,20 +599,28 @@ app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) =>
   res.json({ imageUrl: fileUrl });
 });
 
-// S3 Presigned URL for file upload
+// S3 Presigned URL for file upload (legacy - kept for compatibility)
 app.post('/api/media/presigned-url', authenticateToken, async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  console.log('🔎 [DEBUG] /api/media/presigned-url called (legacy endpoint)');
   try {
+    console.log('🔎 [DEBUG] Request body:', req.body);
+    console.log('🔎 [DEBUG] Authenticated user:', req.user);
     const { filename, contentType, fileSize } = req.body;
-    
     if (!filename || !contentType) {
+      console.log('❌ [DEBUG] Missing filename or contentType:', { filename, contentType });
       return res.status(400).json({ error: 'filename and contentType are required' });
     }
-
     if (!s3Service) {
+      console.log('❌ [DEBUG] S3 service not configured');
       return res.status(500).json({ error: 'S3 service not configured' });
     }
-
     const result = await s3Service.getPresignedUploadUrl(filename, contentType, req.user.userId, fileSize);
+    console.log('✅ [DEBUG] Presigned URL result:', result);
     res.json({ 
       presignedUrl: result.uploadUrl, 
       fileUrl: result.fileUrl,
@@ -598,8 +628,42 @@ app.post('/api/media/presigned-url', authenticateToken, async (req, res) => {
       expiresIn: 3600
     });
   } catch (error) {
-    console.error('❌ Presigned URL generation error:', error);
-    res.status(500).json({ error: 'Failed to generate presigned URL' });
+    console.error('❌ [DEBUG] Presigned URL generation error:', error);
+    res.status(500).json({ error: 'Failed to generate presigned URL', details: error.message });
+  }
+});
+
+// S3 POST Policy for browser uploads (new - recommended)
+app.post('/api/media/post-policy', authenticateToken, async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  console.log('🔎 [DEBUG] /api/media/post-policy called');
+  try {
+    console.log('🔎 [DEBUG] Request body:', req.body);
+    console.log('🔎 [DEBUG] Authenticated user:', req.user);
+    const { filename, contentType, fileSize } = req.body;
+    if (!filename || !contentType) {
+      console.log('❌ [DEBUG] Missing filename or contentType:', { filename, contentType });
+      return res.status(400).json({ error: 'filename and contentType are required' });
+    }
+    if (!s3Service) {
+      console.log('❌ [DEBUG] S3 service not configured');
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+    const result = await s3Service.getPostPolicy(filename, contentType, req.user.userId, fileSize);
+    console.log('✅ [DEBUG] POST policy result:', result);
+    res.json({
+      url: result.url,
+      fields: result.fields,
+      fileUrl: result.fileUrl,
+      key: result.key
+    });
+  } catch (error) {
+    console.error('❌ [DEBUG] POST policy generation error:', error);
+    res.status(500).json({ error: 'Failed to generate POST policy', details: error.message });
   }
 });
 
@@ -631,6 +695,11 @@ app.post('/api/media/signed-url', authenticateToken, async (req, res) => {
 
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media', authenticateToken, async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
   try {
     const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId } = req.body;
     if (!title || !url) {
@@ -774,20 +843,125 @@ app.get('/api/media/:id/stream', async (req, res) => {
       return res.status(404).json({ error: 'Media file not found' });
     }
     const media = result.rows[0];
-    if (!media.url || !media.url.startsWith('data:')) {
-      return res.status(400).json({ error: 'Media file is not stored as base64 data' });
+    
+    // Set CORS headers for all responses
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+    
+    // For S3 files, prioritize server-side streaming over redirects
+    if (media.s3_key && s3Service) {
+      // Generate a fresh signed URL and stream through our server
+      try {
+        console.log('🔗 Generating signed URL for server-side streaming:', media.s3_key);
+        const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600);
+        
+        const response = await fetch(signedUrl);
+        if (response.ok) {
+          console.log('✅ Signed URL works, streaming through server with CORS headers');
+          
+          // Set appropriate headers for audio streaming
+          res.setHeader('Content-Type', media.content_type || 'audio/mpeg');
+          res.setHeader('Accept-Ranges', 'bytes');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          
+          // Handle range requests for audio seeking
+          const range = req.headers.range;
+          if (range) {
+            const contentLength = parseInt(response.headers.get('content-length') || '0');
+            if (contentLength > 0) {
+              const parts = range.replace(/bytes=/, "").split("-");
+              const start = parseInt(parts[0], 10);
+              const end = parts[1] ? parseInt(parts[1], 10) : contentLength - 1;
+              const chunksize = (end - start) + 1;
+              
+              res.status(206);
+              res.setHeader('Content-Range', `bytes ${start}-${end}/${contentLength}`);
+              res.setHeader('Content-Length', chunksize);
+            }
+          }
+          
+          // Convert the response to a readable stream and pipe it
+          const { Readable } = require('stream');
+          const readable = Readable.fromWeb(response.body);
+          readable.pipe(res);
+          return;
+        }
+      } catch (err) {
+        console.log('❌ Server-side streaming failed:', err.message);
+      }
+      
+      // If server-side streaming fails, try the direct S3 URL from the media record
+      if (media.url && media.url.includes('amazonaws.com')) {
+        console.log('🔗 Trying direct S3 URL from media record');
+        try {
+          const response = await fetch(media.url);
+          if (response.ok) {
+            console.log('✅ Direct S3 URL works, streaming through server');
+            
+            // Set appropriate headers for audio streaming
+            res.setHeader('Content-Type', media.content_type || 'audio/mpeg');
+            res.setHeader('Accept-Ranges', 'bytes');
+            res.setHeader('Cache-Control', 'public, max-age=3600');
+            
+            // Convert the response to a readable stream and pipe it
+            const { Readable } = require('stream');
+            const readable = Readable.fromWeb(response.body);
+            readable.pipe(res);
+            return;
+          }
+        } catch (err) {
+          console.log('❌ Direct S3 URL failed:', err.message);
+        }
+      }
+      
+      // Last resort: Redirect to the signed URL (now that CORS is configured)
+      try {
+        console.log('🔄 Falling back to redirect with CORS headers');
+        const signedUrl = await s3Service.getSignedUrl(media.s3_key, 3600);
+        res.redirect(302, signedUrl);
+        return;
+      } catch (err) {
+        console.log('❌ Redirect fallback failed:', err.message);
+      }
+      
+      // If all S3 attempts fail, return an error
+      return res.status(500).json({ error: 'Failed to stream media file from S3. File may not exist or access is denied.' });
+      
+    } else if (media.file_path) {
+      // Stream from local file system
+      const filePath = media.file_path;
+      res.sendFile(filePath, { root: '.' }, (err) => {
+        if (err) {
+          console.error('Error sending local file:', err);
+          res.status(404).json({ error: 'Local file not found' });
+        }
+      });
+      return;
+    } else if (media.url) {
+      // For external URLs, try to proxy them as well
+      try {
+        const response = await fetch(media.url);
+        if (!response.ok) {
+          throw new Error(`External URL fetch failed: ${response.status}`);
+        }
+        
+        res.setHeader('Content-Type', media.content_type || 'audio/mpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        // Convert the response to a readable stream and pipe it
+        const { Readable } = require('stream');
+        const readable = Readable.fromWeb(response.body);
+        readable.pipe(res);
+        return;
+      } catch (err) {
+        console.error('Error proxying external URL:', err);
+        return res.status(500).json({ error: 'Failed to stream external media file' });
+      }
+    } else {
+      return res.status(404).json({ error: 'No file found for this media record' });
     }
-    const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
-    if (!dataUrlMatch) {
-      return res.status(400).json({ error: 'Invalid base64 data format' });
-    }
-    const [, mimeType, base64Data] = dataUrlMatch;
-    const audioBuffer = Buffer.from(base64Data, 'base64');
-    res.setHeader('Content-Type', mimeType || 'audio/mpeg');
-    res.setHeader('Content-Length', audioBuffer.length);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.send(audioBuffer);
   } catch (error) {
     console.error('Error streaming media:', error);
     res.status(500).json({ error: 'Failed to stream media file' });
@@ -1017,7 +1191,10 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
       })
     );
 
-    res.json({ playlists });
+    // Filter out any null playlists (in case getPlaylistWithMedia fails)
+    const validPlaylists = playlists.filter(playlist => playlist !== null);
+
+    res.json({ playlists: validPlaylists });
   } catch (error) {
     console.error('Error fetching playlists:', error);
     res.status(500).json({ error: 'Failed to fetch playlists' });

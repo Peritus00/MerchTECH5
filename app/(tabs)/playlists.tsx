@@ -43,11 +43,26 @@ export default function PlaylistsScreen() {
       const realPlaylists = await playlistAPI.getAll();
       console.log('🔴 PLAYLISTS: Playlists API call successful! Loaded playlists:', realPlaylists?.length || 0, realPlaylists);
 
+      // Filter out any null/undefined playlists and log any issues
+      const validPlaylists = (realPlaylists || []).filter((playlist: any) => {
+        if (!playlist) {
+          console.warn('🔴 PLAYLISTS: Found null/undefined playlist, filtering out');
+          return false;
+        }
+        if (!playlist.name) {
+          console.warn('🔴 PLAYLISTS: Found playlist without name, filtering out:', playlist);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('🔴 PLAYLISTS: Valid playlists after filtering:', validPlaylists.length, validPlaylists);
+
       console.log('🔴 PLAYLISTS: About to call mediaAPI.getAll()...');
       const realMediaFiles = await mediaAPI.getAll();
       console.log('🔴 PLAYLISTS: Media API call successful! Loaded media files:', realMediaFiles?.length || 0, realMediaFiles);
 
-      setPlaylists(realPlaylists || []);
+      setPlaylists(validPlaylists);
       setMediaFiles(realMediaFiles || []);
     } catch (error: any) {
       console.error('🔴 PLAYLISTS: Error fetching data:', error);
@@ -195,6 +210,12 @@ export default function PlaylistsScreen() {
   };
 
   const filteredPlaylists = playlists.filter(playlist => {
+    // Skip playlists that don't have a name (defensive programming)
+    if (!playlist || !playlist.name) {
+      console.warn('🔴 PLAYLISTS: Skipping playlist with missing name:', playlist);
+      return false;
+    }
+    
     const matchesSearch = playlist.name.toLowerCase().includes(searchQuery.toLowerCase());
     if (selectedTab === 'public') {
       return playlist.isPublic && matchesSearch;
