@@ -11,10 +11,12 @@
                 "PUT"
             ],
             "AllowedOrigins": [
+                "https://app.merchtech.net",
+                "https://www.merchtech.net",
+                "https://merchtech.net",
                 "http://localhost:8081",
                 "http://localhost:3000",
-                "http://192.168.1.70:5001",
-                "https://your-production-domain.com"
+                "http://192.168.1.70:5001"
             ],
             "ExposeHeaders": [
                 "Content-Length",
