@@ -12,11 +12,11 @@ import {
   Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Video } from 'expo-av';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
+import { usePlaylistAV, MediaTrack } from '@/hooks/usePlaylistAV';
 
 interface MediaFile {
   id: number;
@@ -66,298 +66,102 @@ export default function MediaPlayer({
     mediaFiles: mediaFiles
   });
 
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [volume, setVolume] = useState(0.8);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [productImageIndexes, setProductImageIndexes] = useState<{[key: string]: number}>({});
 
-  // Web audio fallback
-  const webAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [webAudioLoaded, setWebAudioLoaded] = useState(false);
-  const [webAudioPlaying, setWebAudioPlaying] = useState(false);
-  const [webAudioCurrentTime, setWebAudioCurrentTime] = useState(0);
+  // Convert MediaFile[] to MediaTrack[] for usePlaylistAV
+  const tracks: MediaTrack[] = mediaFiles.map(file => ({
+    id: file.id,
+    url: file.url,
+    title: file.title,
+    fileType: file.fileType === 'video' || file.contentType?.startsWith('video/') ? 'video' : 'audio'
+  }));
+
+  // Use the unified playlist hook
+  const {
+    currentIndex,
+    currentTrack,
+    isPlaying,
+    play,
+    pause,
+    next,
+    previous,
+    onStatusUpdate,
+    soundRef
+  } = usePlaylistAV(tracks);
 
   // Get current track
-  const currentTrack = mediaFiles[currentTrackIndex];
-  console.log('🔴 MEDIA_PLAYER: Current track set to:', currentTrack);
+  const currentMedia = mediaFiles[currentIndex];
+  console.log('🔴 MEDIA_PLAYER: Current track set to:', currentMedia);
   
   // Determine if current media is video or audio
-  const isVideo = currentTrack?.fileType === 'video' || currentTrack?.contentType?.startsWith('video/');
+  const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/');
   
-  // Use the new expo-audio hooks - create player without initial source
-  const player = useAudioPlayer();
-  const audioStatus = useAudioPlayerStatus(player);
-  
-  // Use the new expo-video hooks for video
-  const videoPlayer = useVideoPlayer(currentTrack && isVideo ? currentTrack.url : null, (player) => {
-    player.loop = false;
-    player.muted = false;
-  });
-  
-  // Use web audio status when on web, expo-audio status otherwise
-  const status = isVideo ? videoPlayer.status : (Platform.OS === 'web' ? {
-    isLoaded: webAudioLoaded,
-    playing: webAudioPlaying,
-    currentTime: webAudioCurrentTime,
-    duration: webAudioRef.current?.duration || NaN,
-    isBuffering: false,
-    didJustFinish: false
-  } : audioStatus);
-  
-  console.log('🔴 MEDIA_PLAYER: Audio player created, status:', {
-    isLoaded: status.isLoaded,
-    playing: status.playing,
-    duration: status.duration,
-    currentTime: status.currentTime
+  console.log('🔴 MEDIA_PLAYER: Audio player created, current track:', {
+    index: currentIndex,
+    title: currentTrack?.title,
+    isVideo,
+    isPlaying
   });
 
-  // Load track when current track changes
+  // Track loading is now handled by usePlaylistAV hook
   useEffect(() => {
-    if (currentTrack && currentTrack.url) {
-      console.log('🔴 MEDIA_PLAYER: Loading track:', currentTrack.title, 'Type:', isVideo ? 'video' : 'audio', 'URL:', currentTrack.url);
+    if (currentMedia && currentMedia.url) {
+      console.log('🔴 MEDIA_PLAYER: Current media loaded:', currentMedia.title, 'Type:', isVideo ? 'video' : 'audio', 'URL:', currentMedia.url);
       console.log('🔴 MEDIA_PLAYER: Track details:', {
-        id: currentTrack.id,
-        title: currentTrack.title,
-        url: currentTrack.url,
-        fileType: currentTrack.fileType,
-        contentType: currentTrack.contentType,
+        id: currentMedia.id,
+        title: currentMedia.title,
+        url: currentMedia.url,
+        fileType: currentMedia.fileType,
+        contentType: currentMedia.contentType,
         isVideo: isVideo
       });
-      
-      try {
-        if (isVideo) {
-          // Video player handles URL automatically through useVideoPlayer hook
-          console.log('🔴 MEDIA_PLAYER: Video player will handle URL automatically');
-        } else if (Platform.OS === 'web') {
-          // Use HTML5 Audio for web
-          console.log('🔴 MEDIA_PLAYER: Using HTML5 Audio for web');
-          if (webAudioRef.current) {
-            webAudioRef.current.pause();
-            webAudioRef.current.removeEventListener('loadeddata', () => {});
-            webAudioRef.current.removeEventListener('timeupdate', () => {});
-            webAudioRef.current.removeEventListener('play', () => {});
-            webAudioRef.current.removeEventListener('pause', () => {});
-            webAudioRef.current.removeEventListener('ended', () => {});
-            webAudioRef.current.removeEventListener('error', () => {});
-            webAudioRef.current.src = '';
-          }
-          
-          const audio = new Audio();
-          webAudioRef.current = audio;
-          setWebAudioLoaded(false);
-          setWebAudioPlaying(false);
-          setWebAudioCurrentTime(0);
-          
-          // Set up event listeners before setting src
-          audio.addEventListener('loadeddata', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio loaded successfully');
-            setWebAudioLoaded(true);
-          });
-          
-          audio.addEventListener('canplaythrough', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio can play through');
-            setWebAudioLoaded(true);
-          });
-          
-          audio.addEventListener('timeupdate', () => {
-            setWebAudioCurrentTime(audio.currentTime);
-          });
-          
-          audio.addEventListener('play', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio started playing');
-            setWebAudioPlaying(true);
-          });
-          
-          audio.addEventListener('pause', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio paused');
-            setWebAudioPlaying(false);
-          });
-          
-          audio.addEventListener('ended', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio ended - auto-playing next track');
-            setWebAudioPlaying(false);
-            playNextTrack(true); // Auto-play next track
-          });
-          
-          audio.addEventListener('error', (e) => {
-            console.error('🔴 MEDIA_PLAYER: Web audio error:', e);
-            console.error('🔴 MEDIA_PLAYER: Audio error details:', {
-              error: audio.error,
-              networkState: audio.networkState,
-              readyState: audio.readyState,
-              src: audio.src
-            });
-          });
-          
-          audio.addEventListener('loadstart', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio load started');
-          });
-          
-          audio.addEventListener('progress', () => {
-            console.log('🔴 MEDIA_PLAYER: Web audio loading progress');
-          });
-          
-          // Set crossOrigin before src to handle CORS
-          audio.crossOrigin = 'anonymous';
-          audio.preload = 'auto';
-          
-          // Set the source URL
-          audio.src = currentTrack.url;
-          
-          // Start loading
-          audio.load();
-          
-          console.log('🔴 MEDIA_PLAYER: Web audio setup complete, loading started');
-        } else {
-          // Use expo-audio for mobile
-          player.replace(currentTrack.url);
-        }
-        console.log('🔴 MEDIA_PLAYER: Track loading initiated successfully');
-      } catch (error) {
-        console.error('🔴 MEDIA_PLAYER: Error loading track:', error);
-        console.error('🔴 MEDIA_PLAYER: Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
-      }
-    } else {
-      console.log('🔴 MEDIA_PLAYER: Not loading track because:', {
-        hasCurrentTrack: !!currentTrack,
-        hasUrl: !!currentTrack?.url,
-        currentTrack: currentTrack
-      });
     }
-  }, [currentTrack, player, videoPlayer, isVideo, shouldAutoplay]);
+  }, [currentMedia, isVideo]);
 
-  // Track navigation functions (defined before useEffects that use them)
+  // Track navigation functions now use usePlaylistAV hook
   const playNextTrack = useCallback((autoplay = true) => {
     console.log('🎵 Playing next track, autoplay:', autoplay);
-    const wasPlaying = status.playing;
-    
-    if (currentTrackIndex < mediaFiles.length - 1) {
-      setCurrentTrackIndex(currentTrackIndex + 1);
-    } else {
-      setCurrentTrackIndex(0); // Loop back to first track
-    }
-    
-    // If music was playing or we want autoplay, continue playing the next track
-    if (autoplay || wasPlaying) {
-      // Small delay to allow track to load before playing
-      setTimeout(() => {
-        if (isVideo) {
-          videoPlayer.play();
-        } else if (Platform.OS === 'web' && webAudioRef.current) {
-          webAudioRef.current.play().catch(error => {
-            console.error('🎵 Auto-play next track failed on web:', error);
-          });
-        } else if (player) {
-          player.play().catch(error => {
-            console.error('🎵 Auto-play next track failed on mobile:', error);
-          });
-        }
-      }, 500);
-    }
-  }, [currentTrackIndex, mediaFiles.length, status.playing, player, videoPlayer, isVideo, webAudioRef]);
+    next();
+  }, [next]);
 
   const playPreviousTrack = useCallback((autoplay = true) => {
     console.log('🎵 Playing previous track, autoplay:', autoplay);
-    const wasPlaying = status.playing;
-    
-    if (currentTrackIndex > 0) {
-      setCurrentTrackIndex(currentTrackIndex - 1);
-    } else {
-      setCurrentTrackIndex(mediaFiles.length - 1); // Loop to last track
-    }
-    
-    // If music was playing or we want autoplay, continue playing the previous track
-    if (autoplay || wasPlaying) {
-      // Small delay to allow track to load before playing
-      setTimeout(() => {
-        if (isVideo) {
-          videoPlayer.play();
-        } else if (Platform.OS === 'web' && webAudioRef.current) {
-          webAudioRef.current.play().catch(error => {
-            console.error('🎵 Auto-play previous track failed on web:', error);
-          });
-        } else if (player) {
-          player.play().catch(error => {
-            console.error('🎵 Auto-play previous track failed on mobile:', error);
-          });
-        }
-      }, 500);
-    }
-  }, [currentTrackIndex, mediaFiles.length, status.playing, player, videoPlayer, isVideo, webAudioRef]);
+    previous();
+  }, [previous]);
 
   // Initialize audio and load first track
   useEffect(() => {
-    if (mediaFiles.length > 0 && shouldAutoplay && player && currentTrack) {
-      setCurrentTrackIndex(0);
+    if (mediaFiles.length > 0 && shouldAutoplay) {
       setTimeout(() => {
         try {
-          player.play();
+          play();
         } catch (error) {
           console.error('🎵 Autoplay failed:', error);
         }
       }, 100); // Small delay to ensure player is ready
     }
-  }, [mediaFiles, shouldAutoplay, player, currentTrack]);
+  }, [mediaFiles, shouldAutoplay, play]);
 
   // Update playback state when status changes
   useEffect(() => {
     if (onSetPlaybackState) {
-      onSetPlaybackState(status.playing, currentTrackIndex);
+      onSetPlaybackState(isPlaying, currentIndex);
     }
-  }, [status.playing, currentTrackIndex, onSetPlaybackState]);
+  }, [isPlaying, currentIndex, onSetPlaybackState]);
 
-  // Handle track completion
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      // Web audio ended event is handled in the event listener
-      return;
-    } else if (isVideo && videoPlayer.status.didJustFinish) {
-      console.log('🔴 MEDIA_PLAYER: Video finished - auto-playing next track');
-      playNextTrack(true); // Auto-play next track
-    } else if (!isVideo && audioStatus.didJustFinish) {
-      console.log('🔴 MEDIA_PLAYER: Mobile audio finished - auto-playing next track');
-      playNextTrack(true); // Auto-play next track
-    }
-  }, [isVideo, videoPlayer.status.didJustFinish, audioStatus.didJustFinish, playNextTrack]);
+  // Track completion is now handled by usePlaylistAV hook
+  // No need for manual didJustFinish handling
 
-  // Cleanup effect - stop audio/video when component unmounts
-  useEffect(() => {
-    return () => {
-      console.log('🔴 MEDIA_PLAYER: Component unmounting, cleaning up media');
-      if (Platform.OS === 'web' && webAudioRef.current) {
-        webAudioRef.current.pause();
-        webAudioRef.current.src = '';
-        webAudioRef.current = null;
-      } else if (isVideo && videoPlayer) {
-        videoPlayer.pause();
-      } else if (player) {
-        player.pause();
-      }
-    };
-  }, [player, videoPlayer, isVideo]);
-
-  // Play/Pause toggle
+  // Play/Pause toggle using usePlaylistAV hook
   const togglePlayPause = () => {
     console.log('🔴 MEDIA_PLAYER: Play button clicked!');
-    console.log('🔴 MEDIA_PLAYER: Player status:', { 
-      isLoaded: status.isLoaded, 
-      isBuffering: status.isBuffering,
-      duration: status.duration,
-      currentTime: status.currentTime,
-      playing: status.playing,
-      isVideo: isVideo
-    });
     console.log('🔴 MEDIA_PLAYER: Current track:', {
-      title: currentTrack?.title,
-      url: currentTrack?.url,
-      fileType: currentTrack?.fileType,
-      contentType: currentTrack?.contentType,
-      isVideo: isVideo
+      title: currentMedia?.title,
+      isVideo: isVideo,
+      isPlaying: isPlaying
     });
     
     if (showPlayOverlay) {
@@ -366,103 +170,29 @@ export default function MediaPlayer({
     
     setHasUserInteracted(true);
     
-    if (!currentTrack || !currentTrack.url) {
+    if (!currentMedia || !currentMedia.url) {
       console.log('🔴 MEDIA_PLAYER: No current track or URL available');
       Alert.alert('Error', 'No media file selected');
       return;
     }
     
     try {
-      if (isVideo) {
-        console.log('🔴 MEDIA_PLAYER: Handling video playback...');
-        if (status.playing) {
-          console.log('🔴 MEDIA_PLAYER: Pausing video...');
-          videoPlayer.pause();
-        } else {
-          console.log('🔴 MEDIA_PLAYER: Playing video...');
-          videoPlayer.play();
-        }
-      } else if (Platform.OS === 'web' && webAudioRef.current) {
-        const audio = webAudioRef.current;
-        console.log('🔴 MEDIA_PLAYER: Web audio ready state:', audio.readyState);
-        console.log('🔴 MEDIA_PLAYER: Web audio network state:', audio.networkState);
-        
-        if (webAudioPlaying) {
-          console.log('🔴 MEDIA_PLAYER: Pausing web audio...');
-          audio.pause();
-          console.log('🔴 MEDIA_PLAYER: Web audio pause command sent');
-        } else {
-          console.log('🔴 MEDIA_PLAYER: Attempting to play web audio...');
-          
-          // Check if audio is ready to play
-          if (audio.readyState >= 3) { // HAVE_FUTURE_DATA or HAVE_ENOUGH_DATA
-            console.log('🔴 MEDIA_PLAYER: Audio ready, playing now');
-            audio.play().then(() => {
-              console.log('🔴 MEDIA_PLAYER: Web audio play successful');
-            }).catch(error => {
-              console.error('🔴 MEDIA_PLAYER: Web audio play failed:', error);
-              Alert.alert('Playback Error', 'Failed to start audio playback. Please try again.');
-            });
-          } else {
-            console.log('🔴 MEDIA_PLAYER: Web audio track not loaded yet, waiting...');
-            Alert.alert('Loading...', 'Audio is still loading. Please wait a moment and try again.');
-            
-            // Set up a one-time listener to auto-play when ready
-            const handleCanPlay = () => {
-              console.log('🔴 MEDIA_PLAYER: Audio became ready, auto-playing');
-              audio.removeEventListener('canplaythrough', handleCanPlay);
-              audio.play().then(() => {
-                console.log('🔴 MEDIA_PLAYER: Delayed web audio play successful');
-              }).catch(error => {
-                console.error('🔴 MEDIA_PLAYER: Delayed web audio play failed:', error);
-              });
-            };
-            audio.addEventListener('canplaythrough', handleCanPlay, { once: true });
-          }
-        }
-      } else if (Platform.OS !== 'web') {
-        if (!player) {
-          console.log('🔴 MEDIA_PLAYER: No player available');
-          Alert.alert('Error', 'Media player not initialized');
-          return;
-        }
-        
-        if (!status.isLoaded) {
-          console.log('🔴 MEDIA_PLAYER: Track not loaded yet');
-          Alert.alert('Error', 'Media file is still loading. Please wait...');
-          return;
-        }
-        
-        if (status.playing) {
-          console.log('🔴 MEDIA_PLAYER: Pausing expo audio...');
-          player.pause();
-          console.log('🔴 MEDIA_PLAYER: Expo audio pause command sent');
-        } else {
-          console.log('🔴 MEDIA_PLAYER: Playing expo audio...');
-          player.play();
-          console.log('🔴 MEDIA_PLAYER: Expo audio play command sent');
-        }
+      if (isPlaying) {
+        console.log('🔴 MEDIA_PLAYER: Pausing...');
+        pause();
+      } else {
+        console.log('🔴 MEDIA_PLAYER: Playing...');
+        play();
       }
     } catch (error) {
       console.error('🔴 MEDIA_PLAYER: Error toggling playback:', error);
-      console.error('🔴 MEDIA_PLAYER: Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
       Alert.alert('Error', `Failed to control playback: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 
   const seekToPosition = async (value: number) => {
-    if (player && status.duration) {
-      try {
-        const seekTime = (value / 100) * status.duration;
-        player.seekTo(seekTime);
-      } catch (error) {
-        console.error('Error seeking:', error);
-      }
-    }
+    // Seeking functionality can be implemented later with the usePlaylistAV hook
+    console.log('🔴 MEDIA_PLAYER: Seek functionality not yet implemented with new hook');
   };
 
   const formatTime = (seconds: number) => {
@@ -514,15 +244,13 @@ export default function MediaPlayer({
     return stars;
   };
 
-  if (!currentTrack) {
+  if (!currentMedia) {
     return (
       <View style={styles.container}>
         <Text style={styles.noMediaText}>No media files available</Text>
       </View>
     );
   }
-
-  const progress = status.duration ? (status.currentTime / status.duration) * 100 : 0;
 
   return (
     <View style={styles.container}>
@@ -533,7 +261,7 @@ export default function MediaPlayer({
             <View style={styles.playOverlayContent}>
               <Text style={styles.playOverlayTitle}>Ready to Play</Text>
               <Text style={styles.playOverlaySubtitle}>
-                {currentTrack?.title}
+                {currentMedia?.title}
               </Text>
               <TouchableOpacity
                 style={styles.bigPlayButton}
@@ -558,40 +286,40 @@ export default function MediaPlayer({
         {/* Left Panel - Media Player */}
         <View style={styles.playerPanel}>
           {/* Video Display - Only show for video files */}
-          {isVideo && currentTrack && (
+          {isVideo && currentMedia && (
             <View style={styles.videoContainer}>
-              <VideoView
+              <Video
+                source={{ uri: currentMedia.url }}
                 style={styles.video}
-                player={videoPlayer}
-                allowsFullscreen
-                allowsPictureInPicture
+                useNativeControls
+                resizeMode="contain"
+                onPlaybackStatusUpdate={onStatusUpdate}
+                onError={({ error }) => {
+                  console.error('🔴 MEDIA_PLAYER: Video playback error:', error);
+                }}
               />
             </View>
           )}
 
           {/* Track Info */}
           <View style={styles.trackInfo}>
-            <Text style={styles.trackTitle}>{currentTrack.title}</Text>
+            <Text style={styles.trackTitle}>{currentMedia?.title || 'No track selected'}</Text>
             <Text style={styles.trackCount}>
-              {currentTrackIndex + 1} of {mediaFiles.length}
+              {currentIndex + 1} of {mediaFiles.length}
             </Text>
             <Text style={styles.mediaType}>
               {isVideo ? '🎥 Video' : '🎵 Audio'}
             </Text>
           </View>
 
-          {/* Progress Bar */}
+          {/* Progress Bar - simplified for now */}
           <View style={styles.progressContainer}>
             <View style={styles.progressBar}>
-              <View style={[styles.progressFill, { width: `${progress}%` }]} />
+              <View style={[styles.progressFill, { width: '0%' }]} />
             </View>
             <View style={styles.timeContainer}>
-              <Text style={styles.timeText}>
-                {formatTime(status.currentTime || 0)}
-              </Text>
-              <Text style={styles.timeText}>
-                {formatTime(status.duration || 0)}
-              </Text>
+              <Text style={styles.timeText}>--:--</Text>
+              <Text style={styles.timeText}>--:--</Text>
             </View>
           </View>
 
@@ -608,21 +336,16 @@ export default function MediaPlayer({
             <TouchableOpacity
               style={[
                 styles.playButton, 
-                status.isBuffering && styles.loadingButton,
                 hasUserInteracted && styles.enhancedPlayButton
               ]}
               onPress={togglePlayPause}
-              disabled={!status.isLoaded || status.isBuffering}
+              disabled={!currentMedia}
             >
-              {status.isBuffering ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Ionicons
-                  name={status.playing ? "pause" : "play"}
-                  size={hasUserInteracted ? 40 : 32}
-                  color="#fff"
-                />
-              )}
+              <Ionicons
+                name={isPlaying ? "pause" : "play"}
+                size={hasUserInteracted ? 40 : 32}
+                color="#fff"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
