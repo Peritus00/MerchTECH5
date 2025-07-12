@@ -688,7 +688,10 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
     const uploadedFilename = keyParts[keyParts.length - 1]; // Get the last part (filename)
     
     // Create a proxy URL for serving the image through our server
-    const proxyUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/images/s3/${req.user.userId}/${uploadedFilename}`;
+    let proxyUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/images/s3/${req.user.userId}/${uploadedFilename}`;
+    
+    // Apply URL sanitization to ensure HTTPS and correct domain
+    proxyUrl = sanitizeImageUrls([proxyUrl])[0];
     
     console.log('📤 UPLOAD: S3 upload successful:', fileUrl);
     console.log('📤 UPLOAD: S3 key:', key);
@@ -2487,7 +2490,8 @@ const sanitizeImageUrls = (urls) => {
     
     // Replace local IP with production domain if present
     const localIpRegex = /https:\/\/192\.168\.[0-9]+\.[0-9]+:[0-9]+/;
-    const publicBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+    // Use the correct Railway deployment URL for production
+    const publicBaseUrl = 'https://merchtechapp5-production.up.railway.app';
     newUrl = newUrl.replace(localIpRegex, publicBaseUrl);
     
     // If it's a relative path, prepend the public base URL
