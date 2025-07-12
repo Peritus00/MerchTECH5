@@ -22,6 +22,7 @@ import EditSlideshowModal from '@/components/EditSlideshowModal';
 import SlideshowPreview from '@/components/SlideshowPreview';
 import { slideshowAPI } from '@/services/api';
 import { useRouter } from 'expo-router';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface SlideshowImage {
   id: number;
@@ -42,6 +43,7 @@ interface Slideshow {
   requiresActivationCode: boolean;
   createdAt: string;
   images: SlideshowImage[];
+  userId: number; // Added userId to Slideshow interface
 }
 
 export default function SlideshowsScreen() {
@@ -55,6 +57,7 @@ export default function SlideshowsScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const router = useRouter();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchSlideshows();
@@ -149,11 +152,20 @@ export default function SlideshowsScreen() {
   };
 
   const handlePreviewSlideshow = (slideshow: Slideshow) => {
-    console.log('🎬 PLAY pressed on slideshow', slideshow.id, 'protected?', slideshow.requiresActivationCode);
+    console.log(
+      `▶️ Play button clicked for slideshow: "${slideshow.name}" (ID: ${slideshow.id})`
+    );
+    console.log(
+      `❓ Is it locked? (requiresActivationCode): ${slideshow.requiresActivationCode}`
+    );
 
-    // Always send user to the access-gate screen for activation code / preview options
-    // This ensures all slideshows go through the access control flow
-    router.push(`/slideshow-access/${slideshow.id}`);
+    if (slideshow.requiresActivationCode) {
+      console.log('➡️ Slideshow is locked. Navigating to access screen.');
+      router.push(`/slideshow-access/${slideshow.id}`);
+    } else {
+      console.log('➡️ Slideshow is NOT locked. Navigating to FULL ACCESS media player.');
+      router.push(`/media-player/${slideshow.id}`);
+    }
   };
 
   const onRefresh = () => {
@@ -297,9 +309,15 @@ export default function SlideshowsScreen() {
 
       <SlideshowImageManager
         visible={!!managingSlideshow}
-        slideshow={managingSlideshow}
+        slideshow={managingSlideshow ? slideshows.find(s => s.id === managingSlideshow.id) || managingSlideshow : null}
         onClose={() => setManagingSlideshow(null)}
         onImagesUpdated={(updatedSlideshow) => {
+          // Defensive check to prevent undefined slideshow errors
+          if (!updatedSlideshow || !updatedSlideshow.id) {
+            console.error('🎬 SLIDESHOWS: Invalid slideshow update received:', updatedSlideshow);
+            return;
+          }
+          
           setSlideshows(prev =>
             prev.map(s => s.id === updatedSlideshow.id ? updatedSlideshow : s)
           );

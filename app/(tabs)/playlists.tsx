@@ -9,12 +9,14 @@ import {
   TextInput,
   ActivityIndicator,
   RefreshControl,
+  Image,
 } from 'react-native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { router } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
+import { CartHeader } from '@/components/CartHeader';
 import { Playlist, MediaFile } from '@/shared/media-schema';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
@@ -330,13 +332,27 @@ export default function PlaylistsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <HeaderWithLogo
-        title="Playlists"
-        onRightButtonPress={() => setShowCreateModal(true)}
-        rightButtonIcon="add"
-        rightButtonColor="#3b82f6"
-        logoVariant="gold"
-      />
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
+          <Text style={styles.headerTitle}>Playlists</Text>
+        </View>
+        <View style={styles.headerCenter}>
+          <Image
+            source={require('../../assets/images/merchtechlogogoldnoBgColor.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={styles.headerRight}>
+          <CartHeader color="#6b7280" size={24} />
+          <TouchableOpacity 
+            style={styles.addButton}
+            onPress={() => setShowCreateModal(true)}
+          >
+            <MaterialIconWithFallback name="add" size={24} color="#3b82f6" />
+          </TouchableOpacity>
+        </View>
+      </View>
 
       {/* Refresh Button */}
       <View style={styles.refreshContainer}>
@@ -491,8 +507,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    minHeight: 60,
+  },
+  headerLeft: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  logo: {
+    width: 80,
+    height: 32,
+  },
+  addButton: {
+    padding: 4,
   },
   searchContainer: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -10,79 +10,148 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import PreviewPlayer from '@/components/PreviewPlayer';
-import ProductCard from '@/components/ProductCard';
-import { MediaFile } from '@/shared/media-schema';
+import { slideshowAPI } from '@/services/api';
+
+// Define the structure of a Slideshow and its Images
+interface SlideshowImage {
+  id: number;
+  slideshowId: number;
+  imageUrl: string;
+  caption?: string;
+  displayOrder: number;
+}
+
+interface Slideshow {
+  id: number;
+  name: string;
+  description?: string;
+  images: SlideshowImage[];
+  audioUrl?: string;
+  autoplayInterval?: number;
+  productLinks?: any[];
+}
 
 export default function PreviewPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
-  const [playlistName, setPlaylistName] = useState('');
-  const [playlistData, setPlaylistData] = useState<any>(null);
+  
+  const [slideshow, setSlideshow] = useState<Slideshow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Responsive breakpoint - use horizontal layout on wider screens
+  // Responsive breakpoint
   const isWideScreen = width > 768;
-  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
-    loadPreviewData();
+    if (id) {
+      loadPreviewData(id);
+    }
   }, [id]);
 
-  const loadPreviewData = async () => {
+  const loadPreviewData = async (slideshowId: string) => {
+    setIsLoading(true);
     try {
-      // Fetch actual playlist data from API for preview
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
-      const response = await fetch(`${apiUrl}/playlists/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('authToken')}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to load playlist: ${response.statusText}`);
-      }
-
-      const playlist = await response.json();
-
-      // Store full playlist data for product links
-      setPlaylistData(playlist);
-
-      // Convert to format expected by PreviewPlayer
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
-      const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
-        id: file.id,
-        title: file.title,
-        url: `${baseUrl}/api/media/${file.id}/stream`,
-        fileType: file.fileType,
-        contentType: file.contentType,
-      })) || [];
-
-      setMediaFiles(formattedFiles);
-      setPlaylistName(`Preview: ${playlist.name || `Playlist ${id}`}`);
+      console.log(`⚙️ Loading preview for slideshow ID: ${slideshowId}`);
+      // Use the public slideshow access endpoint for preview
+      const data = await slideshowAPI.getByIdForAccess(slideshowId);
+      console.log('✅ Successfully fetched slideshow data:', data);
+      setSlideshow(data);
     } catch (error) {
-      console.error('Error loading preview:', error);
-      Alert.alert('Error', 'Failed to load preview');
+      console.error('❌ Error loading slideshow preview:', error);
+      Alert.alert('Error', 'Failed to load slideshow preview.');
+      router.back(); // Go back if loading fails
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Memoize the formatted media files to prevent re-renders
+  const formattedMediaFiles = useMemo(() => {
+    if (!slideshow) return [];
+
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+    
+    console.log('🖼️ Processing slideshow for preview:', {
+      id: slideshow.id,
+      name: slideshow.name,
+      imageCount: slideshow.images?.length || 0,
+      hasAudio: !!slideshow.audioUrl,
+      autoplayInterval: slideshow.autoplayInterval
+    });
+    
+    // Map images to media files for the preview player
+    const imageFiles = slideshow.images?.map((image, index) => {
+      // Always use streaming endpoint for consistent S3 handling
+      const streamUrl = `${baseUrl}/api/slideshow-images/${image.id}/stream`;
+      
+      console.log(`🖼️ Image ${index + 1}:`, {
+        id: image.id,
+        originalUrl: image.imageUrl,
+        streamUrl: streamUrl,
+        caption: image.caption
+      });
+      
+      return {
+        id: image.id,
+        title: image.caption || `Image ${index + 1}`,
+        url: streamUrl,
+        fileType: 'image',
+        contentType: 'image/jpeg',
+        duration: slideshow.autoplayInterval || 5000, // Duration for each image in ms
+      };
+    }) || [];
+
+    // Background audio will be handled separately by PreviewPlayer
+    if (slideshow.audioUrl) {
+      const audioStreamUrl = `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`;
+      
+      console.log('🎵 Background audio available:', {
+        originalUrl: slideshow.audioUrl,
+        streamUrl: audioStreamUrl
+      });
+      
+      // Don't add to imageFiles array - PreviewPlayer will handle it separately
+    }
+      
+    console.log('🖼️ Final formatted media files for slideshow preview:', imageFiles);
+    return imageFiles;
+  }, [slideshow]);
+
   const handleBackPress = () => {
     router.back();
+  };
+
+  const handlePreviewComplete = () => {
+    Alert.alert(
+      '⏰ Preview Complete',
+      'Your slideshow preview has ended. Enter an activation code for full access or visit our store.',
+      [
+        { text: 'Enter Code', onPress: () => router.push(`/slideshow-access/${id}`) },
+        { text: 'Visit Store', onPress: () => router.push('/store') }
+      ]
+    );
   };
 
   if (isLoading) {
     return (
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#ffffff" />
-        <ThemedText style={styles.loadingText}>Loading preview...</ThemedText>
+        <ThemedText style={styles.loadingText}>Loading slideshow preview...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (!slideshow) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <ThemedText style={styles.errorText}>Slideshow not found</ThemedText>
+        <TouchableOpacity style={styles.backButton} onPress={handleBackPress}>
+          <ThemedText style={styles.backButtonText}>Go Back</ThemedText>
+        </TouchableOpacity>
       </ThemedView>
     );
   }
@@ -92,65 +161,78 @@ export default function PreviewPlayerScreen() {
       {/* Header with Back Button */}
       <View style={styles.header}>
         <TouchableOpacity 
-          style={styles.backButton}
+          style={styles.headerBackButton}
           onPress={handleBackPress}
           activeOpacity={0.7}
         >
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
-          <ThemedText style={styles.backText}>Back to Dashboard</ThemedText>
+          <ThemedText style={styles.backText}>Back</ThemedText>
         </TouchableOpacity>
+        <ThemedText style={styles.headerTitle}>Slideshow Preview</ThemedText>
+        <View style={{ width: 80 }} />
       </View>
 
-      {/* Main Content - Full Width Preview Player */}
-      <View style={styles.mainContainer}>
-        {/* Preview Player Container */}
-        <View style={styles.previewPlayerContainer}>
-          {/* Playlist Info */}
-          <View style={styles.playlistHeader}>
-            <View style={styles.playlistIcon}>
-              <Ionicons name="musical-notes" size={24} color="#7c3aed" />
-            </View>
-            <View style={styles.playlistInfo}>
-              <ThemedText style={styles.playlistTitle}>{playlistName}</ThemedText>
-              <View style={styles.protectionBadge}>
-                <Ionicons name="lock-closed" size={16} color="#7c3aed" />
-                <ThemedText style={styles.protectionText}>Protected</ThemedText>
+      {/* Enhanced Preview Player */}
+      <PreviewPlayer
+        mediaFiles={formattedMediaFiles}
+        playlistName={slideshow.name}
+        previewDuration={30}
+        autoplay={false}
+        productLinks={slideshow.productLinks || []}
+        onPreviewComplete={handlePreviewComplete}
+        backgroundAudioUrl={slideshow.audioUrl ? 
+          `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+          : undefined}
+      />
+
+      {/* Slideshow Info Section */}
+      <View style={styles.infoSection}>
+        <View style={styles.slideshowInfo}>
+          <View style={styles.slideshowIcon}>
+            <Ionicons name="images" size={24} color="#7c3aed" />
+          </View>
+          <View style={styles.slideshowDetails}>
+            <ThemedText style={styles.slideshowTitle}>{slideshow.name}</ThemedText>
+            {slideshow.description && (
+              <ThemedText style={styles.slideshowDescription}>
+                {slideshow.description}
+              </ThemedText>
+            )}
+            <View style={styles.slideshowStats}>
+              <View style={styles.statItem}>
+                <Ionicons name="images-outline" size={16} color="#6b7280" />
+                <ThemedText style={styles.statText}>
+                  {slideshow.images?.length || 0} images
+                </ThemedText>
               </View>
+              {slideshow.audioUrl && (
+                <View style={styles.statItem}>
+                  <Ionicons name="musical-notes-outline" size={16} color="#6b7280" />
+                  <ThemedText style={styles.statText}>Background audio</ThemedText>
+                </View>
+              )}
             </View>
-            <TouchableOpacity style={styles.previewButton}>
-              <Ionicons name="play" size={20} color="#fff" />
-              <ThemedText style={styles.previewButtonText}>25s PREVIEW</ThemedText>
-            </TouchableOpacity>
-          </View>
-
-          {/* Preview Player Container */}
-          <View style={styles.playerContainer}>
-            <PreviewPlayer
-              mediaFiles={mediaFiles}
-              playlistName={playlistData?.name || playlistName}
-              previewDuration={25}
-              autoplay={false}
-              productLinks={playlistData?.productLinks || []}
-            />
-          </View>
-
-          {/* Preview Info */}
-          <View style={styles.previewInfo}>
-            <ThemedText style={styles.previewInfoTitle}>🎵 25-Second Preview</ThemedText>
-            <ThemedText style={styles.previewInfoText}>
-              Experience a taste of this premium content. Get full access with an activation code or explore our store for more music!
-            </ThemedText>
-            <TouchableOpacity 
-              style={styles.storeButton}
-              onPress={() => router.push('/store')}
-            >
-              <Ionicons name="storefront" size={20} color="#fff" />
-              <ThemedText style={styles.storeButtonText}>Visit Store</ThemedText>
-            </TouchableOpacity>
           </View>
         </View>
+      </View>
 
-
+      {/* Action Buttons */}
+      <View style={styles.actionButtons}>
+        <TouchableOpacity 
+          style={styles.accessButton}
+          onPress={() => router.push(`/slideshow-access/${id}`)}
+        >
+          <Ionicons name="lock-open" size={20} color="#fff" />
+          <ThemedText style={styles.accessButtonText}>Get Full Access</ThemedText>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.storeButton}
+          onPress={() => router.push('/store')}
+        >
+          <Ionicons name="storefront" size={20} color="#3b82f6" />
+          <ThemedText style={styles.storeButtonText}>Visit Store</ThemedText>
+        </TouchableOpacity>
       </View>
     </ThemedView>
   );
@@ -162,14 +244,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60, // Account for status bar
+    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
-  backButton: {
+  headerBackButton: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
@@ -181,104 +266,103 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontWeight: '500',
   },
-  mainContainer: {
-    flex: 1,
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
   },
-  previewPlayerContainer: {
-    flex: 1,
-    padding: 16,
+  infoSection: {
     backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginVertical: 16,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
-  playlistHeader: {
+  slideshowInfo: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+    alignItems: 'flex-start',
   },
-  playlistIcon: {
+  slideshowIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  playlistInfo: {
+  slideshowDetails: {
     flex: 1,
   },
-  playlistTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+  slideshowTitle: {
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1f2937',
     marginBottom: 4,
   },
-  protectionBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  protectionText: {
-    fontSize: 12,
-    color: '#7c3aed',
-    marginLeft: 4,
-    fontWeight: '500',
-  },
-  previewButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#7c3aed',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-  },
-  previewButtonText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginLeft: 4,
-  },
-  playerContainer: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    minHeight: 300,
-  },
-  previewInfo: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  previewInfoTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1f2937',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  previewInfoText: {
+  slideshowDescription: {
     fontSize: 14,
     color: '#6b7280',
-    textAlign: 'center',
+    marginBottom: 8,
     lineHeight: 20,
-    marginBottom: 16,
   },
-  storeButton: {
+  slideshowStats: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    gap: 12,
+  },
+  accessButton: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#3b82f6',
-    borderRadius: 8,
-    paddingVertical: 10,
+    borderRadius: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
+    gap: 8,
+  },
+  accessButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  storeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    gap: 8,
   },
   storeButtonText: {
-    color: '#ffffff',
-    fontSize: 14,
+    color: '#3b82f6',
+    fontSize: 16,
     fontWeight: '600',
-    marginLeft: 8,
   },
-
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -289,5 +373,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#dc2626',
+    marginBottom: 16,
+  },
+  backButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  backButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -24,19 +24,33 @@ import SubscriptionLimitsCard from '@/components/SubscriptionLimitsCard';
 import { env } from '@/config/environment';
 
 // --- Helpers -------------------------------------------------------------
-const normalizeProduct = (p: any): Product => ({
-  ...p,
-  inStock: p.inStock ?? p.in_stock ?? true,
-});
+const normalizeProduct = (p: any): Product => {
+  if (!p) {
+    throw new Error('Product data is null or undefined');
+  }
+  return {
+    ...p,
+    inStock: p.inStock ?? p.in_stock ?? true,
+  };
+};
 
 export default function MyStoreManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
+  const [renderTrigger, setRenderTrigger] = useState(0);
   const router = useRouter();
   const { user } = useAuth();
   const { canCreate, refresh: refreshLimits, usage, limits, tier, isLoading: limitsLoading } = useSubscriptionLimits();
+  
+  // Add ref to track products state for debugging
+  const productsRef = useRef<Product[]>([]);
+  
+  // Keep ref in sync with state
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
 
   // Generate shareable store URL
   const getStoreUrl = () => {
@@ -64,6 +78,12 @@ export default function MyStoreManager() {
   useEffect(() => {
     fetchProducts();
   }, []);
+
+  // Debug: Track products state changes
+  useEffect(() => {
+    console.log('🔍 PRODUCTS STATE CHANGED: New count:', products.length);
+    console.log('🔍 PRODUCTS STATE CHANGED: Products:', products.map(p => ({ id: p.id, name: p.name })));
+  }, [products]);
 
   const fetchProducts = async () => {
     try {
@@ -112,20 +132,71 @@ export default function MyStoreManager() {
   };
 
   const handleDelete = (productId: string) => {
-    console.log('handleDelete called with id', productId);
+    console.log('🗑️ DELETE DEBUG: handleDelete called with id', productId);
+    console.log('🗑️ DELETE DEBUG: Current products count:', products.length);
+    console.log('🗑️ DELETE DEBUG: Current products ref count:', productsRef.current.length);
+    console.log('🗑️ DELETE DEBUG: Current products:', products.map(p => ({ id: p.id, name: p.name })));
+    
     const idStr = productId;
 
     const performDelete = async () => {
       try {
+        console.log('🗑️ DELETE DEBUG: Starting API delete for product:', idStr);
         await productsAPI.deleteProduct(idStr);
-        setProducts((prev) => prev.filter((p) => String(p.id) !== idStr));
-        console.log('Product locally removed; state updated');
+        console.log('🗑️ DELETE DEBUG: API delete successful, updating local state...');
+        
+        // Update state and log the change
+        setProducts((prev) => {
+          const beforeCount = prev.length;
+          console.log('🗑️ DELETE DEBUG: Before filtering - products:', prev.map(p => ({ 
+            id: p.id, 
+            idType: typeof p.id, 
+            name: p.name 
+          })));
+          console.log('🗑️ DELETE DEBUG: Looking for product with ID:', idStr, 'Type:', typeof idStr);
+          
+          const filteredProducts = prev.filter((p) => {
+            const productId = String(p.id);
+            const targetId = String(idStr);
+            const shouldKeep = productId !== targetId;
+            console.log('🗑️ DELETE DEBUG: Product ID:', productId, 'Target ID:', targetId, 'Keep:', shouldKeep);
+            return shouldKeep;
+          });
+          
+          const afterCount = filteredProducts.length;
+          
+          console.log('🗑️ DELETE DEBUG: State update - Before:', beforeCount, 'After:', afterCount);
+          console.log('🗑️ DELETE DEBUG: Filtered out product with ID:', idStr);
+          console.log('🗑️ DELETE DEBUG: Remaining products:', filteredProducts.map(p => ({ id: p.id, name: p.name })));
+          
+          // Force a re-render by returning a new array reference
+          return [...filteredProducts];
+        });
+        
+        // Force FlatList re-render
+        setRenderTrigger(prev => prev + 1);
+        
+        console.log('🗑️ DELETE DEBUG: setProducts called, closing editor...');
         setEditing(null);
+        
+        // Refresh subscription limits after deleting a product
+        refreshLimits();
+        
+        // Add a small delay to check final state
+        setTimeout(() => {
+          console.log('🗑️ DELETE DEBUG: Final state check after 500ms:');
+          console.log('🗑️ DELETE DEBUG: products.length:', products.length);
+          console.log('🗑️ DELETE DEBUG: productsRef.current.length:', productsRef.current.length);
+          console.log('🗑️ DELETE DEBUG: productsRef.current:', productsRef.current.map(p => ({ id: p.id, name: p.name })));
+        }, 500);
+        
         if (Platform.OS !== 'web') {
           Alert.alert('Success', 'Product deleted.');
+        } else {
+          console.log('🗑️ DELETE DEBUG: Product deleted successfully (web)');
         }
       } catch (e) {
-        console.error('Delete failed:', e);
+        console.error('🗑️ DELETE DEBUG: Delete failed:', e);
         if (Platform.OS !== 'web') {
           Alert.alert('Error', 'Failed to delete product.');
         }
@@ -281,8 +352,9 @@ export default function MyStoreManager() {
       ) : (
         <FlatList
           data={products}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => `${item.id}-${renderTrigger}`}
           renderItem={renderItem}
+          extraData={`${products.length}-${renderTrigger}`}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={fetchProducts} />}
           contentContainerStyle={{ padding: 16 }}
         />

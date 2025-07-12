@@ -26,9 +26,20 @@ class Environment {
     
     // Force development mode for local development
     // Use Railway backend ONLY if explicitly set to production
-    let apiBaseUrl = nodeEnv === 'production' && process.env.EXPO_PUBLIC_NODE_ENV === 'production'
-      ? 'https://merchtech5-production.up.railway.app/api'
-      : (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.70:5001/api');
+    let apiBaseUrl: string;
+    
+    // Check if we're explicitly in production mode
+    const isExplicitlyProduction = process.env.EXPO_PUBLIC_NODE_ENV === 'production' || 
+                                  process.env.NODE_ENV === 'production';
+    
+    if (isExplicitlyProduction) {
+      apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
+      console.log('🔧 Using production API URL (explicitly set):', apiBaseUrl);
+    } else {
+      // Default to local development server
+      apiBaseUrl = 'http://192.168.1.70:5001/api';
+      console.log('🔧 Using local development API URL (default):', apiBaseUrl);
+    }
     
     // Force local server if running on localhost (web development)
     if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
@@ -36,11 +47,19 @@ class Environment {
       console.log('🔧 Forced local API URL for localhost development:', apiBaseUrl);
     }
     
+    // Additional check: if we're on the deployed frontend but not explicitly production, use local API
+    if (typeof window !== 'undefined' && 
+        window.location.hostname === 'app.merchtech.net' && 
+        !isExplicitlyProduction) {
+      apiBaseUrl = 'http://192.168.1.70:5001/api';
+      console.log('🔧 Forced local API URL for deployed frontend in development mode:', apiBaseUrl);
+    }
+    
     return {
       API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
-      IS_PRODUCTION: nodeEnv === 'production',
-      IS_DEVELOPMENT: nodeEnv === 'development',
+      IS_PRODUCTION: isExplicitlyProduction,
+      IS_DEVELOPMENT: !isExplicitlyProduction,
       FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };

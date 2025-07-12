@@ -17,6 +17,7 @@ import { analyticsService } from '@/services/analyticsService';
 import { AnalyticsSummary } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
+import { CartHeader } from '@/components/CartHeader';
 import { api } from '@/services/api';
 
 interface DashboardData {
@@ -412,13 +413,16 @@ export default function DashboardScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        {/* Profile Button - Top Right */}
-        <TouchableOpacity 
-          style={styles.profileButton}
-          onPress={() => router.push('/settings/profile')}
-        >
-          <MaterialIcons name="account-circle" size={32} color="#6b7280" />
-        </TouchableOpacity>
+        {/* Header Actions - Top Right */}
+        <View style={styles.headerActions}>
+          <CartHeader color="#6b7280" size={28} />
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => router.push('/settings/profile')}
+          >
+            <MaterialIcons name="account-circle" size={32} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
         
         {/* Centered Logo Section */}
         <View style={styles.logoSection}>
@@ -599,11 +603,17 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e5e7eb',
     alignItems: 'center',
   },
-  profileButton: {
+  headerActions: {
     position: 'absolute',
     top: 20,
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     zIndex: 10,
+  },
+  profileButton: {
+    padding: 4,
   },
   logoSection: {
     alignItems: 'center',

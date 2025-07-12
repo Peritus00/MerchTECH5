@@ -12,6 +12,7 @@ import {
   Text,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { AdvancedQRCodeGenerator } from './AdvancedQRCodeGenerator';
@@ -450,19 +451,23 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   const handleLogoUpload = async () => {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 1,
+        quality: 0.7, // Reduce quality to compress image
+        base64: false, // Don't get base64 initially
       });
 
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
         
+        // Compress the image before storing
+        const compressedImageUri = await compressImage(imageUri);
+        
         setOptions(prev => ({
           ...prev,
           logo: {
-            imageData: imageUri,
+            imageData: compressedImageUri,
             size: 40,
             borderRadius: 8,
             borderSize: 4,
@@ -476,6 +481,83 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
     } catch (error) {
       console.error('Error uploading logo:', error);
       Alert.alert('Error', 'Failed to upload logo');
+    }
+  };
+
+  // Helper function to compress image
+  const compressImage = async (uri: string): Promise<string> => {
+    try {
+      // For web, we'll use Canvas API to compress
+      if (Platform.OS === 'web') {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set maximum dimensions
+            const maxWidth = 200;
+            const maxHeight = 200;
+            
+            let { width, height } = img;
+            
+            // Calculate new dimensions
+            if (width > height) {
+              if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+              }
+            } else {
+              if (height > maxHeight) {
+                width = (width * maxHeight) / height;
+                height = maxHeight;
+              }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Draw and compress
+            ctx?.drawImage(img, 0, 0, width, height);
+            
+            // Convert to base64 with compression
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+            
+            // Check if compressed size is reasonable (< 50KB base64)
+            if (compressedDataUrl.length > 70000) {
+              // Further compress if still too large
+              const furtherCompressed = canvas.toDataURL('image/jpeg', 0.3);
+              resolve(furtherCompressed);
+            } else {
+              resolve(compressedDataUrl);
+            }
+          };
+          
+          img.onerror = () => reject(new Error('Failed to load image'));
+          img.src = uri;
+        });
+      } else {
+        // For React Native, use ImageManipulator
+        const manipulatedImage = await ImageManipulator.manipulateAsync(
+          uri,
+          [
+            { resize: { width: 200, height: 200 } }
+          ],
+          { 
+            compress: 0.6, 
+            format: ImageManipulator.SaveFormat.JPEG,
+            base64: true
+          }
+        );
+        
+        return `data:image/jpeg;base64,${manipulatedImage.base64}`;
+      }
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      // Fallback to original URI if compression fails
+      return uri;
     }
   };
 

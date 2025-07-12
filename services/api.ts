@@ -18,11 +18,28 @@ console.log('🔍 DETAILED Environment details:', {
 
 // Force localhost override if needed
 let FINAL_API_BASE_URL = API_BASE_URL;
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+
+// Check if we're explicitly in production mode
+const isExplicitlyProduction = process.env.EXPO_PUBLIC_NODE_ENV === 'production' || 
+                              process.env.NODE_ENV === 'production';
+
+if (!isExplicitlyProduction) {
+  // Default to local development server unless explicitly in production
+  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
+  console.log('🔧 FORCED local development API URL (not explicitly production):', FINAL_API_BASE_URL);
+} else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
   FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
   console.log('🔧 FORCED localhost override - API URL changed to:', FINAL_API_BASE_URL);
 } else {
   console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
+}
+
+// Additional safety check - if we're on the deployed frontend but not explicitly production
+if (typeof window !== 'undefined' && 
+    window.location.hostname === 'app.merchtech.net' && 
+    !isExplicitlyProduction) {
+  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
+  console.log('🔧 FORCED local API URL for deployed frontend in development mode:', FINAL_API_BASE_URL);
 }
 
 export const api = axios.create({
@@ -216,6 +233,49 @@ export const usersAPI = {
   },
 };
 
+// Universal Chat API
+export const universalChatAPI = {
+  async getMessages(filters: {
+    limit?: number;
+    offset?: number;
+    filterType?: 'all' | 'user_store' | 'category';
+    userId?: string;
+    category?: string;
+    messageType?: 'general' | 'store_promotion' | 'product_showcase';
+  } = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+    
+    const response = await api.get(`/chat/universal?${params.toString()}`);
+    return response.data;
+  },
+
+  async postMessage(messageData: {
+    message: string;
+    messageType?: 'general' | 'store_promotion' | 'product_showcase';
+    relatedProductId?: number;
+    relatedStoreUserId?: number;
+    productCategory?: string;
+  }) {
+    const response = await api.post('/chat/universal', messageData);
+    return response.data;
+  },
+
+  async deleteMessage(messageId: number) {
+    const response = await api.delete(`/chat/universal/${messageId}`);
+    return response.data;
+  },
+
+  async getCategories() {
+    const response = await api.get('/chat/categories');
+    return response.data;
+  },
+};
+
 // Products API
 export const productsAPI = {
   async getMyProducts() {
@@ -225,6 +285,19 @@ export const productsAPI = {
   async getAllProducts() {
     const res = await api.get('/products/all');
     return res.data.products;
+  },
+  async getProductById(id: string) {
+    console.log('🛍️ API: getProductById called for ID:', id);
+    try {
+      const res = await api.get(`/products/${id}`);
+      console.log('✅ API: Product fetched successfully');
+      return res.data;
+    } catch (error: any) {
+      console.error('🔴 API getProductById failed:', error);
+      console.error('🔴 Response data:', error.response?.data);
+      console.error('🔴 Status:', error.response?.status);
+      throw error;
+    }
   },
   async updateProduct(productId: string, updates: Partial<Record<string, any>>) {
     console.log('🟢 API: updateProduct called');
@@ -515,7 +588,26 @@ export const playlistAPI = {
 export const slideshowAPI = {
   async create(slideshowData: any) {
     console.log('📤 SlideshowAPI: Creating slideshow');
-    const res = await api.post('/slideshows', slideshowData);
+    
+    // Convert camelCase to snake_case for server
+    const serverData = {
+      ...slideshowData,
+      autoplay_interval: slideshowData.autoplayInterval,
+      requires_activation_code: slideshowData.requiresActivationCode,
+      is_public: slideshowData.isPublic,
+    };
+    
+    // Remove camelCase fields
+    delete serverData.autoplayInterval;
+    delete serverData.requiresActivationCode;
+    delete serverData.isPublic;
+    
+    console.log('📤 slideshowAPI.create: Converting fields for server:', { 
+      original: slideshowData, 
+      converted: serverData 
+    });
+    
+    const res = await api.post('/slideshows', serverData);
     return res.data.slideshow;
   },
   async getAll() {
@@ -523,22 +615,72 @@ export const slideshowAPI = {
     return res.data.slideshows;
   },
   async getById(id: string) {
+    console.log('🎬 slideshowAPI.getById: Fetching slideshow:', id);
+    console.log('🎬 slideshowAPI.getById: Full endpoint:', `/slideshows/${id}`);
     const res = await api.get(`/slideshows/${id}`);
+    console.log('🎬 slideshowAPI.getById: Response:', res.data);
     return res.data.slideshow;
   },
   async update(id: string, updates: any) {
-    const res = await api.patch(`/slideshows/${id}`, updates);
+    // Convert camelCase to snake_case for server
+    const serverUpdates = {
+      ...updates,
+      autoplay_interval: updates.autoplayInterval,
+      requires_activation_code: updates.requiresActivationCode,
+      is_public: updates.isPublic,
+    };
+    
+    // Remove camelCase fields
+    delete serverUpdates.autoplayInterval;
+    delete serverUpdates.requiresActivationCode;
+    delete serverUpdates.isPublic;
+    
+    console.log('📤 slideshowAPI.update: Converting fields for server:', { 
+      original: updates, 
+      converted: serverUpdates 
+    });
+    
+    const res = await api.patch(`/slideshows/${id}`, serverUpdates);
     return res.data.slideshow;
   },
   async delete(id: string) {
     const res = await api.delete(`/slideshows/${id}`);
     return res.data;
   },
-  async addImage(slideshowId: number | string, data: { imageUrl: string; caption?: string; displayOrder?: number }) {
-    console.log('📤 slideshowAPI.addImage: req', slideshowId, data);
-    const res = await api.post(`/slideshows/${slideshowId}/images`, data);
+  async addImage(slideshowId: number | string, file: any, caption?: string, displayOrder?: number) {
+    console.log('📤 slideshowAPI.addImage: req', slideshowId, { hasFile: !!file, caption, displayOrder });
+    
+    const formData = new FormData();
+    
+    // Handle different file formats
+    if (file instanceof File) {
+      formData.append('image', file);
+    } else if (typeof window !== 'undefined' && file.uri) {
+      // Web environment with URI
+      const response = await fetch(file.uri);
+      const blob = await response.blob();
+      const fileObj = new File([blob], file.name || 'image.jpg', { type: file.type || 'image/jpeg' });
+      formData.append('image', fileObj);
+    } else {
+      // React Native environment
+      formData.append('image', {
+        uri: file.uri,
+        name: file.name || 'image.jpg',
+        type: file.type || 'image/jpeg'
+      } as any);
+    }
+    
+    // Add optional fields
+    if (caption) formData.append('caption', caption);
+    if (displayOrder !== undefined) formData.append('position', displayOrder.toString());
+    
+    const res = await api.post(`/slideshows/${slideshowId}/images`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     console.log('📤 slideshowAPI.addImage: res', res.data);
-    return res.data.slideshow;
+    return res.data.image;
   },
   async deleteImage(slideshowId: number | string, imageId: number | string) {
     console.log('📤 slideshowAPI.deleteImage: req', slideshowId, imageId);
@@ -547,8 +689,77 @@ export const slideshowAPI = {
     return res.data.slideshow;
   },
   async updateAudio(slideshowId: number | string, audioUrl: string) {
+    console.log('🎵 slideshowAPI.updateAudio: req', slideshowId, audioUrl);
     const res = await api.patch(`/slideshows/${slideshowId}/audio`, { audioUrl });
-    return res.data.slideshow;
+    console.log('🎵 slideshowAPI.updateAudio: res', res.data);
+    // Server returns slideshow directly, not wrapped in .slideshow
+    return res.data;
+  },
+  async getByIdForAccess(id: string) {
+    console.log('🎬 slideshowAPI.getByIdForAccess: Fetching slideshow for public access:', id);
+    try {
+      const res = await api.get(`/slideshow-access/${id}`);
+      console.log('🎬 slideshowAPI.getByIdForAccess: res', res.data);
+      
+      // Check if access is restricted
+      if (res.data.accessRestricted) {
+        console.log('🎬 slideshowAPI.getByIdForAccess: Access is restricted, returning slideshow with restriction flag');
+        return {
+          ...res.data.slideshow,
+          accessRestricted: true,
+          message: res.data.message
+        };
+      }
+      
+      // Full access granted
+      console.log('🎬 slideshowAPI.getByIdForAccess: Full access granted');
+      return res.data.slideshow;
+    } catch (error: any) {
+      console.error('🎬 slideshowAPI.getByIdForAccess: Error fetching slideshow:', error);
+      
+      // Handle 403 errors (invalid activation code)
+      if (error.response?.status === 403) {
+        console.log('🎬 slideshowAPI.getByIdForAccess: 403 error - invalid activation code or access denied');
+        throw error; // Let the calling code handle 403 errors
+      }
+      
+      // Handle other errors
+      throw error;
+    }
+  },
+};
+
+// Product Links API
+export const productLinksAPI = {
+  async getByPlaylistId(playlistId: string) {
+    console.log('🔗 ProductLinksAPI: Fetching product links for playlist:', playlistId);
+    const res = await api.get(`/playlists/${playlistId}/product-links`);
+    return res.data;
+  },
+  async addToPlaylist(playlistId: string, productId: string) {
+    console.log('🔗 ProductLinksAPI: Adding product link to playlist:', { playlistId, productId });
+    const res = await api.post(`/playlists/${playlistId}/product-links`, { productId });
+    return res.data;
+  },
+  async removeFromPlaylist(playlistId: string, productId: string) {
+    console.log('🔗 ProductLinksAPI: Removing product link from playlist:', { playlistId, productId });
+    const res = await api.delete(`/playlists/${playlistId}/product-links/${productId}`);
+    return res.data;
+  },
+  async getBySlideshowId(slideshowId: string) {
+    console.log('🔗 ProductLinksAPI: Fetching product links for slideshow:', slideshowId);
+    const res = await api.get(`/slideshows/${slideshowId}/product-links`);
+    return res.data;
+  },
+  async addToSlideshow(slideshowId: string, productId: string) {
+    console.log('🔗 ProductLinksAPI: Adding product link to slideshow:', { slideshowId, productId });
+    const res = await api.post(`/slideshows/${slideshowId}/product-links`, { productId });
+    return res.data;
+  },
+  async removeFromSlideshow(slideshowId: string, productId: string) {
+    console.log('🔗 ProductLinksAPI: Removing product link from slideshow:', { slideshowId, productId });
+    const res = await api.delete(`/slideshows/${slideshowId}/product-links/${productId}`);
+    return res.data;
   },
 };
 
@@ -704,8 +915,18 @@ export const fileUploadAPI = {
       hasUri: !!file.uri
     });
     
+    // Force check the current API configuration
     console.log('🔧 Current API baseURL:', api.defaults.baseURL);
+    console.log('🔧 Environment API URL:', FINAL_API_BASE_URL);
     console.log('🔧 Upload will go to:', `${api.defaults.baseURL}/upload`);
+    
+    // Double-check that we're not using production URL
+    if (api.defaults.baseURL?.includes('railway.app')) {
+      console.error('🚨 CRITICAL: API is still using production URL despite local config!');
+      console.error('🚨 Forcing API baseURL to local server...');
+      api.defaults.baseURL = 'http://192.168.1.70:5001/api';
+      console.log('🔧 API baseURL forced to:', api.defaults.baseURL);
+    }
     
     const formData = new FormData();
     let payload: any;
@@ -725,6 +946,7 @@ export const fileUploadAPI = {
     // Use 'image' field name to match server expectation
     formData.append('image', payload, file.name ?? (payload.name || 'upload'));
     console.log('🔧 FormData prepared, making request to /upload');
+    console.log('🔧 Final request URL will be:', `${api.defaults.baseURL}/upload`);
     
     // Let axios set the correct multipart boundary; specifying the header manually
     // can omit the boundary and lead to 400 errors on some environments.

@@ -17,6 +17,7 @@ import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback'
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { activationCodesAPI, playlistAPI, slideshowAPI } from '@/services/api';
+import { Picker } from '@react-native-picker/picker';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
@@ -179,10 +180,11 @@ const ActivationCodesScreen = () => {
     try {
       console.log('🔑 Loading my access codes');
       const accessCodes = await activationCodesAPI.getMyAccess();
-      setMyAccessCodes(accessCodes);
-      console.log('🔑 Loaded', accessCodes.length, 'access codes');
+      setMyAccessCodes(accessCodes || []);
+      console.log('🔑 Loaded', (accessCodes || []).length, 'access codes');
     } catch (error) {
       console.error('🔑 Error loading access codes:', error);
+      setMyAccessCodes([]);
       throw error;
     }
   };
@@ -191,10 +193,11 @@ const ActivationCodesScreen = () => {
     try {
       console.log('🔑 Loading all generated codes');
       const generatedCodes = await activationCodesAPI.getGenerated();
-      setAllGeneratedCodes(generatedCodes);
-      console.log('🔑 Loaded', generatedCodes.length, 'generated codes');
+      setAllGeneratedCodes(generatedCodes || []);
+      console.log('🔑 Loaded', (generatedCodes || []).length, 'generated codes');
     } catch (error) {
       console.error('🔑 Error loading generated codes:', error);
+      setAllGeneratedCodes([]);
       throw error;
     }
   };
@@ -567,44 +570,23 @@ const ActivationCodesScreen = () => {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Create Activation Code</Text>
             
-            <Text style={styles.label}>Select Content:</Text>
-            <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
-              <TouchableOpacity
-                style={[
-                  styles.playlistOption,
-                  selectedContentType === 'playlist' && styles.selectedPlaylistOption
-                ]}
-                onPress={() => {
-                  console.log('🟢 Content type changed to: playlist');
-                  setSelectedContentType('playlist');
+            <Text style={styles.label}>Select Content Type:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedContentType}
+                style={styles.picker}
+                onValueChange={(itemValue) => {
+                  console.log('🟢 Content type changed to:', itemValue);
+                  setSelectedContentType(itemValue);
+                  if (itemValue === 'slideshow') {
+                    console.log('🟢 Current slideshows state:', slideshows);
+                  }
                 }}
               >
-                <Text style={[
-                  styles.playlistOptionText,
-                  selectedContentType === 'playlist' && styles.selectedPlaylistOptionText
-                ]}>
-                  Playlist
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.playlistOption,
-                  selectedContentType === 'slideshow' && styles.selectedPlaylistOption
-                ]}
-                onPress={() => {
-                  console.log('🟢 Content type changed to: slideshow');
-                  console.log('🟢 Current slideshows state:', slideshows);
-                  setSelectedContentType('slideshow');
-                }}
-              >
-                <Text style={[
-                  styles.playlistOptionText,
-                  selectedContentType === 'slideshow' && styles.selectedPlaylistOptionText
-                ]}>
-                  Slideshow
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+                <Picker.Item label="Playlist" value="playlist" />
+                <Picker.Item label="Slideshow" value="slideshow" />
+              </Picker>
+            </View>
 
             {selectedContentType === 'playlist' && (
               <>
@@ -731,37 +713,17 @@ const ActivationCodesScreen = () => {
               keyboardType="numeric"
             />
 
-            <Text style={styles.label}>Select Content:</Text>
-            <ScrollView style={styles.playlistSelector} showsVerticalScrollIndicator={false}>
-              <TouchableOpacity
-                style={[
-                  styles.playlistOption,
-                  selectedContentType === 'playlist' && styles.selectedPlaylistOption
-                ]}
-                onPress={() => setSelectedContentType('playlist')}
+            <Text style={styles.label}>Select Content Type:</Text>
+            <View style={styles.pickerContainer}>
+              <Picker
+                selectedValue={selectedContentType}
+                style={styles.picker}
+                onValueChange={(itemValue) => setSelectedContentType(itemValue)}
               >
-                <Text style={[
-                  styles.playlistOptionText,
-                  selectedContentType === 'playlist' && styles.selectedPlaylistOptionText
-                ]}>
-                  Playlist
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.playlistOption,
-                  selectedContentType === 'slideshow' && styles.selectedPlaylistOption
-                ]}
-                onPress={() => setSelectedContentType('slideshow')}
-              >
-                <Text style={[
-                  styles.playlistOptionText,
-                  selectedContentType === 'slideshow' && styles.selectedPlaylistOptionText
-                ]}>
-                  Slideshow
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
+                <Picker.Item label="Playlist" value="playlist" />
+                <Picker.Item label="Slideshow" value="slideshow" />
+              </Picker>
+            </View>
 
             {selectedContentType === 'playlist' && (
               <>
@@ -911,7 +873,7 @@ const ActivationCodesScreen = () => {
       </ThemedText>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {allGeneratedCodes.length === 0 ? (
+        {!allGeneratedCodes || allGeneratedCodes.length === 0 ? (
           <View style={styles.emptyState}>
             <MaterialIconWithFallback name="code" size={48} color="#ccc" />
             <Text style={styles.emptyStateText}>No codes generated yet</Text>
@@ -1471,8 +1433,19 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   playlistSelector: {
-    maxHeight: 150,
+    maxHeight: 600,
     marginBottom: 8,
+  },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  picker: {
+    height: 50,
+    width: '100%',
   },
   playlistOption: {
     backgroundColor: '#f8f9fa',

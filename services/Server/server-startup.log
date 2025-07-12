@@ -1,0 +1,68 @@
+DEBUG: Server script starting...
+DEBUG: .env loaded, DATABASE_URL: postgresql://neondb_owner:npg_eMNC8h2HySbs@ep-patient-waterfall-a66aspku.us-west-2.aws.neon.tech/neondb?sslmode=require
+DEBUG: NODE_ENV: development
+AWS Access Key Suffix: V3MU
+AWS Secret Key Suffix: y2Yz
+✅ S3 service loaded and instantiated successfully
+   AWS Region: us-east-2
+   S3 Bucket: merchtechbucket
+   AWS Access Key: Configured
+📂 Uploads directory already exists: /Users/admin/Downloads/merchtechapp5/uploads
+🚀 Server running on port 5001
+🎬 SLIDESHOW_CREATE: Creating slideshow: {
+  name: 'S3 Upload Test Slideshow',
+  description: 'Testing actual S3 uploads',
+  is_public: undefined,
+  requires_activation_code: undefined,
+  autoplay_interval: 5000,
+  transition: 'fade'
+}
+🎬 SLIDESHOW_CREATE: Slideshow created successfully: {
+  id: 29,
+  name: 'S3 Upload Test Slideshow',
+  requiresActivation: false,
+  isPublic: false
+}
+🎬 SLIDESHOW_UPLOAD: Starting image upload process
+🎬 SLIDESHOW_UPLOAD: Parameters received: {
+  id: '29',
+  caption: 'S3 Test Image',
+  position: '1',
+  hasFile: true,
+  fileInfo: {
+    originalname: 'test-image.png',
+    filename: undefined,
+    mimetype: 'image/png',
+    size: 70
+  }
+}
+🎬 SLIDESHOW_UPLOAD: Uploading to S3...
+📤 Uploading file to S3: users/23/media/1752063118038-test-image.png
+📊 File size: 0.00 MB
+📁 Content type: image/png
+📊 Upload progress: 100%
+✅ File uploaded successfully: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118038-test-image.png
+🎬 SLIDESHOW_UPLOAD: S3 upload successful: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118038-test-image.png
+🎬 SLIDESHOW_UPLOAD: About to save image record with S3 URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118038-test-image.png
+🎬 SLIDESHOW_UPLOAD: Image record saved successfully: {
+  id: 12,
+  slideshow_id: 29,
+  image_url: 'https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118038-test-image.png',
+  caption: 'S3 Test Image',
+  display_order: 1,
+  created_at: 2025-07-09T12:11:58.407Z
+}
+🎬 SLIDESHOW_UPLOAD: Image uploaded successfully to S3: {
+  imageId: 12,
+  s3Url: 'https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118038-test-image.png'
+}
+📤 UPLOAD: Uploading file to S3: { originalname: 'test-audio.mp3', mimetype: 'audio/mpeg', size: 16 }
+📤 Uploading file to S3: users/23/media/1752063118545-test-audio.mp3
+📊 File size: 0.00 MB
+📁 Content type: audio/mpeg
+📊 Upload progress: 100%
+✅ File uploaded successfully: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118545-test-audio.mp3
+📤 UPLOAD: S3 upload successful: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/23/media/1752063118545-test-audio.mp3
+✅ Slideshow deleted: 29
+🎬 SLIDESHOWS: Fetching slideshows for user: 1
+🎬 SLIDESHOWS: Found 12 slideshows

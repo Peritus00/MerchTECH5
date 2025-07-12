@@ -1,22 +1,17 @@
 export interface MediaFile {
-  id: number;
-  userId?: number;
-  uniqueId: string;
-  title: string;
-  fileType: string;
-  filePath: string;
-  url?: string;
-  meta?: any;
-  createdAt: string;
-  updatedAt?: string;
-  filename?: string;
-  filesize?: number;
-  contentType?: string;
-  path?: string;
+  id: string; // Can be a number or a string, so use string for flexibility
+  url: string;
+  type: 'image' | 'audio' | 'video'; // Explicitly define the media type
+  title?: string; // Optional title
+  caption?: string; // Optional caption, for images
+  duration?: number; // Optional duration, for images in a slideshow (in ms)
+  fileType?: string; // Retain for backward compatibility if needed
+  contentType?: string; // Retain for backward compatibility if needed
 }
 
 export interface ProductLink {
   id: number;
+  linkId?: string; // Link ID for reference
   playlistId: string;
   title: string;
   url: string;
@@ -29,6 +24,7 @@ export interface ProductLink {
   originalPrice?: string;
   rating?: number; // 1-5 star rating
   reviewCount?: number;
+  productName?: string; // Product name from JOIN with products table
   createdAt: string;
   updatedAt?: string;
 }

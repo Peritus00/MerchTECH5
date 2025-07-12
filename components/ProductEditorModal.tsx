@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
 import { Colors } from '@/constants/Colors';
 import * as ImagePicker from 'expo-image-picker';
-import { uploadService } from '@/services/uploadService';
+import { api, uploadAPI } from '@/services/api';
 
 interface Props {
   visible: boolean;
@@ -37,7 +37,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   const COLORS = ['Red', 'Blue', 'Green', 'Yellow', 'Black', 'White', 'Gray', 'Pink', 'Purple', 'Orange', 'Brown', 'Navy'];
-  const CATEGORIES = ['Music', 'Painting', 'Sculpture', 'Literature', 'Architecture', 'Performing', 'Film'];
+  const CATEGORIES = ['Painting', 'Sculpture', 'Literature', 'Architecture', 'Theater', 'Film', 'Music'];
 
   // Reset fields when product changes
   React.useEffect(() => {
@@ -85,19 +85,77 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   };
 
   const handlePickImage = async () => {
-    let result = await ImagePicker.launchImageLibraryAsync({
-              mediaTypes: ImagePicker.MediaType.Images,
+    if (images.length >= 5) {
+      Alert.alert('Maximum Images', 'You can only add up to 5 images per product.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
       allowsEditing: true,
-      aspect: [1, 1],
+      aspect: [4, 3],
       quality: 1,
     });
 
     if (!result.canceled) {
       try {
-        const { imageUrl } = await uploadService.uploadImage(result.assets[0].uri);
+        // Use the modern S3 upload approach instead of legacy uploadService
+        const file = result.assets[0];
+        let filePayload;
+        
+        if (typeof window !== 'undefined') {
+          // Web environment - convert URI to File object
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+          
+          // Generate a proper filename with timestamp
+          const timestamp = Date.now();
+          const extension = file.type?.split('/')[1] || 'jpg';
+          const filename = `product_${timestamp}.${extension}`;
+          
+          // Ensure proper MIME type
+          const mimeType = file.type || blob.type || 'image/jpeg';
+          
+          filePayload = new File([blob], filename, { 
+            type: mimeType 
+          });
+        } else {
+          // React Native environment
+          const timestamp = Date.now();
+          const extension = file.type?.split('/')[1] || 'jpg';
+          const filename = `product_${timestamp}.${extension}`;
+          
+          filePayload = { 
+            uri: file.uri, 
+            name: filename, 
+            type: file.type || 'image/jpeg' 
+          };
+        }
+
+        console.log('📤 PRODUCT: Uploading image to S3...', {
+          name: filePayload.name || filePayload.uri?.split('/').pop(),
+          type: filePayload.type,
+          isFile: filePayload instanceof File,
+          originalFile: {
+            uri: file.uri.substring(0, 50) + '...',
+            type: file.type,
+            width: file.width,
+            height: file.height
+          }
+        });
+
+        // Upload directly to S3 using the existing /upload endpoint which already uses S3
+        const formData = new FormData();
+        formData.append('image', filePayload);
+        
+        const uploadResponse = await uploadAPI.post('/upload', formData);
+
+        const imageUrl = uploadResponse.data.imageUrl;
+        console.log('📤 PRODUCT: S3 upload successful:', imageUrl);
+        
         setImages([...images, imageUrl]);
       } catch (error) {
-        console.error('Upload failed:', error);
+        console.error('📤 PRODUCT: Upload failed:', error);
         alert('Upload failed');
       }
     }
@@ -105,6 +163,25 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
 
   const handleRemoveImage = (index: number) => {
     setImages(images.filter((_, i) => i !== index));
+  };
+
+  const handleMoveImage = (fromIndex: number, toIndex: number) => {
+    const newImages = [...images];
+    const [movedImage] = newImages.splice(fromIndex, 1);
+    newImages.splice(toIndex, 0, movedImage);
+    setImages(newImages);
+  };
+
+  const handleMoveImageUp = (index: number) => {
+    if (index > 0) {
+      handleMoveImage(index, index - 1);
+    }
+  };
+
+  const handleMoveImageDown = (index: number) => {
+    if (index < images.length - 1) {
+      handleMoveImage(index, index + 1);
+    }
   };
 
   const handleSave = () => {
@@ -218,18 +295,51 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
               placeholderTextColor={Colors[colorScheme].text}
               multiline
             />
+            <ThemedText style={{ marginTop: 16, marginBottom: 8 }}>
+              Product Images ({images.length}/5)
+            </ThemedText>
             <View style={styles.imageContainer}>
               {images.map((uri, index) => (
                 <View key={index} style={styles.imageWrapper}>
                   <Image source={{ uri }} style={styles.imagePreview} />
-                  <TouchableOpacity onPress={() => handleRemoveImage(index)} style={styles.removeImageButton}>
-                    <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>X</ThemedText>
-                  </TouchableOpacity>
+                  {index === 0 && (
+                    <View style={styles.primaryImageBadge}>
+                      <ThemedText style={styles.primaryImageText}>Primary</ThemedText>
+                    </View>
+                  )}
+                  <View style={styles.imageControls}>
+                    <TouchableOpacity 
+                      onPress={() => handleMoveImageUp(index)} 
+                      style={[styles.imageControlButton, index === 0 && styles.disabledButton]}
+                      disabled={index === 0}
+                    >
+                      <ThemedText style={[styles.imageControlText, index === 0 && styles.disabledText]}>↑</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => handleMoveImageDown(index)} 
+                      style={[styles.imageControlButton, index === images.length - 1 && styles.disabledButton]}
+                      disabled={index === images.length - 1}
+                    >
+                      <ThemedText style={[styles.imageControlText, index === images.length - 1 && styles.disabledText]}>↓</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      onPress={() => handleRemoveImage(index)} 
+                      style={[styles.imageControlButton, styles.removeButton]}
+                    >
+                      <ThemedText style={[styles.imageControlText, styles.removeText]}>×</ThemedText>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))}
             </View>
-            <TouchableOpacity onPress={handlePickImage} style={styles.uploadButton}>
-              <ThemedText style={{ color: '#11181C' }}>upload image here</ThemedText>
+            <TouchableOpacity 
+              onPress={handlePickImage} 
+              style={[styles.uploadButton, images.length >= 5 && styles.disabledUploadButton]}
+              disabled={images.length >= 5}
+            >
+              <ThemedText style={[{ color: '#11181C' }, images.length >= 5 && styles.disabledUploadText]}>
+                {images.length >= 5 ? 'Maximum Images Reached' : `Add Image (${images.length}/5)`}
+              </ThemedText>
             </TouchableOpacity>
             <ThemedText>Price (USD)</ThemedText>
             <TextInput
@@ -460,24 +570,59 @@ const styles = StyleSheet.create({
     position: 'relative',
     marginRight: 8,
     marginBottom: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   imagePreview: {
     width: 80,
     height: 80,
-    borderRadius: 4,
+    borderRadius: 8,
   },
-  removeImageButton: {
+  primaryImageBadge: {
     position: 'absolute',
-    top: -5,
-    right: -5,
-    backgroundColor: '#ef4444',
+    top: 2,
+    left: 2,
+    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
+  primaryImageText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  imageControls: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    flexDirection: 'column',
+    gap: 1,
+  },
+  imageControlButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     borderRadius: 12,
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
+  },
+  imageControlText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+  },
+  disabledText: {
+    color: '#999',
+  },
+  removeButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+  },
+  removeText: {
+    color: '#fff',
   },
   uploadButton: {
     backgroundColor: '#e5e7eb',
@@ -485,6 +630,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     alignItems: 'center',
     marginBottom: 12,
+  },
+  disabledUploadButton: {
+    backgroundColor: '#f3f4f6',
+    opacity: 0.6,
+  },
+  disabledUploadText: {
+    color: '#9ca3af',
   },
   categoriesContainer: {
     flexDirection: 'row',

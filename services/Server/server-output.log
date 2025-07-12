@@ -1,0 +1,305 @@
+DEBUG: Server script starting...
+DEBUG: .env loaded, DATABASE_URL: postgresql://neondb_owner:npg_eMNC8h2HySbs@ep-patient-waterfall-a66aspku.us-west-2.aws.neon.tech/neondb?sslmode=require
+DEBUG: NODE_ENV: undefined
+AWS Access Key Suffix: V3MU
+AWS Secret Key Suffix: y2Yz
+✅ S3 service loaded and instantiated successfully
+   AWS Region: us-east-2
+   S3 Bucket: merchtechbucket
+   AWS Access Key: Configured
+📂 Uploads directory already exists: /Users/admin/Downloads/merchtechapp5/uploads
+🚀 Server running on port 5001
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '3', activationCode: undefined, hasAuth: false }
+🎬 SLIDESHOW_ACCESS: ❌ No authentication header provided
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 3,
+  name: 'testg',
+  ownerId: 4,
+  requiresActivation: false,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: false, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 2
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: false
+🎬 SLIDESHOW_ACCESS: 🔓 SLIDESHOW IS NOT PROTECTED
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow does not require activation code, granting access
+🎬 SLIDESHOW_ACCESS: ✅ GRANTING PUBLIC ACCESS
+🎬 SLIDESHOW_ACCESS: ===== SECURITY CHECK COMPLETE =====
+🎬 SLIDESHOW_IMAGE_STREAM: Streaming image: 2
+🎬 SLIDESHOW_IMAGE_STREAM: Image URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752063502235-djimage.jpeg
+🎬 SLIDESHOW_IMAGE_STREAM: Generating signed URL for S3 image
+🎬 SLIDESHOW_IMAGE_STREAM: Extracted S3 key: users/1/media/1752063502235-djimage.jpeg
+🔗 Generated signed URL for: users/1/media/1752063502235-djimage.jpeg
+🎬 SLIDESHOW_IMAGE_STREAM: Generated signed URL, now streaming through server
+🔑 ACTIVATION_CODES: Fetching user access codes for user: 1
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🔑 ACTIVATION_CODES: Found 0 access codes
+🔑 ACTIVATION_CODES: Fetching user access codes for user: 1
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🔑 ACTIVATION_CODES: Found 0 access codes
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🔑 ACTIVATION_CODES: Fetching user access codes for user: 1
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🔑 ACTIVATION_CODES: Found 0 access codes
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🔑 ACTIVATION_CODES: Fetching user access codes for user: 1
+🔑 ACTIVATION_CODES: Found 0 access codes
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '3', activationCode: undefined, hasAuth: false }
+🎬 SLIDESHOW_ACCESS: ❌ No authentication header provided
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 3,
+  name: 'testg',
+  ownerId: 4,
+  requiresActivation: false,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: false, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 3
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 2
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: false
+🎬 SLIDESHOW_ACCESS: 🔓 SLIDESHOW IS NOT PROTECTED
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow does not require activation code, granting access
+🎬 SLIDESHOW_ACCESS: ✅ GRANTING PUBLIC ACCESS
+🎬 SLIDESHOW_ACCESS: ===== SECURITY CHECK COMPLETE =====
+🎬 SLIDESHOW_IMAGE_STREAM: Streaming image: 2
+🎬 SLIDESHOW_IMAGE_STREAM: Image URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752063502235-djimage.jpeg
+🎬 SLIDESHOW_IMAGE_STREAM: Generating signed URL for S3 image
+🎬 SLIDESHOW_IMAGE_STREAM: Extracted S3 key: users/1/media/1752063502235-djimage.jpeg
+🔗 Generated signed URL for: users/1/media/1752063502235-djimage.jpeg
+🎬 SLIDESHOW_IMAGE_STREAM: Generated signed URL, now streaming through server
+🎵 SLIDESHOW_AUDIO_STREAM: Streaming audio for slideshow: 3
+🎵 SLIDESHOW_AUDIO_STREAM: Audio URL: http://192.168.1.70:5001/uploads/file-1751515628054-645267309.mp3
+🎵 SLIDESHOW_AUDIO_STREAM: Redirecting to external URL
+🎬 SLIDESHOWS: Fetching slideshows for user: 1
+🎬 SLIDESHOWS: Found 12 slideshows
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🔑 ACTIVATION_CODES: Fetching user access codes for user: 1
+🔑 ACTIVATION_CODES: Found 0 access codes
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden
+🎬 SLIDESHOW_ACCESS: ===== STARTING SECURITY CHECK =====
+🎬 SLIDESHOW_ACCESS: Starting endpoint execution
+🎬 SLIDESHOW_ACCESS: Parameters received: { id: '23', activationCode: undefined, hasAuth: true }
+🎬 SLIDESHOW_ACCESS: ✅ Authenticated user found: { userId: 1, email: 'djjetfuel@gmail.com' }
+🎬 SLIDESHOW_ACCESS: 📋 Querying slideshow with ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Slideshow query successful, rows: 1
+🎬 SLIDESHOW_ACCESS: 📋 Slideshow details: {
+  id: 23,
+  name: 'test4',
+  ownerId: 1,
+  requiresActivation: true,
+  isPublic: false
+}
+🎬 SLIDESHOW_ACCESS: 🔒 PROTECTION CHECK: { requiresActivationCode: true, isPublic: false }
+🎬 SLIDESHOW_ACCESS: 📸 Querying images for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Images query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 🛍️ Querying product links for slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: ✅ Product links query successful, rows: 3
+🎬 SLIDESHOW_ACCESS: 📦 Creating slideshow object with images and product links
+🎬 SLIDESHOW_ACCESS: 🚨 SECURITY DECISION POINT 🚨
+🎬 SLIDESHOW_ACCESS: Slideshow requires activation code: true
+🎬 SLIDESHOW_ACCESS: 🔒 SLIDESHOW IS PROTECTED - ACTIVATION CODE REQUIRED
+🎬 SLIDESHOW_ACCESS: 🔍 Checking user profile for valid activation codes
+🎬 SLIDESHOW_ACCESS: User ID: 1 Slideshow ID: 23
+🎬 SLIDESHOW_ACCESS: Profile access query result: { rowCount: 0, codes: [] }
+🎬 SLIDESHOW_ACCESS: ❌ User does not have valid activation code in profile
+🎬 SLIDESHOW_ACCESS: 🔍 Checking URL-provided activation code
+🎬 SLIDESHOW_ACCESS: Activation code from URL: undefined
+🎬 SLIDESHOW_ACCESS: 🚨 CRITICAL SECURITY BLOCK 🚨
+🎬 SLIDESHOW_ACCESS: ❌ Activation code required but not provided - ACCESS DENIED
+🎬 SLIDESHOW_ACCESS: ❌ Returning 403 Forbidden

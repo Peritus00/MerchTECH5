@@ -40,9 +40,9 @@ class S3Service {
         ContentType: contentType,
         CacheControl: 'max-age=31536000',
         Metadata: {
-          userId: userId,
+          userId: String(userId),
           uploadedAt: new Date().toISOString(),
-          originalName: fileName,
+          originalName: String(fileName),
         },
       });
       const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
@@ -55,10 +55,8 @@ class S3Service {
     }
   }
 
-  async uploadFile(fileBuffer, fileName, contentType, userId) {
+  async uploadFile(fileBuffer, key, contentType) {
     try {
-      // Always use structured key for all uploads
-      const key = `users/${userId}/media/${Date.now()}-${fileName}`;
       console.log(`📤 Uploading file to S3: ${key}`);
       console.log(`📊 File size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       console.log(`📁 Content type: ${contentType}`);
@@ -71,9 +69,7 @@ class S3Service {
           ContentType: contentType,
           CacheControl: 'max-age=31536000',
           Metadata: {
-            userId: userId,
             uploadedAt: new Date().toISOString(),
-            originalName: fileName,
           },
         },
       });
@@ -86,7 +82,7 @@ class S3Service {
       const result = await upload.done();
       const fileUrl = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`;
       console.log(`✅ File uploaded successfully: ${fileUrl}`);
-      return fileUrl;
+      return { Location: fileUrl, Key: key };
     } catch (error) {
       console.error('❌ S3 upload failed:', error);
       throw new Error(`Failed to upload file to S3: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -152,9 +148,53 @@ class S3Service {
     }
   }
 
+  async getMetadata(key) {
+    try {
+      const command = new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+      const { ContentLength, ContentType, ETag, LastModified } = await s3Client.send(command);
+      return { ContentLength, ContentType, ETag, LastModified };
+    } catch (error) {
+      console.error(`❌ Failed to get metadata for ${key}:`, error);
+      throw error;
+    }
+  }
+
+  getStream(key, range = null) {
+    const params = {
+      Bucket: this.bucketName,
+      Key: key,
+    };
+    if (range) {
+      params.Range = `bytes=${range.start}-${range.end}`;
+    }
+    const command = new GetObjectCommand(params);
+    
+    // This is a workaround to convert the AWS SDK v3 stream to a Node.js readable stream
+    // that can be piped correctly.
+    const { Readable } = require('stream');
+    
+    const stream = new Readable({
+      read() {}
+    });
+
+    s3Client.send(command).then(response => {
+      response.Body.on('data', (chunk) => stream.push(chunk));
+      response.Body.on('end', () => stream.push(null));
+      response.Body.on('error', (err) => stream.emit('error', err));
+    }).catch(err => {
+      stream.emit('error', err);
+    });
+
+    return stream;
+  }
+
   extractKeyFromUrl(url) {
     try {
-      const match = url.match(/https:\/\/.+?\.amazonaws\.com\/(.+)/);
+      const decodedUrl = decodeURIComponent(url);
+      const match = decodedUrl.match(/https:\/\/.+?\.amazonaws\.com\/(.+)/);
       return match ? match[1] : null;
     } catch (error) {
       return null;
@@ -218,4 +258,5 @@ class S3Service {
   }
 }
 
-module.exports.S3Service = S3Service; 
+module.exports.S3Service = S3Service;
+module.exports.S3Service = S3Service;

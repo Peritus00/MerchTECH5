@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { activationCodesAPI } from '@/services/api';
 import { Audio } from 'expo-av';
 import { useRef } from 'react';
+import PreviewPlayer from '@/components/PreviewPlayer';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -54,6 +55,63 @@ export default function SlideshowAccessScreen() {
     username: '',
     firstName: '',
   });
+
+  // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
+  const formattedMediaFiles = React.useMemo(() => {
+    if (!slideshow?.images) {
+      console.log('🎬 SLIDESHOW_ACCESS: No slideshow images found');
+      return [];
+    }
+    
+    const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+    
+    console.log('🎬 SLIDESHOW_ACCESS: Formatting slideshow images:', slideshow.images);
+    console.log('🎬 SLIDESHOW_ACCESS: Base URL:', baseUrl);
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow autoplay interval:', slideshow.autoplayInterval, 'ms');
+    
+    // Map images to media files for the preview player
+    const imageFiles = slideshow.images.map((image: any, index: number) => {
+      const streamUrl = image.imageUrl.includes('amazonaws.com') 
+        ? `${baseUrl}/api/slideshow-images/${image.id}/stream`
+        : image.imageUrl;
+        
+      console.log(`🎬 SLIDESHOW_ACCESS: Image ${index + 1}:`, {
+        id: image.id,
+        originalUrl: image.imageUrl,
+        streamUrl: streamUrl,
+        caption: image.caption
+      });
+      
+      return {
+        id: image.id,
+        title: image.caption || `Image ${index + 1}`,
+        url: streamUrl,
+        fileType: 'image',
+        contentType: 'image/jpeg',
+        type: 'image', // Add type property like the playlist does
+        duration: slideshow.autoplayInterval || 5000,
+      };
+    });
+
+    // Don't add background audio as a separate media file
+    // The PreviewPlayer will handle slideshow background audio separately
+    // Just log the audio URL for debugging
+    if (slideshow.audioUrl) {
+      const audioStreamUrl = slideshow.audioUrl.includes('amazonaws.com')
+        ? `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`
+        : slideshow.audioUrl;
+      
+      console.log('🎬 SLIDESHOW_ACCESS: Background audio available:', {
+        originalUrl: slideshow.audioUrl,
+        streamUrl: audioStreamUrl
+      });
+      
+      // Don't add to imageFiles array - PreviewPlayer will handle it separately
+    }
+    
+    console.log('🎬 SLIDESHOW_ACCESS: Final formatted media files:', imageFiles);
+    return imageFiles;
+  }, [slideshow]);
 
   useEffect(() => {
     fetchSlideshow();
@@ -88,21 +146,23 @@ export default function SlideshowAccessScreen() {
     };
   }, [showPreview, isFullAccess, previewTimeLeft]);
 
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    
-    if (showPreview && slideshow) {
-      interval = setInterval(() => {
-        setCurrentImageIndex(prev => 
-          prev >= slideshow.images.length - 1 ? 0 : prev + 1
-        );
-      }, 3000); // Change image every 3 seconds
-    }
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [showPreview, slideshow]);
+  // Note: Image cycling is now handled by PreviewPlayer component
+  // This effect is no longer needed as PreviewPlayer handles the slideshow cycling
+  // useEffect(() => {
+  //   let interval: NodeJS.Timeout;
+  //   
+  //   if (showPreview && slideshow) {
+  //     interval = setInterval(() => {
+  //       setCurrentImageIndex(prev => 
+  //         prev >= slideshow.images.length - 1 ? 0 : prev + 1
+  //       );
+  //     }, 3000); // Change image every 3 seconds
+  //   }
+  //
+  //   return () => {
+  //     if (interval) clearInterval(interval);
+  //   };
+  // }, [showPreview, slideshow]);
 
   // Cleanup audio when component unmounts
   useEffect(() => {
@@ -116,9 +176,25 @@ export default function SlideshowAccessScreen() {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
       const { slideshowAPI } = await import('@/services/api');
-      const slideshowData = await slideshowAPI.getById(id);
+      const slideshowData = await slideshowAPI.getByIdForAccess(id);
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshowData?.name);
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshowData?.images);
+      console.log('🎬 SLIDESHOW_ACCESS: Images length:', slideshowData?.images?.length);
+      console.log('🎬 SLIDESHOW_ACCESS: requiresActivationCode:', slideshowData?.requiresActivationCode);
+
+      // Check if access is restricted
+      if (slideshowData.accessRestricted) {
+        console.log('🎬 SLIDESHOW_ACCESS: Access is restricted, showing access options');
+        // Set slideshow data but don't set full access
+        setSlideshow(slideshowData);
+        // Don't set isFullAccess to true - user needs to enter activation code
+      } else {
+        console.log('🎬 SLIDESHOW_ACCESS: Full access granted');
+        setSlideshow(slideshowData);
+        // Access is granted, user can view slideshow
+      }
 
       // Log images from server
       if (slideshowData.images) {
@@ -142,11 +218,33 @@ export default function SlideshowAccessScreen() {
         }
       }
 
-      setSlideshow(slideshowData);
     } catch (error: any) {
       console.error('🎬 SLIDESHOW_ACCESS: Error fetching slideshow:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to load slideshow';
-      Alert.alert('Error', errorMessage);
+      
+      // Handle 403 errors specifically - this means slideshow exists but access is denied
+      if (error.response && error.response.status === 403) {
+        console.log('🎬 SLIDESHOW_ACCESS: 403 error - slideshow exists but access denied, showing access form');
+        // Create a minimal slideshow object so the access form can be shown
+        const minimalSlideshow = {
+          id: parseInt(id),
+          name: 'Protected Slideshow',
+          requiresActivationCode: true,
+          images: [],
+          description: 'This slideshow requires an activation code to access.',
+          isPublic: false,
+          userId: null,
+          audioUrl: null,
+          autoplayInterval: 5000,
+          transition: 'fade',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setSlideshow(minimalSlideshow);
+      } else {
+        // Handle other errors
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to load slideshow';
+        Alert.alert('Error', errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -164,12 +262,10 @@ export default function SlideshowAccessScreen() {
         return;
       }
 
-      // CRITICAL CHECK: If slideshow doesn't require activation code, show slideshow directly with full access
+      // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to media player
       if (!slideshow.requiresActivationCode) {
-        console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, showing slideshow directly with full access');
-        setIsFullAccess(true);
-        setShowPreview(true);
-        startAudio(); // Start audio for public slideshows
+        console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to media player');
+        router.replace(`/media-player/${id}`);
         return;
       }
 
@@ -208,10 +304,9 @@ export default function SlideshowAccessScreen() {
           console.log('🎬 SLIDESHOW_ACCESS: Has valid access result:', hasValidAccess);
           
           if (hasValidAccess) {
-            console.log('🎬 SLIDESHOW_ACCESS: User has valid access code for this slideshow, showing slideshow');
-            setIsFullAccess(true);
-            setShowPreview(true);
-            startAudio(); // Start audio for authorized users
+            console.log('🎬 SLIDESHOW_ACCESS: User has valid access code for this slideshow, redirecting directly to media player');
+            // Redirect directly to media player for users with valid access codes
+            router.replace(`/media-player/${id}`);
             return;
           } else {
             console.log('🎬 SLIDESHOW_ACCESS: User has no valid access codes for this slideshow');
@@ -269,10 +364,8 @@ export default function SlideshowAccessScreen() {
       // Check if user has purchased access (you can implement this based on your payment system)
       const hasPurchasedAccess = await checkPurchasedAccess(id);
       if (hasPurchasedAccess) {
-        console.log('🎬 SLIDESHOW_ACCESS: User has purchased access, showing slideshow');
-        setIsFullAccess(true);
-        setShowPreview(true);
-        startAudio(); // Start audio for purchased access
+        console.log('🎬 SLIDESHOW_ACCESS: User has purchased access, redirecting directly to media player');
+        router.replace(`/media-player/${id}`);
         return;
       }
 
@@ -375,10 +468,9 @@ export default function SlideshowAccessScreen() {
       // Store the activation code for future access
       await AsyncStorage.setItem(`slideshow_access_${id}`, code);
       
-      // Show slideshow with full access
-      setIsFullAccess(true);
-      setShowPreview(true);
-      startAudio(); // Start audio for attached codes
+      // Redirect directly to media player with full access
+      console.log('🎬 SLIDESHOW_ACCESS: Code attached successfully, redirecting to media player');
+      router.replace(`/media-player/${id}`);
     } catch (error) {
       console.error('🎬 SLIDESHOW_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');
@@ -386,6 +478,11 @@ export default function SlideshowAccessScreen() {
   };
 
   const handlePreviewStart = () => {
+    console.log('🎬 SLIDESHOW_ACCESS: Starting inline preview');
+    console.log('🎬 SLIDESHOW_ACCESS: Current slideshow data:', slideshow);
+    console.log('🎬 SLIDESHOW_ACCESS: Current slideshow images:', slideshow?.images);
+    console.log('🎬 SLIDESHOW_ACCESS: formattedMediaFiles length:', formattedMediaFiles?.length);
+    console.log('🎬 SLIDESHOW_ACCESS: formattedMediaFiles:', formattedMediaFiles);
     setIsFullAccess(false); // This is just a preview, not full access
     setShowPreview(true);
     setPreviewTimeLeft(30);
@@ -408,9 +505,14 @@ export default function SlideshowAccessScreen() {
   const startAudio = async () => {
     if (slideshow?.audioUrl && !soundRef.current) {
       try {
-        console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', slideshow.audioUrl);
+        // Use streaming endpoint for S3 audio URLs
+        const audioUrl = slideshow.audioUrl.includes('amazonaws.com') 
+          ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+          : slideshow.audioUrl;
+        
+        console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
         const { sound } = await Audio.Sound.createAsync(
-          { uri: slideshow.audioUrl }, 
+          { uri: audioUrl }, 
           { shouldPlay: true, isLooping: true }
         );
         soundRef.current = sound;
@@ -473,89 +575,113 @@ export default function SlideshowAccessScreen() {
     );
   }
 
+
+
   if (showPreview) {
     return (
       <ThemedView style={styles.previewContainer}>
+        {/* Preview Header */}
         <View style={styles.previewHeader}>
-          {/* Only show header back button for limited previews, not full access */}
-          {!isFullAccess && (
-            <TouchableOpacity 
-              style={styles.backButton}
-              onPress={() => {
-                stopAudio(); // Stop audio when going back
-                setShowPreview(false);
-                setIsFullAccess(false);
-              }}
-            >
-              <MaterialIcons name="arrow-back" size={24} color="#fff" />
-            </TouchableOpacity>
-          )}
-          <Text style={styles.previewTitle}>{slideshow.name}</Text>
-          {!isFullAccess && (
-            <View style={styles.previewTimer}>
-              <MaterialIcons name="timer" size={16} color="#f59e0b" />
-              <Text style={styles.previewTimerText}>{previewTimeLeft}s</Text>
-            </View>
-          )}
-          {isFullAccess && (
-            <View style={styles.fullAccessBadge}>
-              <MaterialIcons name="check-circle" size={16} color="#10b981" />
-              <Text style={styles.fullAccessText}>Full Access</Text>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.imageContainer}>
-          {slideshow.images.length > 0 && (
-            <Image
-              source={{ uri: slideshow.images[currentImageIndex].imageUrl }}
-              style={styles.previewImage}
-              resizeMode="cover"
-            />
-          )}
-          <View style={styles.imageOverlay}>
-            <Text style={styles.imageCaption}>
-              {slideshow.images[currentImageIndex]?.caption}
-            </Text>
-            <Text style={styles.imageCounter}>
-              {currentImageIndex + 1} / {slideshow.images.length}
-            </Text>
+          <TouchableOpacity 
+            style={styles.previewBackButton}
+            onPress={() => {
+              stopAudio();
+              setShowPreview(false);
+            }}
+          >
+            <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+          </TouchableOpacity>
+          <View style={styles.previewHeaderContent}>
+            <Text style={styles.previewTitle}>30-Second Preview</Text>
+            <Text style={styles.previewSubtitle}>{slideshow.name}</Text>
+          </View>
+          <View style={styles.previewTimer}>
+            <MaterialIcons name="timer" size={16} color="#f59e0b" />
+            <Text style={styles.previewTimerText}>{previewTimeLeft}s</Text>
           </View>
         </View>
 
-        <View style={styles.previewActions}>
-          {!isFullAccess && (
-            <>
-              <TouchableOpacity
-                style={styles.stopPreviewButton}
-                onPress={() => {
-                  stopAudio(); // Stop audio when stopping preview
-                  setShowPreview(false);
-                }}
-              >
-                <Text style={styles.stopPreviewText}>Stop Preview</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.storeButton}
-                onPress={handleGoToStore}
-              >
-                <MaterialIcons name="storefront" size={20} color="#fff" />
-                <Text style={styles.storeButtonText}>Visit Store</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          {isFullAccess && (
-            <TouchableOpacity
-              style={styles.fullAccessButton}
-              onPress={() => {
-                stopAudio(); // Stop audio when going back to slideshows
-                router.back(); // Go directly back to slideshows
-              }}
-            >
-              <MaterialIcons name="home" size={20} color="#fff" />
-              <Text style={styles.fullAccessButtonText}>Back to Slideshows</Text>
-            </TouchableOpacity>
-          )}
+        {/* Main Content Area */}
+        <View style={styles.previewMainContent}>
+          {/* Full Width Panel - Media Player and Chat */}
+          <View style={styles.fullPanel}>
+            {/* Media Player Section */}
+            <View style={styles.mediaSection}>
+                          <PreviewPlayer
+              mediaFiles={formattedMediaFiles}
+              playlistName={slideshow.name}
+              previewDuration={30}
+              autoplay={false}
+              productLinks={slideshow.productLinks || []}
+              onPreviewComplete={handlePreviewComplete}
+              backgroundAudioUrl={slideshow.audioUrl ? 
+                (slideshow.audioUrl.includes('amazonaws.com') 
+                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+                  : slideshow.audioUrl) 
+                : undefined}
+            />
+            </View>
+
+            {/* Chat Section */}
+            <View style={styles.chatSection}>
+              <View style={styles.chatHeader}>
+                <MaterialIcons name="chat" size={20} color="#3b82f6" />
+                <Text style={styles.chatTitle}>Live Chat</Text>
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText}>0</Text>
+                </View>
+              </View>
+
+              <View style={styles.chatMessages}>
+                <View style={styles.chatEmptyContainer}>
+                  <MaterialIcons name="chat" size={48} color="#ccc" />
+                  <Text style={styles.chatEmptyText}>
+                    {user ? 
+                      "No messages yet. Be the first to share your thoughts!" :
+                      "Join the conversation! Log in to see and post messages."
+                    }
+                  </Text>
+                </View>
+              </View>
+              
+              <View style={styles.chatInputWrapper}>
+                {user ? (
+                  <>
+                    <Text style={styles.chatInputLabel}>Write a message:</Text>
+                    <View style={styles.chatInputContainer}>
+                      <TextInput
+                        style={styles.messageInput}
+                        value=""
+                        placeholder="Type your message..."
+                        placeholderTextColor="#999"
+                        multiline
+                        maxLength={1000}
+                        editable={false}
+                      />
+                      <TouchableOpacity
+                        style={[styles.sendButton, styles.sendButtonDisabled]}
+                        disabled={true}
+                      >
+                        <MaterialIcons name="send" size={20} color="#fff" />
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.chatInputFooter}>
+                      <Text style={styles.chatInputHint}>
+                        Chat available after full access
+                      </Text>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.chatAuthPrompt}>
+                    <Text style={styles.chatAuthText}>Please log in to join the conversation.</Text>
+                    <TouchableOpacity style={styles.chatAuthButton} onPress={() => router.push('/auth/login')}>
+                      <Text style={styles.chatAuthButtonText}>Log In</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+          </View>
         </View>
       </ThemedView>
     );
@@ -578,7 +704,7 @@ export default function SlideshowAccessScreen() {
           <MaterialIcons name="slideshow" size={48} color="#3b82f6" />
           <Text style={styles.slideshowName}>{slideshow.name}</Text>
           <Text style={styles.slideshowSubtitle}>
-            {slideshow.images.length} images • Premium Content
+            {slideshow.images.length} images | Premium Content
           </Text>
           {slideshow.description && (
             <Text style={styles.slideshowDescription}>{slideshow.description}</Text>
@@ -641,6 +767,23 @@ export default function SlideshowAccessScreen() {
               <Text style={styles.previewButtonText}>Start Preview</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Go to Store Option */}
+          <View style={styles.optionCard}>
+            <View style={styles.optionHeader}>
+              <MaterialIcons name="storefront" size={24} color="#8b5cf6" />
+              <Text style={styles.optionTitle}>Visit Our Store</Text>
+            </View>
+            <Text style={styles.optionDescription}>
+              If you don't have an activation code, you can visit our store to purchase one.
+            </Text>
+            <TouchableOpacity
+              style={styles.storePromoButton}
+              onPress={handleGoToStore}
+            >
+              <Text style={styles.storePromoButtonText}>Visit Store</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Store Promotion */}
@@ -678,15 +821,174 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#f8fafc',
   },
+  previewMainContent: {
+    flex: 1,
+    padding: 20,
+  },
+  fullPanel: {
+    flex: 1,
+    flexDirection: 'column',
+    gap: 20,
+  },
+  mediaSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  chatSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+    maxHeight: 400,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  chatTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginLeft: 8,
+    flex: 1,
+  },
+  chatBadge: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    minWidth: 24,
+    alignItems: 'center',
+  },
+  chatBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  chatMessages: {
+    flex: 1,
+    maxHeight: 200,
+    marginBottom: 16,
+  },
+  chatEmptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  chatEmptyText: {
+    color: '#6b7280',
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
+  },
+  chatInputWrapper: {
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    paddingTop: 16,
+  },
+  chatInputLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  chatInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  messageInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+    maxHeight: 80,
+    backgroundColor: '#f9fafb',
+  },
+  sendButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    backgroundColor: '#9ca3af',
+    opacity: 0.5,
+  },
+  chatInputFooter: {
+    marginTop: 4,
+  },
+  chatInputHint: {
+    fontSize: 12,
+    color: '#6b7280',
+    textAlign: 'right',
+  },
+  chatAuthPrompt: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  chatAuthText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  chatAuthButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+  },
+  chatAuthButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
   previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
     paddingTop: 50, // Account for status bar
+  },
+  previewBackButton: {
+    padding: 8,
+  },
+  previewHeaderContent: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  previewSubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 2,
   },
   backButton: {
     padding: 8,
@@ -727,6 +1029,9 @@ const styles = StyleSheet.create({
   imageContainer: {
     flex: 1,
     position: 'relative',
+    backgroundColor: '#000',
+    borderRadius: 8,
+    overflow: 'hidden',
   },
   previewImage: {
     flex: 1,
@@ -753,7 +1058,9 @@ const styles = StyleSheet.create({
   previewActions: {
     flexDirection: 'row',
     padding: 16,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
     gap: 12,
   },
   stopPreviewButton: {
@@ -970,5 +1277,112 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#fff',
     marginLeft: 8,
+  },
+  previewMainContent: {
+    flexDirection: 'row',
+    flex: 1,
+  },
+  previewLeftPanel: {
+    flex: 1,
+    backgroundColor: '#000', // Dark background for media player
+    padding: 16,
+  },
+  previewPlayerSection: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  previewChatSection: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+    marginTop: 16,
+  },
+  chatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  chatTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginLeft: 8,
+  },
+  chatContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  chatPlaceholder: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  chatPlaceholderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 12,
+  },
+  chatPlaceholderSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  previewProductPanel: {
+    width: 280, // Fixed width for the product panel
+    backgroundColor: '#000', // Dark background for products
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  productHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  productPanelTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginLeft: 8,
+  },
+  adPlaceholder: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  adPlaceholderText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginTop: 12,
+  },
+  adPlaceholderSubtext: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginTop: 4,
   },
 });

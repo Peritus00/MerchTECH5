@@ -71,7 +71,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaType.Images,
+        mediaTypes: ['images'],
         allowsMultipleSelection: true,
         quality: 0.8,
       });
@@ -110,17 +110,31 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
         isFile: filePayload instanceof File
       });
       
-      const fileUrl = await fileUploadAPI.upload(filePayload);
-      console.log('📤 SLIDESHOW uploadImage: fileUrl received', fileUrl);
-      console.log('📤 SLIDESHOW uploadImage: calling addImage for slideshow', slideshow.id);
+      // Upload file directly to slideshow endpoint
+      const newImageFromServer = await slideshowAPI.addImage(slideshow.id, filePayload, '', displayOrder);
+      console.log('📤 SLIDESHOW uploadImage: Image uploaded successfully', newImageFromServer);
+      console.log('📤 SLIDESHOW uploadImage: Server response keys:', Object.keys(newImageFromServer));
+      console.log('📤 SLIDESHOW uploadImage: imageUrl field:', newImageFromServer.imageUrl);
+      console.log('📤 SLIDESHOW uploadImage: url field:', newImageFromServer.url);
 
-      const updatedSlideshow = await slideshowAPI.addImage(slideshow.id, {
-        imageUrl: fileUrl,
-        displayOrder,
-      });
+      // Map server response to frontend format
+      const newImage = {
+        id: newImageFromServer.id,
+        slideshowId: newImageFromServer.slideshowId,
+        imageUrl: newImageFromServer.imageUrl || newImageFromServer.url,
+        caption: newImageFromServer.caption,
+        displayOrder: newImageFromServer.position
+      };
 
-      // Refresh local state from server response
-      setImages(updatedSlideshow.images.sort((a, b) => a.displayOrder - b.displayOrder));
+      // Update local state with new image
+      const updatedImages = [...images, newImage].sort((a, b) => a.displayOrder - b.displayOrder);
+      setImages(updatedImages);
+      
+      // Update parent component with updated slideshow
+      const updatedSlideshow = {
+        ...slideshow,
+        images: updatedImages
+      };
       onImagesUpdated(updatedSlideshow);
     } catch (error) {
       console.error('Error uploading image:', error);
@@ -130,11 +144,19 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
 
   const handleDeleteImage = async (imageId: number) => {
     console.log('🗑️ handleDeleteImage called for', imageId);
+    
+    if (!slideshow) {
+      console.error('🗑️ No slideshow available for deletion');
+      Alert.alert('Error', 'No slideshow available');
+      return;
+    }
+    
+    const slideshowId = slideshow.id;
+    
     const confirmDelete = async () => {
-      if (!slideshow) return;
-      console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshow.id);
+      console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshowId);
       try {
-        const updated = await slideshowAPI.deleteImage(slideshow.id, imageId);
+        const updated = await slideshowAPI.deleteImage(slideshowId, imageId);
         console.log('🗑️ deleteImage API success, fresh images length', updated.images.length);
         setImages(updated.images);
         onImagesUpdated(updated);
@@ -186,7 +208,10 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
         multiple: false,
       });
 
-      if (result.canceled || !slideshow) return;
+      if (result.canceled || !slideshow) {
+        console.log('🎵 SLIDESHOW handleAddAudio: Selection canceled or no slideshow');
+        return;
+      }
 
       const file = result.assets[0];
       console.log('🎵 SLIDESHOW handleAddAudio: File selected', {
@@ -200,16 +225,38 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
 
       const filename = file.name || `audio_${Date.now()}.mp3`;
       console.log('🎵 SLIDESHOW handleAddAudio: About to upload with filename', filename);
-      const audioUrlServer = await fileUploadAPI.upload({ uri: file.uri, name: filename, type: file.mimeType || 'audio/mpeg' });
+      
+      const audioUrlServer = await fileUploadAPI.upload({ 
+        uri: file.uri, 
+        name: filename, 
+        type: file.mimeType || 'audio/mpeg' 
+      });
+      
       console.log('🎵 SLIDESHOW handleAddAudio: Upload successful, audioUrl', audioUrlServer);
 
       const updatedSlideshow = await slideshowAPI.updateAudio(slideshow.id, audioUrlServer);
+      console.log('🎵 SLIDESHOW handleAddAudio: Slideshow updated', updatedSlideshow);
+      console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow audioUrl:', updatedSlideshow?.audioUrl);
+      console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow keys:', Object.keys(updatedSlideshow || {}));
 
-      onImagesUpdated(updatedSlideshow);
+      // Validate that we got a proper slideshow object back
+      if (!updatedSlideshow || !updatedSlideshow.id) {
+        console.error('🎵 SLIDESHOW handleAddAudio: Invalid slideshow response:', updatedSlideshow);
+        Alert.alert('Error', 'Failed to update slideshow - invalid response from server');
+        return;
+      }
+
+      // Ensure the slideshow has the images array
+      const slideshowWithImages = {
+        ...updatedSlideshow,
+        images: updatedSlideshow.images || images
+      };
+
+      onImagesUpdated(slideshowWithImages);
       Alert.alert('Success', 'Audio added to slideshow');
     } catch (error) {
-      console.error('Error selecting audio:', error);
-      Alert.alert('Error', 'Failed to select audio');
+      console.error('🎵 SLIDESHOW handleAddAudio: Error:', error);
+      Alert.alert('Error', 'Failed to add audio to slideshow');
     } finally {
       setAudioUploading(false);
     }
@@ -240,6 +287,8 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
         <View style={styles.slideshowInfo}>
           <Text style={styles.slideshowName}>{slideshow.name}</Text>
           <Text style={styles.imageCount}>{images.length} images</Text>
+          {/* Debug audio URL */}
+          {console.log('🎵 SLIDESHOW_MANAGER: slideshow.audioUrl:', slideshow.audioUrl, 'Type:', typeof slideshow.audioUrl)}
           {slideshow.audioUrl ? (
             <View style={styles.audioInfo}>
               <MaterialIcons name="music-note" size={20} color="#1f2937" />
@@ -268,7 +317,11 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
             <View style={styles.imagesGrid}>
               {images.map((image, index) => (
                 <View key={image.id} style={styles.imageCard}>
-                  <Image source={{ uri: image.imageUrl }} style={styles.imagePreview} />
+                  <Image source={{ 
+                    uri: image.imageUrl && image.imageUrl.includes('amazonaws.com') 
+                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-images/${image.id}/stream`
+                      : image.imageUrl || 'https://placehold.co/150x150?text=No+Image'
+                  }} style={styles.imagePreview} />
                   
                   <View style={styles.imageActions}>
                     <View style={styles.orderBadge}>

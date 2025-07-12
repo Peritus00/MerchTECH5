@@ -10,6 +10,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { MediaFile } from '@/shared/media-schema';
+import { useRouter } from 'expo-router';
 
 interface InlineMediaPlayerProps {
   file: MediaFile;
@@ -23,6 +24,30 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
   color = '#3b82f6' 
 }) => {
   const [isInitialized, setIsInitialized] = useState(false);
+  const router = useRouter();
+  
+  // Check if this is a video file
+  const isVideo = file.type === 'video' || file.fileType === 'video' || file.contentType?.startsWith('video/');
+  
+  // If it's a video file, navigate to media player instead of trying to play as audio
+  if (isVideo) {
+    return (
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => {
+          console.log('🔴 INLINE_PLAYER: Video file clicked, navigating to media player:', file.id);
+          router.push(`/media-player/${file.id}`);
+        }}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons
+          name="videocam"
+          size={size}
+          color={color}
+        />
+      </TouchableOpacity>
+    );
+  }
   
   // Web audio fallback
   const webAudioRef = useRef<HTMLAudioElement | null>(null);

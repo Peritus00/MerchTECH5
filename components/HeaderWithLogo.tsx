@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
+import { CartHeader } from '@/components/CartHeader';
 
 interface HeaderWithLogoProps {
   title: string;
@@ -46,9 +47,13 @@ export default function HeaderWithLogo({
       {/* Right side - Action button */}
       <View style={styles.rightSection}>
         {onRightButtonPress && rightButtonIcon && (
-          <TouchableOpacity onPress={onRightButtonPress} style={styles.rightButton}>
-            <MaterialIconWithFallback name={rightButtonIcon as any} size={24} color={rightButtonColor} />
-          </TouchableOpacity>
+          rightButtonIcon === 'shopping-cart' ? (
+            <CartHeader color={rightButtonColor} size={24} />
+          ) : (
+            <TouchableOpacity onPress={onRightButtonPress} style={styles.rightButton}>
+              <MaterialIconWithFallback name={rightButtonIcon as any} size={24} color={rightButtonColor} />
+            </TouchableOpacity>
+          )
         )}
       </View>
     </View>

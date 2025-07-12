@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat Spacing Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow-y: auto;
+            padding-bottom: 40px;
+        }
+        
+        .web-main-content {
+            display: flex;
+            flex-direction: row;
+            min-height: 100vh;
+            gap: 0;
+        }
+        
+        .left-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            padding-bottom: 40px;
+            gap: 20px;
+            overflow-y: auto;
+        }
+        
+        .right-panel {
+            width: 350px;
+            background-color: #f5f5f5;
+            border-left: 1px solid #eee;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .media-section {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            padding: 20px;
+            min-height: 300px;
+            margin-bottom: 20px;
+        }
+        
+        .chat-section {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+            flex-basis: 450px;
+            flex-shrink: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .chat-header {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            background-color: #f9f9f9;
+        }
+        
+        .chat-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-left: 8px;
+            flex: 1;
+        }
+        
+        .chat-badge {
+            background-color: #007AFF;
+            border-radius: 12px;
+            padding: 2px 8px;
+            min-width: 24px;
+            text-align: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .chat-messages {
+            flex: 1;
+            background-color: #fff;
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+        
+        .chat-input-wrapper {
+            border-top: 1px solid #eee;
+            background-color: #f9f9f9;
+            padding: 15px;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .chat-input-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .chat-input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        
+        .message-input {
+            flex: 1;
+            background-color: #fff;
+            border-radius: 20px;
+            padding: 10px 15px;
+            max-height: 100px;
+            min-height: 40px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            outline: none;
+            resize: none;
+        }
+        
+        .send-button {
+            background-color: #007AFF;
+            border-radius: 20px;
+            padding: 12px;
+            border: 1px solid #007AFF;
+            color: white;
+            min-width: 44px;
+            min-height: 44px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .products-section {
+            background-color: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .products-header {
+            display: flex;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .products-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-left: 8px;
+        }
+        
+        .products-content {
+            padding: 20px;
+            text-align: center;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="web-main-content">
+        <!-- Left Panel -->
+        <div class="left-panel">
+            <!-- Media Section -->
+            <div class="media-section">
+                <h3>Media Player</h3>
+                <div style="height: 200px; background-color: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white;">
+                    🎵 Audio Player Placeholder
+                </div>
+                <div style="margin-top: 15px; text-align: center;">
+                    <div style="font-weight: bold;">extracheese.mp3</div>
+                    <div style="color: #666;">Track 1 of 3</div>
+                </div>
+            </div>
+
+            <!-- Chat Section -->
+            <div class="chat-section">
+                <div class="chat-header">
+                    <span>💬</span>
+                    <span class="chat-title">Live Chat</span>
+                    <div class="chat-badge">0</div>
+                </div>
+                
+                <div class="chat-messages">
+                    <div style="font-size: 48px; margin-bottom: 15px;">💬</div>
+                    <div>No messages yet. Be the first to share your thoughts!</div>
+                </div>
+                
+                <div class="chat-input-wrapper">
+                    <div class="chat-input-label">💬 Write a message:</div>
+                    <div class="chat-input-container">
+                        <textarea class="message-input" placeholder="Type your message..." rows="1"></textarea>
+                        <button class="send-button">➤</button>
+                    </div>
+                    <div style="font-size: 12px; color: #999; text-align: right; margin-top: 5px;">
+                        0/1000 characters
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="right-panel">
+            <div class="products-section">
+                <div class="products-header">
+                    <span>🏪</span>
+                    <span class="products-title">Featured Products</span>
+                </div>
+                
+                <div class="products-content">
+                    <div style="font-size: 48px; margin-bottom: 15px;">🏪</div>
+                    <div style="font-weight: bold; margin-bottom: 5px;">Featured Products</div>
+                    <div>Products related to this content will appear here</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html> 

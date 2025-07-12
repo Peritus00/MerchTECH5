@@ -80,7 +80,11 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
       {/* Thumbnail */}
       <View style={styles.thumbnailContainer}>
         {thumbnailImage ? (
-          <Image source={{ uri: thumbnailImage.imageUrl }} style={styles.thumbnail} />
+          <Image source={{ 
+            uri: thumbnailImage.imageUrl && thumbnailImage.imageUrl.includes('amazonaws.com') 
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-images/${thumbnailImage.id}/stream`
+              : thumbnailImage.imageUrl || 'https://placehold.co/150x150?text=No+Image'
+          }} style={styles.thumbnail} />
         ) : (
           <View style={styles.placeholderThumbnail}>
             <MaterialIcons name="slideshow" size={32} color="#9ca3af" />

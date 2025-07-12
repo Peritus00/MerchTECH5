@@ -97,10 +97,17 @@ const SlideshowPreview: React.FC<SlideshowPreviewProps> = ({
     if (slideshow?.audioUrl && !soundRef.current) {
       (async () => {
         try {
-          const { sound } = await Audio.Sound.createAsync({ uri: slideshow.audioUrl }, { shouldPlay: true, isLooping: true });
+          // Use streaming endpoint for S3 audio URLs
+          const audioUrl = slideshow.audioUrl.includes('amazonaws.com') 
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+            : slideshow.audioUrl;
+          
+          console.log('🎵 [DEBUG] Attempting to load and play audio:', audioUrl);
+          const { sound } = await Audio.Sound.createAsync({ uri: audioUrl }, { shouldPlay: true, isLooping: true });
           soundRef.current = sound;
+          console.log('🎵 [DEBUG] Audio loaded and playback started!');
         } catch (err) {
-          console.warn('Failed to load slideshow audio', err);
+          console.warn('🎵 [DEBUG] Failed to load slideshow audio', err);
         }
       })();
     }
@@ -230,7 +237,11 @@ const SlideshowPreview: React.FC<SlideshowPreviewProps> = ({
                 {/* Image Display */}
                 <View style={styles.imageContainer}>
                   <Image
-                    source={{ uri: currentImage.imageUrl }}
+                    source={{ 
+                      uri: currentImage.imageUrl && currentImage.imageUrl.includes('amazonaws.com') 
+                        ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-images/${currentImage.id}/stream`
+                        : currentImage.imageUrl || 'https://placehold.co/150x150?text=No+Image'
+                    }}
                     style={styles.image}
                     resizeMode="contain"
                   />
