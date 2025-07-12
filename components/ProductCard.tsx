@@ -59,9 +59,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   };
 
   // Get the first image or use a default
-  const imageUrl = product.images && product.images.length > 0
+  let imageUrl = product.images && product.images.length > 0
     ? product.images[0]
     : 'https://placehold.co/400x400?text=No+Image';
+
+  // Ensure the URL is secure to prevent mixed content errors
+  if (imageUrl && imageUrl.startsWith('http://')) {
+    imageUrl = imageUrl.replace('http://', 'https://');
+  }
 
   // Get the lowest price for display
   const lowestPrice = product.prices && product.prices.length > 0
