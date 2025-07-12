@@ -2475,6 +2475,32 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
   }
 });
 
+// Helper function to sanitize product image URLs
+const sanitizeImageUrls = (urls) => {
+  if (!Array.isArray(urls)) return [];
+
+  const sanitizedUrls = urls.map(url => {
+    if (typeof url !== 'string') return null;
+
+    // Ensure HTTPS
+    let newUrl = url.replace('http://', 'https://');
+    
+    // Replace local IP with production domain if present
+    const localIpRegex = /https:\/\/192\.168\.[0-9]+\.[0-9]+:[0-9]+/;
+    const publicBaseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+    newUrl = newUrl.replace(localIpRegex, publicBaseUrl);
+    
+    // If it's a relative path, prepend the public base URL
+    if (newUrl.startsWith('/api/')) {
+      newUrl = `${publicBaseUrl}${newUrl}`;
+    }
+    
+    return newUrl;
+  }).filter(Boolean); // Remove any null entries
+
+  return sanitizedUrls;
+};
+
 // Create product
 app.post('/api/products', authenticateToken, async (req, res) => {
   try {
@@ -2532,6 +2558,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     // Format metadata and prices for PostgreSQL
     const formattedMetadata = metadata ? JSON.stringify(metadata) : JSON.stringify({});
     const formattedPrices = prices ? JSON.stringify(prices) : null;
+    const sanitizedImages = sanitizeImageUrls(images);
 
     // Convert price to cents for database storage
     const priceInCents = Math.round(parseFloat(price) * 100);
@@ -2540,7 +2567,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
       `INSERT INTO products (user_id, name, description, images, price, metadata, stripe_product_id, in_stock, prices, category, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
        RETURNING *`,
-      [req.user.userId, name, description, images, priceInCents, formattedMetadata, stripe_product_id, inStock !== false, formattedPrices, category]
+      [req.user.userId, name, description, sanitizedImages, priceInCents, formattedMetadata, stripe_product_id, inStock !== false, formattedPrices, category]
     );
 
     const newProduct = result.rows[0];
@@ -2627,6 +2654,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
     // Format metadata and prices for PostgreSQL
     const formattedMetadata = metadata ? JSON.stringify(metadata) : undefined;
     const formattedPrices = prices ? JSON.stringify(prices) : undefined;
+    const sanitizedImages = images ? sanitizeImageUrls(images) : undefined;
     
     // Convert price to cents for database storage if provided
     const priceInCents = price !== undefined ? Math.round(parseFloat(price) * 100) : undefined;
@@ -2645,7 +2673,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
            updated_at = NOW()
        WHERE id = $10 AND user_id = $11 AND is_deleted = false
        RETURNING *`,
-      [name, description, images, priceInCents, formattedMetadata, stripe_product_id, inStock, formattedPrices, category, id, req.user.userId]
+      [name, description, sanitizedImages, priceInCents, formattedMetadata, stripe_product_id, inStock, formattedPrices, category, id, req.user.userId]
     );
 
     if (result.rowCount === 0) {
