@@ -15,6 +15,9 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
+import { useCart } from '@/contexts/CartContext';
+import { checkoutAPI } from '@/services/api';
+import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
 
 interface MediaFile {
@@ -23,6 +26,7 @@ interface MediaFile {
   url: string;
   fileType: string;
   contentType: string;
+  duration?: number; // For slideshow images
 }
 
 interface PreviewPlayerProps {
@@ -33,6 +37,7 @@ interface PreviewPlayerProps {
   autoplay?: boolean;
   productLinks?: ProductLink[];
   onPreviewComplete?: () => void;
+  backgroundAudioUrl?: string; // For slideshow background audio
 }
 
 export default function PreviewPlayer({
@@ -43,6 +48,7 @@ export default function PreviewPlayer({
   autoplay = false,
   productLinks = [],
   onPreviewComplete,
+  backgroundAudioUrl,
 }: PreviewPlayerProps) {
   const [currentTrack, setCurrentTrack] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
@@ -53,17 +59,51 @@ export default function PreviewPlayer({
   const [showPlayOverlay, setShowPlayOverlay] = useState(true);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const [productImageIndexes, setProductImageIndexes] = useState<{[key: string]: number}>({});
+  
+  // Slideshow-specific state
+  const [slideshowTimer, setSlideshowTimer] = useState<NodeJS.Timeout | null>(null);
+  const [slideshowPlaying, setSlideshowPlaying] = useState(false);
 
   // Web audio fallback
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const [webAudioLoaded, setWebAudioLoaded] = useState(false);
   const [webAudioPlaying, setWebAudioPlaying] = useState(false);
   const [webAudioCurrentTime, setWebAudioCurrentTime] = useState(0);
+  
+  // Background audio for slideshows
+  const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [backgroundAudioPlaying, setBackgroundAudioPlaying] = useState(false);
+  
+  // Overall play state for UI
+  const [isPlaying, setIsPlaying] = useState(false);
 
   const currentMedia = mediaFiles[currentTrack];
   
-  // Determine if current media is video or audio
-  const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/');
+  // Determine if current media is video, audio, or image
+  const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/') || currentMedia?.type === 'video';
+  const isAudio = currentMedia?.fileType === 'audio' || currentMedia?.contentType?.startsWith('audio/') || currentMedia?.type === 'audio';
+  const isImage = currentMedia?.fileType === 'image' || currentMedia?.contentType?.startsWith('image/') || currentMedia?.type === 'image';
+  const isSlideshow = mediaFiles.length > 1 && mediaFiles.some(file => 
+    file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image'
+  );
+  
+  // Debug logging
+  console.log('🔴 PREVIEW_PLAYER: Media analysis:', {
+    currentTrack,
+    mediaFilesLength: mediaFiles.length,
+    currentMedia: currentMedia ? {
+      id: currentMedia.id,
+      title: currentMedia.title,
+      fileType: currentMedia.fileType,
+      contentType: currentMedia.contentType,
+      type: currentMedia.type
+    } : null,
+    isVideo,
+    isAudio,
+    isImage,
+    isSlideshow,
+    backgroundAudioUrl: !!backgroundAudioUrl
+  });
   
   // Use the new expo-audio hooks for audio
   const audioPlayer = useAudioPlayer();
@@ -88,27 +128,24 @@ export default function PreviewPlayer({
   // Load track when current track changes
   useEffect(() => {
     if (currentMedia && currentMedia.url) {
-      console.log('🔴 PREVIEW_PLAYER: Loading media:', currentMedia.title, 'Type:', isVideo ? 'video' : 'audio', 'URL:', currentMedia.url);
-      console.log('🔴 PREVIEW_PLAYER: API URL check:', {
-        EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
-        Platform: Platform.OS,
-        isLocalhost: currentMedia.url.includes('localhost')
-      });
+      console.log('🔴 PREVIEW_PLAYER: Loading media:', currentMedia.title, 'Type:', isVideo ? 'video' : isAudio ? 'audio' : 'image', 'URL:', currentMedia.url);
       console.log('🔴 PREVIEW_PLAYER: Media details:', {
         id: currentMedia.id,
         title: currentMedia.title,
         url: currentMedia.url,
         fileType: currentMedia.fileType,
         contentType: currentMedia.contentType,
-        isVideo: isVideo
+        isVideo,
+        isAudio,
+        isImage,
+        isSlideshow
       });
       
       try {
-        // Use the URL provided by the server (should already be the streaming URL)
-        const streamingUrl = currentMedia.url;
-        console.log('🔴 PREVIEW_PLAYER: Using streaming URL:', streamingUrl);
-        
-        if (isVideo) {
+        if (isImage) {
+          // For images, we don't need to load anything special
+          console.log('🔴 PREVIEW_PLAYER: Image media loaded');
+        } else if (isVideo) {
           // Video player handles URL automatically through useVideoPlayer hook
           console.log('🔴 PREVIEW_PLAYER: Video player will handle URL automatically');
         } else if (Platform.OS === 'web') {
@@ -171,20 +208,12 @@ export default function PreviewPlayer({
             });
           });
           
-          audio.addEventListener('loadstart', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio load started');
-          });
-          
-          audio.addEventListener('progress', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio loading progress');
-          });
-          
           // Set crossOrigin before src to handle CORS
           audio.crossOrigin = 'anonymous';
           audio.preload = 'auto';
           
           // Set the source URL
-          audio.src = streamingUrl;
+          audio.src = currentMedia.url;
           
           // Start loading
           audio.load();
@@ -193,56 +222,119 @@ export default function PreviewPlayer({
         } else {
           // Load audio track with expo-audio for mobile
           console.log('🔴 PREVIEW_PLAYER: Loading audio with expo-audio for mobile');
-          console.log('🔴 PREVIEW_PLAYER: Streaming URL:', streamingUrl);
           
-          audioPlayer.replace(streamingUrl).then(() => {
+          audioPlayer.replace(currentMedia.url).then(() => {
             console.log('🔴 PREVIEW_PLAYER: Audio loaded successfully on mobile');
           }).catch((audioError) => {
-            console.error('🔴 PREVIEW_PLAYER: Failed to load audio on mobile:', audioError);
+            console.error('🔴 PREVIEW_PLAYER: Error loading audio on mobile:', audioError);
           });
         }
-        console.log('🔴 PREVIEW_PLAYER: Media loading initiated successfully');
       } catch (error) {
         console.error('🔴 PREVIEW_PLAYER: Error loading media:', error);
-        console.error('🔴 PREVIEW_PLAYER: Error details:', {
-          message: error.message,
-          name: error.name,
-          stack: error.stack
-        });
       }
     }
-  }, [currentMedia, audioPlayer, isVideo]);
+  }, [currentMedia, isVideo, isAudio, isImage, audioPlayer]);
 
-  // Load track
-  const loadTrack = (index: number) => {
-    setCurrentTrack(index);
-    setCurrentTime(0);
-    setTimeLeft(previewDuration);
-    setPreviewEnded(false);
-  };
+  // Slideshow auto-advance logic
+  useEffect(() => {
+    if (slideshowPlaying && isSlideshow && !previewEnded && mediaFiles.length > 0) {
+      const currentMediaFile = mediaFiles[currentTrack];
+      const duration = currentMediaFile?.duration || 5000; // Use the actual duration from the media file, default 5 seconds
+      
+      console.log(`🔄 SLIDESHOW_CYCLE: Setting timer for ${duration}ms for image "${currentMediaFile?.title}", current track: ${currentTrack}/${mediaFiles.length}`);
+      console.log(`🔄 SLIDESHOW_CYCLE: Media file duration setting:`, {
+        id: currentMediaFile?.id,
+        title: currentMediaFile?.title,
+        duration: currentMediaFile?.duration,
+        usingDuration: duration
+      });
+      
+      const timer = setTimeout(() => {
+        console.log(`🔄 SLIDESHOW_CYCLE: Timer fired after ${duration}ms, advancing from track ${currentTrack}`);
+        if (currentTrack < mediaFiles.length - 1) {
+          const nextTrack = currentTrack + 1;
+          console.log(`🔄 SLIDESHOW_CYCLE: Advancing to track ${nextTrack}`);
+          setCurrentTrack(nextTrack);
+        } else {
+          // Loop back to first image
+          console.log(`🔄 SLIDESHOW_CYCLE: Looping back to track 0`);
+          setCurrentTrack(0);
+        }
+      }, duration);
+      
+      setSlideshowTimer(timer);
+      
+      return () => {
+        if (timer) {
+          console.log(`🔄 SLIDESHOW_CYCLE: Clearing timer for track ${currentTrack}`);
+          clearTimeout(timer);
+        }
+      };
+    } else {
+      // Clear timer if not playing
+      if (slideshowTimer) {
+        console.log(`🔄 SLIDESHOW_CYCLE: Clearing timer - slideshow not playing`);
+        clearTimeout(slideshowTimer);
+        setSlideshowTimer(null);
+      }
+    }
+  }, [slideshowPlaying, currentTrack, mediaFiles.length, currentMedia, isSlideshow, previewEnded]);
 
   // Track preview time and end after duration
   useEffect(() => {
-    const currentPlayTime = isVideo ? videoPlayer.currentTime : 
-                           (Platform.OS === 'web' ? webAudioCurrentTime : audioStatus.currentTime);
-    const isPlaying = isVideo ? videoPlayer.playing : 
-                     (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing);
-    
-    if (isPlaying && currentPlayTime) {
-      const currentSeconds = Math.floor(currentPlayTime);
-      setCurrentTime(currentSeconds);
-      setTimeLeft(Math.max(0, previewDuration - currentSeconds));
+    if (isImage || isSlideshow) {
+      // For images/slideshows, use different timing logic
+      if (slideshowPlaying) {
+        const timer = setInterval(() => {
+          setCurrentTime(prev => {
+            const newTime = prev + 1;
+            setTimeLeft(Math.max(0, previewDuration - newTime));
+            
+            if (newTime >= previewDuration) {
+              console.log('🔴 PREVIEW_PLAYER: Preview duration reached, ending slideshow');
+              setSlideshowPlaying(false);
+              setIsPlaying(false);
+              setPreviewEnded(true);
+              
+              // Stop background audio
+              if (backgroundAudioRef.current) {
+                backgroundAudioRef.current.pause();
+              }
+              
+              if (onPreviewComplete) {
+                onPreviewComplete();
+              }
+            }
+            
+            return newTime;
+          });
+        }, 1000);
+        
+        return () => clearInterval(timer);
+      }
+    } else {
+      // Original audio/video timing logic
+      const currentPlayTime = isVideo ? videoPlayer.currentTime : 
+                             (Platform.OS === 'web' ? webAudioCurrentTime : audioStatus.currentTime);
+      const isPlaying = isVideo ? videoPlayer.playing : 
+                       (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing);
+      
+      if (isPlaying && currentPlayTime) {
+        const currentSeconds = Math.floor(currentPlayTime);
+        setCurrentTime(currentSeconds);
+        setTimeLeft(Math.max(0, previewDuration - currentSeconds));
 
-      // End preview after duration
-      if (currentSeconds >= previewDuration) {
-        handlePause();
-        setPreviewEnded(true);
-        if (onPreviewComplete) {
-          onPreviewComplete();
+        // End preview after duration
+        if (currentSeconds >= previewDuration) {
+          handlePause();
+          setPreviewEnded(true);
+          if (onPreviewComplete) {
+            onPreviewComplete();
+          }
         }
       }
     }
-  }, [isVideo, videoPlayer.playing, videoPlayer.currentTime, webAudioPlaying, webAudioCurrentTime, audioStatus.playing, audioStatus.currentTime, previewDuration, onPreviewComplete]);
+  }, [isImage, isSlideshow, slideshowPlaying, isVideo, videoPlayer.playing, videoPlayer.currentTime, webAudioPlaying, webAudioCurrentTime, audioStatus.playing, audioStatus.currentTime, previewDuration, onPreviewComplete]);
 
   // Load initial track
   useEffect(() => {
@@ -253,18 +345,113 @@ export default function PreviewPlayer({
 
   // Auto-play if enabled
   useEffect(() => {
-    if (autoplay && status.isLoaded && !previewEnded && !hasUserInteracted) {
-      const timer = setTimeout(() => {
-        handlePlay();
-      }, 1000);
-      return () => clearTimeout(timer);
+    // Remove autoplay functionality - user must click play button
+    console.log('🔴 PREVIEW_PLAYER: Autoplay disabled - user must click play button');
+  }, [autoplay, status.isLoaded, previewEnded, hasUserInteracted, isImage, isSlideshow, mediaFiles.length]);
+
+  // Background audio setup for slideshows
+  useEffect(() => {
+    console.log('🎵 PREVIEW_PLAYER: Background audio effect triggered with:', {
+      backgroundAudioUrl: !!backgroundAudioUrl,
+      backgroundAudioUrlValue: backgroundAudioUrl,
+      isSlideshow,
+      platformOS: Platform.OS,
+      mediaFilesLength: mediaFiles.length,
+      shouldSetupAudio: backgroundAudioUrl && Platform.OS === 'web'
+    });
+    
+    // Setup audio if we have a background audio URL and we're on web platform
+    // Don't wait for isSlideshow to be true, as it might have timing issues
+    if (backgroundAudioUrl && Platform.OS === 'web') {
+      console.log('🎵 PREVIEW_PLAYER: Setting up background audio:', backgroundAudioUrl);
+      
+      // Test if the audio URL is accessible
+      fetch(backgroundAudioUrl, { method: 'HEAD' })
+        .then(response => {
+          console.log('🎵 PREVIEW_PLAYER: Background audio URL test response:', {
+            status: response.status,
+            statusText: response.statusText,
+            contentType: response.headers.get('content-type'),
+            url: backgroundAudioUrl
+          });
+        })
+        .catch(error => {
+          console.error('🎵 PREVIEW_PLAYER: Background audio URL test failed:', error);
+        });
+      
+      const audio = new Audio();
+      backgroundAudioRef.current = audio;
+      
+      audio.addEventListener('loadstart', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio load started');
+      });
+      
+      audio.addEventListener('loadeddata', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio loaded');
+      });
+      
+      audio.addEventListener('canplaythrough', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio can play through');
+      });
+      
+      audio.addEventListener('play', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio started');
+        setBackgroundAudioPlaying(true);
+      });
+      
+      audio.addEventListener('pause', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio paused');
+        setBackgroundAudioPlaying(false);
+      });
+      
+      audio.addEventListener('ended', () => {
+        console.log('🎵 PREVIEW_PLAYER: Background audio ended');
+        setBackgroundAudioPlaying(false);
+      });
+      
+      audio.addEventListener('error', (e) => {
+        console.error('🎵 PREVIEW_PLAYER: Background audio error:', e);
+        console.error('🎵 PREVIEW_PLAYER: Background audio error details:', {
+          error: audio.error,
+          networkState: audio.networkState,
+          readyState: audio.readyState,
+          src: audio.src
+        });
+      });
+      
+      audio.crossOrigin = 'anonymous';
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.src = backgroundAudioUrl;
+      audio.load();
+      
+      console.log('🎵 PREVIEW_PLAYER: Background audio setup complete, loading started');
+      
+      return () => {
+        console.log('🎵 PREVIEW_PLAYER: Cleaning up background audio');
+        if (backgroundAudioRef.current) {
+          backgroundAudioRef.current.pause();
+          backgroundAudioRef.current.src = '';
+          backgroundAudioRef.current = null;
+        }
+      };
+    } else {
+      console.log('🎵 PREVIEW_PLAYER: Skipping background audio setup because:', {
+        hasBackgroundAudioUrl: !!backgroundAudioUrl,
+        isSlideshow,
+        isWeb: Platform.OS === 'web',
+        mediaFilesLength: mediaFiles.length
+      });
     }
-  }, [autoplay, status.isLoaded, previewEnded, hasUserInteracted]);
+  }, [backgroundAudioUrl]);
 
   // Cleanup effect - stop audio when component unmounts
   useEffect(() => {
     return () => {
-      console.log('🔴 PREVIEW_PLAYER: Component unmounting, cleaning up audio');
+      console.log('🔴 PREVIEW_PLAYER: Component unmounting, cleaning up');
+      if (slideshowTimer) {
+        clearTimeout(slideshowTimer);
+      }
       if (Platform.OS === 'web' && webAudioRef.current) {
         webAudioRef.current.pause();
         webAudioRef.current.src = '';
@@ -272,21 +459,36 @@ export default function PreviewPlayer({
       } else if (audioPlayer) {
         audioPlayer.pause();
       }
+      if (backgroundAudioRef.current) {
+        backgroundAudioRef.current.pause();
+        backgroundAudioRef.current.src = '';
+        backgroundAudioRef.current = null;
+      }
     };
-  }, [audioPlayer]);
+  }, [audioPlayer, slideshowTimer]);
+
+  // Load track function
+  const loadTrack = (index: number) => {
+    if (index >= 0 && index < mediaFiles.length) {
+      setCurrentTrack(index);
+      setCurrentTime(0);
+      setTimeLeft(previewDuration);
+      setPreviewEnded(false);
+      
+      // Clear any existing slideshow timer
+      if (slideshowTimer) {
+        clearTimeout(slideshowTimer);
+        setSlideshowTimer(null);
+      }
+    }
+  };
 
   // Handle play
   const handlePlay = async () => {
     if (previewEnded) return;
 
     console.log('🔴 PREVIEW_PLAYER: Play button clicked!');
-    console.log('🔴 PREVIEW_PLAYER: Player status:', { 
-      isLoaded: status.isLoaded, 
-      isBuffering: status.isBuffering,
-      duration: status.duration,
-      currentTime: status.currentTime,
-      playing: status.playing
-    });
+    console.log('🔴 PREVIEW_PLAYER: Media type:', { isVideo, isAudio, isImage, isSlideshow });
 
     // Hide overlay on first interaction
     if (showPlayOverlay) {
@@ -296,12 +498,69 @@ export default function PreviewPlayer({
 
     if (!currentMedia || !currentMedia.url) {
       console.log('🔴 PREVIEW_PLAYER: No current media or URL available');
-      Alert.alert('Error', 'No audio track selected');
+      Alert.alert('Error', 'No media track selected');
       return;
     }
 
     try {
-      if (isVideo) {
+      if (isImage || isSlideshow) {
+        console.log('🔴 PREVIEW_PLAYER: Starting slideshow playback...');
+        console.log('🔴 PREVIEW_PLAYER: Current track:', currentTrack, 'Media files length:', mediaFiles.length);
+        
+        const currentMediaFile = mediaFiles[currentTrack];
+        console.log('🔴 PREVIEW_PLAYER: Current media file:', {
+          id: currentMediaFile?.id,
+          title: currentMediaFile?.title,
+          duration: currentMediaFile?.duration,
+          url: currentMediaFile?.url
+        });
+        
+        // Set playing states to start image rotation - THIS IS THE KEY!
+        setIsPlaying(true);
+        setSlideshowPlaying(true);
+        
+        console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow rotation started - images will rotate based on duration settings');
+        
+        // Start background audio simultaneously with slideshow (like MediaPlayer does)
+        if (isSlideshow && backgroundAudioUrl) {
+          if (Platform.OS === 'web' && backgroundAudioRef.current) {
+            console.log('🎵 PREVIEW_PLAYER: Starting background audio with slideshow...');
+            try {
+              await backgroundAudioRef.current.play();
+              console.log('🎵 PREVIEW_PLAYER: ✅ Background audio started successfully with slideshow');
+            } catch (audioError) {
+              console.error('🎵 PREVIEW_PLAYER: ❌ Background audio play failed:', audioError);
+            }
+          } else if (backgroundAudioUrl && !backgroundAudioRef.current) {
+            console.log('🎵 PREVIEW_PLAYER: Background audio URL provided but no audio ref - setting up audio now');
+            
+            // Setup audio immediately if it wasn't set up before
+            const audio = new Audio();
+            audio.crossOrigin = 'anonymous';
+            audio.loop = true;
+            audio.volume = 0.5;
+            audio.src = backgroundAudioUrl;
+            backgroundAudioRef.current = audio;
+            
+            audio.addEventListener('canplaythrough', () => {
+              console.log('🎵 PREVIEW_PLAYER: Immediate audio setup - can play through, starting playback with slideshow');
+              audio.play().catch(error => {
+                console.error('🎵 PREVIEW_PLAYER: ❌ Immediate audio play failed:', error);
+              });
+            });
+            
+            audio.load();
+          } else {
+            console.log('🎵 PREVIEW_PLAYER: No background audio available:', {
+              hasBackgroundAudioUrl: !!backgroundAudioUrl,
+              hasBackgroundAudioRef: !!backgroundAudioRef.current,
+              backgroundAudioUrl: backgroundAudioUrl
+            });
+          }
+        }
+        
+        console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow and audio started successfully - user initiated playback');
+      } else if (isVideo) {
         console.log('🔴 PREVIEW_PLAYER: Starting video playback...');
         if (!player) {
           console.log('🔴 PREVIEW_PLAYER: No video player available');
@@ -309,62 +568,17 @@ export default function PreviewPlayer({
           return;
         }
         videoPlayer.play();
+        setIsPlaying(true);
         console.log('🔴 PREVIEW_PLAYER: Video playback started successfully');
       } else if (Platform.OS === 'web' && webAudioRef.current) {
-        // Check if it's an audio file
-        const isAudioFile = currentMedia.fileType === 'audio' || 
-                           currentMedia.contentType?.startsWith('audio/') ||
-                           currentMedia.fileType?.includes('audio');
-        
-        if (!isAudioFile) {
-          console.log('🔴 PREVIEW_PLAYER: Current track is not an audio file');
-          Alert.alert('Error', 'This file is not an audio file and cannot be played.');
-          return;
-        }
-
-        console.log('🔴 PREVIEW_PLAYER: Web audio details:', {
-          loaded: webAudioLoaded,
-          readyState: webAudioRef.current.readyState,
-          networkState: webAudioRef.current.networkState,
-          src: webAudioRef.current.src,
-          duration: webAudioRef.current.duration
-        });
-
-        if (webAudioLoaded || webAudioRef.current.readyState >= 3) { // HAVE_FUTURE_DATA or higher
-          console.log('🔴 PREVIEW_PLAYER: Starting web audio playback...');
+        console.log('🔴 PREVIEW_PLAYER: Starting web audio playback...');
+        if (webAudioLoaded) {
           await webAudioRef.current.play();
+          setIsPlaying(true);
           console.log('🔴 PREVIEW_PLAYER: Web audio playback started successfully');
-        } else if (webAudioRef.current.readyState >= 1) { // HAVE_METADATA
-          console.log('🔴 PREVIEW_PLAYER: Audio metadata loaded, attempting to play...');
-          try {
-            await webAudioRef.current.play();
-            console.log('🔴 PREVIEW_PLAYER: Web audio playback started successfully');
-          } catch (playError) {
-            console.log('🔴 PREVIEW_PLAYER: Play failed, audio still loading. Waiting for more data...');
-            Alert.alert('Loading', 'Audio is still loading. Please wait a moment and try again...');
-          }
         } else {
-          console.log('🔴 PREVIEW_PLAYER: Web audio track not loaded yet, checking loading state...');
-          
-          // Try to trigger loading if it hasn't started
-          if (webAudioRef.current.networkState === 0) { // NETWORK_EMPTY
-            console.log('🔴 PREVIEW_PLAYER: Network empty, reloading audio...');
-            webAudioRef.current.load();
-          }
-          
+          console.log('🔴 PREVIEW_PLAYER: Web audio not loaded yet, waiting...');
           Alert.alert('Loading', 'Audio track is still loading. Please wait a moment and try again...');
-          
-          // Set up a one-time listener to auto-play when ready
-          const autoPlayWhenReady = () => {
-            if (webAudioRef.current && webAudioRef.current.readyState >= 3) {
-              console.log('🔴 PREVIEW_PLAYER: Auto-playing when ready...');
-              webAudioRef.current.play().catch(e => {
-                console.error('🔴 PREVIEW_PLAYER: Auto-play failed:', e);
-              });
-              webAudioRef.current.removeEventListener('canplaythrough', autoPlayWhenReady);
-            }
-          };
-          webAudioRef.current.addEventListener('canplaythrough', autoPlayWhenReady);
         }
       } else {
         // Check if it's an audio file
@@ -387,6 +601,7 @@ export default function PreviewPlayer({
         if (audioStatus.isLoaded) {
           console.log('🔴 PREVIEW_PLAYER: Starting expo audio playback...');
           await audioPlayer.play();
+          setIsPlaying(true);
           console.log('🔴 PREVIEW_PLAYER: Expo audio playback started successfully');
         } else {
           console.log('🔴 PREVIEW_PLAYER: Expo audio track not loaded yet, waiting...');
@@ -402,15 +617,38 @@ export default function PreviewPlayer({
   // Handle pause
   const handlePause = async () => {
     try {
-      if (isVideo) {
+      if (isImage || isSlideshow) {
+        console.log('🔴 PREVIEW_PLAYER: Pausing slideshow...');
+        
+        // Set paused states to stop image rotation - THIS IS THE KEY!
+        setIsPlaying(false);
+        setSlideshowPlaying(false);
+        
+        if (slideshowTimer) {
+          clearTimeout(slideshowTimer);
+          setSlideshowTimer(null);
+        }
+        
+        // Pause background audio (like MediaPlayer does)
+        if (isSlideshow && backgroundAudioUrl) {
+          if (Platform.OS === 'web' && backgroundAudioRef.current) {
+            console.log('🎵 PREVIEW_PLAYER: Pausing background audio with slideshow...');
+            backgroundAudioRef.current.pause();
+            console.log('🎵 PREVIEW_PLAYER: ✅ Background audio paused with slideshow');
+          }
+        }
+      } else if (isVideo) {
         videoPlayer.pause();
+        setIsPlaying(false);
       } else if (Platform.OS === 'web' && webAudioRef.current) {
         webAudioRef.current.pause();
+        setIsPlaying(false);
       } else {
         audioPlayer.pause();
+        setIsPlaying(false);
       }
     } catch (error) {
-      console.error('Error pausing:', error);
+      console.error('🔴 PREVIEW_PLAYER: Error pausing:', error);
     }
   };
 
@@ -454,15 +692,68 @@ export default function PreviewPlayer({
 
   // Handle product link press
   const handleProductLinkPress = async (url: string) => {
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank');
+    } else {
+      // Handle mobile navigation
+      console.log('Opening product link:', url);
+    }
+  };
+
+  const { addToCart, getTotalItems } = useCart();
+
+  const handleAddToCart = (productLink: ProductLink) => {
     try {
-      const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      } else {
-        Alert.alert('Error', 'Cannot open this URL');
-      }
+      // Convert ProductLink to Product format for cart
+      const product = {
+        id: parseInt(productLink.id),
+        name: productLink.title,
+        description: productLink.description || '',
+        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
+        imageUrl: productLink.imageUrl || '',
+        images: productLink.images || [],
+        category: '',
+        inStock: true,
+        in_stock: true,
+        slug: '',
+        hasSizes: false,
+        isSuspended: false,
+        createdAt: new Date().toISOString(),
+        userId: 0,
+        metadata: {},
+      };
+
+      addToCart(product);
+      
+      Alert.alert(
+        'Added to Cart',
+        `${product.name} has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          { text: 'View Cart', onPress: () => console.log('Navigate to cart') }
+        ]
+      );
     } catch (error) {
-      Alert.alert('Error', 'Failed to open link');
+      console.error('Add to cart error:', error);
+      Alert.alert('Error', 'Failed to add item to cart');
+    }
+  };
+
+  const handleBuyNow = async (productLink: ProductLink) => {
+    try {
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = base;
+      
+      const items = [{ productId: parseInt(productLink.id), quantity: 1 }];
+      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      
+      // Always use WebBrowser to keep app running in background
+      await WebBrowser.openBrowserAsync(url);
+      console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now from PreviewPlayer');
+    } catch (error) {
+      console.error('Buy now error:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
   };
 
@@ -505,6 +796,22 @@ export default function PreviewPlayer({
     return stars;
   };
 
+  // Format price to ensure it displays correctly
+  const formatPrice = (price: string | number | null): string => {
+    if (!price) return '';
+    
+    // If price is already a formatted string (e.g., "$10.00"), return as is
+    if (typeof price === 'string' && price.startsWith('$')) {
+      return price;
+    }
+    
+    // If price is a number or string number, format it
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price;
+    if (isNaN(numPrice)) return '';
+    
+    return `$${numPrice.toFixed(2)}`;
+  };
+
   if (!currentMedia) {
     return (
       <View style={styles.emptyContainer}>
@@ -513,6 +820,58 @@ export default function PreviewPlayer({
     );
   }
 
+  const handleCartPress = () => {
+    // Navigate to cart - you can implement this based on your navigation setup
+    console.log('Navigate to cart');
+    // For web, you might want to use window.location or router
+    if (Platform.OS === 'web') {
+      window.location.href = '/store/cart';
+    }
+    // For mobile, you would use navigation
+    // navigation.navigate('Cart');
+  };
+
+  const nextTrack = () => {
+    if (currentTrack < mediaFiles.length - 1) {
+      setCurrentTrack(currentTrack + 1);
+    } else {
+      setCurrentTrack(0); // loop back to start
+    }
+  };
+
+  // AUTO-ADVANCE FOR WEB AUDIO (ended event)
+  useEffect(() => {
+    if (Platform.OS === 'web' && webAudioRef.current) {
+      const audio = webAudioRef.current;
+      const onEnded = () => {
+        console.log('🔄 PREVIEW_PLAYER: Web audio ended – advancing to next track');
+        nextTrack();
+      };
+      audio.addEventListener('ended', onEnded);
+      return () => audio.removeEventListener('ended', onEnded);
+    }
+  }, [currentTrack, mediaFiles.length]);
+
+  // AUTO-ADVANCE FOR EXPO-VIDEO
+  useEffect(() => {
+    if (isVideo && videoPlayer && videoPlayer.duration) {
+      if (!videoPlayer.playing && videoPlayer.currentTime >= videoPlayer.duration - 0.3) {
+        console.log('🔄 PREVIEW_PLAYER: Video ended – advancing to next track');
+        nextTrack();
+      }
+    }
+  }, [isVideo, videoPlayer.playing, videoPlayer.currentTime, videoPlayer.duration]);
+
+  // AUTO-ADVANCE FOR EXPO-AUDIO (mobile)
+  useEffect(() => {
+    if (!isVideo && !isImage && Platform.OS !== 'web' && audioStatus.isLoaded) {
+      if (!audioStatus.playing && audioStatus.currentTime >= (audioStatus.duration || 0) - 0.3) {
+        console.log('🔄 PREVIEW_PLAYER: Mobile audio ended – advancing to next track');
+        nextTrack();
+      }
+    }
+  }, [audioStatus.playing, audioStatus.currentTime, audioStatus.duration, isVideo, isImage]);
+
   return (
     <View style={styles.container}>
       {/* Initial Play Overlay for Preview */}
@@ -520,7 +879,9 @@ export default function PreviewPlayer({
         <View style={styles.playOverlay}>
           <View style={styles.playOverlayBackground}>
             <View style={styles.playOverlayContent}>
-              <Text style={styles.playOverlayTitle}>25-Second Preview</Text>
+              <Text style={styles.playOverlayTitle}>
+                {isSlideshow ? 'Slideshow Preview' : '25-Second Preview'}
+              </Text>
               <Text style={styles.playOverlaySubtitle}>
                 {currentMedia?.title}
               </Text>
@@ -531,11 +892,13 @@ export default function PreviewPlayer({
               >
                 <View style={styles.bigPlayButtonGradient}>
                   <Ionicons name="play" size={48} color="#fff" />
-                  <Text style={styles.bigPlayButtonText}>START PREVIEW</Text>
+                  <Text style={styles.bigPlayButtonText}>
+                    {isSlideshow ? 'START SLIDESHOW' : 'START PREVIEW'}
+                  </Text>
                 </View>
               </TouchableOpacity>
               <Text style={styles.playOverlayNote}>
-                🎵 Experience a 25-second preview of this playlist
+                {isSlideshow ? '🖼️ Experience this slideshow preview' : '🎵 Experience a 25-second preview of this playlist'}
               </Text>
             </View>
           </View>
@@ -549,15 +912,28 @@ export default function PreviewPlayer({
           {/* Playlist Header */}
           <View style={styles.playlistHeader}>
             <View style={styles.playlistIcon}>
-              <MaterialIcons name="preview" size={24} color="#f59e0b" />
+              <MaterialIcons name={isSlideshow ? "slideshow" : "preview"} size={24} color="#f59e0b" />
             </View>
             <View style={styles.playlistInfo}>
               <Text style={styles.playlistTitle}>{playlistName}</Text>
               <View style={styles.previewBadge}>
                 <MaterialIcons name="access-time" size={16} color="#f59e0b" />
-                <Text style={styles.previewText}>25-Second Preview</Text>
+                <Text style={styles.previewText}>
+                  {isSlideshow ? 'Slideshow Preview' : '25-Second Preview'}
+                </Text>
               </View>
             </View>
+            
+            {/* Cart Icon */}
+            <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
+              <MaterialIcons name="shopping-cart" size={24} color="#374151" />
+              {getTotalItems() > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            
             <TouchableOpacity style={styles.playButton}>
               <MaterialIcons name="play-arrow" size={20} color="#fff" />
               <Text style={styles.playButtonText}>PREVIEW</Text>
@@ -572,9 +948,80 @@ export default function PreviewPlayer({
                 <VideoView
                   style={styles.video}
                   player={videoPlayer}
-                  allowsFullscreen
-                  allowsPictureInPicture
+                  allowsFullscreen={true}
+                  allowsPictureInPicture={true}
+                  contentFit="contain"
                 />
+                
+                {/* Custom fullscreen button */}
+                <TouchableOpacity 
+                  style={styles.fullscreenButton}
+                  onPress={() => {
+                    // VideoView handles fullscreen automatically on mobile
+                    // For web, we can add custom fullscreen logic
+                    if (Platform.OS === 'web') {
+                      const videoElement = document.querySelector('video');
+                      if (videoElement) {
+                        if (!document.fullscreenElement) {
+                          videoElement.requestFullscreen?.() || 
+                          videoElement.webkitRequestFullscreen?.() || 
+                          videoElement.mozRequestFullScreen?.() || 
+                          videoElement.msRequestFullscreen?.();
+                        } else {
+                          document.exitFullscreen?.() || 
+                          document.webkitExitFullscreen?.() || 
+                          document.mozCancelFullScreen?.() || 
+                          document.msExitFullscreen?.();
+                        }
+                      }
+                    }
+                  }}
+                >
+                  <Ionicons 
+                    name="expand" 
+                    size={20} 
+                    color="#fff" 
+                  />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Image Display - For slideshow images */}
+            {(isImage || isSlideshow) && currentMedia && (
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: currentMedia.url }}
+                  style={styles.slideshowImage}
+                  resizeMode="contain"
+                />
+                
+                {/* Image navigation for slideshows */}
+                {isSlideshow && mediaFiles.length > 1 && (
+                  <>
+                    <TouchableOpacity 
+                      style={[styles.imageNavButton, styles.imageNavLeft]}
+                      onPress={handlePrevious}
+                    >
+                      <Ionicons name="chevron-back" size={24} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.imageNavButton, styles.imageNavRight]}
+                      onPress={handleNext}
+                    >
+                      <Ionicons name="chevron-forward" size={24} color="#fff" />
+                    </TouchableOpacity>
+                  </>
+                )}
+                
+                {/* Image info overlay */}
+                <View style={styles.imageInfoOverlay}>
+                  <Text style={styles.imageTitle}>{currentMedia.title}</Text>
+                  {isSlideshow && (
+                    <Text style={styles.imageCounter}>
+                      {currentTrack + 1} / {mediaFiles.length}
+                    </Text>
+                  )}
+                </View>
               </View>
             )}
 
@@ -584,10 +1031,10 @@ export default function PreviewPlayer({
                 {currentMedia.title}
               </Text>
               <Text style={styles.trackCounter}>
-                Track {currentTrack + 1} of {mediaFiles.length}
+                {isSlideshow ? `Image ${currentTrack + 1} of ${mediaFiles.length}` : `Track ${currentTrack + 1} of ${mediaFiles.length}`}
               </Text>
               <Text style={styles.mediaType}>
-                {isVideo ? '🎥 Video' : '🎵 Audio'} Preview
+                {isVideo ? '🎥 Video' : isImage || isSlideshow ? '🖼️ Image' : '🎵 Audio'} Preview
               </Text>
             </View>
 
@@ -621,16 +1068,16 @@ export default function PreviewPlayer({
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={(isVideo ? videoPlayer.playing : (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing)) ? handlePause : handlePlay}
-                disabled={previewEnded || (!isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)}
+                onPress={isPlaying ? handlePause : handlePlay}
+                disabled={previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)}
                 style={[
                   styles.playButtonControl, 
-                  (previewEnded || (!isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)) && styles.disabledControl,
+                  (previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)) && styles.disabledControl,
                   hasUserInteracted && styles.enhancedPlayButton
                 ]}
               >
                 <Ionicons
-                  name={(isVideo ? videoPlayer.playing : (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing)) ? 'pause' : 'play'}
+                  name={isPlaying ? 'pause' : 'play'}
                   size={hasUserInteracted ? 40 : 32}
                   color="#ffffff"
                 />
@@ -645,20 +1092,24 @@ export default function PreviewPlayer({
               </TouchableOpacity>
             </View>
 
-            {/* Volume */}
-            <TouchableOpacity onPress={toggleMute} style={styles.volumeButton}>
-              <Ionicons
-                name={isMuted ? 'volume-mute' : 'volume-high'}
-                size={24}
-                color="#374151"
-              />
-            </TouchableOpacity>
+            {/* Volume - Only show for audio/video */}
+            {(isAudio || isVideo) && (
+              <TouchableOpacity onPress={toggleMute} style={styles.volumeButton}>
+                <Ionicons
+                  name={isMuted ? 'volume-mute' : 'volume-high'}
+                  size={24}
+                  color="#374151"
+                />
+              </TouchableOpacity>
+            )}
 
             {/* Preview End Message */}
             {previewEnded && (
               <View style={styles.endMessage}>
                 <Text style={styles.endText}>Preview completed!</Text>
-                <Text style={styles.endSubtext}>Scan QR code for full access</Text>
+                <Text style={styles.endSubtext}>
+                  {isSlideshow ? 'Enter activation code for full slideshow access' : 'Scan QR code for full access'}
+                </Text>
               </View>
             )}
           </View>
@@ -682,7 +1133,18 @@ export default function PreviewPlayer({
           </View>
           <ScrollView 
             style={styles.productsList}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
+            bounces={Platform.OS === 'ios'} // iOS-specific bounce behavior
+            overScrollMode={Platform.OS === 'android' ? 'always' : 'auto'} // Android-specific over-scroll
+            contentContainerStyle={styles.productsListContent}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+            {...(Platform.OS === 'web' && {
+              // Web-specific scroll optimizations
+              scrollEnabled: true,
+              showsVerticalScrollIndicator: true,
+            })}
           >
             {productLinks.length > 0 ? (
               productLinks
@@ -765,28 +1227,38 @@ export default function PreviewPlayer({
                         {/* Price */}
                         {link.price && (
                           <View style={styles.priceContainer}>
-                            <Text style={styles.currentPrice}>{link.price}</Text>
+                            <Text style={styles.currentPrice}>{formatPrice(link.price)}</Text>
                             {link.originalPrice && link.originalPrice !== link.price && (
-                              <Text style={styles.originalPrice}>{link.originalPrice}</Text>
+                              <Text style={styles.originalPrice}>{formatPrice(link.originalPrice)}</Text>
                             )}
                           </View>
                         )}
 
                         {/* Description */}
                         {link.description && (
-                          <Text style={styles.enhancedProductDescription} numberOfLines={3}>
+                          <Text style={styles.enhancedProductDescription} numberOfLines={2}>
                             {link.description}
                           </Text>
                         )}
 
-                        {/* Action Button */}
-                        <TouchableOpacity
-                          style={styles.enhancedProductButton}
-                          onPress={() => handleProductLinkPress(link.url)}
-                        >
-                          <MaterialIcons name="shopping-cart" size={18} color="#fff" />
-                          <Text style={styles.enhancedProductButtonText}>View Product</Text>
-                        </TouchableOpacity>
+                        {/* Action Buttons */}
+                        <View style={styles.productActionButtons}>
+                          <TouchableOpacity
+                            style={styles.buyNowButton}
+                            onPress={() => handleBuyNow(link)}
+                          >
+                            <MaterialIcons name="flash-on" size={16} color="#fff" />
+                            <Text style={styles.buyNowButtonText}>Buy Now</Text>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity
+                            style={styles.addToCartButton}
+                            onPress={() => handleAddToCart(link)}
+                          >
+                            <MaterialIcons name="add-shopping-cart" size={16} color="#3b82f6" />
+                            <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   );
@@ -808,14 +1280,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#ffffff',
-    minHeight: 500,
   },
   mainContainer: {
     flex: 1,
     flexDirection: 'row',
     backgroundColor: '#ffffff',
+    minHeight: '100vh', // Ensure full viewport height on web
     ...(Platform.OS === 'web' && {
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      height: '100vh',
     }),
   },
   leftPanel: {
@@ -824,11 +1297,14 @@ const styles = StyleSheet.create({
     padding: 20,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
+    minHeight: '100%',
   },
   rightPanel: {
     flex: 1,
     backgroundColor: '#ffffff',
     padding: 20,
+    minHeight: '100%',
+    maxHeight: '100vh', // Constrain to viewport height
   },
   // Playlist Header Styles
   playlistHeader: {
@@ -899,63 +1375,120 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
+  // Video Container Styles
   videoContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
     backgroundColor: '#000000',
-    borderRadius: 12,
+    borderRadius: 8,
     overflow: 'hidden',
     marginBottom: 20,
-    height: 200,
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-    }),
   },
   video: {
-    flex: 1,
     width: '100%',
     height: '100%',
   },
-  chatSection: {
-    marginTop: 20,
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    overflow: 'hidden',
+  fullscreenButton: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    borderRadius: 20,
+    padding: 8,
+    zIndex: 10,
   },
+  // Image Container Styles for Slideshows
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  slideshowImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageNavButton: {
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -20 }],
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  imageNavLeft: {
+    left: 10,
+  },
+  imageNavRight: {
+    right: 10,
+  },
+  imageInfoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 12,
+  },
+  imageTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginBottom: 4,
+  },
+  imageCounter: {
+    fontSize: 12,
+    color: '#e5e7eb',
+  },
+  // Track Info Styles
   trackInfo: {
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   trackTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1f2937',
+    marginBottom: 4,
     textAlign: 'center',
-    marginBottom: 8,
   },
   trackCounter: {
     fontSize: 14,
     color: '#6b7280',
+    marginBottom: 4,
   },
   mediaType: {
     fontSize: 12,
-    color: '#f59e0b',
+    color: '#9ca3af',
+    textTransform: 'uppercase',
     fontWeight: '600',
-    marginTop: 4,
+    letterSpacing: 0.5,
   },
+  // Progress Styles
   progressContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   progressBar: {
-    height: 6,
+    height: 4,
     backgroundColor: '#e5e7eb',
-    borderRadius: 3,
+    borderRadius: 2,
+    overflow: 'hidden',
     marginBottom: 8,
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#f59e0b',
-    borderRadius: 3,
+    borderRadius: 2,
   },
   timeDisplay: {
     flexDirection: 'row',
@@ -963,14 +1496,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   timeText: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6b7280',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   timeLeftContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  // Control Styles
   controls: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -979,110 +1513,179 @@ const styles = StyleSheet.create({
   },
   controlButton: {
     padding: 12,
-    marginHorizontal: 16,
-    borderRadius: 8,
+    marginHorizontal: 8,
+    borderRadius: 24,
     backgroundColor: '#f3f4f6',
     ...(Platform.OS === 'web' && {
       cursor: 'pointer',
     }),
   },
   playButtonControl: {
-    width: 64,
-    height: 64,
+    padding: 16,
+    marginHorizontal: 16,
     borderRadius: 32,
     backgroundColor: '#f59e0b',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 24,
     ...(Platform.OS === 'web' && {
       cursor: 'pointer',
-      boxShadow: '0 4px 12px rgba(245, 158, 11, 0.3)',
     }),
   },
   enhancedPlayButton: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    ...(Platform.OS === 'web' && {
-      boxShadow: '0 6px 16px rgba(245, 158, 11, 0.4)',
-    }),
+    backgroundColor: '#d97706',
+    transform: [{ scale: 1.1 }],
   },
   disabledControl: {
+    backgroundColor: '#f9fafb',
     opacity: 0.5,
   },
   volumeButton: {
     alignSelf: 'center',
-    padding: 12,
-    borderRadius: 8,
+    padding: 8,
+    borderRadius: 20,
     backgroundColor: '#f3f4f6',
     ...(Platform.OS === 'web' && {
       cursor: 'pointer',
     }),
   },
+  // End Message Styles
   endMessage: {
     alignItems: 'center',
-    marginTop: 20,
-    backgroundColor: '#fef3c7',
-    padding: 16,
+    padding: 20,
+    backgroundColor: '#f3f4f6',
     borderRadius: 8,
+    marginTop: 10,
   },
   endText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#f59e0b',
+    fontWeight: '700',
+    color: '#1f2937',
     marginBottom: 4,
   },
   endSubtext: {
     fontSize: 14,
-    color: '#92400e',
+    color: '#6b7280',
+    textAlign: 'center',
   },
-  // Right Panel - Products Styles
+  // Chat Section Styles
+  chatSection: {
+    marginTop: 20,
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  // Products Panel Styles
   productsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
   },
   productsTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#374151',
+    color: '#1f2937',
     marginLeft: 8,
   },
   productsList: {
     flex: 1,
-  },
-  productCard: {
-    backgroundColor: '#f9fafb',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    height: 0, // Force the ScrollView to take remaining space
     ...(Platform.OS === 'web' && {
-      cursor: 'pointer',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      // Web-specific styles for better scrolling
+      overflow: 'auto',
+      WebkitOverflowScrolling: 'touch',
+      scrollbarWidth: 'thin',
+      maxHeight: 'calc(100vh - 200px)', // Account for header and padding
     }),
   },
-  productImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 8,
-    marginBottom: 12,
+  productsListContent: {
+    paddingBottom: 20, // Add padding at the bottom for better scrolling
+    flexGrow: 1,
+    ...(Platform.OS === 'web' && {
+      // Ensure content takes full width on web
+      minHeight: '100%',
+    }),
   },
-  productPlaceholder: {
-    width: '100%',
-    height: 120,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 8,
+  // Play Overlay Styles
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    zIndex: 1000,
   },
-  productContent: {
+  playOverlayBackground: {
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    borderRadius: 16,
+    padding: 32,
+    alignItems: 'center',
+    maxWidth: 400,
+    width: '90%',
+  },
+  playOverlayContent: {
+    alignItems: 'center',
+  },
+  playOverlayTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  playOverlaySubtitle: {
+    fontSize: 16,
+    color: '#d1d5db',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  bigPlayButton: {
+    marginBottom: 16,
+  },
+  bigPlayButtonGradient: {
+    backgroundColor: '#f59e0b',
+    borderRadius: 32,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 200,
+  },
+  bigPlayButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 8,
+    letterSpacing: 0.5,
+  },
+  playOverlayNote: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  // Empty State Styles
+  emptyContainer: {
     flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+  },
+  // Product Card Styles
+  productCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   productTitle: {
     fontSize: 16,
@@ -1120,7 +1723,7 @@ const styles = StyleSheet.create({
   enhancedProductCard: {
     backgroundColor: '#ffffff',
     borderRadius: 12,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e5e7eb',
     overflow: 'hidden',
@@ -1136,15 +1739,20 @@ const styles = StyleSheet.create({
   },
   productImageContainer: {
     position: 'relative',
-    height: 200,
+    width: '25%', // Reduce width to another half (from 50% to 25%)
+    aspectRatio: 1, // Keep it square (1:1 ratio)
     backgroundColor: '#f9fafb',
     alignItems: 'center',
     justifyContent: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+    alignSelf: 'center', // Center the smaller image container
+    marginBottom: 8,
   },
   enhancedProductImage: {
-    width: '42.5%',
+    width: '100%',
     height: '100%',
-    borderRadius: 8,
+    resizeMode: 'cover', // Use cover instead of contain to fill the square nicely
   },
   enhancedProductPlaceholder: {
     width: '100%',
@@ -1152,28 +1760,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#f3f4f6',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  imageNavButton: {
-    position: 'absolute',
-    top: '50%',
-    transform: [{ translateY: -20 }],
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  imageNavLeft: {
-    left: 10,
-  },
-  imageNavRight: {
-    right: 10,
+    borderRadius: 8,
   },
   imageIndicators: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 8,
     left: 0,
     right: 0,
     flexDirection: 'row',
@@ -1181,66 +1772,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   imageIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    marginHorizontal: 3,
+    marginHorizontal: 2,
   },
   activeImageIndicator: {
     backgroundColor: '#ffffff',
   },
   enhancedProductContent: {
-    padding: 16,
+    padding: 12,
   },
   enhancedProductTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
     color: '#1f2937',
-    marginBottom: 8,
-    lineHeight: 22,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  ratingText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginRight: 6,
-  },
-  reviewCount: {
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  priceContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  currentPrice: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#dc2626',
-    marginRight: 8,
-  },
-  originalPrice: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textDecorationLine: 'line-through',
+    marginBottom: 6,
+    lineHeight: 18,
   },
   enhancedProductDescription: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#6b7280',
-    lineHeight: 20,
-    marginBottom: 16,
+    lineHeight: 16,
+    marginBottom: 8,
   },
   enhancedProductButton: {
     flexDirection: 'row',
@@ -1250,9 +1805,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    ...(Platform.OS === 'web' ? {
-      cursor: 'pointer',
-    } : {}),
+    marginTop: 8,
   },
   enhancedProductButtonText: {
     fontSize: 14,
@@ -1260,96 +1813,113 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginLeft: 6,
   },
-  // Play Overlay Styles
-  playOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
+  // Product Action Buttons
+  productActionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
   },
-  playOverlayBackground: {
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 0,
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0 10px 20px rgba(0, 0, 0, 0.3)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 10 },
-      shadowOpacity: 0.3,
-      shadowRadius: 20,
-    }),
-    elevation: 10,
-  },
-  playOverlayContent: {
-    padding: 30,
-    alignItems: 'center',
-    minWidth: 300,
-    maxWidth: 400,
-  },
-  playOverlayTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#f59e0b',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  playOverlaySubtitle: {
-    fontSize: 16,
-    color: '#6b7280',
-    marginBottom: 25,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  bigPlayButton: {
-    borderRadius: 25,
-    ...(Platform.OS === 'web' ? {
-      boxShadow: '0 5px 10px rgba(0, 0, 0, 0.3)',
-    } : {
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 5 },
-      shadowOpacity: 0.3,
-      shadowRadius: 10,
-    }),
-    elevation: 5,
-    marginBottom: 20,
-  },
-  bigPlayButtonGradient: {
-    backgroundColor: '#f59e0b',
-    paddingHorizontal: 30,
-    paddingVertical: 20,
-    borderRadius: 25,
-    alignItems: 'center',
-    flexDirection: 'column',
-    minWidth: 200,
-  },
-  bigPlayButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#ffffff',
-    marginTop: 10,
-    letterSpacing: 1,
-  },
-  playOverlayNote: {
-    fontSize: 14,
-    color: '#6b7280',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  emptyContainer: {
+  buyNowButton: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f59e0b',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  buyNowButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#ffffff',
+    marginLeft: 4,
+  },
+  addToCartButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  addToCartButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginLeft: 4,
+  },
+  // Rating Styles
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginRight: 6,
+  },
+  ratingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginRight: 4,
+  },
+  reviewCount: {
+    fontSize: 10,
+    color: '#6b7280',
+  },
+  // Price Styles
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  currentPrice: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#059669',
+    marginRight: 6,
+  },
+  originalPrice: {
+    fontSize: 12,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+  },
+  // Cart Button Styles
+  cartButton: {
+    position: 'relative',
+    padding: 8,
+    marginRight: 12,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    ...(Platform.OS === 'web' && {
+      cursor: 'pointer',
+    }),
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 32,
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
-  emptyText: {
-    fontSize: 16,
-    color: '#6b7280',
-    textAlign: 'center',
+  cartBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
   },
 });
