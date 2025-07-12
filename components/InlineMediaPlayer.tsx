@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { MediaFile } from '@/shared/media-schema';
 import { useRouter } from 'expo-router';
+import { api } from '@/services/api';
 
 interface InlineMediaPlayerProps {
   file: MediaFile;
@@ -18,54 +19,23 @@ interface InlineMediaPlayerProps {
   color?: string;
 }
 
-const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({ 
-  file, 
-  size = 20, 
-  color = '#3b82f6' 
-}) => {
+// Separate component for the Audio Player to ensure hooks are not conditional
+const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) => {
   const [isInitialized, setIsInitialized] = useState(false);
-  const router = useRouter();
-  
-  // Check if this is a video file
-  const isVideo = file.type === 'video' || file.fileType === 'video' || file.contentType?.startsWith('video/');
-  
-  // If it's a video file, navigate to media player instead of trying to play as audio
-  if (isVideo) {
-    return (
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => {
-          console.log('🔴 INLINE_PLAYER: Video file clicked, navigating to media player:', file.id);
-          router.push(`/media-player/${file.id}`);
-        }}
-        activeOpacity={0.7}
-      >
-        <MaterialIcons
-          name="videocam"
-          size={size}
-          color={color}
-        />
-      </TouchableOpacity>
-    );
-  }
+  const player = useAudioPlayer();
+  const audioStatus = useAudioPlayerStatus(player);
   
   // Web audio fallback
   const webAudioRef = useRef<HTMLAudioElement | null>(null);
   const [webAudioLoaded, setWebAudioLoaded] = useState(false);
   const [webAudioPlaying, setWebAudioPlaying] = useState(false);
-  
-  // Use the new expo-audio hooks for mobile
-  const player = useAudioPlayer();
-  const audioStatus = useAudioPlayerStatus(player);
-  
-  // Use appropriate status based on platform
+
   const status = Platform.OS === 'web' ? {
     isLoaded: webAudioLoaded,
     playing: webAudioPlaying,
     isBuffering: false
   } : audioStatus;
 
-  // Initialize audio when component mounts
   useEffect(() => {
     if (!isInitialized && file.id) {
       initializeAudio();
@@ -73,7 +43,6 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
     }
   }, [file.id, isInitialized]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (Platform.OS === 'web' && webAudioRef.current) {
@@ -88,34 +57,18 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
 
   const initializeAudio = async () => {
     try {
-      // Use the simple streaming endpoint (no authentication required)
-      const streamingUrl = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://192.168.1.70:5001'}/api/media/${file.id}/stream`;
+      const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'http://192.168.1.70:5001';
+      const streamingUrl = `${baseUrl}/api/media/${file.id}/stream`;
       
       if (Platform.OS === 'web') {
-        // Use HTML5 Audio for web
         const audio = new Audio();
         webAudioRef.current = audio;
         
-        audio.addEventListener('loadeddata', () => {
-          setWebAudioLoaded(true);
-        });
-        
-        audio.addEventListener('canplaythrough', () => {
-          setWebAudioLoaded(true);
-        });
-        
-        audio.addEventListener('play', () => {
-          setWebAudioPlaying(true);
-        });
-        
-        audio.addEventListener('pause', () => {
-          setWebAudioPlaying(false);
-        });
-        
-        audio.addEventListener('ended', () => {
-          setWebAudioPlaying(false);
-        });
-        
+        audio.addEventListener('loadeddata', () => setWebAudioLoaded(true));
+        audio.addEventListener('canplaythrough', () => setWebAudioLoaded(true));
+        audio.addEventListener('play', () => setWebAudioPlaying(true));
+        audio.addEventListener('pause', () => setWebAudioPlaying(false));
+        audio.addEventListener('ended', () => setWebAudioPlaying(false));
         audio.addEventListener('error', (e) => {
           console.error('🔴 INLINE_PLAYER: Web audio error:', e);
           Alert.alert('Playback Error', 'Failed to load audio file');
@@ -126,7 +79,6 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
         audio.src = streamingUrl;
         audio.load();
       } else {
-        // Use expo-audio for mobile
         await player.replace(streamingUrl);
       }
     } catch (error) {
@@ -139,27 +91,19 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
     try {
       if (Platform.OS === 'web' && webAudioRef.current) {
         const audio = webAudioRef.current;
-        
         if (webAudioPlaying) {
           audio.pause();
+        } else if (audio.readyState >= 3) {
+          await audio.play();
         } else {
-          if (audio.readyState >= 3) { // HAVE_FUTURE_DATA
-            await audio.play();
-          } else {
-            Alert.alert('Loading...', 'Audio is still loading. Please wait a moment.');
-          }
+          Alert.alert('Loading...', 'Audio is still loading. Please wait a moment.');
         }
       } else if (player) {
         if (!status.isLoaded) {
           Alert.alert('Loading...', 'Audio is still loading. Please wait a moment.');
           return;
         }
-        
-        if (status.playing) {
-          await player.pause();
-        } else {
-          await player.play();
-        }
+        status.playing ? await player.pause() : await player.play();
       }
     } catch (error) {
       console.error('🔴 INLINE_PLAYER: Error toggling playback:', error);
@@ -188,6 +132,38 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
       )}
     </TouchableOpacity>
   );
+};
+
+
+const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({ 
+  file, 
+  size = 20, 
+  color = '#3b82f6' 
+}) => {
+  const router = useRouter();
+  const isVideo = file.type === 'video' || file.fileType === 'video' || file.contentType?.startsWith('video/');
+
+  if (isVideo) {
+    return (
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => {
+          console.log('🔴 INLINE_PLAYER: Video file clicked, navigating to media player:', file.id);
+          router.push(`/media-player/${file.id}`);
+        }}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons
+          name="videocam"
+          size={size}
+          color={color}
+        />
+      </TouchableOpacity>
+    );
+  }
+
+  // Render the dedicated audio player component for audio files
+  return <AudioPlayer file={file} size={size} color={color} />;
 };
 
 const styles = StyleSheet.create({

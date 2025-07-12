@@ -5,9 +5,11 @@ import { Alert, Platform } from 'react-native';
 import { MediaFile } from '@/shared/media-schema';
 import { mediaAPI } from '@/services/api';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
+import { useUpload } from '@/contexts/UploadContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 const MAX_FILE_SIZE_WEB = 1024 * 1024 * 1024; // 1GB for web
-const MAX_FILE_SIZE_MOBILE = 1024 * 1024 * 1024; // 1GB for mobile
+const MAX_FILE_SIZE_MOBILE = 200 * 1024 * 1024; // 200MB for mobile
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks (under Vercel's 6MB limit)
 
 interface UploadProgress {
@@ -18,24 +20,14 @@ interface UploadProgress {
 }
 
 interface UseMediaUploadResult {
-  uploadProgress: UploadProgress;
-  isUploading: boolean;
-  uploadFile: (file: DocumentPicker.DocumentPickerResult) => Promise<MediaFile>;
+  uploadFile: (fileUri: string, fileType: string, fileName: string) => Promise<MediaFile | null>;
   selectAndUploadFile: () => Promise<MediaFile | null>;
-  selectAudioFile: () => Promise<DocumentPicker.DocumentPickerResult | null>;
-  selectVideoFile: () => Promise<DocumentPicker.DocumentPickerResult | null>;
-  selectImageFile: () => Promise<DocumentPicker.DocumentPickerResult | null>;
 }
 
 export const useMediaUpload = (): UseMediaUploadResult => {
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress>({
-    loaded: 0,
-    total: 0,
-    percentage: 0,
-    stage: 'selecting'
-  });
-  const [isUploading, setIsUploading] = useState(false);
+  const { setUploadProgress, setIsUploading } = useUpload();
   const { canCreate } = useSubscriptionLimits();
+  const queryClient = useQueryClient();
 
   const updateProgress = (loaded: number, total: number, stage: UploadProgress['stage']) => {
     const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
@@ -215,6 +207,10 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
       console.log('🔴 UPLOAD: Upload successful:', uploadedFile);
 
+      // Invalidate the media query to trigger a refresh
+      await queryClient.invalidateQueries({ queryKey: ['media'] });
+      console.log('✅ invalidated media query');
+
       // Complete progress
       updateProgress(asset.size || 0, asset.size || 0, 'complete');
 
@@ -225,8 +221,11 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       console.error('🔴 UPLOAD: Upload failed:', error);
       throw error;
     } finally {
-      setIsUploading(false);
-      updateProgress(0, 0, 'selecting');
+      // Hide the indicator after a short delay
+      setTimeout(() => {
+        setIsUploading(false);
+        updateProgress(0, 0, 'selecting');
+      }, 2000);
     }
   };
 
@@ -262,6 +261,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       
       if (result.canceled) {
         console.log('🔴 UPLOAD: File selection canceled');
+        setIsUploading(false);
         return null;
       }
 
@@ -295,6 +295,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     } catch (error) {
       console.error('🔴 UPLOAD: Upload failed:', error);
       setUploadProgress({ loaded: 0, total: 0, percentage: 0, stage: 'selecting' });
+      setIsUploading(false);
       throw error;
     }
   };
@@ -397,55 +398,54 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   };
 
   const selectAudioFile = async () => {
-    return await DocumentPicker.getDocumentAsync({
-      type: Platform.OS === 'web'
-        ? [
-            // Standard audio formats
-            'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/aac',
-            // Mobile formats
-            'audio/3gpp', 'audio/x-m4a',
-            // Other common formats
-            'audio/ogg', 'audio/flac', 'audio/webm'
-          ]
-        : 'audio/*', // Mobile uses wildcard for better compatibility
-      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
-    });
+    try {
+      setIsUploading(true);
+      updateProgress(0, 0, 'selecting');
+      const result = await DocumentPicker.getDocumentAsync({ type: 'audio/*' });
+      if (result.canceled) {
+        setIsUploading(false);
+        return null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error selecting audio file:', error);
+      setIsUploading(false);
+      return null;
+    }
   };
 
   const selectVideoFile = async () => {
-    return await DocumentPicker.getDocumentAsync({
-      type: Platform.OS === 'web' 
-        ? [
-            // Standard video formats
-            'video/mp4', 'video/webm', 'video/ogg',
-            // Mobile formats
-            'video/3gpp', 'video/3gpp2', 'video/quicktime',
-            // Common formats
-            'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
-            // Alternative MIME types
-            'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska',
-            // High efficiency formats
-            'video/hevc', 'video/h264', 'video/h265',
-            // Streaming formats
-            'video/mp2t', 'video/x-ms-asf'
-          ]
-        : 'video/*', // Mobile uses wildcard for better compatibility
-      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
-    });
+    try {
+      setIsUploading(true);
+      updateProgress(0, 0, 'selecting');
+      const result = await DocumentPicker.getDocumentAsync({ type: 'video/*' });
+      if (result.canceled) {
+        setIsUploading(false);
+        return null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error selecting video file:', error);
+      setIsUploading(false);
+      return null;
+    }
   };
-
+  
   const selectImageFile = async () => {
-    return await DocumentPicker.getDocumentAsync({
-      type: Platform.OS === 'web'
-        ? [
-            // Standard image formats
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-            // Mobile formats
-            'image/heic', 'image/heif'
-          ]
-        : 'image/*', // Mobile uses wildcard for better compatibility
-      copyToCacheDirectory: Platform.OS !== 'web', // Don't copy to cache on web
-    });
+    try {
+      setIsUploading(true);
+      updateProgress(0, 0, 'selecting');
+      const result = await DocumentPicker.getDocumentAsync({ type: 'image/*' });
+      if (result.canceled) {
+        setIsUploading(false);
+        return null;
+      }
+      return result;
+    } catch (error) {
+      console.error('Error selecting image file:', error);
+      setIsUploading(false);
+      return null;
+    }
   };
 
   const getFileType = (mimeType: string): string => {
@@ -462,12 +462,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   };
 
   return {
-    uploadProgress,
-    isUploading,
     uploadFile,
     selectAndUploadFile,
-    selectAudioFile,
-    selectVideoFile,
-    selectImageFile,
   };
 };

@@ -81,57 +81,49 @@ export default function MediaPlayerScreen() {
       
       let contentData: ContentData | null = null;
       
-      if (urlContentType === 'playlist') {
-        // Try playlist first if URL suggests it's a playlist
-        console.log('🔴 MEDIA_PLAYER: URL suggests playlist, trying playlist API first');
-        try {
-          const playlist = await playlistAPI.getById(contentId);
-          console.log('🔴 MEDIA_PLAYER: Successfully fetched playlist:', playlist);
-          
-          if (playlist.mediaFiles && playlist.mediaFiles.length > 0) {
-            console.log('🔴 MEDIA_PLAYER: Playlist has media files, using playlist');
-            contentData = await processPlaylistData(playlist);
-          } else {
-            console.log('🔴 MEDIA_PLAYER: Playlist is empty, falling back to slideshow check');
-            // Fall back to slideshow if playlist is empty
-            contentData = await trySlideshow(contentId);
-          }
-        } catch (error) {
-          console.log('🔴 MEDIA_PLAYER: Playlist API failed, trying slideshow:', error);
-          console.error('🔴 MEDIA_PLAYER: Playlist API error details:', {
-            message: error.message,
-            status: error.response?.status,
-            statusText: error.response?.statusText,
-            data: error.response?.data
-          });
-          contentData = await trySlideshow(contentId);
-        }
-      } else if (urlContentType === 'slideshow') {
-        // Try slideshow first if URL suggests it's a slideshow
-        console.log('🔴 MEDIA_PLAYER: URL suggests slideshow, trying slideshow API first');
-        contentData = await trySlideshow(contentId);
+      // NEW: Always try fetching as a single media file first.
+      // This is the most direct and common use case when navigating from the media library.
+      try {
+        console.log('🔴 MEDIA_PLAYER: Attempting to load as single media file first');
+        contentData = await tryMediaFile(contentId);
+        console.log('🔴 MEDIA_PLAYER: Successfully loaded as a single media file.');
+      } catch (mediaError) {
+        console.log('🔴 MEDIA_PLAYER: Failed to load as single media file, proceeding to check playlist/slideshow.', mediaError);
         
-        if (!contentData || (contentData.mediaFiles && contentData.mediaFiles.length === 0)) {
-          console.log('🔴 MEDIA_PLAYER: Slideshow is empty, falling back to playlist check');
+        // If loading as a single file fails, proceed with the original logic.
+        if (urlContentType === 'playlist') {
+          console.log('🔴 MEDIA_PLAYER: URL suggests playlist, trying playlist API');
           try {
             const playlist = await playlistAPI.getById(contentId);
-            console.log('🔴 MEDIA_PLAYER: Successfully fetched playlist as fallback:', playlist);
-            contentData = await processPlaylistData(playlist);
+            console.log('🔴 MEDIA_PLAYER: Successfully fetched playlist:', playlist);
+            
+            if (playlist.mediaFiles && playlist.mediaFiles.length > 0) {
+              console.log('🔴 MEDIA_PLAYER: Playlist has media files, using playlist');
+              contentData = await processPlaylistData(playlist);
+            } else {
+              console.log('🔴 MEDIA_PLAYER: Playlist is empty, falling back to slideshow check');
+              contentData = await trySlideshow(contentId);
+            }
           } catch (error) {
-            console.log('🔴 MEDIA_PLAYER: Playlist fallback also failed:', error);
+            console.log('🔴 MEDIA_PLAYER: Playlist API failed, trying slideshow:', error);
+            contentData = await trySlideshow(contentId);
           }
-        }
-      } else {
-        // No URL hint, try individual media file first since that's most likely when coming from media library
-        console.log('🔴 MEDIA_PLAYER: No URL hint, trying individual media file first');
-        
-        try {
-          contentData = await tryMediaFile(contentId);
-          console.log('🔴 MEDIA_PLAYER: Successfully loaded individual media file');
-        } catch (mediaError) {
-          console.log('🔴 MEDIA_PLAYER: Individual media file failed, trying playlist and slideshow:', mediaError);
+        } else if (urlContentType === 'slideshow') {
+          console.log('🔴 MEDIA_PLAYER: URL suggests slideshow, trying slideshow API first');
+          contentData = await trySlideshow(contentId);
           
-          // If individual media file fails, try both playlist and slideshow in parallel
+          if (!contentData || (contentData.mediaFiles && contentData.mediaFiles.length === 0)) {
+            console.log('🔴 MEDIA_PLAYER: Slideshow is empty, falling back to playlist check');
+            try {
+              const playlist = await playlistAPI.getById(contentId);
+              console.log('🔴 MEDIA_PLAYER: Successfully fetched playlist as fallback:', playlist);
+              contentData = await processPlaylistData(playlist);
+            } catch (error) {
+              console.log('🔴 MEDIA_PLAYER: Playlist fallback also failed:', error);
+            }
+          }
+        } else {
+          console.log('🔴 MEDIA_PLAYER: No URL hint, trying playlist and slideshow in parallel');
           const [slideshowResult, playlistResult] = await Promise.allSettled([
             trySlideshow(contentId),
             (async () => {
@@ -145,44 +137,25 @@ export default function MediaPlayerScreen() {
             playlist: playlistResult.status
           });
 
-          // Determine which content to use based on what has actual media files
           if (slideshowResult.status === 'fulfilled' && playlistResult.status === 'fulfilled') {
-            console.log('🔴 MEDIA_PLAYER: Both slideshow and playlist found, determining which has content');
-            
             const slideshowData = slideshowResult.value;
             const playlistData = playlistResult.value;
-            
-            const slideshowHasContent = slideshowData && slideshowData.mediaFiles && slideshowData.mediaFiles.length > 0;
-            const playlistHasContent = playlistData && playlistData.mediaFiles && playlistData.mediaFiles.length > 0;
-            
-            console.log('🔴 MEDIA_PLAYER: Content analysis:', {
-              slideshowHasContent,
-              playlistHasContent,
-              slideshowMediaFiles: slideshowData?.mediaFiles?.length || 0,
-              playlistMediaFiles: playlistData?.mediaFiles?.length || 0
-            });
+            const slideshowHasContent = slideshowData?.mediaFiles?.length > 0;
+            const playlistHasContent = playlistData?.mediaFiles?.length > 0;
 
-            if (playlistHasContent && !slideshowHasContent) {
-              console.log('🔴 MEDIA_PLAYER: Playlist has content, slideshow is empty - using playlist');
+            if (playlistHasContent) {
               contentData = playlistData;
-            } else if (slideshowHasContent && !playlistHasContent) {
-              console.log('🔴 MEDIA_PLAYER: Slideshow has content, playlist is empty - using slideshow');
+            } else if (slideshowHasContent) {
               contentData = slideshowData;
-            } else if (playlistHasContent && slideshowHasContent) {
-              console.log('🔴 MEDIA_PLAYER: Both have content - defaulting to playlist');
-              contentData = playlistData;
             } else {
-              console.log('🔴 MEDIA_PLAYER: Neither has content - defaulting to playlist');
-              contentData = playlistData;
+              contentData = playlistData; // Default to playlist even if empty
             }
           } else if (slideshowResult.status === 'fulfilled' && slideshowResult.value) {
-            console.log('🔴 MEDIA_PLAYER: Only slideshow found, using slideshow');
             contentData = slideshowResult.value;
           } else if (playlistResult.status === 'fulfilled' && playlistResult.value) {
-            console.log('🔴 MEDIA_PLAYER: Only playlist found, using playlist');
             contentData = playlistResult.value;
           } else {
-            console.error('🔴 MEDIA_PLAYER: All content types failed:', {
+             console.error('🔴 MEDIA_PLAYER: All content types failed:', {
               mediaError,
               slideshowError: slideshowResult.status === 'rejected' ? slideshowResult.reason : null,
               playlistError: playlistResult.status === 'rejected' ? playlistResult.reason : null

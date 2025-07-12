@@ -10,7 +10,8 @@ import {
   Linking,
   Platform,
 } from 'react-native';
-import { Video } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
@@ -18,7 +19,6 @@ import { useCart } from '@/contexts/CartContext';
 import { checkoutAPI } from '@/services/api';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
-import { usePlaylistAV, MediaTrack } from '@/hooks/usePlaylistAV';
 
 interface MediaFile {
   id: number;
@@ -50,6 +50,7 @@ export default function PreviewPlayer({
   onPreviewComplete,
   backgroundAudioUrl,
 }: PreviewPlayerProps) {
+  const [currentTrack, setCurrentTrack] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [timeLeft, setTimeLeft] = useState(previewDuration);
   const [volume, setVolume] = useState(1);
@@ -63,32 +64,20 @@ export default function PreviewPlayer({
   const [slideshowTimer, setSlideshowTimer] = useState<NodeJS.Timeout | null>(null);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
 
+  // Web audio fallback
+  const webAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [webAudioLoaded, setWebAudioLoaded] = useState(false);
+  const [webAudioPlaying, setWebAudioPlaying] = useState(false);
+  const [webAudioCurrentTime, setWebAudioCurrentTime] = useState(0);
+  
   // Background audio for slideshows
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const [backgroundAudioPlaying, setBackgroundAudioPlaying] = useState(false);
+  
+  // Overall play state for UI
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  // Convert MediaFile[] to MediaTrack[] for usePlaylistAV
-  const tracks: MediaTrack[] = mediaFiles.map(file => ({
-    id: file.id,
-    url: file.url,
-    title: file.title,
-    fileType: file.fileType === 'video' || file.contentType?.startsWith('video/') ? 'video' : 'audio'
-  }));
-
-  // Use the unified playlist hook
-  const {
-    currentIndex,
-    currentTrack,
-    isPlaying,
-    play,
-    pause,
-    next,
-    previous,
-    onStatusUpdate,
-    soundRef
-  } = usePlaylistAV(tracks);
-
-  const currentMedia = mediaFiles[currentIndex];
+  const currentMedia = mediaFiles[currentTrack];
   
   // Determine if current media is video, audio, or image
   const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/') || currentMedia?.type === 'video';
@@ -100,7 +89,7 @@ export default function PreviewPlayer({
   
   // Debug logging
   console.log('🔴 PREVIEW_PLAYER: Media analysis:', {
-    currentTrack: currentIndex,
+    currentTrack,
     mediaFilesLength: mediaFiles.length,
     currentMedia: currentMedia ? {
       id: currentMedia.id,
@@ -115,14 +104,144 @@ export default function PreviewPlayer({
     isSlideshow,
     backgroundAudioUrl: !!backgroundAudioUrl
   });
+  
+  // Use the new expo-audio hooks for audio
+  const audioPlayer = useAudioPlayer();
+  const audioStatus = useAudioPlayerStatus(audioPlayer);
+  
+  // Use the new expo-video hooks for video
+  const videoPlayer = useVideoPlayer(currentMedia && isVideo ? currentMedia.url : null, (player) => {
+    player.loop = false;
+    player.muted = isMuted;
+  });
+  
+  // Use appropriate player and status based on media type and platform
+  const player = isVideo ? videoPlayer : (Platform.OS === 'web' ? webAudioRef.current : audioPlayer);
+  const status = isVideo ? videoPlayer.status : (Platform.OS === 'web' ? {
+    isLoaded: webAudioLoaded,
+    playing: webAudioPlaying,
+    currentTime: webAudioCurrentTime,
+    duration: webAudioRef.current?.duration || NaN,
+    isBuffering: false
+  } : audioStatus);
+
+  // Load track when current track changes
+  useEffect(() => {
+    if (currentMedia && currentMedia.url) {
+      console.log('🔴 PREVIEW_PLAYER: Loading media:', currentMedia.title, 'Type:', isVideo ? 'video' : isAudio ? 'audio' : 'image', 'URL:', currentMedia.url);
+      console.log('🔴 PREVIEW_PLAYER: Media details:', {
+        id: currentMedia.id,
+        title: currentMedia.title,
+        url: currentMedia.url,
+        fileType: currentMedia.fileType,
+        contentType: currentMedia.contentType,
+        isVideo,
+        isAudio,
+        isImage,
+        isSlideshow
+      });
+      
+      try {
+        if (isImage) {
+          // For images, we don't need to load anything special
+          console.log('🔴 PREVIEW_PLAYER: Image media loaded');
+        } else if (isVideo) {
+          // Video player handles URL automatically through useVideoPlayer hook
+          console.log('🔴 PREVIEW_PLAYER: Video player will handle URL automatically');
+        } else if (Platform.OS === 'web') {
+          // Use HTML5 Audio for web
+          console.log('🔴 PREVIEW_PLAYER: Using HTML5 Audio for web');
+          if (webAudioRef.current) {
+            webAudioRef.current.pause();
+            webAudioRef.current.removeEventListener('loadeddata', () => {});
+            webAudioRef.current.removeEventListener('timeupdate', () => {});
+            webAudioRef.current.removeEventListener('play', () => {});
+            webAudioRef.current.removeEventListener('pause', () => {});
+            webAudioRef.current.removeEventListener('ended', () => {});
+            webAudioRef.current.removeEventListener('error', () => {});
+            webAudioRef.current.src = '';
+          }
+          
+          const audio = new Audio();
+          webAudioRef.current = audio;
+          setWebAudioLoaded(false);
+          setWebAudioPlaying(false);
+          setWebAudioCurrentTime(0);
+          
+          // Set up event listeners before setting src
+          audio.addEventListener('loadeddata', () => {
+            console.log('🔴 PREVIEW_PLAYER: Web audio loaded successfully');
+            setWebAudioLoaded(true);
+          });
+          
+          audio.addEventListener('canplaythrough', () => {
+            console.log('🔴 PREVIEW_PLAYER: Web audio can play through');
+            setWebAudioLoaded(true);
+          });
+          
+          audio.addEventListener('timeupdate', () => {
+            setWebAudioCurrentTime(audio.currentTime);
+          });
+          
+          audio.addEventListener('play', () => {
+            console.log('🔴 PREVIEW_PLAYER: Web audio started playing');
+            setWebAudioPlaying(true);
+          });
+          
+          audio.addEventListener('pause', () => {
+            console.log('🔴 PREVIEW_PLAYER: Web audio paused');
+            setWebAudioPlaying(false);
+          });
+          
+          audio.addEventListener('ended', () => {
+            console.log('🔴 PREVIEW_PLAYER: Web audio ended');
+            setWebAudioPlaying(false);
+          });
+          
+          audio.addEventListener('error', (e) => {
+            console.error('🔴 PREVIEW_PLAYER: Web audio error:', e);
+            console.error('🔴 PREVIEW_PLAYER: Audio error details:', {
+              error: audio.error,
+              networkState: audio.networkState,
+              readyState: audio.readyState,
+              src: audio.src
+            });
+          });
+          
+          // Set crossOrigin before src to handle CORS
+          audio.crossOrigin = 'anonymous';
+          audio.preload = 'auto';
+          
+          // Set the source URL
+          audio.src = currentMedia.url;
+          
+          // Start loading
+          audio.load();
+          
+          console.log('🔴 PREVIEW_PLAYER: Web audio setup complete, loading started');
+        } else {
+          // Load audio track with expo-audio for mobile
+          console.log('🔴 PREVIEW_PLAYER: Loading audio with expo-audio for mobile');
+          
+          audioPlayer.replace(currentMedia.url).then(() => {
+            console.log('🔴 PREVIEW_PLAYER: Audio loaded successfully on mobile');
+          }).catch((audioError) => {
+            console.error('🔴 PREVIEW_PLAYER: Error loading audio on mobile:', audioError);
+          });
+        }
+      } catch (error) {
+        console.error('🔴 PREVIEW_PLAYER: Error loading media:', error);
+      }
+    }
+  }, [currentMedia, isVideo, isAudio, isImage, audioPlayer]);
 
   // Slideshow auto-advance logic
   useEffect(() => {
     if (slideshowPlaying && isSlideshow && !previewEnded && mediaFiles.length > 0) {
-      const currentMediaFile = mediaFiles[currentIndex];
+      const currentMediaFile = mediaFiles[currentTrack];
       const duration = currentMediaFile?.duration || 5000; // Use the actual duration from the media file, default 5 seconds
       
-      console.log(`🔄 SLIDESHOW_CYCLE: Setting timer for ${duration}ms for image "${currentMediaFile?.title}", current track: ${currentIndex}/${mediaFiles.length}`);
+      console.log(`🔄 SLIDESHOW_CYCLE: Setting timer for ${duration}ms for image "${currentMediaFile?.title}", current track: ${currentTrack}/${mediaFiles.length}`);
       console.log(`🔄 SLIDESHOW_CYCLE: Media file duration setting:`, {
         id: currentMediaFile?.id,
         title: currentMediaFile?.title,
@@ -131,15 +250,15 @@ export default function PreviewPlayer({
       });
       
       const timer = setTimeout(() => {
-        console.log(`🔄 SLIDESHOW_CYCLE: Timer fired after ${duration}ms, advancing from track ${currentIndex}`);
-        if (currentIndex < mediaFiles.length - 1) {
-          const nextTrack = currentIndex + 1;
+        console.log(`🔄 SLIDESHOW_CYCLE: Timer fired after ${duration}ms, advancing from track ${currentTrack}`);
+        if (currentTrack < mediaFiles.length - 1) {
+          const nextTrack = currentTrack + 1;
           console.log(`🔄 SLIDESHOW_CYCLE: Advancing to track ${nextTrack}`);
-          next();
+          setCurrentTrack(nextTrack);
         } else {
           // Loop back to first image
           console.log(`🔄 SLIDESHOW_CYCLE: Looping back to track 0`);
-          next();
+          setCurrentTrack(0);
         }
       }, duration);
       
@@ -147,7 +266,7 @@ export default function PreviewPlayer({
       
       return () => {
         if (timer) {
-          console.log(`🔄 SLIDESHOW_CYCLE: Clearing timer for track ${currentIndex}`);
+          console.log(`🔄 SLIDESHOW_CYCLE: Clearing timer for track ${currentTrack}`);
           clearTimeout(timer);
         }
       };
@@ -159,7 +278,7 @@ export default function PreviewPlayer({
         setSlideshowTimer(null);
       }
     }
-  }, [slideshowPlaying, currentIndex, mediaFiles.length, isSlideshow, previewEnded, next]);
+  }, [slideshowPlaying, currentTrack, mediaFiles.length, currentMedia, isSlideshow, previewEnded]);
 
   // Track preview time and end after duration
   useEffect(() => {
@@ -174,7 +293,7 @@ export default function PreviewPlayer({
             if (newTime >= previewDuration) {
               console.log('🔴 PREVIEW_PLAYER: Preview duration reached, ending slideshow');
               setSlideshowPlaying(false);
-              pause();
+              setIsPlaying(false);
               setPreviewEnded(true);
               
               // Stop background audio
@@ -195,19 +314,19 @@ export default function PreviewPlayer({
       }
     } else {
       // Original audio/video timing logic
-      const currentPlayTime = isVideo ? soundRef.current?.positionMillis : 
-                             (Platform.OS === 'web' ? 0 : currentTime); // Web audio position is not directly available here
-      const isPlaying = isVideo ? soundRef.current?.isPlaying : 
-                       (Platform.OS === 'web' ? false : isPlaying); // Web audio playing state is not directly available here
+      const currentPlayTime = isVideo ? videoPlayer.currentTime : 
+                             (Platform.OS === 'web' ? webAudioCurrentTime : audioStatus.currentTime);
+      const isPlaying = isVideo ? videoPlayer.playing : 
+                       (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing);
       
       if (isPlaying && currentPlayTime) {
-        const currentSeconds = Math.floor(currentPlayTime / 1000);
+        const currentSeconds = Math.floor(currentPlayTime);
         setCurrentTime(currentSeconds);
         setTimeLeft(Math.max(0, previewDuration - currentSeconds));
 
         // End preview after duration
         if (currentSeconds >= previewDuration) {
-          pause();
+          handlePause();
           setPreviewEnded(true);
           if (onPreviewComplete) {
             onPreviewComplete();
@@ -215,20 +334,20 @@ export default function PreviewPlayer({
         }
       }
     }
-  }, [isImage, isSlideshow, slideshowPlaying, isVideo, soundRef.current?.positionMillis, soundRef.current?.isPlaying, previewDuration, onPreviewComplete]);
+  }, [isImage, isSlideshow, slideshowPlaying, isVideo, videoPlayer.playing, videoPlayer.currentTime, webAudioPlaying, webAudioCurrentTime, audioStatus.playing, audioStatus.currentTime, previewDuration, onPreviewComplete]);
 
   // Load initial track
   useEffect(() => {
     if (mediaFiles.length > 0) {
-      play();
+      loadTrack(0);
     }
-  }, [mediaFiles, play]);
+  }, [mediaFiles]);
 
   // Auto-play if enabled
   useEffect(() => {
     // Remove autoplay functionality - user must click play button
     console.log('🔴 PREVIEW_PLAYER: Autoplay disabled - user must click play button');
-  }, [autoplay, isPlaying, previewEnded, hasUserInteracted, isImage, isSlideshow, mediaFiles.length]);
+  }, [autoplay, status.isLoaded, previewEnded, hasUserInteracted, isImage, isSlideshow, mediaFiles.length]);
 
   // Background audio setup for slideshows
   useEffect(() => {
@@ -324,7 +443,7 @@ export default function PreviewPlayer({
         mediaFilesLength: mediaFiles.length
       });
     }
-  }, [backgroundAudioUrl, isSlideshow]);
+  }, [backgroundAudioUrl]);
 
   // Cleanup effect - stop audio when component unmounts
   useEffect(() => {
@@ -333,18 +452,34 @@ export default function PreviewPlayer({
       if (slideshowTimer) {
         clearTimeout(slideshowTimer);
       }
-      if (Platform.OS === 'web' && backgroundAudioRef.current) {
+      if (Platform.OS === 'web' && webAudioRef.current) {
+        webAudioRef.current.pause();
+        webAudioRef.current.src = '';
+        webAudioRef.current = null;
+      } else if (audioPlayer) {
+        audioPlayer.pause();
+      }
+      if (backgroundAudioRef.current) {
         backgroundAudioRef.current.pause();
         backgroundAudioRef.current.src = '';
         backgroundAudioRef.current = null;
       }
     };
-  }, [slideshowTimer]);
+  }, [audioPlayer, slideshowTimer]);
 
   // Load track function
   const loadTrack = (index: number) => {
     if (index >= 0 && index < mediaFiles.length) {
-      play();
+      setCurrentTrack(index);
+      setCurrentTime(0);
+      setTimeLeft(previewDuration);
+      setPreviewEnded(false);
+      
+      // Clear any existing slideshow timer
+      if (slideshowTimer) {
+        clearTimeout(slideshowTimer);
+        setSlideshowTimer(null);
+      }
     }
   };
 
@@ -370,9 +505,9 @@ export default function PreviewPlayer({
     try {
       if (isImage || isSlideshow) {
         console.log('🔴 PREVIEW_PLAYER: Starting slideshow playback...');
-        console.log('🔴 PREVIEW_PLAYER: Current track:', currentIndex, 'Media files length:', mediaFiles.length);
+        console.log('🔴 PREVIEW_PLAYER: Current track:', currentTrack, 'Media files length:', mediaFiles.length);
         
-        const currentMediaFile = mediaFiles[currentIndex];
+        const currentMediaFile = mediaFiles[currentTrack];
         console.log('🔴 PREVIEW_PLAYER: Current media file:', {
           id: currentMediaFile?.id,
           title: currentMediaFile?.title,
@@ -381,7 +516,7 @@ export default function PreviewPlayer({
         });
         
         // Set playing states to start image rotation - THIS IS THE KEY!
-        play();
+        setIsPlaying(true);
         setSlideshowPlaying(true);
         
         console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow rotation started - images will rotate based on duration settings');
@@ -427,17 +562,19 @@ export default function PreviewPlayer({
         console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow and audio started successfully - user initiated playback');
       } else if (isVideo) {
         console.log('🔴 PREVIEW_PLAYER: Starting video playback...');
-        if (!soundRef.current) {
+        if (!player) {
           console.log('🔴 PREVIEW_PLAYER: No video player available');
           Alert.alert('Error', 'Video player not initialized');
           return;
         }
-        soundRef.current.play();
+        videoPlayer.play();
+        setIsPlaying(true);
         console.log('🔴 PREVIEW_PLAYER: Video playback started successfully');
-      } else if (Platform.OS === 'web' && backgroundAudioRef.current) {
+      } else if (Platform.OS === 'web' && webAudioRef.current) {
         console.log('🔴 PREVIEW_PLAYER: Starting web audio playback...');
-        if (backgroundAudioRef.current) {
-          await backgroundAudioRef.current.play();
+        if (webAudioLoaded) {
+          await webAudioRef.current.play();
+          setIsPlaying(true);
           console.log('🔴 PREVIEW_PLAYER: Web audio playback started successfully');
         } else {
           console.log('🔴 PREVIEW_PLAYER: Web audio not loaded yet, waiting...');
@@ -455,15 +592,16 @@ export default function PreviewPlayer({
           return;
         }
 
-        if (!soundRef.current) {
+        if (!player) {
           console.log('🔴 PREVIEW_PLAYER: No audio player available');
           Alert.alert('Error', 'Audio player not initialized');
           return;
         }
 
-        if (soundRef.current.isLoaded) {
+        if (audioStatus.isLoaded) {
           console.log('🔴 PREVIEW_PLAYER: Starting expo audio playback...');
-          await soundRef.current.play();
+          await audioPlayer.play();
+          setIsPlaying(true);
           console.log('🔴 PREVIEW_PLAYER: Expo audio playback started successfully');
         } else {
           console.log('🔴 PREVIEW_PLAYER: Expo audio track not loaded yet, waiting...');
@@ -483,7 +621,7 @@ export default function PreviewPlayer({
         console.log('🔴 PREVIEW_PLAYER: Pausing slideshow...');
         
         // Set paused states to stop image rotation - THIS IS THE KEY!
-        pause();
+        setIsPlaying(false);
         setSlideshowPlaying(false);
         
         if (slideshowTimer) {
@@ -500,14 +638,14 @@ export default function PreviewPlayer({
           }
         }
       } else if (isVideo) {
-        soundRef.current?.pause();
-        console.log('🔴 PREVIEW_PLAYER: Video playback paused');
-      } else if (Platform.OS === 'web' && backgroundAudioRef.current) {
-        backgroundAudioRef.current.pause();
-        console.log('🔴 PREVIEW_PLAYER: Web audio playback paused');
+        videoPlayer.pause();
+        setIsPlaying(false);
+      } else if (Platform.OS === 'web' && webAudioRef.current) {
+        webAudioRef.current.pause();
+        setIsPlaying(false);
       } else {
-        soundRef.current?.pause();
-        console.log('🔴 PREVIEW_PLAYER: Expo audio playback paused');
+        audioPlayer.pause();
+        setIsPlaying(false);
       }
     } catch (error) {
       console.error('🔴 PREVIEW_PLAYER: Error pausing:', error);
@@ -518,7 +656,8 @@ export default function PreviewPlayer({
   const handleNext = () => {
     if (mediaFiles.length <= 1) return;
 
-    next();
+    const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
+    loadTrack(nextIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
@@ -533,7 +672,8 @@ export default function PreviewPlayer({
   const handlePrevious = () => {
     if (mediaFiles.length <= 1) return;
 
-    previous();
+    const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
+    loadTrack(prevIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
@@ -692,17 +832,17 @@ export default function PreviewPlayer({
   };
 
   const nextTrack = () => {
-    if (currentIndex < mediaFiles.length - 1) {
-      next();
+    if (currentTrack < mediaFiles.length - 1) {
+      setCurrentTrack(currentTrack + 1);
     } else {
-      next(); // loop back to start
+      setCurrentTrack(0); // loop back to start
     }
   };
 
   // AUTO-ADVANCE FOR WEB AUDIO (ended event)
   useEffect(() => {
-    if (Platform.OS === 'web' && backgroundAudioRef.current) {
-      const audio = backgroundAudioRef.current;
+    if (Platform.OS === 'web' && webAudioRef.current) {
+      const audio = webAudioRef.current;
       const onEnded = () => {
         console.log('🔄 PREVIEW_PLAYER: Web audio ended – advancing to next track');
         nextTrack();
@@ -710,27 +850,27 @@ export default function PreviewPlayer({
       audio.addEventListener('ended', onEnded);
       return () => audio.removeEventListener('ended', onEnded);
     }
-  }, [currentIndex, mediaFiles.length, next]);
+  }, [currentTrack, mediaFiles.length]);
 
   // AUTO-ADVANCE FOR EXPO-VIDEO
   useEffect(() => {
-    if (isVideo && soundRef.current) {
-      if (!soundRef.current.isPlaying && soundRef.current.positionMillis >= (soundRef.current.durationMillis || 0) - 300) {
+    if (isVideo && videoPlayer && videoPlayer.duration) {
+      if (!videoPlayer.playing && videoPlayer.currentTime >= videoPlayer.duration - 0.3) {
         console.log('🔄 PREVIEW_PLAYER: Video ended – advancing to next track');
         nextTrack();
       }
     }
-  }, [isVideo, soundRef.current?.isPlaying, soundRef.current?.positionMillis, soundRef.current?.durationMillis]);
+  }, [isVideo, videoPlayer.playing, videoPlayer.currentTime, videoPlayer.duration]);
 
   // AUTO-ADVANCE FOR EXPO-AUDIO (mobile)
   useEffect(() => {
-    if (!isVideo && !isImage && Platform.OS !== 'web' && soundRef.current?.isLoaded) {
-      if (!soundRef.current?.isPlaying && soundRef.current?.positionMillis >= (soundRef.current?.durationMillis || 0) - 300) {
+    if (!isVideo && !isImage && Platform.OS !== 'web' && audioStatus.isLoaded) {
+      if (!audioStatus.playing && audioStatus.currentTime >= (audioStatus.duration || 0) - 0.3) {
         console.log('🔄 PREVIEW_PLAYER: Mobile audio ended – advancing to next track');
         nextTrack();
       }
     }
-  }, [isVideo, isImage, soundRef.current?.isPlaying, soundRef.current?.positionMillis, soundRef.current?.durationMillis]);
+  }, [audioStatus.playing, audioStatus.currentTime, audioStatus.duration, isVideo, isImage]);
 
   return (
     <View style={styles.container}>
@@ -805,15 +945,12 @@ export default function PreviewPlayer({
             {/* Video Display - Only show for video files */}
             {isVideo && currentMedia && (
               <View style={styles.videoContainer}>
-                <Video
+                <VideoView
                   style={styles.video}
-                  ref={soundRef}
-                  useNativeControls
-                  isLooping
-                  onPlaybackStatusUpdate={onStatusUpdate}
-                  onError={({ error }) => {
-                    console.error('🔴 PREVIEW_PLAYER: Video playback error:', error);
-                  }}
+                  player={videoPlayer}
+                  allowsFullscreen={true}
+                  allowsPictureInPicture={true}
+                  contentFit="contain"
                 />
                 
                 {/* Custom fullscreen button */}
@@ -881,7 +1018,7 @@ export default function PreviewPlayer({
                   <Text style={styles.imageTitle}>{currentMedia.title}</Text>
                   {isSlideshow && (
                     <Text style={styles.imageCounter}>
-                      {currentIndex + 1} / {mediaFiles.length}
+                      {currentTrack + 1} / {mediaFiles.length}
                     </Text>
                   )}
                 </View>
@@ -894,7 +1031,7 @@ export default function PreviewPlayer({
                 {currentMedia.title}
               </Text>
               <Text style={styles.trackCounter}>
-                {isSlideshow ? `Image ${currentIndex + 1} of ${mediaFiles.length}` : `Track ${currentIndex + 1} of ${mediaFiles.length}`}
+                {isSlideshow ? `Image ${currentTrack + 1} of ${mediaFiles.length}` : `Track ${currentTrack + 1} of ${mediaFiles.length}`}
               </Text>
               <Text style={styles.mediaType}>
                 {isVideo ? '🎥 Video' : isImage || isSlideshow ? '🖼️ Image' : '🎵 Audio'} Preview
@@ -932,10 +1069,10 @@ export default function PreviewPlayer({
 
               <TouchableOpacity
                 onPress={isPlaying ? handlePause : handlePlay}
-                disabled={previewEnded || (!isImage && !isSlideshow && !isVideo && !soundRef.current?.isLoaded)}
+                disabled={previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)}
                 style={[
                   styles.playButtonControl, 
-                  (previewEnded || (!isImage && !isSlideshow && !isVideo && !soundRef.current?.isLoaded)) && styles.disabledControl,
+                  (previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)) && styles.disabledControl,
                   hasUserInteracted && styles.enhancedPlayButton
                 ]}
               >

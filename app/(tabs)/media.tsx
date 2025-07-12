@@ -17,13 +17,14 @@ import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { MediaFile } from '@/shared/media-schema';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
+import { useUpload } from '@/contexts/UploadContext';
 import { mediaAPI } from '@/services/api';
 import MediaFileCard from '@/components/MediaFileCard';
-import UploadProgressModal from '@/components/UploadProgressModal';
 
 export default function MediaScreen() {
   const router = useRouter();
-  const { uploadProgress, isUploading, selectAndUploadFile } = useMediaUpload();
+  const { selectAndUploadFile } = useMediaUpload();
+  const { isUploading } = useUpload();
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -252,44 +253,31 @@ export default function MediaScreen() {
         )}
       </ScrollView>
 
-      {/* Upload Progress Modal */}
-      <UploadProgressModal
-        visible={isUploading}
-        progress={uploadProgress}
-      />
-
       {/* Delete Confirmation Dialog */}
       <Modal
-        visible={showDeleteDialog}
+        animationType="slide"
         transparent={true}
-        animationType="fade"
+        visible={showDeleteDialog}
         onRequestClose={cancelDelete}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.dialogContainer}>
-            <View style={styles.dialogHeader}>
-              <MaterialIconWithFallback name="delete-forever" size={32} color="#ef4444" />
-              <Text style={styles.dialogTitle}>Delete File</Text>
-            </View>
-            
-            <Text style={styles.dialogMessage}>
-              Are you sure you want to delete "{fileToDelete?.name}"?{'\n'}
-              This action cannot be undone.
-            </Text>
-            
-            <View style={styles.dialogButtons}>
+        <View style={styles.centeredView}>
+          <View style={styles.modalView}>
+            <ThemedText style={styles.modalTitle}>Confirm Deletion</ThemedText>
+            <ThemedText style={styles.modalText}>
+              Are you sure you want to delete "{fileToDelete?.name || 'this file'}"? This action cannot be undone.
+            </ThemedText>
+            <View style={styles.modalButtons}>
               <TouchableOpacity
-                style={[styles.dialogButton, styles.cancelButton]}
+                style={[styles.button, styles.buttonCancel]}
                 onPress={cancelDelete}
               >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+                <Text style={styles.textStyle}>Cancel</Text>
               </TouchableOpacity>
-              
               <TouchableOpacity
-                style={[styles.dialogButton, styles.deleteButton]}
+                style={[styles.button, styles.buttonDelete]}
                 onPress={confirmDelete}
               >
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.textStyle}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -463,5 +451,58 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#fff',
+  },
+  centeredView: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalView: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  button: {
+    paddingVertical: 12,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    elevation: 2,
+  },
+  buttonCancel: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  buttonDelete: {
+    backgroundColor: '#ef4444',
+  },
+  textStyle: {
+    color: 'white',
+    fontWeight: 'bold',
+    textAlign: 'center',
   },
 });

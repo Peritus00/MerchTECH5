@@ -6,15 +6,21 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
 import 'react-native-reanimated';
+import { ActionSheetProvider } from '@expo/react-native-action-sheet';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
+import { UploadProvider } from '@/contexts/UploadContext';
+import { UploadProgressIndicator } from '@/components/UploadProgressIndicator';
 import { ConsentBanner } from '@/components/ConsentBanner';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -96,6 +102,7 @@ function RootLayoutNav() {
         console.log('User consent:', consent ? 'accepted' : 'declined');
       }} />
       <StatusBar style="auto" />
+      <UploadProgressIndicator />
     </ThemeProvider>
   );
 }
@@ -129,12 +136,18 @@ export default function RootLayout() {
   console.log('Web platform - using standard payment processing');
 
   return (
-    <AuthProvider>
-      <CartProvider>
-        <NotificationProvider>
-          <RootLayoutNav />
-        </NotificationProvider>
-      </CartProvider>
-    </AuthProvider>
+    <QueryClientProvider client={queryClient}>
+      <ActionSheetProvider>
+        <AuthProvider>
+          <CartProvider>
+            <NotificationProvider>
+              <UploadProvider>
+                <RootLayoutNav />
+              </UploadProvider>
+            </NotificationProvider>
+          </CartProvider>
+        </AuthProvider>
+      </ActionSheetProvider>
+    </QueryClientProvider>
   );
 }
