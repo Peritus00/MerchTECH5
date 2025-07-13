@@ -2491,7 +2491,7 @@ const sanitizeImageUrls = (urls) => {
     // Replace local IP with production domain if present
     const localIpRegex = /https:\/\/192\.168\.[0-9]+\.[0-9]+:[0-9]+/;
     // Use the correct Railway deployment URL for production
-    const publicBaseUrl = 'https://merchtechapp5-production.up.railway.app';
+    const publicBaseUrl = 'https://merchtech5-production.up.railway.app';
     newUrl = newUrl.replace(localIpRegex, publicBaseUrl);
     
     // If it's a relative path, prepend the public base URL
