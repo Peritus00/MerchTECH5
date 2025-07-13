@@ -18,7 +18,8 @@
     "server:start": "node ./services/Server/main.js",
     "server:dev": "NODE_ENV=development node ./services/Server/main.js",
     "server:prod": "NODE_ENV=production node ./services/Server/main.js",
-    "build": "NODE_ENV=production expo export --platform web --output-dir dist"
+    "build": "NODE_ENV=production expo export --platform web --output-dir dist",
+    "postinstall": "npm install @aws-sdk/s3-presigned-post"
   },
   "jest": {
     "preset": "jest-expo"
