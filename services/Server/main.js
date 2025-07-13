@@ -261,40 +261,45 @@ const upload = multer({
     fileSize: 500 * 1024 * 1024, // 500MB limit for video files
   },
   fileFilter: (req, file, cb) => {
-    // Allow images, audio, and video files
-    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|3gp|3gpp|quicktime|hevc|h264|h265/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) || 
-                    file.mimetype.startsWith('audio/') || 
-                    file.mimetype.startsWith('image/') ||
-                    file.mimetype.startsWith('video/');
-    
-    // Special handling for files that might be detected as application/octet-stream
-    const isAudioFile = path.extname(file.originalname).toLowerCase().match(/\.(mp3|wav|m4a|aac|ogg)$/);
-    const isImageFile = path.extname(file.originalname).toLowerCase().match(/\.(jpeg|jpg|png|gif|webp)$/);
-    const isVideoFile = path.extname(file.originalname).toLowerCase().match(/\.(mp4|webm|avi|mov|wmv|flv|mkv|3gp|3gpp|quicktime)$/);
-    
-    console.log('🔍 FILE_FILTER: Checking file:', {
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-      extension: path.extname(file.originalname).toLowerCase(),
-      extname: extname,
-      mimetypeMatch: mimetype,
-      isAudioFile: !!isAudioFile,
-      isImageFile: !!isImageFile,
-      isVideoFile: !!isVideoFile,
-      allowedTypesTest: allowedTypes.test(file.mimetype),
-      startsWithAudio: file.mimetype.startsWith('audio/'),
-      startsWithImage: file.mimetype.startsWith('image/'),
-      startsWithVideo: file.mimetype.startsWith('video/')
-    });
-    
-    if ((mimetype && extname) || isAudioFile || isImageFile || isVideoFile) {
-      console.log('✅ FILE_FILTER: File accepted');
-      return cb(null, true);
-    } else {
-      console.log('❌ FILE_FILTER: File rejected');
-      cb(new Error('Only image, audio, and video files are allowed'));
+    try {
+      // Allow images, audio, and video files
+      const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|3gp|3gpp|quicktime|hevc|h264|h265/;
+      const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = allowedTypes.test(file.mimetype) || 
+                      file.mimetype.startsWith('audio/') || 
+                      file.mimetype.startsWith('image/') ||
+                      file.mimetype.startsWith('video/');
+      
+      // Special handling for files that might be detected as application/octet-stream
+      const isAudioFile = path.extname(file.originalname).toLowerCase().match(/\.(mp3|wav|m4a|aac|ogg)$/);
+      const isImageFile = path.extname(file.originalname).toLowerCase().match(/\.(jpeg|jpg|png|gif|webp)$/);
+      const isVideoFile = path.extname(file.originalname).toLowerCase().match(/\.(mp4|webm|avi|mov|wmv|flv|mkv|3gp|3gpp|quicktime)$/);
+      
+      console.log('🔍 FILE_FILTER: Checking file:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        extension: path.extname(file.originalname).toLowerCase(),
+        extname: extname,
+        mimetypeMatch: mimetype,
+        isAudioFile: !!isAudioFile,
+        isImageFile: !!isImageFile,
+        isVideoFile: !!isVideoFile,
+        allowedTypesTest: allowedTypes.test(file.mimetype),
+        startsWithAudio: file.mimetype.startsWith('audio/'),
+        startsWithImage: file.mimetype.startsWith('image/'),
+        startsWithVideo: file.mimetype.startsWith('video/')
+      });
+      
+      if ((mimetype && extname) || isAudioFile || isImageFile || isVideoFile) {
+        console.log('✅ FILE_FILTER: File accepted');
+        return cb(null, true);
+      } else {
+        console.log('❌ FILE_FILTER: File rejected');
+        cb(new Error('Only image, audio, and video files are allowed'));
+      }
+    } catch (error) {
+      console.error('❌ FILE_FILTER: Error processing file:', error);
+      cb(new Error('File processing error'));
     }
   }
 });
@@ -776,9 +781,16 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
+  // Add request tracking for debugging
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  console.log(`📤 UPLOAD [${requestId}]: Starting upload request`);
+  console.log(`📤 UPLOAD [${requestId}]: User ID: ${req.user?.userId}, IP: ${req.ip}`);
+  console.log(`📤 UPLOAD [${requestId}]: Content-Type: ${req.headers['content-type']}`);
+  console.log(`📤 UPLOAD [${requestId}]: Content-Length: ${req.headers['content-length']}`);
+  
   if (!req.file) {
-    console.error('📤 UPLOAD: No file in request');
-    console.error('📤 UPLOAD: Request details:', {
+    console.error(`📤 UPLOAD [${requestId}]: No file in request`);
+    console.error(`📤 UPLOAD [${requestId}]: Request details:`, {
       body: req.body,
       files: req.files,
       headers: req.headers['content-type']
@@ -788,25 +800,41 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
   
   try {
     if (!s3Service) {
+      console.error(`📤 UPLOAD [${requestId}]: S3 service not configured`);
       return res.status(500).json({ error: 'S3 service not configured' });
     }
     
-    console.log('📤 UPLOAD: Uploading file to S3:', {
+    console.log(`📤 UPLOAD [${requestId}]: File received:`, {
       originalname: req.file.originalname,
       mimetype: req.file.mimetype,
       size: req.file.size,
       fieldname: req.file.fieldname,
-      buffer: req.file.buffer ? 'Buffer present' : 'No buffer'
+      buffer: req.file.buffer ? `Buffer present (${req.file.buffer.length} bytes)` : 'No buffer'
     });
+    
+    // Check if user exists and is valid
+    if (!req.user || !req.user.userId) {
+      console.error(`📤 UPLOAD [${requestId}]: Invalid user object:`, req.user);
+      return res.status(401).json({ error: 'Invalid user authentication' });
+    }
     
     // Generate a unique key for the file
     const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
+    console.log(`📤 UPLOAD [${requestId}]: Generated S3 key: ${key}`);
     
-    const uploadResult = await s3Service.uploadFile(
-      req.file.buffer,
-      key,
-      req.file.mimetype
-    );
+    // Attempt S3 upload with timeout handling
+    console.log(`📤 UPLOAD [${requestId}]: Starting S3 upload...`);
+    const uploadStartTime = Date.now();
+    
+    const uploadResult = await Promise.race([
+      s3Service.uploadFile(req.file.buffer, key, req.file.mimetype),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000)
+      )
+    ]);
+    
+    const uploadDuration = Date.now() - uploadStartTime;
+    console.log(`📤 UPLOAD [${requestId}]: S3 upload completed in ${uploadDuration}ms`);
     
     // Extract the URL from the S3 response
     const fileUrl = uploadResult.Location || uploadResult.location || uploadResult;
@@ -821,20 +849,53 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
     // Apply URL sanitization to ensure HTTPS and correct domain
     proxyUrl = sanitizeImageUrls([proxyUrl])[0];
     
-    console.log('📤 UPLOAD: S3 upload successful:', fileUrl);
-    console.log('📤 UPLOAD: S3 key:', key);
-    console.log('📤 UPLOAD: Proxy URL:', proxyUrl);
-    console.log('📤 UPLOAD: Full upload result:', uploadResult);
+    console.log(`📤 UPLOAD [${requestId}]: Upload successful:`);
+    console.log(`📤 UPLOAD [${requestId}]: - S3 URL: ${fileUrl}`);
+    console.log(`📤 UPLOAD [${requestId}]: - S3 key: ${key}`);
+    console.log(`📤 UPLOAD [${requestId}]: - Proxy URL: ${proxyUrl}`);
+    console.log(`📤 UPLOAD [${requestId}]: - Duration: ${uploadDuration}ms`);
+    
     res.json({ imageUrl: proxyUrl });
     
   } catch (error) {
-    console.error('📤 UPLOAD: S3 upload failed:', error);
-    console.error('📤 UPLOAD: Error details:', {
+    console.error(`📤 UPLOAD [${requestId}]: Upload failed:`, error);
+    console.error(`📤 UPLOAD [${requestId}]: Error details:`, {
       message: error.message,
       stack: error.stack,
-      name: error.name
+      name: error.name,
+      code: error.code
     });
-    res.status(500).json({ error: 'Failed to upload file to S3', details: error.message });
+    
+    // Log system information for debugging
+    console.error(`📤 UPLOAD [${requestId}]: System info:`, {
+      memoryUsage: process.memoryUsage(),
+      uptime: process.uptime(),
+      nodeVersion: process.version
+    });
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to upload file to S3';
+    let statusCode = 500;
+    
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Upload timeout - please try again';
+      statusCode = 408;
+    } else if (error.message.includes('network') || error.message.includes('ENOTFOUND')) {
+      errorMessage = 'Network error - please check your connection';
+      statusCode = 503;
+    } else if (error.message.includes('credentials')) {
+      errorMessage = 'Authentication error - please try again';
+      statusCode = 401;
+    } else if (error.message.includes('bucket')) {
+      errorMessage = 'Storage configuration error';
+      statusCode = 500;
+    }
+    
+    res.status(statusCode).json({ 
+      error: errorMessage, 
+      details: error.message,
+      requestId: requestId
+    });
   }
 });
 
@@ -3595,6 +3656,49 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
 });
 
 // Ensure the app listens on process.env.PORT
+// Global error handler for unhandled errors
+app.use((error, req, res, next) => {
+  console.error('🚨 GLOBAL_ERROR_HANDLER: Unhandled error:', error);
+  console.error('🚨 GLOBAL_ERROR_HANDLER: Request details:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body,
+    user: req.user
+  });
+  
+  // If response already sent, don't try to send another
+  if (res.headersSent) {
+    return next(error);
+  }
+  
+  // Send appropriate error response
+  res.status(500).json({
+    error: 'Internal server error',
+    message: 'An unexpected error occurred. Please try again.',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Process-level error handlers
+process.on('uncaughtException', (error) => {
+  console.error('🚨 UNCAUGHT_EXCEPTION:', error);
+  console.error('🚨 UNCAUGHT_EXCEPTION: Stack:', error.stack);
+  // Don't exit in production, just log the error
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🚨 UNHANDLED_REJECTION:', reason);
+  console.error('🚨 UNHANDLED_REJECTION: Promise:', promise);
+  // Don't exit in production, just log the error
+  if (process.env.NODE_ENV !== 'production') {
+    process.exit(1);
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
