@@ -97,6 +97,44 @@ try {
         } catch (error) {
           return null;
         }
+      },
+      getStream: (key, range = null) => {
+        const { GetObjectCommand } = require('@aws-sdk/client-s3');
+        const { Readable } = require('stream');
+        const bucketName = (process.env.AWS_S3_BUCKET_NAME || 'merchtechbucket').replace(/\s+/g, '');
+        
+        const params = {
+          Bucket: bucketName,
+          Key: key,
+        };
+        if (range) {
+          params.Range = `bytes=${range.start}-${range.end}`;
+        }
+        
+        const command = new GetObjectCommand(params);
+        const stream = new Readable({ read() {} });
+
+        testClient.send(command).then(response => {
+          response.Body.on('data', (chunk) => stream.push(chunk));
+          response.Body.on('end', () => stream.push(null));
+          response.Body.on('error', (err) => stream.emit('error', err));
+        }).catch(err => {
+          stream.emit('error', err);
+        });
+
+        return stream;
+      },
+      getMetadata: async (key) => {
+        const { HeadObjectCommand } = require('@aws-sdk/client-s3');
+        const bucketName = (process.env.AWS_S3_BUCKET_NAME || 'merchtechbucket').replace(/\s+/g, '');
+        
+        const command = new HeadObjectCommand({
+          Bucket: bucketName,
+          Key: key,
+        });
+        
+        const { ContentLength, ContentType, ETag, LastModified } = await testClient.send(command);
+        return { ContentLength, ContentType, ETag, LastModified };
       }
     };
     console.log('✅ Fallback S3 service created successfully');
