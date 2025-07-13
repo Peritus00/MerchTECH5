@@ -61,12 +61,49 @@ try {
         secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').replace(/\s+/g, ''),
       },
     });
-    console.log('✅ Direct S3 client creation successful - S3 service should work');
+    console.log('✅ Direct S3 client creation successful - Creating fallback S3 service');
+    
+    // Create a minimal S3 service fallback
+    s3Service = {
+      uploadFile: async (fileBuffer, key, contentType) => {
+        const { Upload } = require('@aws-sdk/lib-storage');
+        const bucketName = (process.env.AWS_S3_BUCKET_NAME || 'merchtechbucket').replace(/\s+/g, '');
+        const region = (process.env.AWS_REGION || 'us-east-2').replace(/\s+/g, '');
+        
+        const upload = new Upload({
+          client: testClient,
+          params: {
+            Bucket: bucketName,
+            Key: key,
+            Body: fileBuffer,
+            ContentType: contentType,
+            CacheControl: 'max-age=31536000',
+            Metadata: {
+              uploadedAt: new Date().toISOString(),
+            },
+          },
+        });
+        
+        const result = await upload.done();
+        const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${key}`;
+        return { Location: fileUrl, Key: key };
+      },
+      isConfigured: () => true,
+      extractKeyFromUrl: (url) => {
+        try {
+          const decodedUrl = decodeURIComponent(url);
+          const match = decodedUrl.match(/https:\/\/.+?\.amazonaws\.com\/(.+)/);
+          return match ? match[1] : null;
+        } catch (error) {
+          return null;
+        }
+      }
+    };
+    console.log('✅ Fallback S3 service created successfully');
   } catch (directError) {
     console.log('❌ Direct S3 client creation failed:', directError.message);
+    s3Service = null;
   }
-  
-  s3Service = null;
 }
 
 const app = express();
