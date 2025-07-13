@@ -44,6 +44,12 @@ try {
 } catch (jsError) {
   console.log('⚠️  S3 service not available, using local/base64 storage');
   console.log('   Error:', jsError.message);
+  console.log('   Stack:', jsError.stack);
+  console.log('   Environment variables check:');
+  console.log('   - AWS_ACCESS_KEY_ID length:', process.env.AWS_ACCESS_KEY_ID?.length || 0);
+  console.log('   - AWS_SECRET_ACCESS_KEY length:', process.env.AWS_SECRET_ACCESS_KEY?.length || 0);
+  console.log('   - AWS_REGION:', process.env.AWS_REGION);
+  console.log('   - AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
   s3Service = null;
 }
 

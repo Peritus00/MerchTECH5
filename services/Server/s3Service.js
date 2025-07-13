@@ -6,10 +6,10 @@ const crypto = require('crypto');
 
 // S3 Configuration
 const s3Config = {
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: (process.env.AWS_REGION || 'us-east-1').trim(),
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    accessKeyId: (process.env.AWS_ACCESS_KEY_ID || '').trim(),
+    secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').trim(),
   },
 };
 
@@ -18,8 +18,8 @@ const s3Client = new S3Client(s3Config);
 
 class S3Service {
   constructor() {
-    this.bucketName = process.env.AWS_S3_BUCKET_NAME || 'merchtech-media-files';
-    this.region = process.env.AWS_REGION || 'us-east-1';
+    this.bucketName = (process.env.AWS_S3_BUCKET_NAME || 'merchtech-media-files').trim();
+    this.region = (process.env.AWS_REGION || 'us-east-1').trim();
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
       console.warn('⚠️  AWS credentials not configured. S3 upload will not work.');
     }
@@ -202,7 +202,7 @@ class S3Service {
   }
 
   isConfigured() {
-    return !!(process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY && process.env.AWS_S3_BUCKET_NAME);
+    return !!(process.env.AWS_ACCESS_KEY_ID?.trim() && process.env.AWS_SECRET_ACCESS_KEY?.trim() && process.env.AWS_S3_BUCKET_NAME?.trim());
   }
 
   // New method for S3 POST policy (browser-compatible, AWS v4)
