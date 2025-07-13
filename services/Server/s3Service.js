@@ -1,7 +1,6 @@
 const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-const { createPresignedPost } = require('@aws-sdk/s3-presigned-post');
 const crypto = require('crypto');
 
 // S3 Configuration - Aggressive trimming to handle Railway environment variable issues
@@ -203,58 +202,6 @@ class S3Service {
 
   isConfigured() {
     return !!(process.env.AWS_ACCESS_KEY_ID?.replace(/\s+/g, '') && process.env.AWS_SECRET_ACCESS_KEY?.replace(/\s+/g, '') && process.env.AWS_S3_BUCKET_NAME?.replace(/\s+/g, ''));
-  }
-
-  // New method for S3 POST policy (browser-compatible, AWS v4)
-  async getPostPolicy(fileName, contentType, userId, fileSize) {
-    try {
-      // Always use structured key for all uploads
-      const key = `users/${userId}/media/${Date.now()}-${fileName}`;
-      console.log(`🔗 Generating S3 POST policy for: ${key}`);
-      console.log(`📁 Content type: ${contentType}`);
-      if (fileSize) {
-        console.log(`📊 File size: ${(fileSize / 1024 / 1024).toFixed(2)} MB`);
-      }
-
-      const uploadedAt = new Date().toISOString();
-      const fields = {
-        'key': key, // This is critical - it specifies where the file goes in S3
-        'Content-Type': contentType,
-        'Cache-Control': 'max-age=31536000',
-        'x-amz-meta-userid': String(userId),
-        'x-amz-meta-uploadedat': uploadedAt,
-        'x-amz-meta-originalname': fileName
-      };
-      const conditions = [
-        ['content-length-range', 0, fileSize || 1073741824],
-        { 'key': key }, // Also include in conditions
-        { 'Content-Type': contentType },
-        { 'Cache-Control': 'max-age=31536000' },
-        { 'x-amz-meta-userid': String(userId) },
-        { 'x-amz-meta-uploadedat': uploadedAt },
-        { 'x-amz-meta-originalname': fileName }
-      ];
-      const presigned = await createPresignedPost(s3Client, {
-        Bucket: this.bucketName,
-        Key: key,
-        Conditions: conditions,
-        Fields: fields,
-        Expires: 3600
-      });
-      
-      console.log(`✅ POST policy generated with key: ${key}`);
-      console.log(`🔍 POST policy fields:`, presigned.fields);
-      
-      return {
-        url: presigned.url,
-        fields: presigned.fields,
-        fileUrl: `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${key}`,
-        key
-      };
-    } catch (error) {
-      console.error('❌ Failed to generate S3 POST policy:', error);
-      throw new Error(`Failed to generate S3 POST policy: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
   }
 }
 
