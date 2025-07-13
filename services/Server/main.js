@@ -4607,4 +4607,64 @@ app.post('/api/media/signed-url', authenticateToken, async (req, res) => {
   }
 });
 
+// Migration endpoint to fix existing product images (admin only)
+app.post('/api/admin/migrate-product-images', isAdmin, async (req, res) => {
+  try {
+    console.log('🔍 MIGRATION: Starting product image URL migration...');
+    
+    // Get all products with images
+    const result = await pool.query(`
+      SELECT id, name, images 
+      FROM products 
+      WHERE images IS NOT NULL 
+      AND array_length(images, 1) > 0
+      AND is_deleted = false
+    `);
+    
+    console.log(`📦 MIGRATION: Found ${result.rows.length} products with images`);
+    
+    let updatedCount = 0;
+    const updatedProducts = [];
+    
+    for (const product of result.rows) {
+      const originalImages = product.images;
+      const sanitizedImages = sanitizeImageUrls(originalImages);
+      
+      // Check if any URLs were changed
+      const hasChanges = JSON.stringify(originalImages) !== JSON.stringify(sanitizedImages);
+      
+      if (hasChanges) {
+        console.log(`🔧 MIGRATION: Updating product "${product.name}" (ID: ${product.id})`);
+        
+        await pool.query(
+          'UPDATE products SET images = $1, updated_at = NOW() WHERE id = $2',
+          [sanitizedImages, product.id]
+        );
+        
+        updatedProducts.push({
+          id: product.id,
+          name: product.name,
+          before: originalImages[0],
+          after: sanitizedImages[0]
+        });
+        
+        updatedCount++;
+      }
+    }
+    
+    console.log(`✅ MIGRATION: Complete! Updated ${updatedCount} products with sanitized image URLs`);
+    
+    res.json({
+      success: true,
+      message: `Migration complete! Updated ${updatedCount} products with sanitized image URLs`,
+      updatedCount,
+      updatedProducts
+    });
+    
+  } catch (error) {
+    console.error('❌ MIGRATION: Error fixing product images:', error);
+    res.status(500).json({ error: 'Migration failed', details: error.message });
+  }
+});
+
 module.exports = app;
