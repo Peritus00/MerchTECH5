@@ -36,6 +36,8 @@
     }
   ],
   "env": {
-    "NODE_ENV": "production"
+    "NODE_ENV": "production",
+    "EXPO_PUBLIC_NODE_ENV": "production",
+    "EXPO_PUBLIC_API_URL": "https://merchtechapp5-production.up.railway.app/api"
   }
 } 
