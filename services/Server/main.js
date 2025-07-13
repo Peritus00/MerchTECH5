@@ -171,6 +171,10 @@ const PORT = process.env.PORT || 5001;
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
+  connectionTimeoutMillis: 5000, // 5 seconds
+  idleTimeoutMillis: 30000, // 30 seconds
+  max: 20,
+  allowExitOnIdle: true,
 });
 
 // 🔒 SECURITY LOGGER SETUP - FREE MONITORING
@@ -1352,6 +1356,12 @@ app.get('/api/products/all', async (req, res) => {
 // Helper function to get playlist with media files
 async function getPlaylistWithMedia(playlistId) {
   console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
+
+  // Add a defensive check to ensure playlistId is valid
+  if (playlistId === null || typeof playlistId === 'undefined') {
+    console.log('🔴 GET_PLAYLIST: Received null or undefined playlistId. Skipping.');
+    return null;
+  }
   
   // Ensure playlistId is an integer
   const playlistIdInt = parseInt(playlistId);
