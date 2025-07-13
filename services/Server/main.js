@@ -232,6 +232,20 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// --- DEBUG ENDPOINT FOR S3 SERVICE STATUS ---
+app.get('/api/debug/s3', (req, res) => {
+  res.json({
+    s3ServiceAvailable: !!s3Service,
+    environmentVariables: {
+      AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID ? `${process.env.AWS_ACCESS_KEY_ID.slice(0, 4)}...${process.env.AWS_ACCESS_KEY_ID.slice(-4)}` : 'Missing',
+      AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY ? `${process.env.AWS_SECRET_ACCESS_KEY.slice(0, 4)}...${process.env.AWS_SECRET_ACCESS_KEY.slice(-4)}` : 'Missing',
+      AWS_REGION: process.env.AWS_REGION || 'Missing',
+      AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || 'Missing'
+    },
+    s3ServiceConfigured: s3Service ? s3Service.isConfigured() : false
+  });
+});
+
 // --- AUTH MIDDLEWARE ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
