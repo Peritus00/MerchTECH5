@@ -42,7 +42,7 @@ try {
   console.log('   S3 Bucket:', process.env.AWS_S3_BUCKET_NAME);
   console.log('   AWS Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Configured' : 'Missing');
 } catch (jsError) {
-  console.log('⚠️  S3 service not available, using local/base64 storage');
+  console.log('⚠️  S3 service not available, trying direct initialization');
   console.log('   Error:', jsError.message);
   console.log('   Stack:', jsError.stack);
   console.log('   Environment variables check:');
@@ -50,6 +50,22 @@ try {
   console.log('   - AWS_SECRET_ACCESS_KEY length:', process.env.AWS_SECRET_ACCESS_KEY?.length || 0);
   console.log('   - AWS_REGION:', process.env.AWS_REGION);
   console.log('   - AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
+  
+  // Try direct S3 client creation as fallback
+  try {
+    const { S3Client } = require('@aws-sdk/client-s3');
+    const testClient = new S3Client({
+      region: (process.env.AWS_REGION || 'us-east-1').replace(/\s+/g, ''),
+      credentials: {
+        accessKeyId: (process.env.AWS_ACCESS_KEY_ID || '').replace(/\s+/g, ''),
+        secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').replace(/\s+/g, ''),
+      },
+    });
+    console.log('✅ Direct S3 client creation successful - S3 service should work');
+  } catch (directError) {
+    console.log('❌ Direct S3 client creation failed:', directError.message);
+  }
+  
   s3Service = null;
 }
 
