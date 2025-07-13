@@ -240,6 +240,22 @@ app.get('/api/health', async (req, res) => {
 
 // --- DEBUG ENDPOINT FOR S3 SERVICE STATUS ---
 app.get('/api/debug/s3', (req, res) => {
+  // Test direct S3 client creation
+  let directS3Test = null;
+  try {
+    const { S3Client } = require('@aws-sdk/client-s3');
+    const testClient = new S3Client({
+      region: (process.env.AWS_REGION || 'us-east-1').replace(/\s+/g, ''),
+      credentials: {
+        accessKeyId: (process.env.AWS_ACCESS_KEY_ID || '').replace(/\s+/g, ''),
+        secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').replace(/\s+/g, ''),
+      },
+    });
+    directS3Test = 'Success - S3Client created directly';
+  } catch (error) {
+    directS3Test = `Failed - ${error.message}`;
+  }
+
   res.json({
     s3ServiceAvailable: !!s3Service,
     environmentVariables: {
@@ -248,7 +264,8 @@ app.get('/api/debug/s3', (req, res) => {
       AWS_REGION: process.env.AWS_REGION || 'Missing',
       AWS_S3_BUCKET_NAME: process.env.AWS_S3_BUCKET_NAME || 'Missing'
     },
-    s3ServiceConfigured: s3Service ? s3Service.isConfigured() : false
+    s3ServiceConfigured: s3Service ? s3Service.isConfigured() : false,
+    directS3Test: directS3Test
   });
 });
 
