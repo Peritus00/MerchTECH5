@@ -2672,7 +2672,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
   }
 });
 
-// Stream slideshow image endpoint
+// Stream slideshow image endpoint - serves images for slideshow preview
 app.get('/api/slideshow-images/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
