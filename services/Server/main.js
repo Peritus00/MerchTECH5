@@ -854,7 +854,9 @@ app.get('/api/images/s3/*', async (req, res) => {
             }
         }
         
-        res.status(404).send('Image not found');
+        // Return a placeholder image for missing files
+        console.log(`🔴 IMAGE_PROXY: Image not found, returning placeholder`);
+        res.redirect(302, 'https://placehold.co/600x600/e5e7eb/6b7280?text=Image+Not+Found');
     }
 });
 
