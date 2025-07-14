@@ -47,11 +47,12 @@ class Environment {
       console.log('🔧 Forced local API URL for localhost development:', apiBaseUrl);
     }
     
-    // Additional check: if we're on the deployed frontend, use correct production API
+    // CRITICAL: Force production API for production web app (highest priority)
     if (typeof window !== 'undefined' && 
         window.location.hostname === 'app.merchtech.net') {
       apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
-      console.log('🔧 Forced correct production API URL for app.merchtech.net:', apiBaseUrl);
+      console.log('🔧 CRITICAL: Forced production API URL for app.merchtech.net:', apiBaseUrl);
+      console.log('🔧 CRITICAL: This should prevent mixed content errors');
     }
     
     return {
