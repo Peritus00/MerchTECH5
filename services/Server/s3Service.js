@@ -161,7 +161,7 @@ class S3Service {
     }
   }
 
-  getStream(key, range = null) {
+  async getStream(key, range = null) {
     const params = {
       Bucket: this.bucketName,
       Key: key,
@@ -171,23 +171,21 @@ class S3Service {
     }
     const command = new GetObjectCommand(params);
     
-    // This is a workaround to convert the AWS SDK v3 stream to a Node.js readable stream
-    // that can be piped correctly.
-    const { Readable } = require('stream');
-    
-    const stream = new Readable({
-      read() {}
-    });
-
-    s3Client.send(command).then(response => {
-      response.Body.on('data', (chunk) => stream.push(chunk));
-      response.Body.on('end', () => stream.push(null));
-      response.Body.on('error', (err) => stream.emit('error', err));
-    }).catch(err => {
-      stream.emit('error', err);
-    });
-
-    return stream;
+    try {
+      const response = await s3Client.send(command);
+      return {
+        stream: response.Body,
+        metadata: {
+          ContentType: response.ContentType,
+          ContentLength: response.ContentLength,
+          LastModified: response.LastModified,
+          ETag: response.ETag
+        }
+      };
+    } catch (error) {
+      console.error('❌ Failed to get S3 stream:', error);
+      throw new Error(`Failed to get S3 stream: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 
   extractKeyFromUrl(url) {

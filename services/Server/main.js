@@ -718,12 +718,66 @@ app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
-app.post('/api/upload', authenticateToken, upload.single('image'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded.');
-  }
-  const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ imageUrl: fileUrl });
+app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
+    const requestId = `req_${Date.now()}`;
+    console.log(`📤 UPLOAD [${requestId}]: Starting upload request for user ${req.user?.userId}`);
+    
+    if (!req.file) {
+        console.error(`❌ UPLOAD_ERROR [${requestId}]: No file uploaded.`);
+        return res.status(400).json({ error: 'No file uploaded.' });
+    }
+
+    if (!s3Service.isConfigured()) {
+        console.error(`❌ UPLOAD_ERROR [${requestId}]: S3 service is not configured.`);
+        return res.status(500).json({ error: 'File upload service is not available.' });
+    }
+
+    try {
+        console.log(`📤 UPLOAD [${requestId}]: Uploading to S3...`);
+        
+        // Generate a unique key for the file
+        const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
+        
+        const result = await s3Service.uploadFile(req.file.buffer, key, req.file.mimetype);
+        
+        const proxyUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/images/s3/${result.Key}`;
+        
+        console.log(`✅ UPLOAD_SUCCESS [${requestId}]: S3 URL: ${result.Location}`);
+        console.log(`✅ UPLOAD_SUCCESS [${requestId}]: Proxy URL: ${proxyUrl}`);
+
+        res.status(200).json({
+            message: 'File uploaded successfully',
+            url: result.Location, // Direct S3 URL
+            proxy_url: proxyUrl,   // URL proxied through our server
+            key: result.Key,
+            imageUrl: proxyUrl    // Legacy field for backward compatibility
+        });
+
+  } catch (error) {
+        console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
+        res.status(500).json({ 
+            error: 'Failed to upload file.', 
+            message: error.message 
+        });
+    }
+});
+
+// --- Image Proxy Endpoint ---
+app.get('/api/images/s3/*', async (req, res) => {
+    const key = req.params[0];
+        if (!key) {
+        return res.status(400).send('Invalid image key');
+    }
+    try {
+        const { stream, metadata } = await s3Service.getStream(key);
+        res.setHeader('Content-Type', metadata.ContentType);
+        res.setHeader('Content-Length', metadata.ContentLength);
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        stream.pipe(res);
+      } catch (error) {
+        console.error(`🔴 IMAGE_PROXY_ERROR: Failed to stream image for key "${key}":`, error);
+        res.status(404).send('Image not found');
+    }
 });
 
 // ---------- MEDIA ROUTES ----------
