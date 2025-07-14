@@ -205,5 +205,6 @@ class S3Service {
   }
 }
 
-module.exports.S3Service = S3Service;
+// Export both the class and a default instance
+module.exports = new S3Service();
 module.exports.S3Service = S3Service;
