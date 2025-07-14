@@ -176,8 +176,8 @@ export default function SlideshowAccessScreen() {
     try {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
-      const { slideshowAPI } = await import('@/services/api');
-      const slideshowData = await slideshowAPI.getByIdForAccess(id);
+          const { slideshowAccessAPI } = await import('@/services/api');
+    const slideshowData = await slideshowAccessAPI.getByIdForAccess(id);
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshowData?.name);

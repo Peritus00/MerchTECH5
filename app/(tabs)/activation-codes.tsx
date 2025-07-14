@@ -16,7 +16,7 @@ import {
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
-import { activationCodesAPI, playlistAPI, slideshowAPI } from '@/services/api';
+import { accessCodeAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
 import { Picker } from '@react-native-picker/picker';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -166,7 +166,7 @@ const ActivationCodesScreen = () => {
   const loadSlideshows = async () => {
     try {
       console.log('🔑 Loading slideshows for code generation');
-      const slideshowsData = await slideshowAPI.getAll();
+      const slideshowsData = await slideshowsAPI.getAll();
       console.log('🔑 Raw slideshows data from API:', slideshowsData);
       setSlideshows(slideshowsData);
       console.log('🔑 Loaded', slideshowsData.length, 'slideshows:', slideshowsData);
