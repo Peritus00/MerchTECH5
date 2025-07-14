@@ -24,21 +24,24 @@ const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, isInitialized } = useAuth(); // <-- Add isInitialized
   const segments = useSegments();
   const router = useRouter();
 
-  console.log('🔴 Route navigation check:', {
-    isAuthenticated: !!user,
-    inAuthGroup: segments[0] === 'auth',
-    inSubscriptionGroup: segments[0] === 'subscription',
-    inNotFoundGroup: segments[0] === '+not-found',
-    currentSegments: segments,
-    userIsNew: user?.isNewUser,
-    user: user?.username
-  });
-
+  // This effect handles waiting for auth to initialize and then hiding the splash screen.
   useEffect(() => {
+    if (isInitialized) {
+      SplashScreen.hideAsync();
+    }
+  }, [isInitialized]);
+  
+  // This effect handles auth-based routing.
+  useEffect(() => {
+    // Wait until auth is initialized before running any routing logic.
+    if (!isInitialized) {
+      return;
+    }
+
     const inAuthGroup = segments[0] === 'auth';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
@@ -77,7 +80,13 @@ function RootLayoutNav() {
     }, 100);
 
     return () => clearTimeout(navigationTimeout);
-  }, [user, segments, isLoading]);
+  }, [user, segments, isLoading, isInitialized]); // <-- Add isInitialized to dependency array
+
+  // Render nothing until the auth state is initialized.
+  // This prevents the hydration mismatch.
+  if (!isInitialized) {
+    return null;
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
@@ -124,7 +133,8 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (loaded) {
-      SplashScreen.hideAsync();
+      // Defer hiding the splash screen until auth is also ready in RootLayoutNav
+      // SplashScreen.hideAsync();
     }
   }, [loaded]);
 
