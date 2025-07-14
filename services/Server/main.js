@@ -755,6 +755,13 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
 
     try {
         console.log(`📤 UPLOAD [${requestId}]: Uploading to S3...`);
+        console.log(`📤 UPLOAD [${requestId}]: File info:`, {
+            originalname: req.file.originalname,
+            mimetype: req.file.mimetype,
+            size: req.file.size,
+            hasBuffer: !!req.file.buffer,
+            bufferLength: req.file.buffer ? req.file.buffer.length : 'undefined'
+        });
         
         // Generate a unique key for the file
         const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;

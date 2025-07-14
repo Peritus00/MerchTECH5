@@ -57,8 +57,18 @@ class S3Service {
   async uploadFile(fileBuffer, key, contentType) {
     try {
       console.log(`📤 Uploading file to S3: ${key}`);
-      console.log(`📊 File size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       console.log(`📁 Content type: ${contentType}`);
+      console.log(`📊 File buffer info:`, {
+        hasBuffer: !!fileBuffer,
+        bufferType: typeof fileBuffer,
+        bufferLength: fileBuffer ? fileBuffer.length : 'undefined'
+      });
+      
+      if (!fileBuffer) {
+        throw new Error('File buffer is undefined or null');
+      }
+      
+      console.log(`📊 File size: ${(fileBuffer.length / 1024 / 1024).toFixed(2)} MB`);
       const upload = new Upload({
         client: s3Client,
         params: {
