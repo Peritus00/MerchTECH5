@@ -14,6 +14,7 @@ const os = require('os');
 const { Readable } = require('stream');
 const s3Service = require('./s3Service');
 const brevo = require('@getbrevo/brevo');
+const axios = require('axios');
 
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
@@ -2668,6 +2669,112 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
   } catch (error) {
     console.error('🎬 SLIDESHOW_DELETE_IMAGE: Error deleting image:', error);
     res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// Stream slideshow image endpoint
+app.get('/api/slideshow-images/:id/stream', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎬 SLIDESHOW_IMAGE_STREAM: Streaming image:', id);
+    
+    // Set CORS headers for image streaming
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    
+    // Get image details from database
+    const result = await pool.query(
+      'SELECT * FROM slideshow_images WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_IMAGE_STREAM: Image not found:', id);
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    const image = result.rows[0];
+    const imageUrl = image.image_url;
+    
+    console.log('🎬 SLIDESHOW_IMAGE_STREAM: Image URL:', imageUrl);
+    
+    // If it's an S3 URL, stream through our S3 service
+    if (imageUrl.includes('amazonaws.com') && s3Service) {
+      try {
+        console.log('🎬 SLIDESHOW_IMAGE_STREAM: Streaming S3 image');
+        const key = s3Service.extractKeyFromUrl(imageUrl);
+        if (!key) {
+          console.error('🎬 SLIDESHOW_IMAGE_STREAM: Could not extract S3 key from URL:', imageUrl);
+          return res.status(500).json({ error: 'Invalid S3 URL format' });
+        }
+        console.log('🎬 SLIDESHOW_IMAGE_STREAM: Extracted S3 key:', key);
+        
+        // Stream the image through our S3 service
+        const { stream, metadata } = await s3Service.getStream(key);
+        
+        // Set appropriate headers for image streaming
+        res.setHeader('Content-Type', metadata.ContentType || 'image/jpeg');
+        res.setHeader('Content-Length', metadata.ContentLength);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        // Pipe the response stream directly
+        stream.pipe(res);
+        console.log('🎬 SLIDESHOW_IMAGE_STREAM: Successfully streaming S3 image');
+        return;
+        
+      } catch (error) {
+        console.error('🎬 SLIDESHOW_IMAGE_STREAM: Error streaming S3 image:', error);
+        return res.status(500).json({ error: 'Failed to stream S3 image' });
+      }
+    }
+    
+    // If it's a local file, serve it directly
+    if (imageUrl.startsWith('/') || imageUrl.startsWith('./') || imageUrl.includes('uploads/')) {
+      const filename = imageUrl.split('/').pop();
+      const filePath = path.join(__dirname, 'uploads', filename);
+      if (fs.existsSync(filePath)) {
+        console.log('🎬 SLIDESHOW_IMAGE_STREAM: Serving local file:', filePath);
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.sendFile(filePath);
+      }
+    }
+    
+    // For other URLs, try to proxy them
+    try {
+      console.log('🎬 SLIDESHOW_IMAGE_STREAM: Proxying external URL:', imageUrl);
+      const response = await axios.get(imageUrl, {
+        responseType: 'stream',
+        headers: {
+          'Range': req.headers.range || undefined
+        }
+      });
+      
+      res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      // Copy content-length if present
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      // Pipe the response stream directly
+      response.data.pipe(res);
+      return;
+    } catch (err) {
+      console.error('🎬 SLIDESHOW_IMAGE_STREAM: Error proxying external URL:', err);
+      // Fall back to redirect for external URLs
+      console.log('🎬 SLIDESHOW_IMAGE_STREAM: Redirecting to external URL');
+      return res.redirect(imageUrl);
+    }
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_IMAGE_STREAM: Error streaming image:', error);
+    res.status(500).json({ error: 'Failed to stream image' });
   }
 });
 
