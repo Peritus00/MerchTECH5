@@ -162,4 +162,25 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       // Show file size warning for large files
       if (asset.size && asset.size > 100 * 1024 * 1024) { // 100MB
         const fileSizeMB = Math.round(asset.size / (1024 * 1024));
-        console.log(`⚠️ UPLOAD: Large file detected (${fileSizeMB}MB). This may take several minutes to upload.`
+        console.log(`⚠️ UPLOAD: Large file detected (${fileSizeMB}MB). This may take several minutes to upload.`);
+      }
+
+      return await uploadFile(result);
+    } catch (error) {
+      console.error('🔴 MEDIA: Upload error:', error);
+      setIsUploading(false);
+      throw error;
+    }
+  };
+
+  const getFileType = (mimeType: string): string => {
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType.startsWith('video/')) return 'video';
+    return 'unknown';
+  };
+
+  return {
+    uploadFile,
+    selectAndUploadFile,
+  };
+};

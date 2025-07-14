@@ -1,0 +1,31 @@
+DEBUG: Server script starting...
+DEBUG: .env loaded, DATABASE_URL: configured
+DEBUG: NODE_ENV: undefined
+📂 Uploads directory already exists: /Users/admin/Downloads/merchtechapp5/services/Server/uploads
+AWS Access Key Suffix: V3MU
+AWS Secret Key Suffix: y2Yz
+✅ S3 service loaded and instantiated successfully
+   AWS Region: us-east-2
+   S3 Bucket: merchtechbucket
+   AWS Access Key: Configured
+🚀 Starting server initialization...
+🔧 Initializing database schema...
+🔧 Verifying table columns exist...
+   -> Checking for column: verification_token
+   -> Checking for column: is_admin
+   -> Checking for column: is_suspended
+   -> Checking for column: subscription_tier
+   -> Checking for column: created_at
+   -> Checking for column: updated_at
+   -> Checking for column: max_products
+   -> Checking for column: max_audio_files
+   -> Checking for column: max_playlists
+   -> Checking for column: max_qr_codes
+   -> Checking for column: max_slideshows
+   -> Checking for column: max_videos
+   -> Checking for column: max_activation_codes
+✅ Database schema initialized successfully.
+✅ Database initialized successfully
+🚀 Full server with email logic running on port 5001
+🌐 Server accessible at: http://localhost:5001
+📊 Health check: http://localhost:5001/api/health

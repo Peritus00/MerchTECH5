@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Domain Fix Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Domain Fix Test</h1>
+    <p>This page tests if the frontend correctly uses the right API URL.</p>
+    
+    <div id="results"></div>
+    
+    <script>
+        // Simulate the environment configuration logic
+        function getApiUrl() {
+            const hostname = window.location.hostname;
+            console.log('Current hostname:', hostname);
+            
+            // This is the logic from config/environment.ts
+            if (hostname === 'app.merchtech.net') {
+                return 'https://merchtech5-production.up.railway.app/api';
+            }
+            
+            // Default fallback
+            return 'https://merchtech5-production.up.railway.app/api';
+        }
+        
+        function showResult(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            document.getElementById('results').appendChild(div);
+        }
+        
+        // Test the API URL determination
+        const apiUrl = getApiUrl();
+        const hostname = window.location.hostname;
+        
+        showResult(`🌐 Current hostname: <strong>${hostname}</strong>`, 'info');
+        showResult(`🔗 Determined API URL: <strong>${apiUrl}</strong>`, 'info');
+        
+        // Check if it's the correct URL
+        if (apiUrl === 'https://merchtech5-production.up.railway.app/api') {
+            showResult('✅ SUCCESS: Using correct Railway URL (merchtech5)', 'success');
+        } else if (apiUrl.includes('merchtechapp5')) {
+            showResult('❌ ERROR: Still using incorrect URL (merchtechapp5)', 'error');
+        } else {
+            showResult('⚠️ WARNING: Using unexpected URL', 'error');
+        }
+        
+        // Test API connectivity
+        showResult('🧪 Testing API connectivity...', 'info');
+        
+        fetch(`${apiUrl}/health`)
+            .then(response => {
+                if (response.ok) {
+                    showResult('✅ API Health Check: PASSED', 'success');
+                    return response.json();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            })
+            .then(data => {
+                showResult(`📊 API Response: ${JSON.stringify(data)}`, 'info');
+            })
+            .catch(error => {
+                showResult(`❌ API Health Check: FAILED - ${error.message}`, 'error');
+            });
+        
+        // Test image URL
+        const testImageUrl = `${apiUrl}/images/s3/1/test.jpg`;
+        showResult(`🖼️ Testing image URL: <a href="${testImageUrl}" target="_blank">${testImageUrl}</a>`, 'info');
+        
+        // Test the actual image that was failing
+        const failingImageUrl = `${apiUrl}/images/s3/1/1752182824502-product_1752182824493.jpg`;
+        showResult(`🖼️ Testing failing image: <a href="${failingImageUrl}" target="_blank">${failingImageUrl}</a>`, 'info');
+    </script>
+</body>
+</html> 

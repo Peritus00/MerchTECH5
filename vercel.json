@@ -16,17 +16,23 @@
     },
     {
       "src": "/assets/(.*)",
-      "dest": "/assets/$1"
+      "dest": "/assets/$1",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
     },
     {
       "src": "/(.*)",
-      "dest": "/index.html"
+      "dest": "/index.html",
+      "headers": {
+        "Cache-Control": "no-cache, no-store, must-revalidate"
+      }
     }
   ],
   "env": {
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
     "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api",
-    "CACHE_BUST": "20250714-04-removed-legacy-methods"
+    "CACHE_BUST": "20250714-05-FORCE-CACHE-INVALIDATION"
   }
 } 
