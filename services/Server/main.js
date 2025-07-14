@@ -1012,7 +1012,7 @@ app.get('/api/media/:id', async (req, res) => {
   }
 });
 
-// Stream audio file from base64 data
+// Stream media file (supports both base64 data and S3 files)
 app.get('/api/media/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1024,29 +1024,113 @@ app.get('/api/media/:id/stream', async (req, res) => {
     
     const media = result.rows[0];
     
-    if (!media.url || !media.url.startsWith('data:')) {
-      return res.status(400).json({ error: 'Media file is not stored as base64 data' });
+    // Set CORS headers for media streaming
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    
+    // Handle S3 files
+    if (media.s3_key && s3Service) {
+      try {
+        console.log(`📺 MEDIA_STREAM: Streaming S3 file for media ${id}: ${media.s3_key}`);
+        
+        // Get file metadata from S3
+        const metadata = await s3Service.getMetadata(media.s3_key);
+        const fileSize = metadata.ContentLength;
+        const contentType = metadata.ContentType || media.content_type || 'application/octet-stream';
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        const range = req.headers.range;
+        
+        if (range) {
+          // Handle range requests for video/audio streaming
+          const parts = range.replace(/bytes=/, "").split("-");
+          const start = parseInt(parts[0], 10);
+          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          const chunksize = (end - start) + 1;
+          
+          console.log(`📺 MEDIA_STREAM: Range request for ${media.s3_key}: bytes=${start}-${end}`);
+          
+          // Ensure range is valid
+          if (start >= fileSize || end >= fileSize) {
+            return res.status(416).send('Requested range not satisfiable');
+          }
+          
+          const { stream } = await s3Service.getStream(media.s3_key, { start, end });
+          
+          res.writeHead(206, {
+            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+            'Content-Length': chunksize,
+          });
+          
+          stream.pipe(res);
+        } else {
+          // Full file request
+          console.log(`📺 MEDIA_STREAM: Full file request for ${media.s3_key}`);
+          res.setHeader('Content-Length', fileSize);
+          const { stream } = await s3Service.getStream(media.s3_key);
+          stream.pipe(res);
+        }
+        
+        return;
+      } catch (error) {
+        console.error(`❌ MEDIA_STREAM: Failed to stream S3 file ${media.s3_key}:`, error);
+        return res.status(500).json({ error: 'Failed to stream S3 file' });
+      }
     }
     
-    // Parse the data URL
-    const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
-    if (!dataUrlMatch) {
-      return res.status(400).json({ error: 'Invalid base64 data format' });
+    // Handle base64 data files
+    if (media.url && media.url.startsWith('data:')) {
+      console.log(`📺 MEDIA_STREAM: Streaming base64 data for media ${id}`);
+      
+      // Parse the data URL
+      const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
+      if (!dataUrlMatch) {
+        return res.status(400).json({ error: 'Invalid base64 data format' });
+      }
+      
+      const [, mimeType, base64Data] = dataUrlMatch;
+      const audioBuffer = Buffer.from(base64Data, 'base64');
+      
+      // Set appropriate headers for media streaming
+      res.setHeader('Content-Type', mimeType || 'audio/mpeg');
+      res.setHeader('Content-Length', audioBuffer.length);
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      // Send the media data
+      res.send(audioBuffer);
+      return;
     }
     
-    const [, mimeType, base64Data] = dataUrlMatch;
-    const audioBuffer = Buffer.from(base64Data, 'base64');
+    // Handle local files (fallback)
+    if (media.filename) {
+      console.log(`📺 MEDIA_STREAM: Attempting to stream local file for media ${id}: ${media.filename}`);
+      const filePath = path.join(__dirname, 'uploads', media.filename);
+      
+      if (fs.existsSync(filePath)) {
+        const stat = fs.statSync(filePath);
+        const contentType = media.content_type || 'application/octet-stream';
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        return;
+      }
+    }
     
-    // Set appropriate headers for audio streaming
-    res.setHeader('Content-Type', mimeType || 'audio/mpeg');
-    res.setHeader('Content-Length', audioBuffer.length);
-    res.setHeader('Accept-Ranges', 'bytes');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    // No valid streaming source found
+    return res.status(400).json({ error: 'No streamable media source found' });
     
-    // Send the audio data
-    res.send(audioBuffer);
   } catch (error) {
-    console.error('Error streaming media:', error);
+    console.error('❌ MEDIA_STREAM: Error streaming media:', error);
     res.status(500).json({ error: 'Failed to stream media file' });
   }
 });
