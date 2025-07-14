@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import PreviewPlayer from '@/components/PreviewPlayer';
-import { slideshowAPI } from '@/services/api';
+import { slideshowsAPI, slideshowAccessAPI } from '@/services/api';
 import { env } from '@/config/environment';
 
 // Define the structure of a Slideshow and its Images
@@ -58,7 +58,7 @@ export default function PreviewPlayerScreen() {
     try {
       console.log(`⚙️ Loading preview for slideshow ID: ${slideshowId}`);
       // Use the public slideshow access endpoint for preview
-      const data = await slideshowAPI.getByIdForAccess(slideshowId);
+      const data = await slideshowAccessAPI.getByIdForAccess(slideshowId);
       console.log('✅ Successfully fetched slideshow data:', data);
       setSlideshow(data);
     } catch (error) {

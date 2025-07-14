@@ -20,7 +20,7 @@ import CreateSlideshowModal from '@/components/CreateSlideshowModal';
 import SlideshowImageManager from '@/components/SlideshowImageManager';
 import EditSlideshowModal from '@/components/EditSlideshowModal';
 import SlideshowPreview from '@/components/SlideshowPreview';
-import { slideshowAPI } from '@/services/api';
+import { slideshowsAPI } from '@/services/api';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -65,7 +65,7 @@ export default function SlideshowsScreen() {
 
   const fetchSlideshows = async () => {
     try {
-      const serverSlideshows = await slideshowAPI.getAll();
+      const serverSlideshows = await slideshowsAPI.getAll();
       console.log('📥 Fetched slideshows from server:', serverSlideshows);
       
       // Filter out any invalid slideshow objects
@@ -104,7 +104,7 @@ export default function SlideshowsScreen() {
     requiresActivationCode: boolean;
   }) => {
     try {
-      const created = await slideshowAPI.create(slideshowData);
+      const created = await slideshowsAPI.create(slideshowData);
       setSlideshows(prev => [created, ...prev]);
       setShowCreateModal(false);
       Alert.alert('Success', 'Slideshow created successfully');
@@ -120,7 +120,7 @@ export default function SlideshowsScreen() {
 
     const executeDelete = () => {
       console.log('🗑️ Confirmed delete, filtering slideshows...');
-      slideshowAPI.delete(String(slideshowId)).catch(err =>
+              slideshowsAPI.delete(String(slideshowId)).catch(err =>
         console.error('Failed to delete slideshow on server:', err)
       );
       setSlideshows(prev => prev.filter(slideshow => slideshow.id !== slideshowId));
@@ -341,10 +341,10 @@ export default function SlideshowsScreen() {
             if (updates.requiresActivationCode !== undefined) payload.requiresActivationCode = updates.requiresActivationCode;
 
             console.log('📤 PATCH payload:', payload);
-            await slideshowAPI.update(editingSlideshow.id, payload);
+            await slideshowsAPI.update(editingSlideshow.id, payload);
 
             // fetch fresh object
-            const fresh = await slideshowAPI.getById(String(editingSlideshow.id));
+            const fresh = await slideshowsAPI.getById(String(editingSlideshow.id));
             console.log('📥 Fresh slideshow:', fresh);
 
             setSlideshows(prev => prev.map(s => (s.id === fresh.id ? fresh : s)));

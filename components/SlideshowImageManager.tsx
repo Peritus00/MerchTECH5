@@ -15,7 +15,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { fileUploadAPI, slideshowAPI } from '@/services/api';
+import { mediaAPI, slideshowsAPI } from '@/services/api';
 
 interface SlideshowImage {
   id: number;
@@ -111,7 +111,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       });
       
       // Upload file directly to slideshow endpoint
-      const newImageFromServer = await slideshowAPI.addImage(slideshow.id, filePayload, '', displayOrder);
+              const newImageFromServer = await slideshowsAPI.addImage(slideshow.id, filePayload, '', displayOrder);
       console.log('📤 SLIDESHOW uploadImage: Image uploaded successfully', newImageFromServer);
       console.log('📤 SLIDESHOW uploadImage: Server response keys:', Object.keys(newImageFromServer));
       console.log('📤 SLIDESHOW uploadImage: imageUrl field:', newImageFromServer.imageUrl);
@@ -156,7 +156,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     const confirmDelete = async () => {
       console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshowId);
       try {
-        const updated = await slideshowAPI.deleteImage(slideshowId, imageId);
+        const updated = await slideshowsAPI.deleteImage(slideshowId, imageId);
         console.log('🗑️ deleteImage API success, fresh images length', updated.images.length);
         setImages(updated.images);
         onImagesUpdated(updated);
@@ -226,15 +226,26 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       const filename = file.name || `audio_${Date.now()}.mp3`;
       console.log('🎵 SLIDESHOW handleAddAudio: About to upload with filename', filename);
       
-      const audioUrlServer = await fileUploadAPI.upload({ 
-        uri: file.uri, 
-        name: filename, 
-        type: file.mimeType || 'audio/mpeg' 
-      });
+      // Create a File object for web compatibility
+      let fileToUpload: File;
+      if (Platform.OS === 'web') {
+        const response = await fetch(file.uri);
+        const blob = await response.blob();
+        fileToUpload = new File([blob], filename, { type: file.mimeType || 'audio/mpeg' });
+      } else {
+        // For React Native, create a File-like object
+        fileToUpload = {
+          uri: file.uri,
+          name: filename,
+          type: file.mimeType || 'audio/mpeg'
+        } as any;
+      }
+      
+      const audioUrlServer = await mediaAPI.uploadFile(fileToUpload);
       
       console.log('🎵 SLIDESHOW handleAddAudio: Upload successful, audioUrl', audioUrlServer);
 
-      const updatedSlideshow = await slideshowAPI.updateAudio(slideshow.id, audioUrlServer);
+      const updatedSlideshow = await slideshowsAPI.updateAudio(slideshow.id, audioUrlServer);
       console.log('🎵 SLIDESHOW handleAddAudio: Slideshow updated', updatedSlideshow);
       console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow audioUrl:', updatedSlideshow?.audioUrl);
       console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow keys:', Object.keys(updatedSlideshow || {}));
