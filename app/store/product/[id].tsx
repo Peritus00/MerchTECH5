@@ -6,11 +6,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product, ProductRating } from '@/shared/product-schema';
-import { productsAPI } from '@/services/api';
+import { productsAPI, checkoutAPI } from '@/services/api';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
-import { checkoutAPI } from '@/services/api';
-import ShareButton from '@/components/ShareButton';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
@@ -24,6 +22,7 @@ export default function ProductDetailsScreen() {
   const [addingToCart, setAddingToCart] = useState(false);
   const [buyingNow, setBuyingNow] = useState(false);
   const flatListRef = useRef<FlatList<string>>(null);
+  const [base, setBase] = useState('');
 
   // Ratings & comments
   const [ratings, setRatings] = useState<ProductRating[]>([]);
@@ -35,6 +34,10 @@ export default function ProductDetailsScreen() {
 
   useEffect(() => {
     loadProduct();
+    // Safely set the base URL only on the client side
+    if (Platform.OS === 'web') {
+      setBase(window.location.origin);
+    }
   }, [id, productParam]);
 
   const loadProduct = async () => {
@@ -145,9 +148,14 @@ export default function ProductDetailsScreen() {
 
     setBuyingNow(true);
     try {
-      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      // Ensure base URL is set before creating session
+      if (Platform.OS === 'web' && !base) {
+        Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
+        return;
+      }
+
       const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/checkout-cancel`;
+      const cancelUrl = `${base}/store/product/${id}`;
       
       const items = Array(quantity).fill({ productId: product.id, quantity: 1 });
       const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);

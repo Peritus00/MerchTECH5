@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   ScrollView,
@@ -18,6 +18,14 @@ import * as WebBrowser from 'expo-web-browser';
 export default function CartScreen() {
   const router = useRouter();
   const { cart, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
+  const [base, setBase] = useState('');
+
+  useEffect(() => {
+    // Safely set the base URL only on the client side
+    if (Platform.OS === 'web') {
+      setBase(window.location.origin);
+    }
+  }, []);
 
   const formatPrice = (priceInCents: number) => {
     return `$${(priceInCents / 100).toFixed(2)}`;
@@ -34,15 +42,20 @@ export default function CartScreen() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) {
-      Alert.alert('Empty Cart', 'Please add items to your cart before checkout.');
+      Alert.alert('Empty Cart', 'Your cart is empty.');
+      return;
+    }
+    
+    // Ensure base URL is set before creating session
+    if (Platform.OS === 'web' && !base) {
+      Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
       return;
     }
 
     try {
       const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
-      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/checkout-cancel`;
+      const cancelUrl = `${base}/store/cart`;
 
       const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
 
