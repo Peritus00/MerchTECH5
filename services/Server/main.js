@@ -2244,9 +2244,9 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
           images: imagesResult.rows.map(img => ({
             id: img.id,
             slideshowId: img.slideshow_id,
-            url: img.image_url,
+            imageUrl: img.image_url,
             caption: img.caption,
-            position: img.display_order,
+            displayOrder: img.display_order,
             createdAt: img.created_at
           }))
         };
@@ -2290,9 +2290,9 @@ app.get('/api/slideshows/:id', async (req, res) => {
     slideshow.images = imagesResult.rows.map(img => ({
       id: img.id,
       slideshowId: img.slideshow_id,
-      url: img.image_url,
+      imageUrl: img.image_url,
       caption: img.caption,
-      position: img.display_order,
+      displayOrder: img.display_order,
       createdAt: img.created_at
     }));
     
@@ -2534,7 +2534,7 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
       slideshowId: imageResult.rows[0].slideshow_id,
       imageUrl: imageResult.rows[0].image_url,
       caption: imageResult.rows[0].caption,
-      position: imageResult.rows[0].display_order,
+      displayOrder: imageResult.rows[0].display_order,
       createdAt: imageResult.rows[0].created_at
     };
     
@@ -2619,8 +2619,51 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
       }
     }
     
-    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image deleted successfully');
-    res.json({ message: 'Image deleted successfully' });
+    // Get updated slideshow with remaining images
+    const updatedSlideshowResult = await pool.query(
+      'SELECT * FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    if (updatedSlideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = updatedSlideshowResult.rows[0];
+    
+    // Get remaining images for the slideshow
+    const remainingImagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [slideshowId]
+    );
+    
+    const updatedSlideshow = {
+      id: slideshow.id,
+      name: slideshow.name,
+      description: slideshow.description,
+      uniqueId: slideshow.unique_id,
+      userId: slideshow.user_id,
+      autoplayInterval: slideshow.autoplay_interval,
+      transition: slideshow.transition,
+      audioUrl: slideshow.audio_url,
+      requiresActivationCode: slideshow.requires_activation_code,
+      isPublic: slideshow.is_public,
+      createdAt: slideshow.created_at,
+      updatedAt: slideshow.updated_at,
+      images: remainingImagesResult.rows.map(img => ({
+        id: img.id,
+        slideshowId: img.slideshow_id,
+        imageUrl: img.image_url,
+        caption: img.caption,
+        displayOrder: img.display_order,
+        createdAt: img.created_at
+      }))
+    };
+    
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image deleted successfully, returning updated slideshow with', updatedSlideshow.images.length, 'images');
+    res.json({ slideshow: updatedSlideshow });
     
   } catch (error) {
     console.error('🎬 SLIDESHOW_DELETE_IMAGE: Error deleting image:', error);
