@@ -1,3 +1,6 @@
+// Load .env from project root regardless of where the script is run from
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+
 const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -11,13 +14,12 @@ const os = require('os');
 const { Readable } = require('stream');
 const s3Service = require('./s3Service');
 const brevo = require('@getbrevo/brevo');
-// Load .env from project root regardless of where the script is run from
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 console.log('DEBUG: Upload endpoint fix deployed - version 2');
+console.log('DEBUG: AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
 
 const app = express();
 const PORT = process.env.PORT || 5001;
