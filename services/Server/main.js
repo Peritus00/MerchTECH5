@@ -138,17 +138,35 @@ const isAdmin = async (req, res, next) => {
 // --- ROUTES ---
 
 app.get('/api/health', (req, res) => {
-    res.status(200).json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        version: '1.0.0',
-        services: {
-            s3: s3Service.isConfigured(),
-            database: !!process.env.DATABASE_URL,
-            brevo: !!process.env.BREVO_API_KEY
+    try {
+        const healthData = {
+            status: 'healthy',
+            timestamp: new Date().toISOString(),
+            uptime: process.uptime(),
+            version: '1.0.0',
+            services: {
+                database: !!process.env.DATABASE_URL,
+                brevo: !!process.env.BREVO_API_KEY
+            }
+        };
+        
+        // Safely check S3 service
+        try {
+            healthData.services.s3 = s3Service && s3Service.isConfigured ? s3Service.isConfigured() : false;
+        } catch (error) {
+            console.error('Health check S3 error:', error);
+            healthData.services.s3 = false;
         }
-    });
+        
+        res.status(200).json(healthData);
+    } catch (error) {
+        console.error('Health check error:', error);
+        res.status(503).json({
+            status: 'unhealthy',
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+    }
 });
 
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
