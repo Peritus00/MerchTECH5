@@ -38,6 +38,6 @@
   "env": {
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
-    "EXPO_PUBLIC_API_URL": "http://192.168.1.70:5001/api"
+    "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api"
   }
 } 
