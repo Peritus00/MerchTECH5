@@ -18,8 +18,6 @@ const brevo = require('@getbrevo/brevo');
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
-console.log('DEBUG: Upload endpoint fix deployed - version 2');
-console.log('DEBUG: AWS_S3_BUCKET_NAME:', process.env.AWS_S3_BUCKET_NAME);
 
 const app = express();
 const PORT = process.env.PORT || 5001;
