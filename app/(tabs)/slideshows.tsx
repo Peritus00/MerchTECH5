@@ -65,8 +65,12 @@ export default function SlideshowsScreen() {
 
   const fetchSlideshows = async () => {
     try {
-      const serverSlideshows = await slideshowsAPI.getAll();
-      console.log('📥 Fetched slideshows from server:', serverSlideshows);
+      const serverSlideshowsResponse = await slideshowsAPI.getAll();
+      console.log('📥 Fetched slideshows from server:', serverSlideshowsResponse);
+      
+      // Extract slideshows array from response
+      const serverSlideshows = serverSlideshowsResponse?.slideshows || serverSlideshowsResponse || [];
+      console.log('📥 Extracted slideshows array:', serverSlideshows);
       
       // Filter out any invalid slideshow objects
       const validSlideshows = (serverSlideshows || []).filter((slideshow: any) => {

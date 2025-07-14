@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
-import api from '@/services/api';
+import { api } from '@/services/api';
 
 export interface UsageStats {
   products: number;
@@ -67,9 +67,9 @@ export const useSubscriptionLimits = (): SubscriptionLimitsData => {
       ]);
 
       setUsage({
-        products: productsRes.data.products?.length || 0,
-        media: mediaRes.data.media?.length || 0,
-        playlists: playlistsRes.data.playlists?.length || 0,
+        products: productsRes.data?.products?.length || productsRes.data?.length || 0,
+        media: mediaRes.data?.media?.length || mediaRes.data?.length || 0,
+        playlists: playlistsRes.data?.playlists?.length || playlistsRes.data?.length || 0,
         qrCodes: 0, // TODO: Add QR codes endpoint
         slideshows: 0 // TODO: Add slideshows endpoint
       });

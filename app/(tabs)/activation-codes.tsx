@@ -154,7 +154,8 @@ const ActivationCodesScreen = () => {
   const loadPlaylists = async () => {
     try {
       console.log('🔑 Loading playlists for code generation');
-      const playlistsData = await playlistAPI.getAll();
+      const playlistsResponse = await playlistsAPI.getAll();
+      const playlistsData = playlistsResponse?.playlists || playlistsResponse || [];
       setPlaylists(playlistsData);
       console.log('🔑 Loaded', playlistsData.length, 'playlists');
     } catch (error) {

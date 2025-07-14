@@ -58,11 +58,15 @@ export default function PlaylistsScreen() {
       console.log('🔴 PLAYLISTS: Fetching real data from database...');
 
       // Fetch real playlists and media files from the database
-      const { playlistAPI, mediaAPI } = await import('@/services/api');
+      const { playlistsAPI, mediaAPI } = await import('@/services/api');
 
-      console.log('🔴 PLAYLISTS: About to call playlistAPI.getAll()...');
-      const realPlaylists = await playlistAPI.getAll();
-      console.log('🔴 PLAYLISTS: Playlists API call successful! Loaded playlists:', realPlaylists?.length || 0, realPlaylists);
+      console.log('🔴 PLAYLISTS: About to call playlistsAPI.getAll()...');
+      const realPlaylistsResponse = await playlistsAPI.getAll();
+      console.log('🔴 PLAYLISTS: Playlists API call successful! Response:', realPlaylistsResponse);
+      
+      // Extract playlists array from response
+      const realPlaylists = realPlaylistsResponse?.playlists || realPlaylistsResponse || [];
+      console.log('🔴 PLAYLISTS: Extracted playlists array:', realPlaylists?.length || 0, realPlaylists);
 
       // Filter out any null/undefined playlists and log any issues
       const validPlaylists = (realPlaylists || []).filter((playlist: any) => {
@@ -80,7 +84,11 @@ export default function PlaylistsScreen() {
       console.log('🔴 PLAYLISTS: Valid playlists after filtering:', validPlaylists.length, validPlaylists);
 
       console.log('🔴 PLAYLISTS: About to call mediaAPI.getAll()...');
-      const realMediaFiles = await mediaAPI.getAll();
+      const realMediaFilesResponse = await mediaAPI.getAll();
+      console.log('🔴 PLAYLISTS: Media API response:', realMediaFilesResponse);
+      
+      // Extract media array from response
+      const realMediaFiles = realMediaFilesResponse?.media || realMediaFilesResponse || [];
       console.log('🔴 PLAYLISTS: Media API call successful! Loaded media files:', realMediaFiles?.length || 0, realMediaFiles);
 
       setPlaylists(validPlaylists);
@@ -263,7 +271,7 @@ export default function PlaylistsScreen() {
     try {
       console.log('🔴 PLAYLISTS: Toggling protection for playlist:', playlist.id, 'Current status:', playlist.requiresActivationCode);
       
-      const { playlistAPI } = await import('@/services/api');
+      const { playlistsAPI } = await import('@/services/api');
       // Handle undefined case - default to false (public)
       const currentStatus = playlist.requiresActivationCode ?? false;
       const newProtectionStatus = !currentStatus;
@@ -271,7 +279,7 @@ export default function PlaylistsScreen() {
       console.log('🔴 PLAYLISTS: Current status (with fallback):', currentStatus, 'New status:', newProtectionStatus);
       
       // Update the playlist protection status
-      const updatedPlaylist = await playlistAPI.update(playlist.id, {
+      const updatedPlaylist = await playlistsAPI.update(playlist.id, {
         requires_activation_code: newProtectionStatus
       });
       

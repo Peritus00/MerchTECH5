@@ -39,7 +39,11 @@ export default function MediaScreen() {
   const fetchMediaFiles = async () => {
     try {
       console.log('🔴 MEDIA: Fetching media files from database...');
-      const files = await mediaAPI.getAll();
+      const filesResponse = await mediaAPI.getAll();
+      console.log('🔴 MEDIA: Media API response:', filesResponse);
+      
+      // Extract media array from response
+      const files = filesResponse?.media || filesResponse || [];
       console.log('🔴 MEDIA: Loaded media files:', files.length);
       setMediaFiles(files);
     } catch (error) {

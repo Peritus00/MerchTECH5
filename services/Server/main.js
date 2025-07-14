@@ -2376,9 +2376,10 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
 app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, autoplayInterval, transition, requiresActivationCode } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, audio_url } = req.body;
     
     console.log('🎬 SLIDESHOWS: Updating slideshow:', id);
+    console.log('🎬 SLIDESHOWS: Update data:', { name, description, autoplayInterval, transition, requiresActivationCode, audio_url });
     
     // Check if user owns the slideshow
     const ownerCheck = await pool.query(
@@ -2401,14 +2402,18 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
            autoplay_interval = COALESCE($3, autoplay_interval), 
            transition = COALESCE($4, transition),
            requires_activation_code = COALESCE($5, requires_activation_code),
+           audio_url = COALESCE($6, audio_url),
            updated_at = NOW()
-       WHERE id = $6 RETURNING *`,
-      [name, description, autoplayInterval, transition, requiresActivationCode, id]
+       WHERE id = $7 RETURNING *`,
+      [name, description, autoplayInterval, transition, requiresActivationCode, audio_url, id]
     );
 
     const slideshow = result.rows[0];
     
     console.log('🎬 SLIDESHOWS: Slideshow updated successfully:', slideshow.name);
+    if (audio_url) {
+      console.log('🎵 SLIDESHOWS: Audio URL updated to:', slideshow.audio_url);
+    }
     res.json({ slideshow });
     
   } catch (error) {

@@ -122,11 +122,11 @@ export default function DashboardScreen() {
           ]);
 
           userCounts = {
-            totalQRCodes: qrCodes.data.qrCodes?.length || 0,
-            totalPlaylists: playlists.data.playlists?.length || 0,
-            totalSlideshows: slideshows.data.slideshows?.length || 0,
-            totalProducts: products.data.products?.length || 0,
-            activationCodes: activationCodes.data.activationCodes?.length || 0,
+            totalQRCodes: qrCodes.data?.qrCodes?.length || qrCodes.data?.length || 0,
+            totalPlaylists: playlists.data?.playlists?.length || playlists.data?.length || 0,
+            totalSlideshows: slideshows.data?.slideshows?.length || slideshows.data?.length || 0,
+            totalProducts: products.data?.products?.length || products.data?.length || 0,
+            activationCodes: activationCodes.data?.activationCodes?.length || activationCodes.data?.length || 0,
           };
         } catch (error) {
           console.error('Error fetching user content counts:', error);
