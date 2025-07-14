@@ -2443,6 +2443,118 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Upload image for slideshow
+app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    console.log('🎬 SLIDESHOW_UPLOAD: Starting image upload process');
+    const { id } = req.params;
+    const { caption, position } = req.body;
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Parameters received:', { 
+      id, 
+      caption, 
+      position,
+      hasFile: !!req.file,
+      fileInfo: req.file ? {
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : null
+    });
+    
+    if (!req.file) {
+      console.log('🎬 SLIDESHOW_UPLOAD: No file provided');
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+    
+    // Check if user owns the slideshow
+    const slideshowResult = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [id]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_UPLOAD: Slideshow not found:', id);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      console.log('🎬 SLIDESHOW_UPLOAD: User not authorized:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to upload to this slideshow' });
+    }
+    
+    // Upload to S3
+    let imageUrl;
+    try {
+      if (!s3Service) {
+        return res.status(500).json({ error: 'S3 service not configured' });
+      }
+      
+      console.log('🎬 SLIDESHOW_UPLOAD: Uploading to S3...');
+      const key = `users/${req.user.userId}/media/${Date.now()}-${Math.floor(Math.random() * 1000000000)}.${req.file.originalname.split('.').pop()}`;
+      const uploadResult = await s3Service.uploadFile(
+        req.file.buffer,
+        key,
+        req.file.mimetype
+      );
+      imageUrl = uploadResult.Location || uploadResult.location || `https://merchtechbucket.s3.us-east-2.amazonaws.com/${key}`;
+      console.log('🎬 SLIDESHOW_UPLOAD: S3 upload successful:', imageUrl);
+    } catch (error) {
+      console.error('🎬 SLIDESHOW_UPLOAD: S3 upload failed:', error);
+      return res.status(500).json({ error: 'Failed to upload image to S3', details: error.message });
+    }
+    
+    // Get next position if not provided
+    let displayOrder = position;
+    if (!displayOrder) {
+      console.log('🎬 SLIDESHOW_UPLOAD: Getting next position for slideshow:', id);
+      const maxPositionResult = await pool.query(
+        'SELECT MAX(display_order) as max_pos FROM slideshow_images WHERE slideshow_id = $1',
+        [id]
+      );
+      displayOrder = (maxPositionResult.rows[0].max_pos || 0) + 1;
+      console.log('🎬 SLIDESHOW_UPLOAD: Next position calculated:', displayOrder);
+    }
+    
+    // Save image record to database with S3 URL
+    console.log('🎬 SLIDESHOW_UPLOAD: About to save image record with S3 URL:', imageUrl);
+    
+    const imageResult = await pool.query(
+      `INSERT INTO slideshow_images (slideshow_id, image_url, caption, display_order, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING *`,
+      [id, imageUrl, caption || '', displayOrder]
+    );
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Image record saved successfully:', imageResult.rows[0]);
+    
+    const image = {
+      id: imageResult.rows[0].id,
+      slideshowId: imageResult.rows[0].slideshow_id,
+      imageUrl: imageResult.rows[0].image_url,
+      caption: imageResult.rows[0].caption,
+      position: imageResult.rows[0].display_order,
+      createdAt: imageResult.rows[0].created_at
+    };
+    
+    console.log('🎬 SLIDESHOW_UPLOAD: Image uploaded successfully to S3:', {
+      imageId: image.id,
+      s3Url: image.imageUrl
+    });
+    
+    res.status(201).json({ image });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_UPLOAD: Error uploading image:', error);
+    console.error('🎬 SLIDESHOW_UPLOAD: Error message:', error.message);
+    if (error.stack) {
+      console.error('🎬 SLIDESHOW_UPLOAD: Error stack:', error.stack);
+    }
+    res.status(500).json({ error: 'Failed to upload image', details: error.message });
+  }
+});
+
 // Delete image from slideshow
 app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, async (req, res) => {
   try {
