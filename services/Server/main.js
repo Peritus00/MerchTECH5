@@ -826,49 +826,6 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
         }
     });
 });
-    }
-
-    if (!s3Service.isConfigured()) {
-        console.error(`❌ UPLOAD_ERROR [${requestId}]: S3 service is not configured.`);
-        return res.status(500).json({ error: 'File upload service is not available.' });
-    }
-
-    try {
-        console.log(`📤 UPLOAD [${requestId}]: Uploading to S3...`);
-        console.log(`📤 UPLOAD [${requestId}]: File info:`, {
-            originalname: req.file.originalname,
-            mimetype: req.file.mimetype,
-            size: req.file.size,
-            hasBuffer: !!req.file.buffer,
-            bufferLength: req.file.buffer ? req.file.buffer.length : 'undefined'
-        });
-        
-        // Generate a unique key for the file
-        const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
-        
-        const result = await s3Service.uploadFile(req.file.buffer, key, req.file.mimetype);
-        
-        const proxyUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/images/s3/${result.Key}`;
-        
-        console.log(`✅ UPLOAD_SUCCESS [${requestId}]: S3 URL: ${result.Location}`);
-        console.log(`✅ UPLOAD_SUCCESS [${requestId}]: Proxy URL: ${proxyUrl}`);
-
-        res.status(200).json({
-            message: 'File uploaded successfully',
-            url: result.Location, // Direct S3 URL
-            proxy_url: proxyUrl,   // URL proxied through our server
-            key: result.Key,
-            imageUrl: proxyUrl    // Legacy field for backward compatibility
-        });
-
-    } catch (error) {
-        console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
-        res.status(500).json({ 
-            error: 'Failed to upload file.', 
-            message: error.message 
-        });
-    }
-});
 
 // --- Image Proxy Endpoint ---
 app.get('/api/images/s3/*', async (req, res) => {
