@@ -83,7 +83,7 @@ try {
   }
   console.log('✅ S3 service loaded and instantiated successfully');
   console.log('   AWS Region:', process.env.AWS_REGION);
-  console.log('   S3 Bucket:', process.env.S3_BUCKET_NAME);
+  console.log('   S3 Bucket:', process.env.AWS_S3_BUCKET_NAME);
   console.log('   AWS Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Configured' : 'Missing');
 } catch (error) {
   console.error('❌ S3 service initialization failed:', error);
@@ -791,7 +791,7 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
             imageUrl: proxyUrl    // Legacy field for backward compatibility
         });
 
-  } catch (error) {
+    } catch (error) {
         console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
         res.status(500).json({ 
             error: 'Failed to upload file.', 
