@@ -133,6 +133,16 @@ app.use(cors({
 }));
 app.use('/uploads', express.static(uploadsDir));
 
+// Handle domain redirects for legacy URLs
+app.use((req, res, next) => {
+  const host = req.get('host');
+  if (host === 'merchtechapp5-production.up.railway.app') {
+    console.log(`🔀 REDIRECT: Redirecting from ${host} to merchtech5-production.up.railway.app`);
+    return res.redirect(301, `https://merchtech5-production.up.railway.app${req.originalUrl}`);
+  }
+  next();
+});
+
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -795,17 +805,55 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
 // --- Image Proxy Endpoint ---
 app.get('/api/images/s3/*', async (req, res) => {
     const key = req.params[0];
-        if (!key) {
+    if (!key) {
         return res.status(400).send('Invalid image key');
     }
+    
+    console.log(`🔗 IMAGE_PROXY: Requested key: "${key}"`);
+    
     try {
-        const { stream, metadata } = await s3Service.getStream(key);
+        let s3Key = key;
+        
+        // Handle legacy URL structure: if key doesn't start with "users/", 
+        // try to convert it to the new structure
+        if (!key.startsWith('users/')) {
+            // Legacy format: "1/filename" -> "users/1/media/filename"
+            const keyParts = key.split('/');
+            if (keyParts.length >= 2) {
+                const userId = keyParts[0];
+                const filename = keyParts.slice(1).join('/');
+                s3Key = `users/${userId}/media/${filename}`;
+                console.log(`🔗 IMAGE_PROXY: Converted legacy key "${key}" to "${s3Key}"`);
+            }
+        }
+        
+        const { stream, metadata } = await s3Service.getStream(s3Key);
         res.setHeader('Content-Type', metadata.ContentType);
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
         stream.pipe(res);
-      } catch (error) {
+        
+        console.log(`✅ IMAGE_PROXY: Successfully streamed "${s3Key}"`);
+        
+    } catch (error) {
         console.error(`🔴 IMAGE_PROXY_ERROR: Failed to stream image for key "${key}":`, error);
+        
+        // If the converted key failed, try the original key as fallback
+        if (!key.startsWith('users/')) {
+            try {
+                console.log(`🔗 IMAGE_PROXY: Trying original key as fallback: "${key}"`);
+                const { stream, metadata } = await s3Service.getStream(key);
+                res.setHeader('Content-Type', metadata.ContentType);
+                res.setHeader('Content-Length', metadata.ContentLength);
+                res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+                stream.pipe(res);
+                console.log(`✅ IMAGE_PROXY: Successfully streamed original key "${key}"`);
+                return;
+            } catch (fallbackError) {
+                console.error(`🔴 IMAGE_PROXY_ERROR: Fallback also failed for key "${key}":`, fallbackError);
+            }
+        }
+        
         res.status(404).send('Image not found');
     }
 });
