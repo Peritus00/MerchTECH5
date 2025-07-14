@@ -7,17 +7,9 @@
       "config": {
         "distDir": "dist"
       }
-    },
-    {
-      "src": "services/Server/main.js",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/services/Server/main.js"
-    },
     {
       "src": "/_expo/(.*)",
       "dest": "/_expo/$1"
@@ -25,10 +17,6 @@
     {
       "src": "/assets/(.*)",
       "dest": "/assets/$1"
-    },
-    {
-      "src": "/(.*\\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot))$",
-      "dest": "/$1"
     },
     {
       "src": "/(.*)",
@@ -39,6 +27,6 @@
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
     "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api",
-    "CACHE_BUST": "20250714-01"
+    "CACHE_BUST": "20250714-02"
   }
 } 
