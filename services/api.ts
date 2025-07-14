@@ -383,69 +383,6 @@ export const mediaAPI = {
     return res.data;
   },
 
-  async getPostPolicy(filename: string, contentType: string, fileSize?: number) {
-    console.log('🔗 MediaAPI: Getting S3 POST policy for browser upload');
-    console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
-    const res = await api.post('/media/post-policy', {
-      filename,
-      contentType,
-      fileSize
-    });
-    console.log('🔗 MediaAPI: POST policy response:', res.data);
-    return res.data;
-  },
-
-  async uploadToS3WithPostPolicy(postPolicyData: any, file: File | Blob, onProgress?: (progress: number) => void) {
-    console.log('📤 MediaAPI: Uploading to S3 using POST policy');
-    console.log('📤 MediaAPI: File size:', file.size, 'bytes');
-    
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable && onProgress) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          onProgress(progress);
-        }
-      });
-      
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200 || xhr.status === 204) {
-          console.log('✅ MediaAPI: S3 POST upload successful');
-          resolve(xhr.response);
-        } else {
-          console.error('❌ MediaAPI: S3 POST upload failed:', xhr.status, xhr.statusText);
-          // Log the S3 error response body for debugging
-          console.error('❌ S3 Error Response:', xhr.responseText);
-          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}\n${xhr.responseText}`));
-        }
-      });
-      
-      xhr.addEventListener('error', () => {
-        console.error('❌ MediaAPI: S3 POST upload error');
-        // Log the S3 error response body for debugging
-        console.error('❌ S3 Error Response:', xhr.responseText);
-        reject(new Error('S3 upload failed'));
-      });
-      
-      // Create FormData with all the required fields as strings
-      const formData = new FormData();
-      Object.entries(postPolicyData.fields).forEach(([k, v]) => {
-        formData.append(k, String(v));
-      });
-      formData.append('file', file);
-      
-      // Debug: log all FormData keys/values
-      for (let pair of formData.entries()) {
-        console.log('FormData:', pair[0], pair[1]);
-      }
-      
-      xhr.open('POST', postPolicyData.url);
-      // Don't set Content-Type header - let the browser set it with the boundary
-      xhr.send(formData);
-    });
-  },
-
   async uploadFile(file: File, onProgress?: (progress: number) => void) {
     console.log('📤 MediaAPI: Uploading file directly to server');
     const formData = new FormData();

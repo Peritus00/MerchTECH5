@@ -27,6 +27,6 @@
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
     "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api",
-    "CACHE_BUST": "20250714-03-s3keys-updated"
+    "CACHE_BUST": "20250714-04-removed-legacy-methods"
   }
 } 
