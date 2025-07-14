@@ -520,6 +520,20 @@ app.get('/api/debug/s3', (req, res) => {
     });
 });
 
+// --- Health Check Endpoint for Railway ---
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        services: {
+            s3: s3Service.isConfigured(),
+            database: !!process.env.DATABASE_URL,
+            brevo: !!process.env.BREVO_API_KEY
+        }
+    });
+});
+
 // --- Global Error Handler ---
 app.use((error, req, res, next) => {
   console.error('🚨 GLOBAL_ERROR_HANDLER:', {
