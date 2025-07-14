@@ -823,8 +823,32 @@ export const chatAPI = {
   },
 };
 
+// Helper function to dynamically determine the base URL
+const getFinalApiBaseUrl = () => {
+  if (typeof window !== 'undefined' && window.location.hostname === 'app.merchtech.net') {
+    return 'https://merchtech5-production.up.railway.app/api';
+  }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    return 'http://192.168.1.70:5001/api';
+  }
+  if (process.env.EXPO_PUBLIC_NODE_ENV === 'production' || process.env.NODE_ENV === 'production') {
+    return 'https://merchtech5-production.up.railway.app/api';
+  }
+  if (typeof window === 'undefined') {
+    return 'http://192.168.1.70:5001/api';
+  }
+  return env.apiBaseUrl; // Fallback to centralized config
+}
+
 export const fileUploadAPI = {
   async upload(file: any) {
+    // DYNAMICALLY SET THE BASE URL TO ENSURE CORRECTNESS
+    const currentBaseURL = getFinalApiBaseUrl();
+    const uploadInstance = axios.create({
+      baseURL: currentBaseURL,
+      timeout: 300000, // 5 minutes for large uploads
+    });
+
     console.log('🔧 fileUploadAPI.upload called with:', {
       fileName: file.name,
       fileType: file.type,
@@ -833,9 +857,9 @@ export const fileUploadAPI = {
     });
     
     // Log the current API configuration
-    console.log('🔧 Current API baseURL:', api.defaults.baseURL);
+    console.log('🔧 Current API baseURL:', uploadInstance.defaults.baseURL);
     console.log('🔧 Environment API URL:', FINAL_API_BASE_URL);
-    console.log('🔧 Upload will go to:', `${api.defaults.baseURL}/upload`);
+    console.log('🔧 Upload will go to:', `${uploadInstance.defaults.baseURL}/upload`);
     
     const formData = new FormData();
     let payload: any;
@@ -855,11 +879,11 @@ export const fileUploadAPI = {
     // Use 'image' field name to match server expectation
     formData.append('image', payload, file.name ?? (payload.name || 'upload'));
     console.log('🔧 FormData prepared, making request to /upload');
-    console.log('🔧 Final request URL will be:', `${api.defaults.baseURL}/upload`);
+    console.log('🔧 Final request URL will be:', `${uploadInstance.defaults.baseURL}/upload`);
     
     // Let axios set the correct multipart boundary; specifying the header manually
     // can omit the boundary and lead to 400 errors on some environments.
-    const res = await api.post('/upload', formData);
+    const res = await uploadInstance.post('/upload', formData);
     console.log('🔧 Upload response:', res.data);
     // Server returns 'imageUrl' but we want to return 'fileUrl' for consistency
     return res.data.imageUrl as string;
