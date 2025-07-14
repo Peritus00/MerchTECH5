@@ -749,13 +749,83 @@ app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
-app.post('/api/upload', authenticateToken, upload.single('image'), async (req, res) => {
+app.post('/api/upload', authenticateToken, (req, res, next) => {
     const requestId = `req_${Date.now()}`;
     console.log(`📤 UPLOAD [${requestId}]: Starting upload request for user ${req.user?.userId}`);
     
-    if (!req.file) {
-        console.error(`❌ UPLOAD_ERROR [${requestId}]: No file uploaded.`);
-        return res.status(400).json({ error: 'No file uploaded.' });
+    // Use multer middleware with proper error handling
+    upload.single('image')(req, res, async (err) => {
+        if (err) {
+            console.error(`❌ MULTER_ERROR [${requestId}]:`, err);
+            
+            if (err.code === 'FILE_TYPE_NOT_ALLOWED') {
+                return res.status(400).json({ 
+                    error: 'File type not allowed. Only images, audio, and video are supported.',
+                    code: 'FILE_TYPE_NOT_ALLOWED'
+                });
+            }
+            
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ 
+                    error: 'File too large. Maximum size is 500MB.',
+                    code: 'FILE_TOO_LARGE'
+                });
+            }
+            
+            return res.status(400).json({ 
+                error: 'File upload error.', 
+                message: err.message,
+                code: err.code || 'UPLOAD_ERROR'
+            });
+        }
+        
+        if (!req.file) {
+            console.error(`❌ UPLOAD_ERROR [${requestId}]: No file uploaded.`);
+            return res.status(400).json({ error: 'No file uploaded.' });
+        }
+
+        if (!s3Service.isConfigured()) {
+            console.error(`❌ UPLOAD_ERROR [${requestId}]: S3 service is not configured.`);
+            return res.status(500).json({ error: 'File upload service is not available.' });
+        }
+
+        try {
+            console.log(`📤 UPLOAD [${requestId}]: Uploading to S3...`);
+            console.log(`📤 UPLOAD [${requestId}]: File info:`, {
+                originalname: req.file.originalname,
+                mimetype: req.file.mimetype,
+                size: req.file.size,
+                hasBuffer: !!req.file.buffer,
+                bufferLength: req.file.buffer ? req.file.buffer.length : 'undefined'
+            });
+            
+            // Generate a unique key for the file
+            const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
+            
+            const result = await s3Service.uploadFile(req.file.buffer, key, req.file.mimetype);
+            
+            const proxyUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/images/s3/${result.Key}`;
+            
+            console.log(`✅ UPLOAD_SUCCESS [${requestId}]: S3 URL: ${result.Location}`);
+            console.log(`✅ UPLOAD_SUCCESS [${requestId}]: Proxy URL: ${proxyUrl}`);
+
+            res.status(200).json({
+                message: 'File uploaded successfully',
+                url: result.Location, // Direct S3 URL
+                proxy_url: proxyUrl,   // URL proxied through our server
+                key: result.Key,
+                imageUrl: proxyUrl    // Legacy field for backward compatibility
+            });
+
+        } catch (error) {
+            console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
+            res.status(500).json({ 
+                error: 'Failed to upload file.', 
+                message: error.message 
+            });
+        }
+    });
+});
     }
 
     if (!s3Service.isConfigured()) {
