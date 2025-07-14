@@ -8,38 +8,36 @@ import { MediaFile } from '@/shared/media-schema';
 const API_BASE_URL = env.apiBaseUrl;
 
 console.log('✅ API configured with centralized environment config');
-console.log('🔍 DETAILED Environment details:', {
-  environment: env.nodeEnv,
-  apiUrl: API_BASE_URL,
-  isProduction: env.isProduction,
-  isDevelopment: env.isDevelopment,
-  windowLocation: typeof window !== 'undefined' ? window.location.href : 'not available',
-  hostname: typeof window !== 'undefined' ? window.location.hostname : 'not available'
-});
+console.log('🔧 Environment API Base URL:', API_BASE_URL);
+console.log('🔧 Current hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A (not web)');
+console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
+console.log('🔧 EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
 
 // Force localhost override if needed
 let FINAL_API_BASE_URL = API_BASE_URL;
 
-// Check if we're explicitly in production mode
-const isExplicitlyProduction = process.env.EXPO_PUBLIC_NODE_ENV === 'production' || 
-                              process.env.NODE_ENV === 'production';
-
-if (!isExplicitlyProduction) {
-  // Default to local development server unless explicitly in production
-  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
-  console.log('🔧 FORCED local development API URL (not explicitly production):', FINAL_API_BASE_URL);
-} else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
-  console.log('🔧 FORCED localhost override - API URL changed to:', FINAL_API_BASE_URL);
-} else {
-  console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
-}
-
-// Additional safety check - if we're on the deployed frontend, use correct production URL
-if (typeof window !== 'undefined' && 
-    window.location.hostname === 'app.merchtech.net') {
+// Check if we're on the production web app first (highest priority)
+if (typeof window !== 'undefined' && window.location.hostname === 'app.merchtech.net') {
   FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
-  console.log('🔧 FORCED correct production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
+  console.log('🔧 FORCED production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
+}
+// Then check for localhost development
+else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
+  console.log('🔧 FORCED localhost API URL for localhost development:', FINAL_API_BASE_URL);
+}
+// Check if we're explicitly in production mode
+else if (process.env.EXPO_PUBLIC_NODE_ENV === 'production' || process.env.NODE_ENV === 'production') {
+  FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
+  console.log('🔧 Using production API URL (explicitly set):', FINAL_API_BASE_URL);
+}
+// Default to local development server for React Native development
+else if (typeof window === 'undefined') {
+  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
+  console.log('🔧 Using local development API URL for React Native:', FINAL_API_BASE_URL);
+}
+else {
+  console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
 }
 
 export const api = axios.create({
@@ -831,18 +829,10 @@ export const fileUploadAPI = {
       hasUri: !!file.uri
     });
     
-    // Force check the current API configuration
+    // Log the current API configuration
     console.log('🔧 Current API baseURL:', api.defaults.baseURL);
     console.log('🔧 Environment API URL:', FINAL_API_BASE_URL);
     console.log('🔧 Upload will go to:', `${api.defaults.baseURL}/upload`);
-    
-    // Double-check that we're not using production URL
-    if (api.defaults.baseURL?.includes('railway.app')) {
-      console.error('🚨 CRITICAL: API is still using production URL despite local config!');
-      console.error('🚨 Forcing API baseURL to local server...');
-      api.defaults.baseURL = 'http://192.168.1.70:5001/api';
-      console.log('🔧 API baseURL forced to:', api.defaults.baseURL);
-    }
     
     const formData = new FormData();
     let payload: any;
