@@ -1043,13 +1043,17 @@ app.get('/api/media/:id', async (req, res) => {
     const media = result.rows[0];
     
     // Create a proper HTTP URL for the audio file
+    const baseUrl = process.env.API_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN 
+      ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+      : 'https://merchtech5-production.up.railway.app';
+    
     let properUrl = media.url;
     if (media.url && media.url.startsWith('data:')) {
       // If it's base64 data, serve it through our audio streaming endpoint
-      properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/api/media/${id}/stream`;
+      properUrl = `${baseUrl}/api/media/${id}/stream`;
     } else if (media.filename) {
       // If we have a filename, construct the proper URL
-              properUrl = `${process.env.API_BASE_URL || 'http://192.168.1.70:5001'}/uploads/${media.filename}`;
+      properUrl = `${baseUrl}/uploads/${media.filename}`;
     }
     
     // Return media with the proper URL structure expected by the frontend
@@ -1485,7 +1489,9 @@ async function getPlaylistWithMedia(playlistId) {
     filePath: `/uploads/${media.filename}`,
     fileType: media.file_type,
     contentType: media.content_type,
-    url: `${process.env.API_BASE_URL || 'http://localhost:5001'}/uploads/${media.filename}`,
+            url: `${process.env.API_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN 
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
+          : 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`,
   }));
 
   // Convert snake_case fields to camelCase for frontend compatibility
