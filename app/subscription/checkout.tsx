@@ -15,8 +15,9 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
+import { env } from '@/config/environment';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+const API_BASE_URL = env.apiBaseUrl;
 
 export default function SubscriptionCheckoutScreen() {
   const { tier } = useLocalSearchParams();

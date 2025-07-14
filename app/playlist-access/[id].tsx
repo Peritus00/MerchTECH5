@@ -21,6 +21,7 @@ import PreviewPlayer from '@/components/PreviewPlayer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { activationCodesAPI } from '@/services/api';
+import { env } from '@/config/environment';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -498,7 +499,7 @@ export default function PlaylistAccessScreen() {
     const formattedFiles = playlist.mediaFiles?.map((file: any) => ({
       id: file.id,
       title: file.title,
-              url: `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/media/${file.id}/stream`,
+              url: `${env.apiBaseUrl.replace('/api', '')}/api/media/${file.id}/stream`,
       fileType: file.fileType,
       contentType: file.contentType,
     })) || [];

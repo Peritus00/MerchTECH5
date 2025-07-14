@@ -23,6 +23,7 @@ import { activationCodesAPI } from '@/services/api';
 import { Audio } from 'expo-av';
 import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
+import { env } from '@/config/environment';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -63,7 +64,7 @@ export default function SlideshowAccessScreen() {
       return [];
     }
     
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+    const baseUrl = env.apiBaseUrl.replace('/api', '');
     
     console.log('🎬 SLIDESHOW_ACCESS: Formatting slideshow images:', slideshow.images);
     console.log('🎬 SLIDESHOW_ACCESS: Base URL:', baseUrl);
@@ -98,7 +99,7 @@ export default function SlideshowAccessScreen() {
     // Just log the audio URL for debugging
     if (slideshow.audioUrl) {
       const audioStreamUrl = slideshow.audioUrl.includes('amazonaws.com')
-        ? `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`
+        ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
         : slideshow.audioUrl;
       
       console.log('🎬 SLIDESHOW_ACCESS: Background audio available:', {
@@ -507,7 +508,7 @@ export default function SlideshowAccessScreen() {
       try {
         // Use streaming endpoint for S3 audio URLs
         const audioUrl = slideshow.audioUrl.includes('amazonaws.com') 
-          ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+          ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
           : slideshow.audioUrl;
         
         console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
@@ -616,7 +617,7 @@ export default function SlideshowAccessScreen() {
               onPreviewComplete={handlePreviewComplete}
               backgroundAudioUrl={slideshow.audioUrl ? 
                 (slideshow.audioUrl.includes('amazonaws.com') 
-                  ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+                  ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
                   : slideshow.audioUrl) 
                 : undefined}
             />

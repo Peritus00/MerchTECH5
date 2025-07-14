@@ -24,42 +24,26 @@ class Environment {
     // Check both regular and EXPO_PUBLIC_ prefixed environment variables
     const nodeEnv = (process.env.EXPO_PUBLIC_NODE_ENV || process.env.NODE_ENV || 'development') as 'development' | 'staging' | 'production';
     
-    // Force development mode for local development
-    // Use Railway backend ONLY if explicitly set to production
+    // Determine API base URL based on environment
     let apiBaseUrl: string;
     
-    // Check if we're explicitly in production mode
-    const isExplicitlyProduction = process.env.EXPO_PUBLIC_NODE_ENV === 'production' || 
-                                  process.env.NODE_ENV === 'production';
+    // Check if we're in production mode
+    const isProduction = nodeEnv === 'production';
     
-    if (isExplicitlyProduction) {
+    if (isProduction) {
       apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
-      console.log('🔧 Using production API URL (explicitly set):', apiBaseUrl);
+      console.log('🔧 Using production API URL:', apiBaseUrl);
     } else {
-      // Default to local development server
+      // Default to local development server for development
       apiBaseUrl = 'http://192.168.1.70:5001/api';
-      console.log('🔧 Using local development API URL (default):', apiBaseUrl);
-    }
-    
-    // Force local server if running on localhost (web development)
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      apiBaseUrl = 'http://192.168.1.70:5001/api';
-      console.log('🔧 Forced local API URL for localhost development:', apiBaseUrl);
-    }
-    
-    // CRITICAL: Force production API for production web app (highest priority)
-    if (typeof window !== 'undefined' && 
-        window.location.hostname === 'app.merchtech.net') {
-      apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
-      console.log('🔧 CRITICAL: Forced production API URL for app.merchtech.net:', apiBaseUrl);
-      console.log('🔧 CRITICAL: This should prevent mixed content errors');
+      console.log('🔧 Using local development API URL:', apiBaseUrl);
     }
     
     return {
       API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
-      IS_PRODUCTION: isExplicitlyProduction,
-      IS_DEVELOPMENT: !isExplicitlyProduction,
+      IS_PRODUCTION: isProduction,
+      IS_DEVELOPMENT: !isProduction,
       FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
@@ -70,7 +54,7 @@ class Environment {
 
     // Validate API URL
     if (!this.config.API_BASE_URL) {
-      errors.push('EXPO_PUBLIC_API_URL is required');
+      errors.push('API_BASE_URL is required');
     }
 
     // Production-specific validations
@@ -160,14 +144,8 @@ export const {
 
 // Always log configuration for debugging
 console.log('🔧 Environment Configuration Loading...');
-console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- ENV CONFIG LOADING - BUILD 20250714-09');
+console.log('🔧 TIMESTAMP:', new Date().toISOString());
 console.log('🔧 process.env.NODE_ENV:', process.env.NODE_ENV);
 console.log('🔧 process.env.EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
-console.log('🔧 process.env.EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
 
-env.logConfiguration();
-
-// Force development mode if we're on localhost
-if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-  console.log('🔧 Detected localhost - forcing development mode');
-} 
+env.logConfiguration(); 

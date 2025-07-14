@@ -15,6 +15,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import PreviewPlayer from '@/components/PreviewPlayer';
 import { slideshowAPI } from '@/services/api';
+import { env } from '@/config/environment';
 
 // Define the structure of a Slideshow and its Images
 interface SlideshowImage {
@@ -73,7 +74,7 @@ export default function PreviewPlayerScreen() {
   const formattedMediaFiles = useMemo(() => {
     if (!slideshow) return [];
 
-    const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+    const baseUrl = env.apiBaseUrl.replace('/api', '');
     
     console.log('🖼️ Processing slideshow for preview:', {
       id: slideshow.id,
@@ -181,7 +182,7 @@ export default function PreviewPlayerScreen() {
         productLinks={slideshow.productLinks || []}
         onPreviewComplete={handlePreviewComplete}
         backgroundAudioUrl={slideshow.audioUrl ? 
-          `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-audio/${slideshow.id}/stream`
+          `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
           : undefined}
       />
 
