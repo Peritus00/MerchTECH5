@@ -94,7 +94,7 @@ if (!fs.existsSync(UPLOADS_DIR)) {
 }
 
 const storage = multer.memoryStorage();
-const upload = multer({
+const upload = multer({ 
   storage: storage,
   limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
   fileFilter: (req, file, cb) => {
@@ -107,11 +107,11 @@ const upload = multer({
 
     const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) ||
-                     file.mimetype.startsWith('audio/') ||
-                     file.mimetype.startsWith('image/') ||
-                     file.mimetype.startsWith('video/');
-
+    const mimetype = allowedTypes.test(file.mimetype) || 
+                    file.mimetype.startsWith('audio/') || 
+                    file.mimetype.startsWith('image/') ||
+                    file.mimetype.startsWith('video/');
+    
     if (extname || mimetype) {
       console.log(`✅ FILE_FILTER [${requestId}]: File accepted`);
       cb(null, true);
@@ -127,10 +127,10 @@ const upload = multer({
 
 // --- Brevo Email Transporter ---
 const createTransporter = () => {
-    const defaultClient = brevo.ApiClient.instance;
-    let apiKey = defaultClient.authentications['api-key'];
-    apiKey.apiKey = process.env.BREVO_API_KEY;
-    return new brevo.TransactionalEmailsApi();
+    const emailAPI = new brevo.TransactionalEmailsApi();
+    // Set authentication for the API
+    emailAPI.authentications.apiKey.apiKey = process.env.BREVO_API_KEY;
+    return emailAPI;
 };
 const transporter = createTransporter();
 
@@ -191,7 +191,7 @@ const sanitizeImageUrls = (urls) => {
 
 const mapProductFields = (product) => {
   if (!product) return null;
-  return {
+      return {
     id: product.id,
     userId: product.user_id,
     name: product.name,
@@ -213,10 +213,10 @@ async function getPlaylistWithMedia(playlistId) {
         return null;
     }
     const playlistIdInt = parseInt(playlistId, 10);
-    if (isNaN(playlistIdInt)) {
-        console.log('🔴 GET_PLAYLIST: Invalid playlist ID:', playlistId);
-        return null;
-    }
+  if (isNaN(playlistIdInt)) {
+    console.log('🔴 GET_PLAYLIST: Invalid playlist ID:', playlistId);
+    return null;
+  }
     // ... rest of the function
 }
 
@@ -232,14 +232,14 @@ app.post('/api/auth/register', async (req, res) => {
     }
     try {
         const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
-        const result = await pool.query(
+    const result = await pool.query(
             'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, is_admin',
             [username, email, hashedPassword]
         );
         const user = result.rows[0];
         const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.is_admin }, JWT_SECRET, { expiresIn: '24h' });
         res.status(201).json({ token, user: { id: user.id, username: user.username, email: user.email, isAdmin: user.is_admin } });
-    } catch (error) {
+  } catch (error) {
         console.error('🔴 REGISTER ERROR:', error);
         if (error.code === '23505') { // Unique constraint violation
             return res.status(409).json({ error: 'Email or username already exists.' });
@@ -305,7 +305,7 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
             key: result.Key
         });
 
-    } catch (error) {
+  } catch (error) {
         console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
         res.status(500).json({ 
             error: 'Failed to upload file.', 
@@ -319,7 +319,7 @@ app.post('/api/upload', authenticateToken, upload.single('image'), async (req, r
 
 app.get('/api/images/s3/*', async (req, res) => {
     const key = req.params[0];
-    if (!key) {
+        if (!key) {
         return res.status(400).send('Invalid image key');
     }
     try {
@@ -328,7 +328,7 @@ app.get('/api/images/s3/*', async (req, res) => {
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
         stream.pipe(res);
-    } catch (error) {
+      } catch (error) {
         console.error(`🔴 IMAGE_PROXY_ERROR: Failed to stream image for key "${key}":`, error);
         res.status(404).send('Image not found');
     }
@@ -367,16 +367,16 @@ async function getProductById(id) {
     console.error('🔴 GET_PRODUCT_BY_ID_ERROR: Invalid or missing product ID received:', id);
     return null;
   }
-
-  const result = await pool.query(
+    
+    const result = await pool.query(
     `SELECT p.*, u.username as artist_name 
      FROM products p 
      JOIN users u ON p.user_id = u.id 
      WHERE p.id = $1 AND p.is_deleted = false`,
     [productId]
-  );
-
-  if (result.rows.length === 0) {
+    );
+    
+    if (result.rows.length === 0) {
     return null;
   }
   
@@ -420,7 +420,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
     const priceInCents = Math.round(parseFloat(price) * 100);
     const sanitizedImages = sanitizeImageUrls(images || []);
-
+    
     const result = await pool.query(
       `INSERT INTO products (user_id, name, description, images, price, category)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -441,8 +441,8 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 
 // Update product
 app.patch('/api/products/:id', authenticateToken, async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
         const productId = parseInt(id, 10);
 
         if (isNaN(productId)) {
@@ -483,29 +483,29 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
 
         res.json({ product: mapProductFields(updatedProduct) });
 
-    } catch (error) {
-        console.error('🔴 UPDATE PRODUCT ERROR:', error);
-        res.status(500).json({ error: 'Failed to update product' });
-    }
+  } catch (error) {
+    console.error('🔴 UPDATE PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
 });
 
 // Delete product
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
     // Soft delete implementation
-    try {
-        const { id } = req.params;
-        const result = await pool.query(
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
             'UPDATE products SET is_deleted = true, updated_at = NOW() WHERE id = $1 AND user_id = $2 RETURNING *',
-            [id, req.user.userId]
-        );
-        if (result.rowCount === 0) {
+      [id, req.user.userId]
+    );
+    if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Product not found or you do not have permission to delete it.' });
-        }
-        res.status(200).json({ message: 'Product deleted successfully' });
-    } catch (error) {
-        console.error('🔴 DELETE PRODUCT ERROR:', error);
-        res.status(500).json({ error: 'Failed to delete product' });
     }
+        res.status(200).json({ message: 'Product deleted successfully' });
+  } catch (error) {
+    console.error('🔴 DELETE PRODUCT ERROR:', error);
+    res.status(500).json({ error: 'Failed to delete product' });
+  }
 });
 
 // --- Debug & Admin Endpoints ---
@@ -555,7 +555,7 @@ const initializeDatabase = async () => {
         console.log('🕒 Postgres server time:', res.rows[0].now);
         client.release();
         return true;
-    } catch (error) {
+  } catch (error) {
         console.error('🔴 DATABASE_CONNECTION_ERROR: Could not connect to the database.');
         console.error(error.stack);
         return false;
@@ -571,12 +571,12 @@ const startServer = async () => {
         process.exit(1);
     }
     
-    app.listen(PORT, () => {
-        console.log(`🚀 Server running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
     }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
             console.error(`❌ PORT_ERROR: Port ${PORT} is already in use. Is another server instance running?`);
-        } else {
+      } else {
             console.error('❌ SERVER_START_ERROR:', err);
         }
         process.exit(1);
