@@ -17,6 +17,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
+console.log('DEBUG: Upload endpoint fix deployed - version 2');
 
 const app = express();
 const PORT = process.env.PORT || 5001;
