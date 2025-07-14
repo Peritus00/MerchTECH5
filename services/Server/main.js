@@ -885,6 +885,61 @@ app.get('/api/images/s3/*', async (req, res) => {
     }
 });
 
+// --- Local Image Endpoint ---
+app.get('/api/images/local/:filename', async (req, res) => {
+    const filename = req.params.filename;
+    if (!filename) {
+        return res.status(400).send('Invalid filename');
+    }
+    
+    console.log(`🖼️ LOCAL_IMAGE: Requested filename: "${filename}"`);
+    
+    try {
+        const filePath = path.join(__dirname, 'uploads', filename);
+        
+        if (!fs.existsSync(filePath)) {
+            console.log(`🔴 LOCAL_IMAGE: File not found: ${filePath}`);
+            return res.status(404).send('Image not found');
+        }
+        
+        // Get file stats for content length
+        const stats = fs.statSync(filePath);
+        
+        // Determine content type based on file extension
+        const ext = path.extname(filename).toLowerCase();
+        let contentType = 'application/octet-stream';
+        
+        switch (ext) {
+            case '.jpg':
+            case '.jpeg':
+                contentType = 'image/jpeg';
+                break;
+            case '.png':
+                contentType = 'image/png';
+                break;
+            case '.gif':
+                contentType = 'image/gif';
+                break;
+            case '.webp':
+                contentType = 'image/webp';
+                break;
+        }
+        
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Length', stats.size);
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        
+        const fileStream = fs.createReadStream(filePath);
+        fileStream.pipe(res);
+        
+        console.log(`✅ LOCAL_IMAGE: Successfully streamed "${filename}"`);
+        
+    } catch (error) {
+        console.error(`🔴 LOCAL_IMAGE_ERROR: Failed to stream image "${filename}":`, error);
+        res.status(500).send('Failed to stream image');
+    }
+});
+
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media', authenticateToken, async (req, res) => {
   try {
@@ -2385,6 +2440,79 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('🎬 SLIDESHOWS: Error deleting slideshow:', error);
     res.status(500).json({ error: 'Failed to delete slideshow' });
+  }
+});
+
+// Delete image from slideshow
+app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, async (req, res) => {
+  try {
+    const { slideshowId, imageId } = req.params;
+    
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Deleting image:', { slideshowId, imageId });
+    
+    // Check if user owns the slideshow
+    const slideshowResult = await pool.query(
+      'SELECT user_id FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Slideshow not found:', slideshowId);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: User not authorized:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to delete from this slideshow' });
+    }
+    
+    // Get image details for file deletion
+    const imageResult = await pool.query(
+      'SELECT * FROM slideshow_images WHERE id = $1 AND slideshow_id = $2',
+      [imageId, slideshowId]
+    );
+    
+    if (imageResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image not found:', imageId);
+      return res.status(404).json({ error: 'Image not found' });
+    }
+    
+    // Delete image record
+    await pool.query(
+      'DELETE FROM slideshow_images WHERE id = $1',
+      [imageId]
+    );
+    
+    // Delete file from S3 if it's an S3 URL
+    const imageUrl = imageResult.rows[0].image_url;
+    if (imageUrl.includes('amazonaws.com') && s3Service) {
+      try {
+        const key = s3Service.extractKeyFromUrl(imageUrl);
+        if (key) {
+          await s3Service.deleteFile(key);
+          console.log('🎬 SLIDESHOW_DELETE_IMAGE: S3 file deleted:', key);
+        }
+      } catch (s3Error) {
+        console.error('🎬 SLIDESHOW_DELETE_IMAGE: Failed to delete S3 file:', s3Error);
+        // Continue with response even if S3 deletion fails
+      }
+    } else if (imageUrl.includes('localhost') || imageUrl.includes('uploads/')) {
+      // Delete file from filesystem for local files
+      const filename = imageUrl.split('/').pop();
+      const filePath = path.join(__dirname, 'uploads', filename);
+      
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log('🎬 SLIDESHOW_DELETE_IMAGE: File deleted from filesystem:', filename);
+      }
+    }
+    
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image deleted successfully');
+    res.json({ message: 'Image deleted successfully' });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_DELETE_IMAGE: Error deleting image:', error);
+    res.status(500).json({ error: 'Failed to delete image' });
   }
 });
 
