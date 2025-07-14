@@ -12,6 +12,7 @@ console.log('🔧 Environment API Base URL:', API_BASE_URL);
 console.log('🔧 Current hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A (not web)');
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 console.log('🔧 EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
+console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- API CONFIG LOADING');
 
 // Force localhost override if needed
 let FINAL_API_BASE_URL = API_BASE_URL;
@@ -19,7 +20,9 @@ let FINAL_API_BASE_URL = API_BASE_URL;
 // Check if we're on the production web app first (highest priority)
 if (typeof window !== 'undefined' && window.location.hostname === 'app.merchtech.net') {
   FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
-  console.log('🔧 FORCED production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
+  console.log('🚨 CRITICAL: FORCED production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
+  console.log('🚨 CRITICAL: This should prevent mixed content errors!');
+  console.log('🚨 CRITICAL: Current window.location.hostname:', window.location.hostname);
 }
 // Then check for localhost development
 else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
