@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Product } from '@/shared/product-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '@/config/environment';
+import { MediaFile } from '@/shared/media-schema';
 
 // Use centralized environment configuration
 const API_BASE_URL = env.apiBaseUrl;
@@ -445,55 +446,34 @@ export const mediaAPI = {
     });
   },
 
-  // Legacy method - kept for compatibility
-  async getPresignedUrl(filename: string, contentType: string, fileSize?: number) {
-    console.log('🔗 MediaAPI: Getting presigned URL for direct S3 upload (legacy)');
-    console.log('🔗 MediaAPI: File details:', { filename, contentType, fileSize });
-    const res = await api.post('/media/presigned-url', {
-      filename,
-      contentType,
-      fileSize
+  async uploadFile(file: File, onProgress?: (progress: number) => void) {
+    console.log('📤 MediaAPI: Uploading file directly to server');
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const response = await api.post('/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: (progressEvent) => {
+        if (progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
+          if (onProgress) {
+            onProgress(progress);
+          }
+        }
+      },
     });
-    console.log('🔗 MediaAPI: Presigned URL response:', res.data);
-    return res.data;
+
+    console.log('✅ MediaAPI: Direct upload successful:', response.data);
+    return response.data;
   },
 
-  async uploadToS3(presignedUrl: string, file: File | Blob, contentType: string, onProgress?: (progress: number) => void) {
-    console.log('📤 MediaAPI: Uploading directly to S3 (legacy method)');
-    console.log('📤 MediaAPI: File size:', file.size, 'bytes');
-    
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable && onProgress) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          onProgress(progress);
-        }
-      });
-      
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          console.log('✅ MediaAPI: S3 upload successful');
-          resolve(xhr.response);
-        } else {
-          console.error('❌ MediaAPI: S3 upload failed:', xhr.status, xhr.statusText);
-          reject(new Error(`S3 upload failed: ${xhr.status} ${xhr.statusText}`));
-        }
-      });
-      
-      xhr.addEventListener('error', () => {
-        console.error('❌ MediaAPI: S3 upload error');
-        reject(new Error('S3 upload failed'));
-      });
-      
-      xhr.open('PUT', presignedUrl);
-      xhr.setRequestHeader('Content-Type', contentType);
-      // Only set Cache-Control if you know it was included in the presigned URL
-      // xhr.setRequestHeader('Cache-Control', 'max-age=31536000');
-      // Do NOT set any x-amz-meta-* headers here
-      xhr.send(file);
-    });
+  async create(mediaData: Partial<MediaFile>) {
+    console.log('📝 MediaAPI: Creating media record in database');
+    const res = await api.post('/media', mediaData);
+    console.log('📝 MediaAPI: Create media response:', res.data);
+    return res.data;
   },
 
   async confirmUpload(uploadData: {
