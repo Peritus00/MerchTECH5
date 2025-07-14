@@ -29,17 +29,37 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('📂 Uploads directory already exists:', uploadsDir);
 }
 
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+const storage = multer.memoryStorage();
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  fileFilter: (req, file, cb) => {
+    const requestId = `req_${Date.now()}`;
+    console.log(`🔍 FILE_FILTER [${requestId}]: Checking file:`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+    });
+
+    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype) || 
+                    file.mimetype.startsWith('audio/') || 
+                    file.mimetype.startsWith('image/') ||
+                    file.mimetype.startsWith('video/');
+    
+    if (extname || mimetype) {
+      console.log(`✅ FILE_FILTER [${requestId}]: File accepted`);
+      cb(null, true);
+    } else {
+      const filterError = new Error('File type not allowed. Only images, audio, and video are supported.');
+      filterError.code = 'FILE_TYPE_NOT_ALLOWED';
+      console.log(`❌ FILE_FILTER [${requestId}]: File rejected. Type not allowed: ${file.mimetype}`);
+      cb(filterError, false);
+    }
   }
 });
-
-const upload = multer({ storage: storage });
 
 // --- CONFIGURATION ---
 const pool = new Pool({
