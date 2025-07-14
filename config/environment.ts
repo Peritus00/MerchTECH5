@@ -160,7 +160,7 @@ export const {
 
 // Always log configuration for debugging
 console.log('🔧 Environment Configuration Loading...');
-console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- ENV CONFIG LOADING - BUILD 20250714-08');
+console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- ENV CONFIG LOADING - BUILD 20250714-09');
 console.log('🔧 process.env.NODE_ENV:', process.env.NODE_ENV);
 console.log('🔧 process.env.EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
 console.log('🔧 process.env.EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);

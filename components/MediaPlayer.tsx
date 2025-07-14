@@ -349,7 +349,7 @@ export default function MediaPlayer({
     
     // Use streaming endpoint for S3 audio URLs
     if (audioUrl.includes('amazonaws.com') && slideshow?.id) {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001';
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
       return `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`;
     }
     

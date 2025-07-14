@@ -627,7 +627,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.playlist = 'Please select a playlist';
       } else {
         // Use web URL that works for both browser users and app users
-        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/playlist-access/${selectedPlaylist.id}`;
+        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/playlist-access/${selectedPlaylist.id}`;
         console.log('✅ Playlist web URL generated:', finalContent);
       }
     } else if (contentType === 'slideshow') {
@@ -636,7 +636,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.slideshow = 'Please select a slideshow';
       } else {
         // Use web URL that works for both browser users and app users
-        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/slideshow-access/${selectedSlideshow.id}`;
+        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/slideshow-access/${selectedSlideshow.id}`;
         console.log('✅ Slideshow web URL generated:', finalContent);
       }
     } else if (!finalContent) {
@@ -1474,9 +1474,9 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
     
     // Handle playlist and slideshow selections
     if (contentType === 'playlist' && selectedPlaylist) {
-      finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/playlist-access/${selectedPlaylist.id}`;
+      finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/playlist-access/${selectedPlaylist.id}`;
     } else if (contentType === 'slideshow' && selectedSlideshow) {
-      finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/slideshow-access/${selectedSlideshow.id}`;
+              finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/slideshow-access/${selectedSlideshow.id}`;
     }
 
     if (useGradient) {
@@ -1587,9 +1587,9 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
                 <AdvancedQRCodeGenerator
                   value={(() => {
                     if (contentType === 'playlist' && selectedPlaylist) {
-                      return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/playlist-access/${selectedPlaylist.id}`;
+                      return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/playlist-access/${selectedPlaylist.id}`;
                     } else if (contentType === 'slideshow' && selectedSlideshow) {
-                      return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/slideshow-access/${selectedSlideshow.id}`;
+                                              return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/slideshow-access/${selectedSlideshow.id}`;
                     }
                     return content || 'https://example.com';
                   })()}

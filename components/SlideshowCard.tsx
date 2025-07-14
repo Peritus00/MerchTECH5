@@ -82,7 +82,7 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
         {thumbnailImage ? (
           <Image source={{ 
             uri: thumbnailImage.imageUrl && thumbnailImage.imageUrl.includes('amazonaws.com') 
-              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-images/${thumbnailImage.id}/stream`
+              ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/slideshow-images/${thumbnailImage.id}/stream`
               : thumbnailImage.imageUrl || 'https://placehold.co/150x150?text=No+Image'
           }} style={styles.thumbnail} />
         ) : (

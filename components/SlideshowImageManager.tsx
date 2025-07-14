@@ -319,7 +319,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
                 <View key={image.id} style={styles.imageCard}>
                   <Image source={{ 
                     uri: image.imageUrl && image.imageUrl.includes('amazonaws.com') 
-                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5001'}/api/slideshow-images/${image.id}/stream`
+                      ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/slideshow-images/${image.id}/stream`
                       : image.imageUrl || 'https://placehold.co/150x150?text=No+Image'
                   }} style={styles.imagePreview} />
                   

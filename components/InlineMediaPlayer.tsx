@@ -57,7 +57,7 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
 
   const initializeAudio = async () => {
     try {
-      const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'http://192.168.1.70:5001';
+      const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
       const streamingUrl = `${baseUrl}/api/media/${file.id}/stream`;
       
       if (Platform.OS === 'web') {

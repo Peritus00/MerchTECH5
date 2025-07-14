@@ -12,7 +12,7 @@ console.log('🔧 Environment API Base URL:', API_BASE_URL);
 console.log('🔧 Current hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A (not web)');
 console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
 console.log('🔧 EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
-console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- API CONFIG LOADING - BUILD 20250714-08');
+console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- API CONFIG LOADING - BUILD 20250714-09');
 
 // Force localhost override if needed
 let FINAL_API_BASE_URL = API_BASE_URL;
