@@ -197,6 +197,43 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
   }
 });
 
+// Analytics summary endpoint
+app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
+  try {
+    console.log('📊 ANALYTICS: Fetching summary for user:', req.user.userId);
+    
+    // Get counts of user's content
+    const [
+      playlistsResult,
+      slideshowsResult,
+      qrCodesResult,
+      activationCodesResult,
+      productsResult
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [req.user.userId]),
+      pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [req.user.userId]),
+      pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1', [req.user.userId]),
+      pool.query('SELECT COUNT(*) FROM activation_codes WHERE created_by = $1', [req.user.userId]),
+      pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [req.user.userId])
+    ]);
+    
+    const summary = {
+      playlists: parseInt(playlistsResult.rows[0].count),
+      slideshows: parseInt(slideshowsResult.rows[0].count),
+      qrCodes: parseInt(qrCodesResult.rows[0].count),
+      activationCodes: parseInt(activationCodesResult.rows[0].count),
+      products: parseInt(productsResult.rows[0].count)
+    };
+    
+    console.log('📊 ANALYTICS: Summary data:', summary);
+    res.json(summary);
+    
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching summary:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics summary' });
+  }
+});
+
 app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1293,15 +1330,28 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   try {
     console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
     
-    const result = await pool.query(
-      `SELECT qr.*, COUNT(qs.id) as scan_count
-       FROM qr_codes qr
-       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
-       WHERE qr.owner_id = $1 AND qr.is_active = true
-       GROUP BY qr.id
-       ORDER BY qr.created_at DESC`,
-      [req.user.userId]
-    );
+    // First try with scan count, fall back to simple query if qr_scans table doesn't exist
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT qr.*, COUNT(qs.id) as scan_count
+         FROM qr_codes qr
+         LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+         WHERE qr.owner_id = $1 AND qr.is_active = true
+         GROUP BY qr.id
+         ORDER BY qr.created_at DESC`,
+        [req.user.userId]
+      );
+    } catch (scanError) {
+      console.log('📱 QR_CODES: qr_scans table not available, using simple query');
+      result = await pool.query(
+        `SELECT qr.*, 0 as scan_count
+         FROM qr_codes qr
+         WHERE qr.owner_id = $1 AND qr.is_active = true
+         ORDER BY qr.created_at DESC`,
+        [req.user.userId]
+      );
+    }
     
     const qrCodes = result.rows.map(qr => ({
       ...qr,
@@ -1536,6 +1586,32 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('🔑 ACTIVATION_CODES: Error creating code:', error);
     res.status(500).json({ error: 'Failed to create activation code' });
+  }
+});
+
+// Get all activation codes for the user (simple GET endpoint)
+app.get('/api/activation-codes', authenticateToken, async (req, res) => {
+  try {
+    console.log('🔑 ACTIVATION_CODES: Fetching all activation codes for user:', req.user.userId);
+    
+    const result = await pool.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.created_by = $1
+       ORDER BY ac.created_at DESC`,
+      [req.user.userId]
+    );
+    
+    console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'activation codes');
+    res.json({ activationCodes: result.rows });
+    
+  } catch (error) {
+    console.error('🔑 ACTIVATION_CODES: Error fetching codes:', error);
+    res.status(500).json({ error: 'Failed to fetch activation codes' });
   }
 });
 
