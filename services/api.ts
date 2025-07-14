@@ -7,54 +7,20 @@ import { MediaFile } from '@/shared/media-schema';
 // Use centralized environment configuration
 const API_BASE_URL = env.apiBaseUrl;
 
-console.log('✅ API configured with centralized environment config');
-console.log('🔧 Environment API Base URL:', API_BASE_URL);
-console.log('🔧 Current hostname:', typeof window !== 'undefined' ? window.location.hostname : 'N/A (not web)');
-console.log('🔧 NODE_ENV:', process.env.NODE_ENV);
-console.log('🔧 EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
-console.log('🔧 TIMESTAMP:', new Date().toISOString(), '- API CONFIG LOADING - BUILD 20250714-09');
-
-// Force localhost override if needed
-let FINAL_API_BASE_URL = API_BASE_URL;
-
-// Check if we're on the production web app first (highest priority)
-if (typeof window !== 'undefined' && window.location.hostname === 'app.merchtech.net') {
-  FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
-  console.log('🚨 CRITICAL: FORCED production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
-  console.log('🚨 CRITICAL: This should prevent mixed content errors!');
-  console.log('🚨 CRITICAL: Current window.location.hostname:', window.location.hostname);
-}
-// Then check for localhost development
-else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
-  console.log('🔧 FORCED localhost API URL for localhost development:', FINAL_API_BASE_URL);
-}
-// Check if we're explicitly in production mode
-else if (process.env.EXPO_PUBLIC_NODE_ENV === 'production' || process.env.NODE_ENV === 'production') {
-  FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
-  console.log('🔧 Using production API URL (explicitly set):', FINAL_API_BASE_URL);
-}
-// Default to local development server for React Native development
-else if (typeof window === 'undefined') {
-  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
-  console.log('🔧 Using local development API URL for React Native:', FINAL_API_BASE_URL);
-}
-else {
-  console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
-}
+console.log(`[${new Date().toISOString()}] API Service Initialized. Using Base URL: ${API_BASE_URL}`);
 
 export const api = axios.create({
-  baseURL: FINAL_API_BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 60000, // Standard timeout for most requests
 });
 
 // Create a separate instance for large file uploads
 export const uploadAPI = axios.create({
-  baseURL: FINAL_API_BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 300000, // 5 minutes for large uploads
 });
 
-console.log('🔧 API instances created with baseURL:', FINAL_API_BASE_URL);
+console.log('🔧 API instances created with baseURL:', API_BASE_URL);
 
 // Add interceptors for upload API
 uploadAPI.interceptors.response.use(
@@ -196,21 +162,17 @@ export const authAPI = {
     return response.data;
   },
 
-  // **THE FIX**: Added the missing sendVerification function.
   async sendVerification(email: string) {
     const response = await api.post('/auth/send-verification', { email });
     return response.data;
   },
   
-  // You may need these other functions later, so I've added them proactively.
   async resendVerification(email: string) {
     const response = await api.post('/auth/resend-verification', { email });
     return response.data;
   },
 
   async verifyEmail(token: string) {
-    // Note: The verification link is a GET request, but if you have a form for it, it might be a POST.
-    // This assumes the server has a POST route for this.
     const response = await api.post('/auth/verify-email', { token });
     return response.data;
   },
@@ -281,137 +243,116 @@ export const universalChatAPI = {
 export const productsAPI = {
   async getMyProducts() {
     const res = await api.get('/products?mine=true');
-    return res.data.products;
+    return res.data as Product[];
   },
   async getAllProducts() {
-    const res = await api.get('/products/all');
-    return res.data.products;
+    const res = await api.get('/products');
+    return res.data as Product[];
   },
   async getProductById(id: string) {
-    console.log('🛍️ API: getProductById called for ID:', id);
     try {
-      const res = await api.get(`/products/${id}`);
-      console.log('✅ API: Product fetched successfully');
-      return res.data;
-    } catch (error: any) {
-      console.error('🔴 API getProductById failed:', error);
-      console.error('🔴 Response data:', error.response?.data);
-      console.error('🔴 Status:', error.response?.status);
+      const response = await api.get(`/products/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching product with id ${id}:`, error);
       throw error;
     }
   },
   async updateProduct(productId: string, updates: Partial<Record<string, any>>) {
-    console.log('🟢 API: updateProduct called');
-    console.log('🟢 Product ID:', productId);
-    console.log('🟢 Updates payload:', JSON.stringify(updates, null, 2));
-    
     try {
-      const res = await api.patch(`/products/${productId}`, updates);
-      console.log('✅ API response:', res.data);
-      return res.data.product;
-    } catch (error: any) {
-      console.error('🔴 API updateProduct failed:', error);
-      console.error('🔴 Response data:', error.response?.data);
-      console.error('🔴 Status:', error.response?.status);
+      console.log('Updating product with data:', updates);
+      const response = await api.patch(`/products/${productId}`, updates);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating product:', error);
       throw error;
     }
   },
   async createProduct(productData: Partial<Product>) {
-    console.log('🟢 API: createProduct called');
-    console.log('🟢 Product data:', JSON.stringify(productData, null, 2));
-    
     try {
-      const res = await api.post('/products', productData);
-      console.log('✅ API create response:', res.data);
-      return res.data.product;
-    } catch (error: any) {
-      console.error('🔴 API createProduct failed:', error);
-      console.error('🔴 Response data:', error.response?.data);
-      console.error('🔴 Status:', error.response?.status);
+      console.log('Creating product with data:', productData);
+      const response = await api.post('/products', productData);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating product:', error);
       throw error;
     }
   },
   async deleteProduct(productId: string) {
-    const res = await api.delete(`/products/${productId}`);
-    return res.data;
+    try {
+      const response = await api.delete(`/products/${productId}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      throw error;
+    }
   },
 };
 
 export const salesAPI = {
   async getMySales() {
-    const res = await api.get('/sales/user');
-    return res.data.sales;
+    const res = await api.get('/sales?mine=true');
+    return res.data;
   },
   async downloadMyCsv() {
-    return api.get('/sales/user/csv', { responseType: 'blob' });
+    return api.get('/sales/csv?mine=true', { responseType: 'blob' });
   },
   async getAllSales() {
-    const res = await api.get('/sales/all');
-    return res.data.sales;
+    const res = await api.get('/sales');
+    return res.data;
   },
   async downloadAllCsv() {
-    return api.get('/sales/all/csv', { responseType: 'blob' });
-  }
-};
-
-export const checkoutAPI = {
-  async createSession(items: { productId: string | number; quantity: number }[], successUrl: string, cancelUrl: string) {
-    const res = await api.post('/checkout/session', { items, successUrl, cancelUrl });
-    return res.data;
+    return api.get('/sales/csv', { responseType: 'blob' });
   },
 };
 
-// Media API
+export const paymentAPI = {
+  async createSession(items: { productId: string | number; quantity: number }[], successUrl: string, cancelUrl: string) {
+    const response = await api.post('/payments/create-checkout-session', {
+      items,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+    });
+    return response.data;
+  },
+};
+
 export const mediaAPI = {
   async getAll() {
-    console.log('🔴 MediaAPI: Fetching all media files');
-    const res = await api.get('/media?mine=true');
-    console.log('🔴 MediaAPI: Loaded media files:', res.data.media?.length || 0);
-    return res.data.media || [];
+    const response = await api.get('/media');
+    return response.data;
   },
-  
+
   async getById(id: string) {
-    console.log('🔴 MediaAPI: Fetching media file by ID:', id);
-    const res = await api.get(`/media/${id}`);
-    console.log('🔴 MediaAPI: Media file data:', res.data);
-    return res.data.media;
+    const response = await api.get(`/media/${id}`);
+    return response.data;
   },
-  
+
   async upload(mediaData: any) {
-    console.log('🔴 MediaAPI: Uploading media file (legacy method)');
-    const res = await uploadAPI.post('/media', mediaData);
-    console.log('🔴 MediaAPI: Upload response:', res.data);
-    return res.data;
+    const response = await uploadAPI.post('/media/upload', mediaData);
+    return response.data;
   },
 
   async uploadFile(file: File, onProgress?: (progress: number) => void) {
-    console.log('📤 MediaAPI: Uploading file directly to server');
     const formData = new FormData();
-    formData.append('image', file);
+    formData.append('file', file); // 'file' is the field name expected by your backend
 
-    const response = await api.post('/upload', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      onUploadProgress: (progressEvent) => {
-        if (progressEvent.total) {
-          const progress = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-          if (onProgress) {
-            onProgress(progress);
-          }
+    const config = {
+      onUploadProgress: (progressEvent: any) => {
+        if (onProgress && progressEvent.total) {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress(percentCompleted);
         }
       },
-    });
+    };
 
-    console.log('✅ MediaAPI: Direct upload successful:', response.data);
+    const response = await uploadAPI.post('/upload', formData, config);
     return response.data;
   },
 
   async create(mediaData: Partial<MediaFile>) {
-    console.log('📝 MediaAPI: Creating media record in database');
-    const res = await api.post('/media', mediaData);
-    console.log('📝 MediaAPI: Create media response:', res.data);
-    return res.data;
+    const response = await api.post('/media', mediaData);
+    return response.data;
   },
 
   async confirmUpload(uploadData: {
@@ -424,397 +365,300 @@ export const mediaAPI = {
     duration?: number;
     s3Key: string;
   }) {
-    console.log('✅ MediaAPI: Confirming S3 upload');
-    const res = await api.post('/media/confirm-upload', uploadData);
-    console.log('✅ MediaAPI: Upload confirmation response:', res.data);
-    return res.data;
+    const response = await api.post('/media/confirm-upload', uploadData);
+    return response.data;
   },
 
   async delete(mediaId: string) {
-    console.log('🗑️ MediaAPI: Deleting media file:', mediaId);
-    const res = await api.delete(`/media/${mediaId}`);
-    console.log('🗑️ MediaAPI: Delete response:', res.data);
-    return res.data;
-  },
-  async deleteMedia(mediaId: string) {
-    // Legacy method - redirect to delete
-    return this.delete(mediaId);
+    await api.delete(`/media/${mediaId}`);
   },
 };
 
-// Playlist API
-export const playlistAPI = {
+export const playlistsAPI = {
+  async deleteMedia(mediaId: string) {
+    // This seems to be a duplicate of mediaAPI.delete, but keeping it in case of subtle differences
+    console.warn('playlistsAPI.deleteMedia is deprecated. Use mediaAPI.delete instead.');
+    const response = await api.delete(`/media/${mediaId}`);
+    return response.data;
+  },
   async create(playlistData: any) {
-    console.log('📤 PlaylistAPI: Creating playlist');
-    const res = await api.post('/playlists', playlistData);
-    return res.data.playlist;
+    const response = await api.post('/playlists', playlistData);
+    return response.data;
   },
   async getAll() {
-    const res = await api.get('/playlists');
-    return res.data.playlists;
+    const response = await api.get('/playlists');
+    return response.data;
   },
   async getById(id: string) {
-    const res = await api.get(`/playlists/${id}`);
-    return res.data.playlist;
+    const response = await api.get(`/playlists/${id}`);
+    return response.data;
   },
   async update(id: string, updates: any) {
-    const res = await api.patch(`/playlists/${id}`, updates);
-    return res.data.playlist;
+    const response = await api.patch(`/playlists/${id}`, updates);
+    return response.data;
   },
   async delete(id: string) {
-    const res = await api.delete(`/playlists/${id}`);
-    return res.data;
+    const response = await api.delete(`/playlists/${id}`);
+    return response.data;
   },
   async addMedia(playlistId: string, mediaId: number, displayOrder?: number) {
-    console.log('📤 PlaylistAPI: Adding media to playlist');
-    const res = await api.post(`/playlists/${playlistId}/media`, { mediaId, displayOrder });
-    return res.data;
+    const response = await api.post(`/playlists/${playlistId}/media`, { mediaId, displayOrder });
+    return response.data;
   },
   async removeMedia(playlistId: string, mediaId: number) {
-    console.log('📤 PlaylistAPI: Removing media from playlist');
-    const res = await api.delete(`/playlists/${playlistId}/media/${mediaId}`);
-    return res.data;
+    const response = await api.delete(`/playlists/${playlistId}/media/${mediaId}`);
+    return response.data;
   },
   async updateMedia(playlistId: string, mediaIds: number[]) {
-    console.log('📤 PlaylistAPI: Updating playlist media files');
-    
-    // Get current playlist to compare
-    const currentPlaylist = await this.getById(playlistId);
-    const currentMediaIds = currentPlaylist.mediaFiles?.map((f: any) => f.id) || [];
-    
-    // Remove media files that are no longer in the list
-    const toRemove = currentMediaIds.filter((id: number) => !mediaIds.includes(id));
-    for (const mediaId of toRemove) {
-      await this.removeMedia(playlistId, mediaId);
-    }
-    
-    // Add new media files
-    const toAdd = mediaIds.filter((id: number) => !currentMediaIds.includes(id));
-    for (let i = 0; i < toAdd.length; i++) {
-      await this.addMedia(playlistId, toAdd[i], currentMediaIds.length + i + 1);
-    }
-    
-    // Note: This doesn't handle reordering of existing files
-    // For full reordering, we'd need to remove all and re-add in order
-    
-    return { message: 'Media files updated successfully' };
+    // This endpoint should handle reordering of all media items in a playlist
+    const response = await api.put(`/playlists/${playlistId}/media`, { media_ids: mediaIds });
+    return response.data;
   },
 };
 
-// Slideshow API
-export const slideshowAPI = {
+export const slideshowsAPI = {
   async create(slideshowData: any) {
-    console.log('📤 SlideshowAPI: Creating slideshow');
-    
-    // Convert camelCase to snake_case for server
-    const serverData = {
+    console.log('Creating slideshow with data:', slideshowData);
+    // Ensure `is_featured` is a boolean
+    const payload = {
       ...slideshowData,
-      autoplay_interval: slideshowData.autoplayInterval,
-      requires_activation_code: slideshowData.requiresActivationCode,
-      is_public: slideshowData.isPublic,
+      is_featured: slideshowData.is_featured === true || slideshowData.is_featured === 'true',
     };
-    
-    // Remove camelCase fields
-    delete serverData.autoplayInterval;
-    delete serverData.requiresActivationCode;
-    delete serverData.isPublic;
-    
-    console.log('📤 slideshowAPI.create: Converting fields for server:', { 
-      original: slideshowData, 
-      converted: serverData 
-    });
-    
-    const res = await api.post('/slideshows', serverData);
-    return res.data.slideshow;
+    try {
+      const response = await api.post('/slideshows', payload);
+      console.log('Slideshow created successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error creating slideshow:', error.response ? error.response.data : error.message);
+      throw error;
+    }
   },
   async getAll() {
-    const res = await api.get('/slideshows');
-    return res.data.slideshows;
+    const response = await api.get('/slideshows');
+    return response.data;
   },
   async getById(id: string) {
-    console.log('🎬 slideshowAPI.getById: Fetching slideshow:', id);
-    console.log('🎬 slideshowAPI.getById: Full endpoint:', `/slideshows/${id}`);
-    const res = await api.get(`/slideshows/${id}`);
-    console.log('🎬 slideshowAPI.getById: Response:', res.data);
-    return res.data.slideshow;
+    try {
+      const response = await api.get(`/slideshows/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching slideshow', error);
+      throw error;
+    }
   },
   async update(id: string, updates: any) {
-    // Convert camelCase to snake_case for server
-    const serverUpdates = {
-      ...updates,
-      autoplay_interval: updates.autoplayInterval,
-      requires_activation_code: updates.requiresActivationCode,
-      is_public: updates.isPublic,
-    };
-    
-    // Remove camelCase fields
-    delete serverUpdates.autoplayInterval;
-    delete serverUpdates.requiresActivationCode;
-    delete serverUpdates.isPublic;
-    
-    console.log('📤 slideshowAPI.update: Converting fields for server:', { 
-      original: updates, 
-      converted: serverUpdates 
-    });
-    
-    const res = await api.patch(`/slideshows/${id}`, serverUpdates);
-    return res.data.slideshow;
+    // Ensure boolean values are correctly formatted if they are strings
+    if (updates.is_featured !== undefined) {
+      updates.is_featured = updates.is_featured === true || updates.is_featured === 'true';
+    }
+    if (updates.is_public !== undefined) {
+      updates.is_public = updates.is_public === true || updates.is_public === 'true';
+    }
+    console.log('Updating slideshow with data:', updates);
+    try {
+      const response = await api.patch(`/slideshows/${id}`, updates);
+      console.log('Slideshow updated successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating slideshow:', error.response ? error.response.data : error.message);
+      throw error;
+    }
   },
   async delete(id: string) {
-    const res = await api.delete(`/slideshows/${id}`);
-    return res.data;
+    const response = await api.delete(`/slideshows/${id}`);
+    return response.data;
   },
   async addImage(slideshowId: number | string, file: any, caption?: string, displayOrder?: number) {
-    console.log('📤 slideshowAPI.addImage: req', slideshowId, { hasFile: !!file, caption, displayOrder });
-    
+    console.log('addImage called with:', { slideshowId, file, caption, displayOrder });
     const formData = new FormData();
-    
-    // Handle different file formats
-    if (file instanceof File) {
-      formData.append('image', file);
-    } else if (typeof window !== 'undefined' && file.uri) {
-      // Web environment with URI
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
-      const fileObj = new File([blob], file.name || 'image.jpg', { type: file.type || 'image/jpeg' });
-      formData.append('image', fileObj);
-    } else {
-      // React Native environment
+    if (file.uri) { // React Native
       formData.append('image', {
         uri: file.uri,
-        name: file.name || 'image.jpg',
-        type: file.type || 'image/jpeg'
+        name: file.name || 'photo.jpg',
+        type: file.type || 'image/jpeg',
       } as any);
+    } else { // Web
+      formData.append('image', file);
     }
-    
-    // Add optional fields
+
     if (caption) formData.append('caption', caption);
-    if (displayOrder !== undefined) formData.append('position', displayOrder.toString());
-    
-    const res = await api.post(`/slideshows/${slideshowId}/images`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-    console.log('📤 slideshowAPI.addImage: res', res.data);
-    return res.data.image;
+    if (displayOrder) formData.append('display_order', String(displayOrder));
+  
+    console.log('Uploading image to slideshow:', slideshowId);
+    console.log('FormData content:', formData);
+
+    try {
+      // Use the dedicated uploadAPI instance for this request
+      const response = await uploadAPI.post(`/slideshows/${slideshowId}/images`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      console.log('Image added successfully:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error adding image to slideshow:', error.response ? error.response.data : error.message);
+      throw error;
+    }
   },
   async deleteImage(slideshowId: number | string, imageId: number | string) {
-    console.log('📤 slideshowAPI.deleteImage: req', slideshowId, imageId);
-    const res = await api.delete(`/slideshows/${slideshowId}/images/${imageId}`);
-    console.log('📤 slideshowAPI.deleteImage: res', res.data);
-    return res.data.slideshow;
+    const response = await api.delete(`/slideshows/${slideshowId}/images/${imageId}`);
+    return response.data;
   },
   async updateAudio(slideshowId: number | string, audioUrl: string) {
-    console.log('🎵 slideshowAPI.updateAudio: req', slideshowId, audioUrl);
-    const res = await api.patch(`/slideshows/${slideshowId}/audio`, { audioUrl });
-    console.log('🎵 slideshowAPI.updateAudio: res', res.data);
-    // Server returns slideshow directly, not wrapped in .slideshow
-    return res.data;
+    console.log(`Updating audio for slideshow ${slideshowId} with URL: ${audioUrl}`);
+    const response = await api.patch(`/slideshows/${slideshowId}`, { audio_url: audioUrl });
+    return response.data;
   },
+};
+
+export const slideshowAccessAPI = {
   async getByIdForAccess(id: string) {
-    console.log('🎬 slideshowAPI.getByIdForAccess: Fetching slideshow for public access:', id);
     try {
-      const res = await api.get(`/slideshow-access/${id}`);
-      console.log('🎬 slideshowAPI.getByIdForAccess: res', res.data);
-      
-      // Check if access is restricted
-      if (res.data.accessRestricted) {
-        console.log('🎬 slideshowAPI.getByIdForAccess: Access is restricted, returning slideshow with restriction flag');
-        return {
-          ...res.data.slideshow,
-          accessRestricted: true,
-          message: res.data.message
-        };
-      }
-      
-      // Full access granted
-      console.log('🎬 slideshowAPI.getByIdForAccess: Full access granted');
-      return res.data.slideshow;
+      const response = await api.get(`/slideshow-access/${id}`);
+      return response.data;
     } catch (error: any) {
-      console.error('🎬 slideshowAPI.getByIdForAccess: Error fetching slideshow:', error);
-      
-      // Handle 403 errors (invalid activation code)
-      if (error.response?.status === 403) {
-        console.log('🎬 slideshowAPI.getByIdForAccess: 403 error - invalid activation code or access denied');
-        throw error; // Let the calling code handle 403 errors
+      if (error.response && error.response.status === 404) {
+        console.warn(`Slideshow with ID ${id} not found.`);
+        return null;
       }
-      
-      // Handle other errors
+      console.error('Error fetching slideshow for access:', error);
       throw error;
     }
   },
 };
 
-// Product Links API
-export const productLinksAPI = {
+// This is for managing products associated with playlists or slideshows.
+export const contentProductsAPI = {
+  // Playlist-specific product management
   async getByPlaylistId(playlistId: string) {
-    console.log('🔗 ProductLinksAPI: Fetching product links for playlist:', playlistId);
-    const res = await api.get(`/playlists/${playlistId}/product-links`);
-    return res.data;
+    const response = await api.get(`/playlists/${playlistId}/products`);
+    return response.data;
   },
   async addToPlaylist(playlistId: string, productId: string) {
-    console.log('🔗 ProductLinksAPI: Adding product link to playlist:', { playlistId, productId });
-    const res = await api.post(`/playlists/${playlistId}/product-links`, { productId });
-    return res.data;
+    const response = await api.post(`/playlists/${playlistId}/products`, { productId });
+    return response.data;
   },
   async removeFromPlaylist(playlistId: string, productId: string) {
-    console.log('🔗 ProductLinksAPI: Removing product link from playlist:', { playlistId, productId });
-    const res = await api.delete(`/playlists/${playlistId}/product-links/${productId}`);
-    return res.data;
+    const response = await api.delete(`/playlists/${playlistId}/products/${productId}`);
+    return response.data;
   },
+
+  // Slideshow-specific product management
   async getBySlideshowId(slideshowId: string) {
-    console.log('🔗 ProductLinksAPI: Fetching product links for slideshow:', slideshowId);
-    const res = await api.get(`/slideshows/${slideshowId}/product-links`);
-    return res.data;
+    const response = await api.get(`/slideshows/${slideshowId}/products`);
+    return response.data;
   },
   async addToSlideshow(slideshowId: string, productId: string) {
-    console.log('🔗 ProductLinksAPI: Adding product link to slideshow:', { slideshowId, productId });
-    const res = await api.post(`/slideshows/${slideshowId}/product-links`, { productId });
-    return res.data;
+    const response = await api.post(`/slideshows/${slideshowId}/products`, { productId });
+    return response.data;
   },
   async removeFromSlideshow(slideshowId: string, productId: string) {
-    console.log('🔗 ProductLinksAPI: Removing product link from slideshow:', { slideshowId, productId });
-    const res = await api.delete(`/slideshows/${slideshowId}/product-links/${productId}`);
-    return res.data;
+    const response = await api.delete(`/slideshows/${slideshowId}/products/${productId}`);
+    return response.data;
   },
 };
 
-// QR Code API
 export const qrCodeAPI = {
   async create(qrData: any) {
-    console.log('📱 QRCodeAPI: ============ API CREATE DEBUG START ============');
-    console.log('📱 QRCodeAPI: Creating QR code with data:', JSON.stringify(qrData, null, 2));
-    console.log('📱 QRCodeAPI: API Base URL:', API_BASE_URL);
-    console.log('📱 QRCodeAPI: Full endpoint will be:', `${API_BASE_URL}/qr-codes`);
-    
+    console.log('Creating QR code with data:', qrData);
+    // Validate that either playlist_id or slideshow_id is present
+    if (!qrData.playlist_id && !qrData.slideshow_id) {
+      throw new Error('Either playlist_id or slideshow_id must be provided.');
+    }
+    // Ensure optional fields are handled correctly
+    const payload = {
+      ...qrData,
+      max_uses: qrData.max_uses || null,
+      expires_at: qrData.expires_at || null,
+      is_active: qrData.is_active !== false, // Default to true
+    };
     try {
-      console.log('📱 QRCodeAPI: About to make POST request...');
-      const res = await api.post('/qr-codes', qrData);
-      console.log('📱 QRCodeAPI: POST request successful');
-      console.log('📱 QRCodeAPI: Response status:', res.status);
-      console.log('📱 QRCodeAPI: Response data:', JSON.stringify(res.data, null, 2));
-      console.log('📱 QRCodeAPI: ============ API CREATE DEBUG END ============');
-      return res.data.qrCode;
+      const response = await api.post('/qrcodes', payload);
+      console.log('QR code created successfully:', response.data);
+      return response.data;
     } catch (error: any) {
-      console.error('📱 QRCodeAPI: ============ API CREATE ERROR DEBUG START ============');
-      console.error('📱 QRCodeAPI: POST request failed:', error);
-      console.error('📱 QRCodeAPI: Error message:', error.message);
-      
-      if (error.response) {
-        console.error('📱 QRCodeAPI: Error response details:', {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data,
-          headers: error.response.headers
-        });
-      } else if (error.request) {
-        console.error('📱 QRCodeAPI: Network error - no response:', error.request);
-      }
-      
-      console.error('📱 QRCodeAPI: ============ API CREATE ERROR DEBUG END ============');
+      console.error('Error creating QR code:', error.response ? error.response.data : error.message);
       throw error;
     }
   },
   async getAll() {
-    console.log('📱 QRCodeAPI: Fetching all QR codes');
-    const res = await api.get('/qr-codes');
-    return res.data.qrCodes;
+    const response = await api.get('/qrcodes');
+    return response.data;
   },
+
   async getById(id: string) {
-    console.log('📱 QRCodeAPI: Fetching QR code by ID:', id);
-    const res = await api.get(`/qr-codes/${id}`);
-    return res.data.qrCode;
+    const response = await api.get(`/qrcodes/${id}`);
+    return response.data;
   },
+
   async update(id: string, updates: any) {
-    console.log('📱 QRCodeAPI: Updating QR code:', id);
-    const res = await api.patch(`/qr-codes/${id}`, updates);
-    return res.data.qrCode;
+    const response = await api.patch(`/qrcodes/${id}`, updates);
+    return response.data;
   },
   async delete(id: string) {
-    console.log('📱 QRCodeAPI: Deleting QR code:', id);
-    const res = await api.delete(`/qr-codes/${id}`);
-    return res.data;
+    const response = await api.delete(`/qrcodes/${id}`);
+    return response.data;
   },
 };
 
-// Activation Codes API
-export const activationCodesAPI = {
-  // Generate new activation code
+export const accessCodeAPI = {
+  // Create a new activation code
   async create(data: { playlistId?: string; slideshowId?: string; maxUses?: number; expiresAt?: string }) {
-    console.log('🔑 ActivationCodesAPI: Creating activation code');
-    const res = await api.post('/activation-codes', data);
-    return res.data.activationCode;
+    const response = await api.post('/access-codes', data);
+    return response.data;
   },
-
-  // Get all codes generated by user (ALL GENERATED CODES tab)
+  // Get all codes generated by the current user
   async getGenerated() {
-    console.log('🔑 ActivationCodesAPI: Fetching generated codes');
-    const res = await api.get('/activation-codes/generated');
-    return res.data.activationCodes;
+    const response = await api.get('/access-codes/generated');
+    return response.data;
   },
-
-  // Get codes attached to user's profile (MY ACCESS CODES tab)
+  // Get all codes owned/claimed by the current user
   async getMyAccess() {
-    console.log('🔑 ActivationCodesAPI: Fetching my access codes');
-    const res = await api.get('/activation-codes/my-access');
-    return res.data.accessCodes;
+    const response = await api.get('/access-codes/my-access');
+    return response.data;
   },
-
-  // Attach activation code to user's profile
+  // Attach/claim a code
   async attach(code: string) {
-    console.log('🔑 ActivationCodesAPI: Attaching code:', code);
-    const res = await api.post('/activation-codes/attach', { code });
-    return res.data;
+    const response = await api.post('/access-codes/attach', { code });
+    return response.data;
   },
-
-  // Detach activation code from user's profile (removes access)
+  // Detach/unclaim a code
   async detach(codeId: string) {
-    console.log('🔑 ActivationCodesAPI: Detaching code:', codeId);
-    const res = await api.delete(`/activation-codes/detach/${codeId}`);
-    return res.data;
+    const response = await api.delete(`/access-codes/${codeId}/detach`);
+    return response.data;
   },
-
-  // Validate activation code for playlist/slideshow access
+  // Validate a code for a specific piece of content
   async validate(code: string, playlistId?: string, slideshowId?: string) {
-    console.log('🔑 ActivationCodesAPI: Validating code:', { code, playlistId, slideshowId });
-    const res = await api.post('/activation-codes/validate', { code, playlistId, slideshowId });
-    return res.data;
+    const response = await api.post('/access-codes/validate', { code, playlistId, slideshowId });
+    return response.data;
   },
-
-  // Get codes for specific playlist/slideshow (for content creators)
+  // Get all codes for a specific playlist or slideshow
   async getForContent(contentType: 'playlist' | 'slideshow', contentId: string) {
-    console.log('🔑 ActivationCodesAPI: Fetching codes for content:', { contentType, contentId });
-    const res = await api.get(`/activation-codes/content/${contentType}/${contentId}`);
-    return res.data.activationCodes;
+    const response = await api.get(`/access-codes/content/${contentType}/${contentId}`);
+    return response.data;
   },
-
-  // Update activation code (change expiration date, usage limits, or active status)
+  // Update a code
   async update(codeId: string, updates: { maxUses?: number | null; expiresAt?: string | null; isActive?: boolean }) {
-    console.log('🔑 ActivationCodesAPI: Updating code:', { codeId, updates });
-    const res = await api.patch(`/activation-codes/${codeId}`, updates);
-    return res.data.activationCode;
+    const response = await api.patch(`/access-codes/${codeId}`, updates);
+    return response.data;
   },
-
-  // Delete activation code
+  // Delete a code
   async delete(codeId: string) {
-    console.log('🔑 ActivationCodesAPI: Deleting code:', codeId);
-    const res = await api.delete(`/activation-codes/${codeId}`);
-    return res.data;
+    const response = await api.delete(`/access-codes/${codeId}`);
+    return response.data;
   },
 };
 
-// Chat API
-export const chatAPI = {
+// Playlist Chat API
+export const playlistChatAPI = {
   async getMessages(playlistId: string, limit = 50, offset = 0) {
-    console.log('📤 ChatAPI: Fetching messages for playlist:', playlistId);
-    const res = await api.get(`/playlists/${playlistId}/chat?limit=${limit}&offset=${offset}`);
-    return res.data.messages;
+    const response = await api.get(`/playlists/${playlistId}/chat?limit=${limit}&offset=${offset}`);
+    return response.data;
   },
   async sendMessage(playlistId: string, message: string) {
-    console.log('📤 ChatAPI: Sending message to playlist:', playlistId);
-    const res = await api.post(`/playlists/${playlistId}/chat`, { message });
-    return res.data.message;
+    const response = await api.post(`/playlists/${playlistId}/chat`, { message });
+    return response.data;
   },
   async deleteMessage(playlistId: string, messageId: string) {
     console.log('📤 ChatAPI: Deleting message:', messageId);
@@ -822,72 +666,3 @@ export const chatAPI = {
     return res.data;
   },
 };
-
-// Helper function to dynamically determine the base URL
-const getFinalApiBaseUrl = () => {
-  if (typeof window !== 'undefined' && window.location.hostname === 'app.merchtech.net') {
-    return 'https://merchtech5-production.up.railway.app/api';
-  }
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    return 'http://192.168.1.70:5001/api';
-  }
-  if (process.env.EXPO_PUBLIC_NODE_ENV === 'production' || process.env.NODE_ENV === 'production') {
-    return 'https://merchtech5-production.up.railway.app/api';
-  }
-  if (typeof window === 'undefined') {
-    return 'http://192.168.1.70:5001/api';
-  }
-  return env.apiBaseUrl; // Fallback to centralized config
-}
-
-export const fileUploadAPI = {
-  async upload(file: any) {
-    // DYNAMICALLY SET THE BASE URL TO ENSURE CORRECTNESS
-    const currentBaseURL = getFinalApiBaseUrl();
-    const uploadInstance = axios.create({
-      baseURL: currentBaseURL,
-      timeout: 300000, // 5 minutes for large uploads
-    });
-
-    console.log('🔧 fileUploadAPI.upload called with:', {
-      fileName: file.name,
-      fileType: file.type,
-      isFile: file instanceof File,
-      hasUri: !!file.uri
-    });
-    
-    // Log the current API configuration
-    console.log('🔧 Current API baseURL:', uploadInstance.defaults.baseURL);
-    console.log('🔧 Environment API URL:', FINAL_API_BASE_URL);
-    console.log('🔧 Upload will go to:', `${uploadInstance.defaults.baseURL}/upload`);
-    
-    const formData = new FormData();
-    let payload: any;
-    if (file instanceof File) {
-      payload = file; // Web direct
-      console.log('🔧 Using File directly');
-    } else if (typeof window !== 'undefined') {
-      console.log('🔧 Converting URI to File object');
-      const response = await fetch(file.uri);
-      const blob = await response.blob();
-      payload = new File([blob], file.name, { type: file.type });
-    } else {
-      console.log('🔧 Using URI payload for native');
-      payload = { uri: file.uri, name: file.name, type: file.type } as any;
-    }
-    
-    // Use 'image' field name to match server expectation
-    formData.append('image', payload, file.name ?? (payload.name || 'upload'));
-    console.log('🔧 FormData prepared, making request to /upload');
-    console.log('🔧 Final request URL will be:', `${uploadInstance.defaults.baseURL}/upload`);
-    
-    // Let axios set the correct multipart boundary; specifying the header manually
-    // can omit the boundary and lead to 400 errors on some environments.
-    const res = await uploadInstance.post('/upload', formData);
-    console.log('🔧 Upload response:', res.data);
-    // Server returns 'imageUrl' but we want to return 'fileUrl' for consistency
-    return res.data.imageUrl as string;
-  },
-};
-
-export default api;
