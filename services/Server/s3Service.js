@@ -17,8 +17,11 @@ const s3Client = new S3Client(s3Config);
 
 class S3Service {
   constructor() {
+    console.log('🔧 S3Service constructor called');
+    console.log('🔧 AWS_S3_BUCKET_NAME env var:', process.env.AWS_S3_BUCKET_NAME);
     this.bucketName = (process.env.AWS_S3_BUCKET_NAME || 'merchtech-media-files').replace(/\s+/g, '');
     this.region = (process.env.AWS_REGION || 'us-east-1').replace(/\s+/g, '');
+    console.log('🔧 S3Service bucketName set to:', this.bucketName);
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
       console.warn('⚠️  AWS credentials not configured. S3 upload will not work.');
     }

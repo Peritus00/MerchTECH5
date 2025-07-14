@@ -1,4 +1,5 @@
 // Load .env from project root regardless of where the script is run from
+const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const express = require('express');
@@ -8,7 +9,6 @@ const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
