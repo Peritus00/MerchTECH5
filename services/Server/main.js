@@ -1337,7 +1337,7 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
         `SELECT qr.*, COUNT(qs.id) as scan_count
          FROM qr_codes qr
          LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
-         WHERE qr.owner_id = $1 AND qr.is_active = true
+         WHERE qr.user_id = $1 AND qr.is_active = true
          GROUP BY qr.id
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
@@ -1347,7 +1347,7 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
       result = await pool.query(
         `SELECT qr.*, 0 as scan_count
          FROM qr_codes qr
-         WHERE qr.owner_id = $1 AND qr.is_active = true
+         WHERE qr.user_id = $1 AND qr.is_active = true
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
       );
@@ -1378,7 +1378,7 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       `SELECT qr.*, COUNT(qs.id) as scan_count
        FROM qr_codes qr
        LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
-       WHERE qr.id = $1 AND qr.owner_id = $2
+       WHERE qr.id = $1 AND qr.user_id = $2
        GROUP BY qr.id`,
       [id, req.user.userId]
     );
@@ -1423,7 +1423,7 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE owner_id = $1 AND is_active = true', [req.user.userId]);
+    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -1452,7 +1452,7 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const result = await pool.query(
-      `INSERT INTO qr_codes (owner_id, name, url, qr_code_data, options, description) 
+      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
     );
@@ -1482,7 +1482,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     
     // Check if user owns the QR code
     const ownerCheck = await pool.query(
-      'SELECT owner_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
       [id]
     );
 
@@ -1490,7 +1490,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'QR code not found' });
     }
 
-    if (ownerCheck.rows[0].owner_id !== req.user.userId) {
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
@@ -1528,7 +1528,7 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     
     // Check if user owns the QR code
     const ownerCheck = await pool.query(
-      'SELECT owner_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
       [id]
     );
 
@@ -1536,7 +1536,7 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'QR code not found' });
     }
 
-    if (ownerCheck.rows[0].owner_id !== req.user.userId) {
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
       return res.status(403).json({ error: 'Not authorized to delete this QR code' });
     }
 
@@ -2495,7 +2495,7 @@ const initializeDatabase = async () => {
     await client.query(`
       CREATE TABLE IF NOT EXISTS qr_codes (
         id SERIAL PRIMARY KEY,
-        owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         name VARCHAR(255) NOT NULL,
         url TEXT NOT NULL,
         qr_code_data TEXT NOT NULL,
