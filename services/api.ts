@@ -34,12 +34,11 @@ if (!isExplicitlyProduction) {
   console.log('🔧 Using environment API URL:', FINAL_API_BASE_URL);
 }
 
-// Additional safety check - if we're on the deployed frontend but not explicitly production
+// Additional safety check - if we're on the deployed frontend, use correct production URL
 if (typeof window !== 'undefined' && 
-    window.location.hostname === 'app.merchtech.net' && 
-    !isExplicitlyProduction) {
-  FINAL_API_BASE_URL = 'http://192.168.1.70:5001/api';
-  console.log('🔧 FORCED local API URL for deployed frontend in development mode:', FINAL_API_BASE_URL);
+    window.location.hostname === 'app.merchtech.net') {
+  FINAL_API_BASE_URL = 'https://merchtech5-production.up.railway.app/api';
+  console.log('🔧 FORCED correct production API URL for app.merchtech.net:', FINAL_API_BASE_URL);
 }
 
 export const api = axios.create({
