@@ -16,12 +16,10 @@ import {
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
-import { accessCodeAPI, activationCodesAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
+import { accessCodeAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
 
 // Debug: Check if API is available at import time
 console.log('🔑 IMPORT DEBUG: accessCodeAPI at import time:', typeof accessCodeAPI);
-console.log('🔑 IMPORT DEBUG: activationCodesAPI at import time:', typeof activationCodesAPI);
-console.log('🔑 IMPORT DEBUG: APIs are same:', accessCodeAPI === activationCodesAPI);
 console.log('🔑 IMPORT DEBUG: accessCodeAPI methods:', accessCodeAPI ? Object.keys(accessCodeAPI) : 'undefined');
 import { Picker } from '@react-native-picker/picker';
 import { ThemedView } from '@/components/ThemedView';
@@ -186,46 +184,36 @@ const ActivationCodesScreen = () => {
   const loadMyAccessCodes = async () => {
     try {
       console.log('🔑 Loading my access codes');
-      console.log('🔑 accessCodeAPI available:', typeof accessCodeAPI);
-      console.log('🔑 accessCodeAPI.getMyAccess available:', typeof accessCodeAPI?.getMyAccess);
-      
       if (!accessCodeAPI || typeof accessCodeAPI.getMyAccess !== 'function') {
-        console.error('🔑 accessCodeAPI is not properly defined');
+        console.error('🔑 accessCodeAPI.getMyAccess is not available!');
         setMyAccessCodes([]);
         return;
       }
-      
       const response = await accessCodeAPI.getMyAccess();
-      const accessCodes = response?.accessCodes || response || [];
+      const accessCodes = Array.isArray(response) ? response : [];
       setMyAccessCodes(accessCodes);
       console.log('🔑 Loaded', accessCodes.length, 'access codes');
     } catch (error) {
       console.error('🔑 Error loading access codes:', error);
       setMyAccessCodes([]);
-      throw error;
     }
   };
 
   const loadAllGeneratedCodes = async () => {
     try {
       console.log('🔑 Loading all generated codes');
-      console.log('🔑 accessCodeAPI available:', typeof accessCodeAPI);
-      console.log('🔑 accessCodeAPI.getGenerated available:', typeof accessCodeAPI?.getGenerated);
-      
       if (!accessCodeAPI || typeof accessCodeAPI.getGenerated !== 'function') {
-        console.error('🔑 accessCodeAPI is not properly defined');
+        console.error('🔑 accessCodeAPI.getGenerated is not available!');
         setAllGeneratedCodes([]);
         return;
       }
-      
       const response = await accessCodeAPI.getGenerated();
-      const generatedCodes = response?.activationCodes || response || [];
+      const generatedCodes = Array.isArray(response) ? response : [];
       setAllGeneratedCodes(generatedCodes);
       console.log('🔑 Loaded', generatedCodes.length, 'generated codes');
     } catch (error) {
       console.error('🔑 Error loading generated codes:', error);
       setAllGeneratedCodes([]);
-      throw error;
     }
   };
 
