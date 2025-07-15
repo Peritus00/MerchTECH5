@@ -335,7 +335,7 @@ export const mediaAPI = {
 
   async uploadFile(file: File, onProgress?: (progress: number) => void) {
     const formData = new FormData();
-    formData.append('file', file); // 'file' is the field name expected by your backend
+    formData.append('image', file); // 'image' is the field name expected by your backend
 
     const config = {
       onUploadProgress: (progressEvent: any) => {
