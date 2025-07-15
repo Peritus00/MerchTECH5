@@ -1,188 +1,255 @@
 DEBUG: Server script starting...
-DEBUG: .env loaded, DATABASE_URL: postgresql://neondb_owner:npg_eMNC8h2HySbs@ep-patient-waterfall-a66aspku.us-west-2.aws.neon.tech/neondb?sslmode=require
+DEBUG: .env loaded, DATABASE_URL: configured
 DEBUG: NODE_ENV: undefined
+📂 Uploads directory already exists: /Users/admin/Downloads/merchtechapp5/services/Server/uploads
 AWS Access Key Suffix: V3MU
 AWS Secret Key Suffix: y2Yz
 ✅ S3 service loaded and instantiated successfully
    AWS Region: us-east-2
    S3 Bucket: merchtechbucket
    AWS Access Key: Configured
-📂 Uploads directory already exists: /Users/admin/Downloads/merchtechapp5/uploads
-🚀 Server running on port 5001
-🎵 PLAYLIST_CREATE: Creating playlist: {
-  name: 'Fix Test Playlist',
-  description: 'Testing playlist integration fix',
-  is_public: undefined,
-  requires_activation_code: undefined,
-  mediaFileIds: 0
+🚀 Starting server initialization...
+🔧 Initializing database schema...
+🔧 Verifying table columns exist...
+   -> Checking for column: verification_token
+   -> Checking for column: is_admin
+   -> Checking for column: is_suspended
+   -> Checking for column: subscription_tier
+   -> Checking for column: created_at
+   -> Checking for column: updated_at
+   -> Checking for column: max_products
+   -> Checking for column: max_audio_files
+   -> Checking for column: max_playlists
+   -> Checking for column: max_qr_codes
+   -> Checking for column: max_slideshows
+   -> Checking for column: max_videos
+   -> Checking for column: max_activation_codes
+✅ Database schema initialized successfully.
+✅ Database initialized successfully
+🚀 Full server with email logic running on port 5001
+🌐 Server accessible at: http://localhost:5001
+📊 Health check: http://localhost:5001/api/health
+🎬 SLIDESHOW_ACCESS: Fetching slideshow for access: 30
+🎬 SLIDESHOW_ACCESS: Audio URL is not JSON, keeping as string
+🎬 SLIDESHOW_ACCESS: Found 2 product links
+🎬 SLIDESHOW_ACCESS: Slideshow found: testagain7
+🎬 SLIDESHOW_ACCESS: Access restricted: false
+🎬 SLIDESHOW_ACCESS: Fetching slideshow for access: 30
+🎬 SLIDESHOW_ACCESS: Audio URL is not JSON, keeping as string
+🎬 SLIDESHOW_ACCESS: Found 2 product links
+🎬 SLIDESHOW_ACCESS: Slideshow found: testagain7
+🎬 SLIDESHOW_ACCESS: Access restricted: false
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====
+🎬 SLIDESHOWS: Fetching slideshow ID: 30
+🎬 SLIDESHOWS: ✅ Slideshow found in database
+🎬 SLIDESHOWS: Raw slideshow data from database:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 5000
+🎬 SLIDESHOWS:   - requires_activation_code: false
+🎬 SLIDESHOWS: Found 4 images for slideshow
+🔗 Generated signed URL for: users/1/media/1752512959661-865920832.png
+🔗 Generated signed URL for: users/1/media/1752544564617-208519358.png
+🔗 Generated signed URL for: users/1/media/1752544581730-219520606.png
+🔗 Generated signed URL for: users/1/media/1752544604299-346189419.png
+🎬 SLIDESHOWS: Processing background audio URL...
+🎬 SLIDESHOWS: Original audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Audio URL is S3, generating signed URL...
+🎵 SLIDESHOWS: Extracted S3 key: users/1/media/1752588116546-ambientbeat.mp3
+🔗 Generated signed URL for: users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Generated signed audio URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162454Z&X-Amz-Expires=3600&X-Amz-Signature=6bc03c69e19d3e89302ca7de33aabcda56179b1a20f514a8ebfeb43e515fadd0&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS: Found 2 product links
+🎬 SLIDESHOWS: Final slideshow object prepared:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - backgroundAudioUrl: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162454Z&X-Amz-Expires=3600&X-Amz-Signature=6bc03c69e19d3e89302ca7de33aabcda56179b1a20f514a8ebfeb43e515fadd0&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS:   - backgroundAudioUrl type: string
+🎬 SLIDESHOWS:   - autoplayInterval: 5000
+🎬 SLIDESHOWS:   - requiresActivationCode: false
+🎬 SLIDESHOWS:   - images count: 4
+🎬 SLIDESHOWS: Sending response to frontend...
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG END =====
+🌍 UNIVERSAL_CHAT: Fetching messages with filters: {
+  limit: '50',
+  offset: 0,
+  filterType: 'all',
+  userId: undefined,
+  category: undefined,
+  messageType: undefined
 }
-🎵 PLAYLIST_CREATE: Playlist created successfully: {
-  id: 25,
-  name: 'Fix Test Playlist',
-  requiresActivation: false,
-  isPublic: false
+🌍 CHAT_CATEGORIES: Fetching categories
+🌍 UNIVERSAL_CHAT: Found 4 messages
+🌍 CHAT_CATEGORIES: Found categories: [ 'general', 'products', 'support', 'feedback' ]
+🎬 SLIDESHOWS: Fetching slideshows for user: 1
+🎬 SLIDESHOWS: Found 13 slideshows
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====
+🎬 SLIDESHOWS: Updating slideshow ID: 30
+🎬 SLIDESHOWS: Request body received: {
+  "name": "testagain7",
+  "description": "test",
+  "transition": "fade",
+  "autoplayInterval": 5000,
+  "requiresActivationCode": true
 }
-🔴 GET_PLAYLIST: Fetching playlist: 25
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 25,
-  user_id: 39,
-  name: 'Fix Test Playlist',
-  created_at: 2025-07-11T03:54:25.325Z,
-  description: 'Testing playlist integration fix',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:54:25.325Z,
-  username: 'fixtest1752188063804'
+🎬 SLIDESHOWS: Extracted fields:
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - description: test
+🎬 SLIDESHOWS:   - autoplayInterval: 5000
+🎬 SLIDESHOWS:   - transition: fade
+🎬 SLIDESHOWS:   - requiresActivationCode: true
+🎬 SLIDESHOWS:   - audio_url: undefined
+🎬 SLIDESHOWS:   - audio_url type: undefined
+🎬 SLIDESHOWS: User ID: 1
+🎬 SLIDESHOWS: Checking slideshow ownership...
+🎬 SLIDESHOWS: ✅ Ownership verified
+🎬 SLIDESHOWS: Executing UPDATE query with parameters:
+🎬 SLIDESHOWS:   $1 (name): testagain7
+🎬 SLIDESHOWS:   $2 (description): test
+🎬 SLIDESHOWS:   $3 (autoplayInterval): 5000
+🎬 SLIDESHOWS:   $4 (transition): fade
+🎬 SLIDESHOWS:   $5 (requiresActivationCode): true
+🎬 SLIDESHOWS:   $6 (processedAudioUrl): undefined
+🎬 SLIDESHOWS:   $7 (id): 30
+🎬 SLIDESHOWS: ✅ UPDATE query successful
+🎬 SLIDESHOWS: Updated slideshow data from database:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 5000
+🎬 SLIDESHOWS:   - requires_activation_code: true
+🎬 SLIDESHOWS:   - updated_at: 2025-07-15T16:25:29.287Z
+🎵 SLIDESHOWS: ℹ️ No audio_url provided in request
+🎬 SLIDESHOWS: Preparing response object...
+🎬 SLIDESHOWS: Response object prepared:
+🎬 SLIDESHOWS: {
+  "id": 30,
+  "name": "testagain7",
+  "description": "test",
+  "autoplayInterval": 5000,
+  "transition": "fade",
+  "requiresActivationCode": true,
+  "backgroundAudioUrl": "https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3",
+  "updatedAt": "2025-07-15T16:25:29.287Z"
 }
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 25,
-  name: 'Fix Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG END =====
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====
+🎬 SLIDESHOWS: Fetching slideshow ID: 30
+🎬 SLIDESHOWS: ✅ Slideshow found in database
+🎬 SLIDESHOWS: Raw slideshow data from database:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 5000
+🎬 SLIDESHOWS:   - requires_activation_code: true
+🎬 SLIDESHOWS: Found 4 images for slideshow
+🔗 Generated signed URL for: users/1/media/1752512959661-865920832.png
+🔗 Generated signed URL for: users/1/media/1752544564617-208519358.png
+🔗 Generated signed URL for: users/1/media/1752544581730-219520606.png
+🔗 Generated signed URL for: users/1/media/1752544604299-346189419.png
+🎬 SLIDESHOWS: Processing background audio URL...
+🎬 SLIDESHOWS: Original audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Audio URL is S3, generating signed URL...
+🎵 SLIDESHOWS: Extracted S3 key: users/1/media/1752588116546-ambientbeat.mp3
+🔗 Generated signed URL for: users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Generated signed audio URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162529Z&X-Amz-Expires=3600&X-Amz-Signature=f370426b15b71c39c3187aa0646b43fefd1ca873a8580ebebbb8b712cf059e17&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS: Found 2 product links
+🎬 SLIDESHOWS: Final slideshow object prepared:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - backgroundAudioUrl: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162529Z&X-Amz-Expires=3600&X-Amz-Signature=f370426b15b71c39c3187aa0646b43fefd1ca873a8580ebebbb8b712cf059e17&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS:   - backgroundAudioUrl type: string
+🎬 SLIDESHOWS:   - autoplayInterval: 5000
+🎬 SLIDESHOWS:   - requiresActivationCode: true
+🎬 SLIDESHOWS:   - images count: 4
+🎬 SLIDESHOWS: Sending response to frontend...
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG END =====
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====
+🎬 SLIDESHOWS: Updating slideshow ID: 23
+🎬 SLIDESHOWS: Request body received: {
+  "name": "Test Update Fixed v2",
+  "description": "hi",
+  "transition": "slide",
+  "autoplayInterval": 8000,
+  "requiresActivationCode": false
 }
-🔴 GET_PLAYLIST: Fetching playlist: 25
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 25,
-  user_id: 39,
-  name: 'Fix Test Playlist',
-  created_at: 2025-07-11T03:54:25.325Z,
-  description: 'Testing playlist integration fix',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:54:25.325Z,
-  username: 'fixtest1752188063804'
+🎬 SLIDESHOWS: Extracted fields:
+🎬 SLIDESHOWS:   - name: Test Update Fixed v2
+🎬 SLIDESHOWS:   - description: hi
+🎬 SLIDESHOWS:   - autoplayInterval: 8000
+🎬 SLIDESHOWS:   - transition: slide
+🎬 SLIDESHOWS:   - requiresActivationCode: false
+🎬 SLIDESHOWS:   - audio_url: undefined
+🎬 SLIDESHOWS:   - audio_url type: undefined
+🎬 SLIDESHOWS: User ID: 1
+🎬 SLIDESHOWS: Checking slideshow ownership...
+🎬 SLIDESHOWS: ✅ Ownership verified
+🎬 SLIDESHOWS: Executing UPDATE query with parameters:
+🎬 SLIDESHOWS:   $1 (name): Test Update Fixed v2
+🎬 SLIDESHOWS:   $2 (description): hi
+🎬 SLIDESHOWS:   $3 (autoplayInterval): 8000
+🎬 SLIDESHOWS:   $4 (transition): slide
+🎬 SLIDESHOWS:   $5 (requiresActivationCode): false
+🎬 SLIDESHOWS:   $6 (processedAudioUrl): undefined
+🎬 SLIDESHOWS:   $7 (id): 23
+🎬 SLIDESHOWS: ✅ UPDATE query successful
+🎬 SLIDESHOWS: Updated slideshow data from database:
+🎬 SLIDESHOWS:   - id: 23
+🎬 SLIDESHOWS:   - name: Test Update Fixed v2
+🎬 SLIDESHOWS:   - audio_url: {"message":"File uploaded successfully","url":"https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3","proxy_url":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3","key":"users/1/media/1752583729161-ambientbeat.mp3","imageUrl":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3"}
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 8000
+🎬 SLIDESHOWS:   - requires_activation_code: false
+🎬 SLIDESHOWS:   - updated_at: 2025-07-15T16:25:42.323Z
+🎵 SLIDESHOWS: ℹ️ No audio_url provided in request
+🎬 SLIDESHOWS: Preparing response object...
+🎬 SLIDESHOWS: Response object prepared:
+🎬 SLIDESHOWS: {
+  "id": 23,
+  "name": "Test Update Fixed v2",
+  "description": "hi",
+  "autoplayInterval": 8000,
+  "transition": "slide",
+  "requiresActivationCode": false,
+  "backgroundAudioUrl": "{\"message\":\"File uploaded successfully\",\"url\":\"https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3\",\"proxy_url\":\"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3\",\"key\":\"users/1/media/1752583729161-ambientbeat.mp3\",\"imageUrl\":\"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3\"}",
+  "updatedAt": "2025-07-15T16:25:42.323Z"
 }
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 25,
-  name: 'Fix Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔗 Streaming base64 data for media type: video
-🎵 PLAYLIST_CREATE: Creating playlist: {
-  name: 'Final Video Test Playlist',
-  description: 'Testing video in playlist',
-  is_public: undefined,
-  requires_activation_code: undefined,
-  mediaFileIds: 0
-}
-🎵 PLAYLIST_CREATE: Playlist created successfully: {
-  id: 26,
-  name: 'Final Video Test Playlist',
-  requiresActivation: false,
-  isPublic: false
-}
-🔴 GET_PLAYLIST: Fetching playlist: 26
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 26,
-  user_id: 40,
-  name: 'Final Video Test Playlist',
-  created_at: 2025-07-11T03:54:58.004Z,
-  description: 'Testing video in playlist',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:54:58.004Z,
-  username: 'videotest1752188094606'
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 26,
-  name: 'Final Video Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔴 GET_PLAYLIST: Fetching playlist: 26
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 26,
-  user_id: 40,
-  name: 'Final Video Test Playlist',
-  created_at: 2025-07-11T03:54:58.004Z,
-  description: 'Testing video in playlist',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:54:58.004Z,
-  username: 'videotest1752188094606'
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 26,
-  name: 'Final Video Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🎵 PLAYLIST_CREATE: Creating playlist: {
-  name: 'Final Video Test Playlist',
-  description: 'Testing video in playlist',
-  is_public: undefined,
-  requires_activation_code: undefined,
-  mediaFileIds: 1
-}
-🎵 PLAYLIST_CREATE: Playlist created successfully: {
-  id: 27,
-  name: 'Final Video Test Playlist',
-  requiresActivation: false,
-  isPublic: false
-}
-🎵 PLAYLIST_CREATE: Adding media files to playlist: [ 26 ]
-🎵 PLAYLIST_CREATE: Added media 26 to playlist at position 1
-🔴 GET_PLAYLIST: Fetching playlist: 27
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 27,
-  user_id: 41,
-  name: 'Final Video Test Playlist',
-  created_at: 2025-07-11T03:55:25.317Z,
-  description: 'Testing video in playlist',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:55:25.317Z,
-  username: 'videotest1752188124155'
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 27,
-  name: 'Final Video Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔴 GET_PLAYLIST: Fetching playlist: 27
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 27,
-  user_id: 41,
-  name: 'Final Video Test Playlist',
-  created_at: 2025-07-11T03:55:25.317Z,
-  description: 'Testing video in playlist',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-11T03:55:25.317Z,
-  username: 'videotest1752188124155'
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 27,
-  name: 'Final Video Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG END =====
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====
+🎬 SLIDESHOWS: Fetching slideshow ID: 23
+🎬 SLIDESHOWS: ✅ Slideshow found in database
+🎬 SLIDESHOWS: Raw slideshow data from database:
+🎬 SLIDESHOWS:   - id: 23
+🎬 SLIDESHOWS:   - name: Test Update Fixed v2
+🎬 SLIDESHOWS:   - audio_url: {"message":"File uploaded successfully","url":"https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3","proxy_url":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3","key":"users/1/media/1752583729161-ambientbeat.mp3","imageUrl":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3"}
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 8000
+🎬 SLIDESHOWS:   - requires_activation_code: false
+🎬 SLIDESHOWS: Found 3 images for slideshow
+🔗 Generated signed URL for: users/1/media/1752512593229-289101895.png
+🔗 Generated signed URL for: users/1/media/1752512600819-200776205.png
+🔗 Generated signed URL for: users/1/media/1752549797348-430197896.svg
+🎬 SLIDESHOWS: Processing background audio URL...
+🎬 SLIDESHOWS: Original audio_url: {"message":"File uploaded successfully","url":"https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3","proxy_url":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3","key":"users/1/media/1752583729161-ambientbeat.mp3","imageUrl":"http://localhost:5001/api/images/s3/users/1/media/1752583729161-ambientbeat.mp3"}
+🎵 SLIDESHOWS: Parsed JSON audio data, extracted URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3
+🎵 SLIDESHOWS: Audio URL is S3, generating signed URL...
+🎵 SLIDESHOWS: Extracted S3 key: users/1/media/1752583729161-ambientbeat.mp3
+🔗 Generated signed URL for: users/1/media/1752583729161-ambientbeat.mp3
+🎵 SLIDESHOWS: Generated signed audio URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162542Z&X-Amz-Expires=3600&X-Amz-Signature=add5e5bb1e325af0a1d4b728c6480eb8d40bfe7b1325f6d25bac09147f5feb93&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS: Found 2 product links
+🎬 SLIDESHOWS: Final slideshow object prepared:
+🎬 SLIDESHOWS:   - id: 23
+🎬 SLIDESHOWS:   - name: Test Update Fixed v2
+🎬 SLIDESHOWS:   - backgroundAudioUrl: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752583729161-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162542Z&X-Amz-Expires=3600&X-Amz-Signature=add5e5bb1e325af0a1d4b728c6480eb8d40bfe7b1325f6d25bac09147f5feb93&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS:   - backgroundAudioUrl type: string
+🎬 SLIDESHOWS:   - autoplayInterval: 8000
+🎬 SLIDESHOWS:   - requiresActivationCode: false
+🎬 SLIDESHOWS:   - images count: 3
+🎬 SLIDESHOWS: Sending response to frontend...
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG END =====
 🔴 GET_PLAYLIST: Fetching playlist: 22
 🔴 GET_PLAYLIST: Fetching playlist: 21
 🔴 GET_PLAYLIST: Fetching playlist: 20
@@ -193,315 +260,80 @@ AWS Secret Key Suffix: y2Yz
 🔴 GET_PLAYLIST: Fetching playlist: 4
 🔴 GET_PLAYLIST: Fetching playlist: 3
 🔴 GET_PLAYLIST: Fetching playlist: 2
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 22,
-  user_id: 1,
-  name: 'test3',
-  created_at: 2025-07-09T06:31:30.336Z,
-  description: 'test3',
-  requires_activation_code: true,
-  is_public: false,
-  updated_at: 2025-07-10T03:12:02.229Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 3,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:16:28.025Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:16:28.025Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 2,
-  user_id: 1,
-  name: 'Updated Test Playlist',
-  created_at: 2025-07-08T08:05:49.320Z,
-  description: 'Updated description',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T08:05:56.953Z,
-  username: 'djjetfuel'
-}
+📺 MEDIA_STREAM: Streaming S3 file for media 29: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 32: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 30: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 31: users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+📺 MEDIA_STREAM: Attempting to stream local file for media 34: tjshelmet_2.mp3
+🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+📺 MEDIA_STREAM: Streaming S3 file for media 27: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4: bytes=0-470040120
+📺 MEDIA_STREAM: Range request for users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4: bytes=0-427343159
 🔴 GET_PLAYLIST: Found 2 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 22,
-  name: 'test3',
-  requiresActivationCode: true,
-  requires_activation_code: true,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 2
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 3,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022226006-extracheese.mp3
-🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+📺 MEDIA_STREAM: Range request for users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4: bytes=0-275747194
+📺 MEDIA_STREAM: Range request for users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4: bytes=0-701925961
+📺 MEDIA_STREAM: Range request for users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4: bytes=0-517148415
 🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 2,
-  name: 'Updated Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 18,
-  user_id: 1,
-  name: 'DJKINGCAKE',
-  created_at: 2025-07-09T05:52:47.873Z,
-  description: 'www.djkingcake.com',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T05:52:47.873Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 21,
-  user_id: 1,
-  name: 'yo',
-  created_at: 2025-07-09T06:27:11.340Z,
-  description: 'yo',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T06:27:11.340Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 5,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:40:20.200Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:40:20.200Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 19,
-  user_id: 1,
-  name: 'hi',
-  created_at: 2025-07-09T05:58:28.459Z,
-  description: 'hi',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T05:58:28.459Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 13,
-  user_id: 1,
-  name: 'Test Media Player Playlist',
-  created_at: 2025-07-08T09:48:04.315Z,
-  description: 'Playlist for testing media player functionality',
-  requires_activation_code: false,
-  is_public: true,
-  updated_at: 2025-07-08T09:48:04.315Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 4,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:19:08.672Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:19:08.672Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 20,
-  user_id: 1,
-  name: 'Test S3 Playlist',
-  created_at: 2025-07-09T06:24:50.697Z,
-  description: null,
-  requires_activation_code: false,
-  is_public: true,
-  updated_at: 2025-07-09T06:24:50.697Z,
-  username: 'djjetfuel'
-}
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 18,
-  name: 'DJKINGCAKE',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
+📺 MEDIA_STREAM: Streaming base64 data for media 26
+📺 MEDIA_STREAM: Streaming base64 data for media 25
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 21,
-  name: 'yo',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
+📺 MEDIA_STREAM: Streaming base64 data for media 24
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 19,
-  name: 'hi',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
+📺 MEDIA_STREAM: Streaming base64 data for media 23
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 5,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 13,
-  name: 'Test Media Player Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: true,
-  is_public: true,
-  productLinksCount: 0
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 4,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 20,
-  name: 'Test S3 Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: true,
-  is_public: true,
-  productLinksCount: 0
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022226006-extracheese.mp3
-🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752018614400-putitinthepotbeat(2).mp3
-🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-🔎 [DEBUG] /api/media/post-policy called
-🔎 [DEBUG] Request body: {
-  filename: 'vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  contentType: 'video/mp4',
-  fileSize: 517148416
-}
-🔎 [DEBUG] Authenticated user: {
-  userId: 1,
-  email: 'djjetfuel@gmail.com',
-  isAdmin: true,
-  iat: 1752178344,
-  exp: 1752264744
-}
-🔗 Generating S3 POST policy for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-📁 Content type: video/mp4
-📊 File size: 493.19 MB
-✅ POST policy generated with key: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔍 POST policy fields: {
-  key: 'users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  'Content-Type': 'video/mp4',
-  'Cache-Control': 'max-age=31536000',
-  'x-amz-meta-userid': '1',
-  'x-amz-meta-uploadedat': '2025-07-10T22:56:33.372Z',
-  'x-amz-meta-originalname': 'vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  bucket: 'merchtechbucket',
-  'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-  'X-Amz-Credential': 'AKIAZK2GCMJ2JIHNV3MU/20250710/us-east-2/s3/aws4_request',
-  'X-Amz-Date': '20250710T225633Z',
-  Policy: 'eyJleHBpcmF0aW9uIjoiMjAyNS0wNy0xMFQyMzo1NjozM1oiLCJjb25kaXRpb25zIjpbWyJjb250ZW50LWxlbmd0aC1yYW5nZSIsMCw1MTcxNDg0MTZdLHsia2V5IjoidXNlcnMvMS9tZWRpYS8xNzUyMTg4MTkzMzcxLXZoc3RlbXBsYXRlIC0gYnJhemlsaWFuYnVtczIwMjUtMDEtMDMgMDktMTQtMzcubXA0In0seyJDb250ZW50LVR5cGUiOiJ2aWRlby9tcDQifSx7IkNhY2hlLUNvbnRyb2wiOiJtYXgtYWdlPTMxNTM2MDAwIn0seyJ4LWFtei1tZXRhLXVzZXJpZCI6IjEifSx7IngtYW16LW1ldGEtdXBsb2FkZWRhdCI6IjIwMjUtMDctMTBUMjI6NTY6MzMuMzcyWiJ9LHsieC1hbXotbWV0YS1vcmlnaW5hbG5hbWUiOiJ2aHN0ZW1wbGF0ZSAtIGJyYXppbGlhbmJ1bXMyMDI1LTAxLTAzIDA5LTE0LTM3Lm1wNCJ9LHsiYnVja2V0IjoibWVyY2h0ZWNoYnVja2V0In0seyJYLUFtei1BbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJYLUFtei1DcmVkZW50aWFsIjoiQUtJQVpLMkdDTUoySklITlYzTVUvMjAyNTA3MTAvdXMtZWFzdC0yL3MzL2F3czRfcmVxdWVzdCJ9LHsiWC1BbXotRGF0ZSI6IjIwMjUwNzEwVDIyNTYzM1oifV19',
-  'X-Amz-Signature': '3910e2e57a9497830fba94c046545584829f0a9fff6bb8ec18ac6c93341402e7'
-}
-✅ [DEBUG] POST policy result: {
-  url: 'https://merchtechbucket.s3.us-east-2.amazonaws.com/',
-  fields: {
-    key: 'users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-    'Content-Type': 'video/mp4',
-    'Cache-Control': 'max-age=31536000',
-    'x-amz-meta-userid': '1',
-    'x-amz-meta-uploadedat': '2025-07-10T22:56:33.372Z',
-    'x-amz-meta-originalname': 'vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-    bucket: 'merchtechbucket',
-    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-    'X-Amz-Credential': 'AKIAZK2GCMJ2JIHNV3MU/20250710/us-east-2/s3/aws4_request',
-    'X-Amz-Date': '20250710T225633Z',
-    Policy: 'eyJleHBpcmF0aW9uIjoiMjAyNS0wNy0xMFQyMzo1NjozM1oiLCJjb25kaXRpb25zIjpbWyJjb250ZW50LWxlbmd0aC1yYW5nZSIsMCw1MTcxNDg0MTZdLHsia2V5IjoidXNlcnMvMS9tZWRpYS8xNzUyMTg4MTkzMzcxLXZoc3RlbXBsYXRlIC0gYnJhemlsaWFuYnVtczIwMjUtMDEtMDMgMDktMTQtMzcubXA0In0seyJDb250ZW50LVR5cGUiOiJ2aWRlby9tcDQifSx7IkNhY2hlLUNvbnRyb2wiOiJtYXgtYWdlPTMxNTM2MDAwIn0seyJ4LWFtei1tZXRhLXVzZXJpZCI6IjEifSx7IngtYW16LW1ldGEtdXBsb2FkZWRhdCI6IjIwMjUtMDctMTBUMjI6NTY6MzMuMzcyWiJ9LHsieC1hbXotbWV0YS1vcmlnaW5hbG5hbWUiOiJ2aHN0ZW1wbGF0ZSAtIGJyYXppbGlhbmJ1bXMyMDI1LTAxLTAzIDA5LTE0LTM3Lm1wNCJ9LHsiYnVja2V0IjoibWVyY2h0ZWNoYnVja2V0In0seyJYLUFtei1BbGdvcml0aG0iOiJBV1M0LUhNQUMtU0hBMjU2In0seyJYLUFtei1DcmVkZW50aWFsIjoiQUtJQVpLMkdDTUoySklITlYzTVUvMjAyNTA3MTAvdXMtZWFzdC0yL3MzL2F3czRfcmVxdWVzdCJ9LHsiWC1BbXotRGF0ZSI6IjIwMjUwNzEwVDIyNTYzM1oifV19',
-    'X-Amz-Signature': '3910e2e57a9497830fba94c046545584829f0a9fff6bb8ec18ac6c93341402e7'
-  },
-  fileUrl: 'https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  key: 'users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4'
-}
-✅ Confirming S3 upload: {
-  title: 'vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  filename: 'vhstemplate - brazilianbums2025-01-03 09-14-37.mp4',
-  fileType: 'video',
-  filesize: 517148416,
-  s3Key: 'users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4'
-}
-✅ Media record created: 27
-🔗 Generating signed URL for server-side streaming: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-✅ Signed URL works, streaming through server with CORS headers
-🔗 Generating signed URL for server-side streaming: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-✅ Signed URL works, streaming through server with CORS headers
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 22: users/1/media/1752022305057-stackawayedm 1.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 21: users/1/media/1752022268038-beautythatIseeedm.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 20: users/1/media/1752022244645-getitpoppin.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 19: users/1/media/1752022226006-extracheese.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 18: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 17: users/1/media/1752022305057-stackawayedm 1.mp3
+📺 MEDIA_STREAM: Range request for users/1/media/1752022305057-stackawayedm 1.mp3: bytes=0-5645758
+📺 MEDIA_STREAM: Range request for users/1/media/1752022268038-beautythatIseeedm.mp3: bytes=0-3631611
+📺 MEDIA_STREAM: Range request for users/1/media/1752018614400-putitinthepotbeat(2).mp3: bytes=0-2970548
+📺 MEDIA_STREAM: Range request for users/1/media/1752022226006-extracheese.mp3: bytes=0-5539340
+📺 MEDIA_STREAM: Range request for users/1/media/1752022305057-stackawayedm 1.mp3: bytes=0-5645758
+📺 MEDIA_STREAM: Range request for users/1/media/1752022244645-getitpoppin.mp3: bytes=0-5219256
+📺 MEDIA_STREAM: Streaming S3 file for media 16: users/1/media/1752022268038-beautythatIseeedm.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 14: users/1/media/1752022226006-extracheese.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 15: users/1/media/1752022244645-getitpoppin.mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 13: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+📺 MEDIA_STREAM: Streaming S3 file for media 32: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752022268038-beautythatIseeedm.mp3: bytes=0-3631611
+📺 MEDIA_STREAM: Range request for users/1/media/1752022226006-extracheese.mp3: bytes=0-5539340
+📺 MEDIA_STREAM: Range request for users/1/media/1752022244645-getitpoppin.mp3: bytes=0-5219256
+📺 MEDIA_STREAM: Range request for users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4: bytes=427098112-427343159
+📺 MEDIA_STREAM: Range request for users/1/media/1752018614400-putitinthepotbeat(2).mp3: bytes=0-2970548
+📺 MEDIA_STREAM: Streaming S3 file for media 31: users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 29: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 30: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 27: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4: bytes=701562880-701925961
+📺 MEDIA_STREAM: Streaming S3 file for media 32: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4: bytes=275513344-275747194
+📺 MEDIA_STREAM: Range request for users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4: bytes=469794816-470040120
+📺 MEDIA_STREAM: Range request for users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4: bytes=516849664-517148415
+📺 MEDIA_STREAM: Range request for users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4: bytes=32768-427343159
+📺 MEDIA_STREAM: Streaming S3 file for media 29: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4: bytes=701661184-701925961
+📺 MEDIA_STREAM: Streaming S3 file for media 27: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+📺 MEDIA_STREAM: Streaming S3 file for media 30: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4: bytes=32768-517148415
+📺 MEDIA_STREAM: Streaming S3 file for media 31: users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4: bytes=32768-470040120
+📺 MEDIA_STREAM: Range request for users/1/media/1752333029335-FAITH- 2024-08-31 16-32-59.mp4: bytes=32768-275747194
+📺 MEDIA_STREAM: Streaming S3 file for media 29: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+📺 MEDIA_STREAM: Range request for users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4: bytes=32768-701925961
 🔴 GET_PLAYLIST: Fetching playlist: 22
 🔴 GET_PLAYLIST: Fetching playlist: 21
 🔴 GET_PLAYLIST: Fetching playlist: 20
@@ -512,249 +344,259 @@ AWS Secret Key Suffix: y2Yz
 🔴 GET_PLAYLIST: Fetching playlist: 4
 🔴 GET_PLAYLIST: Fetching playlist: 3
 🔴 GET_PLAYLIST: Fetching playlist: 2
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 20,
-  user_id: 1,
-  name: 'Test S3 Playlist',
-  created_at: 2025-07-09T06:24:50.697Z,
-  description: null,
-  requires_activation_code: false,
-  is_public: true,
-  updated_at: 2025-07-09T06:24:50.697Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 21,
-  user_id: 1,
-  name: 'yo',
-  created_at: 2025-07-09T06:27:11.340Z,
-  description: 'yo',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T06:27:11.340Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 22,
-  user_id: 1,
-  name: 'test3',
-  created_at: 2025-07-09T06:31:30.336Z,
-  description: 'test3',
-  requires_activation_code: true,
-  is_public: false,
-  updated_at: 2025-07-10T03:12:02.229Z,
-  username: 'djjetfuel'
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022226006-extracheese.mp3
 🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 20,
-  name: 'Test S3 Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: true,
-  is_public: true,
-  productLinksCount: 0
-}
-🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 21,
-  name: 'yo',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
 🔴 GET_PLAYLIST: Found 2 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 22,
-  name: 'test3',
-  requiresActivationCode: true,
-  requires_activation_code: true,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 2
-}
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 3,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:16:28.025Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:16:28.025Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 19,
-  user_id: 1,
-  name: 'hi',
-  created_at: 2025-07-09T05:58:28.459Z,
-  description: 'hi',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T05:58:28.459Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 2,
-  user_id: 1,
-  name: 'Updated Test Playlist',
-  created_at: 2025-07-08T08:05:49.320Z,
-  description: 'Updated description',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T08:05:56.953Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 4,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:19:08.672Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:19:08.672Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 18,
-  user_id: 1,
-  name: 'DJKINGCAKE',
-  created_at: 2025-07-09T05:52:47.873Z,
-  description: 'www.djkingcake.com',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-09T05:52:47.873Z,
-  username: 'djjetfuel'
-}
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 5,
-  user_id: 1,
-  name: 'Protected Playlist Test',
-  created_at: 2025-07-08T09:40:20.200Z,
-  description: 'Testing playlist with activation code',
-  requires_activation_code: false,
-  is_public: false,
-  updated_at: 2025-07-08T09:40:20.200Z,
-  username: 'djjetfuel'
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752018614400-putitinthepotbeat(2).mp3
 🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
-🔴 GET_PLAYLIST: Raw playlist data: {
-  id: 13,
-  user_id: 1,
-  name: 'Test Media Player Playlist',
-  created_at: 2025-07-08T09:48:04.315Z,
-  description: 'Playlist for testing media player functionality',
-  requires_activation_code: false,
-  is_public: true,
-  updated_at: 2025-07-08T09:48:04.315Z,
-  username: 'djjetfuel'
-}
-✅ Signed URL works, streaming through server with CORS headers
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022305057-stackawayedm 1.mp3
 🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022268038-beautythatIseeedm.mp3
 🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022244645-getitpoppin.mp3
 🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 3,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 19,
-  name: 'hi',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 4,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 2,
-  name: 'Updated Test Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 18,
-  name: 'DJKINGCAKE',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 5,
-  name: 'Protected Playlist Test',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: false,
-  is_public: false,
-  productLinksCount: 0
-}
 🔴 GET_PLAYLIST: Found 0 product links
-🔴 GET_PLAYLIST: Converted playlist data: {
-  id: 13,
-  name: 'Test Media Player Playlist',
-  requiresActivationCode: false,
-  requires_activation_code: false,
-  isPublic: true,
-  is_public: true,
-  productLinksCount: 0
-}
-🔗 Generating signed URL for server-side streaming: users/1/media/1752022226006-extracheese.mp3
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Fetching playlist: 22
+🔴 GET_PLAYLIST: Fetching playlist: 21
+🔴 GET_PLAYLIST: Fetching playlist: 20
+🔴 GET_PLAYLIST: Fetching playlist: 19
+🔴 GET_PLAYLIST: Fetching playlist: 18
+🔴 GET_PLAYLIST: Fetching playlist: 13
+🔴 GET_PLAYLIST: Fetching playlist: 5
+🔴 GET_PLAYLIST: Fetching playlist: 4
+🔴 GET_PLAYLIST: Fetching playlist: 3
+🔴 GET_PLAYLIST: Fetching playlist: 2
 🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
-✅ Signed URL works, streaming through server with CORS headers
-🔗 Generating signed URL for server-side streaming: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
 🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-🔗 Generating signed URL for server-side streaming: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 2 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+📋 Using subscription tier limit: 50 playlists for premium plan
+✅ Playlist creation allowed: User 1 has 10/50 playlists
+🔴 GET_PLAYLIST: Fetching playlist: 28
+🔗 Generated signed URL for: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+🔗 Generated signed URL for: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+🔗 Generated signed URL for: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
 🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
-✅ Signed URL works, streaming through server with CORS headers
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Fetching playlist: 28
+🔴 GET_PLAYLIST: Fetching playlist: 22
+🔴 GET_PLAYLIST: Fetching playlist: 21
+🔴 GET_PLAYLIST: Fetching playlist: 20
+🔴 GET_PLAYLIST: Fetching playlist: 19
+🔴 GET_PLAYLIST: Fetching playlist: 18
+🔴 GET_PLAYLIST: Fetching playlist: 13
+🔴 GET_PLAYLIST: Fetching playlist: 5
+🔴 GET_PLAYLIST: Fetching playlist: 4
+🔴 GET_PLAYLIST: Fetching playlist: 3
+🔴 GET_PLAYLIST: Fetching playlist: 2
+🔗 Generated signed URL for: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+🔗 Generated signed URL for: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+🔗 Generated signed URL for: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+🔴 GET_PLAYLIST: Found 2 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Fetching playlist: 28
+🔴 GET_PLAYLIST: Fetching playlist: 22
+🔴 GET_PLAYLIST: Fetching playlist: 21
+🔴 GET_PLAYLIST: Fetching playlist: 20
+🔴 GET_PLAYLIST: Fetching playlist: 19
+🔴 GET_PLAYLIST: Fetching playlist: 18
+🔴 GET_PLAYLIST: Fetching playlist: 13
+🔴 GET_PLAYLIST: Fetching playlist: 5
+🔴 GET_PLAYLIST: Fetching playlist: 4
+🔴 GET_PLAYLIST: Fetching playlist: 3
+🔴 GET_PLAYLIST: Fetching playlist: 2
+🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+🔗 Generated signed URL for: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+🔗 Generated signed URL for: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 2 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Fetching playlist: 28
+🔴 GET_PLAYLIST: Fetching playlist: 22
+🔴 GET_PLAYLIST: Fetching playlist: 21
+🔴 GET_PLAYLIST: Fetching playlist: 20
+🔴 GET_PLAYLIST: Fetching playlist: 19
+🔴 GET_PLAYLIST: Fetching playlist: 18
+🔴 GET_PLAYLIST: Fetching playlist: 13
+🔴 GET_PLAYLIST: Fetching playlist: 5
+🔴 GET_PLAYLIST: Fetching playlist: 4
+🔴 GET_PLAYLIST: Fetching playlist: 3
+🔴 GET_PLAYLIST: Fetching playlist: 2
+🔗 Generated signed URL for: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+🔗 Generated signed URL for: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+🔗 Generated signed URL for: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+🔗 Generated signed URL for: users/1/media/1752018614400-putitinthepotbeat(2).mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔗 Generated signed URL for: users/1/media/1752022268038-beautythatIseeedm.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022226006-extracheese.mp3
+🔗 Generated signed URL for: users/1/media/1752022244645-getitpoppin.mp3
+🔗 Generated signed URL for: users/1/media/1752022305057-stackawayedm 1.mp3
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 2 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🔴 GET_PLAYLIST: Found 0 product links
+🎬 SLIDESHOWS: Fetching slideshows for user: 1
+🎬 SLIDESHOWS: Found 13 slideshows
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====
+🎬 SLIDESHOWS: Updating slideshow ID: 30
+🎬 SLIDESHOWS: Request body received: {
+  "name": "testagain7",
+  "description": "test",
+  "transition": "fade",
+  "autoplayInterval": 5000,
+  "requiresActivationCode": true
+}
+🎬 SLIDESHOWS: Extracted fields:
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - description: test
+🎬 SLIDESHOWS:   - autoplayInterval: 5000
+🎬 SLIDESHOWS:   - transition: fade
+🎬 SLIDESHOWS:   - requiresActivationCode: true
+🎬 SLIDESHOWS:   - audio_url: undefined
+🎬 SLIDESHOWS:   - audio_url type: undefined
+🎬 SLIDESHOWS: User ID: 1
+🎬 SLIDESHOWS: Checking slideshow ownership...
+🎬 SLIDESHOWS: ✅ Ownership verified
+🎬 SLIDESHOWS: Executing UPDATE query with parameters:
+🎬 SLIDESHOWS:   $1 (name): testagain7
+🎬 SLIDESHOWS:   $2 (description): test
+🎬 SLIDESHOWS:   $3 (autoplayInterval): 5000
+🎬 SLIDESHOWS:   $4 (transition): fade
+🎬 SLIDESHOWS:   $5 (requiresActivationCode): true
+🎬 SLIDESHOWS:   $6 (processedAudioUrl): undefined
+🎬 SLIDESHOWS:   $7 (id): 30
+🎬 SLIDESHOWS: ✅ UPDATE query successful
+🎬 SLIDESHOWS: Updated slideshow data from database:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 5000
+🎬 SLIDESHOWS:   - requires_activation_code: true
+🎬 SLIDESHOWS:   - updated_at: 2025-07-15T16:29:07.415Z
+🎵 SLIDESHOWS: ℹ️ No audio_url provided in request
+🎬 SLIDESHOWS: Preparing response object...
+🎬 SLIDESHOWS: Response object prepared:
+🎬 SLIDESHOWS: {
+  "id": 30,
+  "name": "testagain7",
+  "description": "test",
+  "autoplayInterval": 5000,
+  "transition": "fade",
+  "requiresActivationCode": true,
+  "backgroundAudioUrl": "https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3",
+  "updatedAt": "2025-07-15T16:29:07.415Z"
+}
+🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG END =====
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====
+🎬 SLIDESHOWS: Fetching slideshow ID: 30
+🎬 SLIDESHOWS: ✅ Slideshow found in database
+🎬 SLIDESHOWS: Raw slideshow data from database:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎬 SLIDESHOWS:   - audio_url type: string
+🎬 SLIDESHOWS:   - autoplay_interval: 5000
+🎬 SLIDESHOWS:   - requires_activation_code: true
+🎬 SLIDESHOWS: Found 4 images for slideshow
+🔗 Generated signed URL for: users/1/media/1752512959661-865920832.png
+🔗 Generated signed URL for: users/1/media/1752544564617-208519358.png
+🔗 Generated signed URL for: users/1/media/1752544581730-219520606.png
+🔗 Generated signed URL for: users/1/media/1752544604299-346189419.png
+🎬 SLIDESHOWS: Processing background audio URL...
+🎬 SLIDESHOWS: Original audio_url: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Audio URL is S3, generating signed URL...
+🎵 SLIDESHOWS: Extracted S3 key: users/1/media/1752588116546-ambientbeat.mp3
+🔗 Generated signed URL for: users/1/media/1752588116546-ambientbeat.mp3
+🎵 SLIDESHOWS: Generated signed audio URL: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162907Z&X-Amz-Expires=3600&X-Amz-Signature=ea80bbfc26304186cc170e07b74d3e19988a502faa1880f34e7a41fd39d0882b&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS: Found 2 product links
+🎬 SLIDESHOWS: Final slideshow object prepared:
+🎬 SLIDESHOWS:   - id: 30
+🎬 SLIDESHOWS:   - name: testagain7
+🎬 SLIDESHOWS:   - backgroundAudioUrl: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/1/media/1752588116546-ambientbeat.mp3?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=AKIAZK2GCMJ2JIHNV3MU%2F20250715%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20250715T162907Z&X-Amz-Expires=3600&X-Amz-Signature=ea80bbfc26304186cc170e07b74d3e19988a502faa1880f34e7a41fd39d0882b&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject
+🎬 SLIDESHOWS:   - backgroundAudioUrl type: string
+🎬 SLIDESHOWS:   - autoplayInterval: 5000
+🎬 SLIDESHOWS:   - requiresActivationCode: true
+🎬 SLIDESHOWS:   - images count: 4
+🎬 SLIDESHOWS: Sending response to frontend...
+🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG END =====
+🔴 GET_PLAYLIST: Fetching playlist: 28
+🔗 Generated signed URL for: users/1/media/1752341969098-CEREAL KILLAVIZZY - 2024-10-22 20-31-01.mp4
+🔗 Generated signed URL for: users/1/media/1752332979075-ICEDOUTBASSVIZZY- 2024-10-22 20-13-41.mp4
+🔗 Generated signed URL for: users/1/media/1752299135356-REMEMEBERBERRIESVIZZY - 2024-10-22 19-47-21.mp4
+🔗 Generated signed URL for: users/1/media/1752188193371-vhstemplate - brazilianbums2025-01-03 09-14-37.mp4
+🔴 GET_PLAYLIST: Found 0 product links
+🌍 UNIVERSAL_CHAT: Fetching messages with filters: {
+  limit: '50',
+  offset: 0,
+  filterType: 'all',
+  userId: undefined,
+  category: undefined,
+  messageType: undefined
+}
+🌍 CHAT_CATEGORIES: Fetching categories
+🌍 UNIVERSAL_CHAT: Found 4 messages
+🌍 CHAT_CATEGORIES: Found categories: [ 'general', 'products', 'support', 'feedback' ]
+SIGTERM signal received: closing HTTP server
+HTTP server closed
+Database pool has ended

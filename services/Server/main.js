@@ -1187,12 +1187,23 @@ app.get('/api/media/:id/stream', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
     
     // Handle S3 files
-    if (media.s3_key && s3Service) {
+    let s3Key = media.s3_key;
+    
+    // If s3_key is null but we have an S3 URL, extract the key from the URL
+    if (!s3Key && media.url && media.url.includes('merchtechbucket.s3.')) {
+      const urlMatch = media.url.match(/merchtechbucket\.s3\.[^/]+\/(.+)$/);
+      if (urlMatch) {
+        s3Key = urlMatch[1];
+        console.log(`📺 MEDIA_STREAM: Extracted S3 key from URL for media ${id}: ${s3Key}`);
+      }
+    }
+    
+    if (s3Key && s3Service) {
       try {
-        console.log(`📺 MEDIA_STREAM: Streaming S3 file for media ${id}: ${media.s3_key}`);
+        console.log(`📺 MEDIA_STREAM: Streaming S3 file for media ${id}: ${s3Key}`);
         
         // Get file metadata from S3
-        const metadata = await s3Service.getMetadata(media.s3_key);
+        const metadata = await s3Service.getMetadata(s3Key);
         const fileSize = metadata.ContentLength;
         const contentType = metadata.ContentType || media.content_type || 'application/octet-stream';
         
@@ -1209,14 +1220,14 @@ app.get('/api/media/:id/stream', async (req, res) => {
           const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
           const chunksize = (end - start) + 1;
           
-          console.log(`📺 MEDIA_STREAM: Range request for ${media.s3_key}: bytes=${start}-${end}`);
+          console.log(`📺 MEDIA_STREAM: Range request for ${s3Key}: bytes=${start}-${end}`);
           
           // Ensure range is valid
           if (start >= fileSize || end >= fileSize) {
             return res.status(416).send('Requested range not satisfiable');
           }
           
-          const { stream } = await s3Service.getStream(media.s3_key, { start, end });
+          const { stream } = await s3Service.getStream(s3Key, { start, end });
           
           res.writeHead(206, {
             'Content-Range': `bytes ${start}-${end}/${fileSize}`,
@@ -1226,15 +1237,15 @@ app.get('/api/media/:id/stream', async (req, res) => {
           stream.pipe(res);
         } else {
           // Full file request
-          console.log(`📺 MEDIA_STREAM: Full file request for ${media.s3_key}`);
+          console.log(`📺 MEDIA_STREAM: Full file request for ${s3Key}`);
           res.setHeader('Content-Length', fileSize);
-          const { stream } = await s3Service.getStream(media.s3_key);
+          const { stream } = await s3Service.getStream(s3Key);
           stream.pipe(res);
         }
         
         return;
       } catch (error) {
-        console.error(`❌ MEDIA_STREAM: Failed to stream S3 file ${media.s3_key}:`, error);
+        console.error(`❌ MEDIA_STREAM: Failed to stream S3 file ${s3Key}:`, error);
         return res.status(500).json({ error: 'Failed to stream S3 file' });
       }
     }
@@ -1791,6 +1802,49 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
 
 // ---------- QR CODES API ----------
 
+// Get all QR codes for the current user (alias for backward compatibility)
+app.get('/api/qrcodes', authenticateToken, async (req, res) => {
+  try {
+    console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
+    
+    // First try with scan count, fall back to simple query if qr_scans table doesn't exist
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT qr.*, COUNT(qs.id) as scan_count
+         FROM qr_codes qr
+         LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+         WHERE qr.user_id = $1 AND qr.is_active = true
+         GROUP BY qr.id
+         ORDER BY qr.created_at DESC`,
+        [req.user.userId]
+      );
+    } catch (scanError) {
+      console.log('📱 QR_CODES: qr_scans table not available, using simple query');
+      result = await pool.query(
+        `SELECT qr.*, 0 as scan_count
+         FROM qr_codes qr
+         WHERE qr.user_id = $1 AND qr.is_active = true
+         ORDER BY qr.created_at DESC`,
+        [req.user.userId]
+      );
+    }
+    
+    const qrCodes = result.rows.map(qr => ({
+      ...qr,
+      options: typeof qr.options === 'string' ? JSON.parse(qr.options) : qr.options,
+      scanCount: parseInt(qr.scan_count) || 0
+    }));
+    
+    console.log('📱 QR_CODES: Found', qrCodes.length, 'QR codes');
+    res.json({ qrCodes });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR codes:', error);
+    res.status(500).json({ error: 'Failed to fetch QR codes' });
+  }
+});
+
 // Get all QR codes for the current user
 app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   try {
@@ -1834,6 +1888,40 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   }
 });
 
+// Get a specific QR code by ID (alias for backward compatibility)
+app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('📱 QR_CODES: Fetching QR code:', id);
+    
+    const result = await pool.query(
+      `SELECT qr.*, COUNT(qs.id) as scan_count
+       FROM qr_codes qr
+       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       WHERE qr.id = $1 AND qr.user_id = $2
+       GROUP BY qr.id`,
+      [id, req.user.userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
+      scanCount: parseInt(result.rows[0].scan_count) || 0
+    };
+    
+    console.log('📱 QR_CODES: QR code found:', qrCode.name);
+    res.json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error fetching QR code:', error);
+    res.status(500).json({ error: 'Failed to fetch QR code' });
+  }
+});
+
 // Get a specific QR code by ID
 app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   try {
@@ -1865,6 +1953,76 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('📱 QR_CODES: Error fetching QR code:', error);
     res.status(500).json({ error: 'Failed to fetch QR code' });
+  }
+});
+
+// Create a new QR code (alias for backward compatibility)
+app.post('/api/qrcodes', authenticateToken, async (req, res) => {
+  try {
+    console.log('📱 QR_CODES: ============ CREATE QR CODE DEBUG START ============');
+    console.log('📱 QR_CODES: Request body:', JSON.stringify(req.body, null, 2));
+    console.log('📱 QR_CODES: Authenticated user:', req.user);
+    
+    const { name, url, description, contentType, options } = req.body;
+    
+    if (!name || !url) {
+      console.log('📱 QR_CODES: Validation failed - missing name or url:', { name, url });
+      return res.status(400).json({ error: 'Name and URL are required' });
+    }
+    
+    console.log('📱 QR_CODES: Creating QR code:', { name, url, contentType });
+    
+    // 🔒 SUBSCRIPTION LIMIT CHECK
+    const userResult = await pool.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
+    const user = userResult.rows[0];
+    const userTier = user?.subscription_tier || 'free';
+    
+    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
+    const currentCount = parseInt(countResult.rows[0].count);
+
+    // Check for admin-set custom limit first, then fall back to subscription tier limits
+    let maxQRCodes;
+    if (user?.max_qr_codes !== null && user?.max_qr_codes !== undefined) {
+      maxQRCodes = user.max_qr_codes;
+    } else {
+      const limits = {
+        free: { maxQRCodes: 10 },
+        basic: { maxQRCodes: 50 },
+        premium: { maxQRCodes: 100 }
+      };
+      maxQRCodes = (limits[userTier] || limits.free).maxQRCodes;
+    }
+    
+    if (currentCount >= maxQRCodes) {
+      return res.status(403).json({ 
+        error: `QR code limit reached. You have reached your limit of ${maxQRCodes} QR codes.`,
+        limit: maxQRCodes,
+        current: currentCount,
+        subscriptionTier: userTier
+      });
+    }
+
+    // Generate QR code data (simplified - in production you might want to use a proper QR library)
+    const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const result = await pool.query(
+      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
+    );
+    
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
+      scanCount: 0
+    };
+    
+    console.log('📱 QR_CODES: QR code created successfully:', qrCode.name);
+    res.status(201).json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error creating QR code:', error);
+    res.status(500).json({ error: 'Failed to create QR code' });
   }
 });
 
@@ -1938,6 +2096,53 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
   }
 });
 
+// Update a QR code (alias for backward compatibility)
+app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, url, description, options } = req.body;
+    
+    console.log('📱 QR_CODES: Updating QR code:', id);
+    
+    // Check if user owns the QR code
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to update this QR code' });
+    }
+
+    const result = await pool.query(
+      `UPDATE qr_codes 
+       SET name = COALESCE($1, name), 
+           url = COALESCE($2, url), 
+           description = COALESCE($3, description), 
+           options = COALESCE($4, options),
+           updated_at = NOW()
+       WHERE id = $5 RETURNING *`,
+      [name, url, description, options ? JSON.stringify(options) : null, id]
+    );
+
+    const qrCode = {
+      ...result.rows[0],
+      options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options
+    };
+    
+    console.log('📱 QR_CODES: QR code updated successfully:', qrCode.name);
+    res.json({ qrCode });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error updating QR code:', error);
+    res.status(500).json({ error: 'Failed to update QR code' });
+  }
+});
+
 // Update a QR code
 app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   try {
@@ -1982,6 +2187,42 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('📱 QR_CODES: Error updating QR code:', error);
     res.status(500).json({ error: 'Failed to update QR code' });
+  }
+});
+
+// Delete a QR code (soft delete) (alias for backward compatibility)
+app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('📱 QR_CODES: Deleting QR code:', id);
+    
+    // Check if user owns the QR code
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
+      [id]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to delete this QR code' });
+    }
+
+    // Soft delete by setting is_active to false
+    await pool.query(
+      'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1',
+      [id]
+    );
+    
+    console.log('📱 QR_CODES: QR code deleted successfully');
+    res.json({ message: 'QR code deleted successfully' });
+    
+  } catch (error) {
+    console.error('📱 QR_CODES: Error deleting QR code:', error);
+    res.status(500).json({ error: 'Failed to delete QR code' });
   }
 });
 
