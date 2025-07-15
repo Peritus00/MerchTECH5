@@ -497,7 +497,11 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { ...p, prices: pricesArr };
+      return { 
+        ...p, 
+        price: p.price ? p.price / 100 : 0, // Convert cents to dollars
+        prices: pricesArr 
+      };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
@@ -516,12 +520,56 @@ app.get('/api/products/all', async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { ...p, prices: pricesArr };
+      return { 
+        ...p, 
+        price: p.price ? p.price / 100 : 0, // Convert cents to dollars
+        prices: pricesArr 
+      };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get single product by ID
+app.get('/api/products/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔍 GET_PRODUCT: Fetching product with ID:', id);
+
+    const result = await pool.query(
+      'SELECT * FROM products WHERE id = $1 AND is_deleted = false',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      console.log('❌ GET_PRODUCT: Product not found with ID:', id);
+      return res.status(404).json({ error: 'Product not found' });
+    }
+
+    const product = result.rows[0];
+    console.log('✅ GET_PRODUCT: Found product:', product.name);
+    
+    // Format prices array
+    let pricesArr = product.prices;
+    if (!pricesArr || !pricesArr.length) {
+      const amount = product.price || (product.metadata && (product.metadata.price || product.metadata.unit_amount)) || 0;
+      pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
+    }
+
+    const productWithPrices = { 
+      ...product, 
+      price: product.price ? product.price / 100 : 0, // Convert cents to dollars
+      prices: pricesArr,
+      in_stock: product.in_stock !== false // Ensure boolean
+    };
+    
+    res.json({ product: productWithPrices });
+  } catch (error) {
+    console.error('🔴 GET_PRODUCT: Error fetching product:', error);
+    res.status(500).json({ error: 'Failed to fetch product' });
   }
 });
 
@@ -557,6 +605,12 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
     console.log('🟠 Formatted metadata:', formattedMetadata);
     console.log('🟠 Formatted prices:', formattedPrices);
 
+    // Convert price to cents for database storage if provided
+    const priceInCents = price !== undefined ? Math.round(parseFloat(price) * 100) : undefined;
+    if (price !== undefined) {
+      console.log('🟠 Price conversion:', price, '→', priceInCents, 'cents');
+    }
+
     console.log('🟠 Executing UPDATE query...');
     await pool.query(
       `UPDATE products SET 
@@ -571,7 +625,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
         category = COALESCE($9, category),
         updated_at = NOW() 
        WHERE id = $10`,
-      [name, description, inStock, formattedMetadata, isSuspended, images, price, formattedPrices, category, id]
+      [name, description, inStock, formattedMetadata, isSuspended, images, priceInCents, formattedPrices, category, id]
     );
     console.log('✅ UPDATE query completed');
 
@@ -579,7 +633,14 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
 
     const updated = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
     console.log('✅ Updated product:', updated.rows[0]);
-    res.json({ product: updated.rows[0] });
+    
+    // Convert price back to dollars for frontend
+    const updatedProduct = updated.rows[0];
+    if (updatedProduct.price) {
+      updatedProduct.price = updatedProduct.price / 100;
+    }
+    
+    res.json({ product: updatedProduct });
   } catch (err) {
     console.error('🔴 SERVER: Update product error:', err);
     console.error('🔴 Stack trace:', err.stack);
@@ -678,16 +739,23 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     console.log('🟠 Formatted metadata:', formattedMetadata);
     console.log('🟠 Formatted prices:', formattedPrices);
 
+    // Convert price to cents for database storage
+    const priceInCents = Math.round(parseFloat(price) * 100);
+    console.log('🟠 Price conversion:', price, '→', priceInCents, 'cents');
+
     console.log('🟠 Executing INSERT query...');
     const result = await pool.query(
       `INSERT INTO products (user_id, name, description, images, metadata, in_stock, price, prices, category)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
-      [userId, name, description, images, formattedMetadata, inStock, price, formattedPrices, category]
+      [userId, name, description, images, formattedMetadata, inStock, priceInCents, formattedPrices, category]
     );
     console.log('✅ INSERT completed, result:', result.rows[0]);
 
     const newProduct = result.rows[0];
+
+    // Convert price back to dollars for frontend
+    newProduct.price = newProduct.price / 100;
 
     // In a real app, you'd also create Stripe Price objects here
     // and associate them. For now, we assume prices are managed elsewhere
@@ -854,12 +922,40 @@ app.get('/api/images/s3/*', async (req, res) => {
         }
         
         const { stream, metadata } = await s3Service.getStream(s3Key);
-        res.setHeader('Content-Type', metadata.ContentType);
+        
+        console.log(`🔍 IMAGE_PROXY: S3 metadata for "${s3Key}":`, metadata);
+        
+        // Ensure we have a proper image content type
+        let contentType = metadata.ContentType;
+        if (!contentType || contentType === 'text/plain') {
+          // Try to determine content type from file extension
+          const ext = s3Key.toLowerCase().split('.').pop();
+          switch (ext) {
+            case 'jpg':
+            case 'jpeg':
+              contentType = 'image/jpeg';
+              break;
+            case 'png':
+              contentType = 'image/png';
+              break;
+            case 'gif':
+              contentType = 'image/gif';
+              break;
+            case 'webp':
+              contentType = 'image/webp';
+              break;
+            default:
+              contentType = 'application/octet-stream';
+          }
+          console.log(`🔧 IMAGE_PROXY: Corrected content type from "${metadata.ContentType}" to "${contentType}"`);
+        }
+        
+        res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
         stream.pipe(res);
         
-        console.log(`✅ IMAGE_PROXY: Successfully streamed "${s3Key}"`);
+        console.log(`✅ IMAGE_PROXY: Successfully streamed "${s3Key}" with content type "${contentType}"`);
         
     } catch (error) {
         console.error(`🔴 IMAGE_PROXY_ERROR: Failed to stream image for key "${key}":`, error);
@@ -1062,7 +1158,8 @@ app.get('/api/media/:id', async (req, res) => {
       url: properUrl,
       title: media.title,
       fileType: media.file_type,
-      contentType: media.content_type
+      contentType: media.content_type,
+      type: media.file_type // Add type property for MediaPlayer compatibility
     };
     
     res.json({ media: mediaResponse });
@@ -1456,7 +1553,7 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
 // Helper function to get playlist with media files
 async function getPlaylistWithMedia(playlistId) {
   console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
-  
+
   const playlistResult = await pool.query(
     `SELECT p.*, u.username 
      FROM playlists p 
@@ -1466,14 +1563,10 @@ async function getPlaylistWithMedia(playlistId) {
   );
 
   if (playlistResult.rows.length === 0) {
-    console.log('🔴 GET_PLAYLIST: Playlist not found:', playlistId);
     return null;
   }
 
-  const playlist = playlistResult.rows[0];
-  console.log('🔴 GET_PLAYLIST: Raw playlist data:', playlist);
-
-  // Get media files for this playlist
+  const playlistData = playlistResult.rows[0];
   const mediaResult = await pool.query(
     `SELECT m.*, pm.display_order 
      FROM media m 
@@ -1483,37 +1576,69 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
-  playlist.mediaFiles = mediaResult.rows.map(media => ({
+  const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => ({
     id: media.id,
+    userId: media.user_id,
     title: media.title,
+    description: media.description,
+    filename: media.filename,
     filePath: `/uploads/${media.filename}`,
     fileType: media.file_type,
     contentType: media.content_type,
-            url: `${process.env.API_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN 
-          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` 
-          : 'https://merchtech5-production.up.railway.app'}/uploads/${media.filename}`,
-  }));
+    displayOrder: media.display_order,
+    createdAt: media.created_at,
+    updatedAt: media.updated_at,
+    type: media.file_type,
+    url: await s3Service.getSignedUrl(media.s3_key || media.filename),
+  })));
 
-  // Convert snake_case fields to camelCase for frontend compatibility
-  const convertedPlaylist = {
-    ...playlist,
-    requiresActivationCode: playlist.requires_activation_code,
-    isPublic: playlist.is_public,
-    userId: playlist.user_id,
-    createdAt: playlist.created_at,
-    updatedAt: playlist.updated_at
+  // Get product links for this playlist
+  let productLinks = [];
+  try {
+    const productLinksResult = await pool.query(`
+      SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+      FROM product_links pl
+      JOIN products p ON pl.product_id = p.id
+      WHERE pl.playlist_id = $1 AND pl.is_active = true
+      ORDER BY pl.display_order, pl.created_at
+    `, [playlistId]);
+
+    // Format product links for frontend
+    productLinks = productLinksResult.rows.map(link => ({
+      id: link.product_id.toString(), // Use product_id, not link.id
+      linkId: link.id.toString(), // Keep link ID for reference
+      title: link.title,
+      url: link.url,
+      description: link.description,
+      imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+      images: link.product_images || (link.image_url ? [link.image_url] : []),
+      displayOrder: link.display_order,
+      isActive: link.is_active,
+      price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
+      productName: link.product_name
+    }));
+
+    console.log('🔴 GET_PLAYLIST: Found', productLinks.length, 'product links');
+  } catch (error) {
+    console.error('🔴 GET_PLAYLIST: Error fetching product links:', error);
+    productLinks = [];
+  }
+
+  const finalPlaylist = {
+    id: playlistData.id,
+    userId: playlistData.user_id,
+    name: playlistData.name,
+    description: playlistData.description,
+    username: playlistData.username,
+    requiresActivationCode: playlistData.requires_activation_code,
+    isPublic: playlistData.is_public,
+    createdAt: playlistData.created_at,
+    updatedAt: playlistData.updated_at,
+    mediaFiles: mediaFiles,
+    productLinks: productLinks,
   };
   
-  console.log('🔴 GET_PLAYLIST: Converted playlist data:', {
-    id: convertedPlaylist.id,
-    name: convertedPlaylist.name,
-    requiresActivationCode: convertedPlaylist.requiresActivationCode,
-    requires_activation_code: playlist.requires_activation_code,
-    isPublic: convertedPlaylist.isPublic,
-    is_public: playlist.is_public
-  });
-  
-  return convertedPlaylist;
+  return finalPlaylist;
 }
 
 // ---------- STRIPE UTILITY ROUTES ----------
@@ -1574,6 +1699,14 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
     for (const it of items) {
       const prod = productsMap.get(String(it.productId));
       if (!prod) continue;
+      
+      // Debug: Log product data to see what images are available
+      console.log('💳 CHECKOUT: Product data for', prod.name, ':', {
+        id: prod.id,
+        images: prod.images,
+        imageType: typeof prod.images,
+        imageLength: prod.images ? prod.images.length : 'undefined'
+      });
 
       // Check if product is in stock
       if (!prod.in_stock) {
@@ -1593,23 +1726,48 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
 
       console.log('Adding line item', prod.name, unitAmount);
 
-      line_items.push({
+      // Handle product images - use actual product images with proper content type
+      let productImages = [];
+      console.log('💳 CHECKOUT: Processing images for product', prod.name, '- Images available:', !!prod.images, 'Length:', prod.images ? prod.images.length : 'N/A');
+      
+      if (prod.images && prod.images.length > 0) {
+        const firstImage = prod.images[0];
+        console.log('💳 CHECKOUT: Original image URL:', firstImage);
+        
+        if (firstImage) {
+          // Use the actual product image
+          productImages = [firstImage];
+          console.log('💳 CHECKOUT: Using actual product image for Stripe:', firstImage);
+        }
+      } else {
+        console.log('💳 CHECKOUT: No images found for product', prod.name);
+      }
+
+      console.log('💳 CHECKOUT: Final productImages array:', productImages);
+      console.log('💳 CHECKOUT: Sending to Stripe - Product:', prod.name, 'Images:', productImages.length > 0 ? productImages : 'NO IMAGES');
+
+      const lineItem = {
         price_data: {
           currency: 'usd',
           product_data: {
             name: prod.name,
-            images: prod.images && prod.images.length ? [prod.images[0]] : undefined,
+            images: productImages.length > 0 ? productImages : undefined,
           },
           unit_amount: unitAmount,
         },
         quantity: it.quantity || 1,
-      });
+      };
+
+      console.log('💳 CHECKOUT: Complete line item being sent to Stripe:', JSON.stringify(lineItem, null, 2));
+      line_items.push(lineItem);
     }
 
     if (line_items.length === 0) {
       return res.status(400).json({ error: 'No valid items for checkout' });
     }
 
+    console.log('💳 CHECKOUT: Creating Stripe session with line_items:', JSON.stringify(line_items, null, 2));
+    
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       mode: 'payment',
@@ -1621,6 +1779,9 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
       },
     });
 
+    console.log('✅ CHECKOUT: Stripe session created successfully. Session ID:', session.id);
+    console.log('💳 CHECKOUT: Session URL:', session.url);
+    
     res.json({ url: session.url });
   } catch (err) {
     console.error('Checkout session error:', err);
@@ -2246,8 +2407,19 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
           [slideshow.id]
         );
         
+        // Convert snake_case fields to camelCase for frontend compatibility
         return {
-          ...slideshow,
+          id: slideshow.id,
+          userId: slideshow.user_id,
+          name: slideshow.name,
+          description: slideshow.description,
+          requiresActivationCode: slideshow.requires_activation_code,
+          isPublic: slideshow.is_public,
+          autoplayInterval: slideshow.autoplay_interval,
+          transition: slideshow.transition,
+          backgroundAudioUrl: slideshow.audio_url,
+          createdAt: slideshow.created_at,
+          updatedAt: slideshow.updated_at,
           images: imagesResult.rows.map(img => ({
             id: img.id,
             slideshowId: img.slideshow_id,
@@ -2273,7 +2445,233 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
 app.get('/api/slideshows/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('🎬 SLIDESHOWS: Fetching slideshow:', id);
+    
+    console.log('🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====');
+    console.log('🎬 SLIDESHOWS: Fetching slideshow ID:', id);
+    
+    const result = await pool.query(
+      `SELECT s.*, u.username 
+       FROM slideshows s 
+       JOIN users u ON s.user_id = u.id
+       WHERE s.id = $1`,
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('🎬 SLIDESHOWS: ❌ Slideshow not found');
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = result.rows[0];
+    
+    console.log('🎬 SLIDESHOWS: ✅ Slideshow found in database');
+    console.log('🎬 SLIDESHOWS: Raw slideshow data from database:');
+    console.log('🎬 SLIDESHOWS:   - id:', slideshow.id);
+    console.log('🎬 SLIDESHOWS:   - name:', slideshow.name);
+    console.log('🎬 SLIDESHOWS:   - audio_url:', slideshow.audio_url);
+    console.log('🎬 SLIDESHOWS:   - audio_url type:', typeof slideshow.audio_url);
+    console.log('🎬 SLIDESHOWS:   - autoplay_interval:', slideshow.autoplay_interval);
+    console.log('🎬 SLIDESHOWS:   - requires_activation_code:', slideshow.requires_activation_code);
+    
+    const imagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [id]
+    );
+    
+    console.log('🎬 SLIDESHOWS: Found', imagesResult.rows.length, 'images for slideshow');
+    
+    const images = await Promise.all(imagesResult.rows.map(async (img) => {
+      const s3Key = s3Service.extractKeyFromUrl(img.image_url);
+      const signedUrl = s3Key ? await s3Service.getSignedUrl(s3Key) : img.image_url;
+      
+      return {
+        id: img.id,
+        slideshowId: id,
+        displayOrder: img.display_order,
+        createdAt: img.created_at,
+        title: img.caption || `Image ${img.display_order + 1}`,
+        description: img.caption,
+        url: signedUrl, 
+        type: 'image',
+        fileType: 'image',
+        contentType: 'image/jpeg'
+      };
+    }));
+
+    console.log('🎬 SLIDESHOWS: Processing background audio URL...');
+    console.log('🎬 SLIDESHOWS: Original audio_url:', slideshow.audio_url);
+    
+    // Pre-sign the background audio URL if it exists
+    let signedAudioUrl = null;
+    if (slideshow.audio_url) {
+      let actualAudioUrl = slideshow.audio_url;
+      
+      // Check if the audio_url is a JSON string and parse it
+      if (typeof slideshow.audio_url === 'string' && slideshow.audio_url.startsWith('{')) {
+        try {
+          const audioData = JSON.parse(slideshow.audio_url);
+          actualAudioUrl = audioData.url || slideshow.audio_url;
+          console.log('🎵 SLIDESHOWS: Parsed JSON audio data, extracted URL:', actualAudioUrl);
+        } catch (e) {
+          console.log('🎵 SLIDESHOWS: ⚠️ Failed to parse audio_url as JSON:', e.message);
+          // Try to extract URL from malformed JSON string using regex
+          const urlMatch = slideshow.audio_url.match(/"url":"([^"]+)"/);
+          if (urlMatch) {
+            actualAudioUrl = urlMatch[1];
+            console.log('🎵 SLIDESHOWS: Extracted URL from malformed JSON using regex:', actualAudioUrl);
+          } else {
+            actualAudioUrl = slideshow.audio_url;
+          }
+        }
+      }
+      
+      if (actualAudioUrl && actualAudioUrl.includes('amazonaws.com')) {
+        console.log('🎵 SLIDESHOWS: Audio URL is S3, generating signed URL...');
+        const audioKey = s3Service.extractKeyFromUrl(actualAudioUrl);
+        console.log('🎵 SLIDESHOWS: Extracted S3 key:', audioKey);
+        if (audioKey) {
+          signedAudioUrl = await s3Service.getSignedUrl(audioKey);
+          console.log('🎵 SLIDESHOWS: Generated signed audio URL:', signedAudioUrl);
+        } else {
+          console.log('🎵 SLIDESHOWS: ⚠️ Could not extract S3 key from audio URL');
+        }
+      } else if (actualAudioUrl) {
+        console.log('🎵 SLIDESHOWS: Audio URL is not S3, using as-is');
+        signedAudioUrl = actualAudioUrl;
+      } else {
+        console.log('🎵 SLIDESHOWS: ⚠️ No valid audio URL found after parsing');
+      }
+    } else {
+      console.log('🎵 SLIDESHOWS: No background audio URL found');
+    }
+
+    // Get product links for this slideshow
+    let productLinks = [];
+    try {
+      const productLinksResult = await pool.query(`
+        SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+        FROM product_links pl
+        JOIN products p ON pl.product_id = p.id
+        WHERE pl.slideshow_id = $1 AND pl.is_active = true
+        ORDER BY pl.display_order, pl.created_at
+      `, [id]);
+
+      // Format product links for frontend
+      productLinks = productLinksResult.rows.map(link => ({
+        id: link.product_id.toString(), // Use product_id, not link.id
+        linkId: link.id.toString(), // Keep link ID for reference
+        title: link.title,
+        url: link.url,
+        description: link.description,
+        imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+        images: link.product_images || (link.image_url ? [link.image_url] : []),
+        displayOrder: link.display_order,
+        isActive: link.is_active,
+        price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
+        productName: link.product_name
+      }));
+
+      console.log('🎬 SLIDESHOWS: Found', productLinks.length, 'product links');
+    } catch (error) {
+      console.error('🎬 SLIDESHOWS: Error fetching product links:', error);
+      productLinks = [];
+    }
+
+    const finalSlideshow = {
+      id: slideshow.id,
+      userId: slideshow.user_id,
+      name: slideshow.name,
+      description: slideshow.description,
+      username: slideshow.username,
+      isPublic: slideshow.is_public,
+      requiresActivationCode: slideshow.requires_activation_code,
+      autoplayInterval: slideshow.autoplay_interval,
+      backgroundAudioUrl: signedAudioUrl,
+      createdAt: slideshow.created_at,
+      updatedAt: slideshow.updated_at,
+      images: images,
+      productLinks: productLinks
+    };
+    
+    console.log('🎬 SLIDESHOWS: Final slideshow object prepared:');
+    console.log('🎬 SLIDESHOWS:   - id:', finalSlideshow.id);
+    console.log('🎬 SLIDESHOWS:   - name:', finalSlideshow.name);
+    console.log('🎬 SLIDESHOWS:   - backgroundAudioUrl:', finalSlideshow.backgroundAudioUrl);
+    console.log('🎬 SLIDESHOWS:   - backgroundAudioUrl type:', typeof finalSlideshow.backgroundAudioUrl);
+    console.log('🎬 SLIDESHOWS:   - autoplayInterval:', finalSlideshow.autoplayInterval);
+    console.log('🎬 SLIDESHOWS:   - requiresActivationCode:', finalSlideshow.requiresActivationCode);
+    console.log('🎬 SLIDESHOWS:   - images count:', finalSlideshow.images.length);
+    
+    console.log('🎬 SLIDESHOWS: Sending response to frontend...');
+    console.log('🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG END =====');
+    
+    res.json({ slideshow: finalSlideshow });
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOWS: ❌ Error fetching slideshow:', error);
+    console.error('🎬 SLIDESHOWS: Error stack:', error.stack);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get product links for a specific slideshow
+app.get('/api/slideshows/:slideshowId/products', async (req, res) => {
+  try {
+    const { slideshowId } = req.params;
+    console.log(`🔗 PRODUCTS: Fetching product links for slideshow ${slideshowId}`);
+
+    const result = await pool.query(
+      `SELECT p.*
+       FROM products p
+       JOIN product_links pl ON p.id = pl.product_id
+       WHERE pl.slideshow_id = $1 AND p.is_deleted = false`,
+      [slideshowId]
+    );
+
+    const products = result.rows;
+
+    const productsWithSignedUrls = await Promise.all(products.map(async (product) => {
+      // Convert price from cents to dollars
+      if (product.price) {
+        product.price = product.price / 100;
+      }
+      
+      if (product.image_url && product.image_url.includes('amazonaws.com')) {
+        const s3Key = s3Service.extractKeyFromUrl(product.image_url);
+        if (s3Key) {
+          product.image_url = await s3Service.getSignedUrl(s3Key);
+        }
+      }
+      if (product.image_urls && Array.isArray(product.image_urls)) {
+        product.image_urls = await Promise.all(product.image_urls.map(async (url) => {
+           if (url && url.includes('amazonaws.com')) {
+            const s3Key = s3Service.extractKeyFromUrl(url);
+            if (s3Key) {
+              return s3Service.getSignedUrl(s3Key);
+            }
+          }
+          return url;
+        }));
+      }
+      return product;
+    }));
+
+    console.log(`🔗 PRODUCTS: Found ${productsWithSignedUrls.length} product links.`);
+    res.json({ products: productsWithSignedUrls });
+
+  } catch (error) {
+    console.error('🔗 PRODUCTS: Error fetching product links for slideshow:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get a specific slideshow by ID for access control (no auth required)
+app.get('/api/slideshow-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow for access:', id);
     
     const result = await pool.query(
       `SELECT s.* FROM slideshows s WHERE s.id = $1`,
@@ -2285,6 +2683,19 @@ app.get('/api/slideshows/:id', async (req, res) => {
     }
     
     const slideshow = result.rows[0];
+    
+    // Fix audio_url if it's stored as JSON object
+    if (slideshow.audio_url && typeof slideshow.audio_url === 'string') {
+      try {
+        const audioData = JSON.parse(slideshow.audio_url);
+        if (audioData && audioData.url) {
+          slideshow.audio_url = audioData.url;
+        }
+      } catch (e) {
+        // If it's not valid JSON, leave it as is
+        console.log('🎬 SLIDESHOW_ACCESS: Audio URL is not JSON, keeping as string');
+      }
+    }
     
     // Get images for the slideshow
     const imagesResult = await pool.query(
@@ -2298,16 +2709,73 @@ app.get('/api/slideshows/:id', async (req, res) => {
       id: img.id,
       slideshowId: img.slideshow_id,
       imageUrl: img.image_url,
+      url: img.image_url, // Add url field for MediaPlayer compatibility
       caption: img.caption,
+      title: img.caption || `Image ${img.display_order + 1}`, // Add title field for MediaPlayer compatibility
       displayOrder: img.display_order,
-      createdAt: img.created_at
+      createdAt: img.created_at,
+      // Add media type fields for MediaPlayer compatibility
+      type: 'image',
+      fileType: 'image',
+      contentType: 'image/jpeg'
     }));
     
-    console.log('🎬 SLIDESHOWS: Slideshow found:', slideshow.name);
-    res.json({ slideshow });
+    // Get product links for this slideshow
+    let productLinks = [];
+    try {
+      const productLinksResult = await pool.query(`
+        SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+        FROM product_links pl
+        JOIN products p ON pl.product_id = p.id
+        WHERE pl.slideshow_id = $1 AND pl.is_active = true
+        ORDER BY pl.display_order, pl.created_at
+      `, [id]);
+
+      // Format product links for frontend
+      productLinks = productLinksResult.rows.map(link => ({
+        id: link.product_id.toString(), // Use product_id, not link.id
+        linkId: link.id.toString(), // Keep link ID for reference
+        title: link.title,
+        url: link.url,
+        description: link.description,
+        imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+        images: link.product_images || (link.image_url ? [link.image_url] : []),
+        displayOrder: link.display_order,
+        isActive: link.is_active,
+        price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
+        productName: link.product_name
+      }));
+
+      console.log('🎬 SLIDESHOW_ACCESS: Found', productLinks.length, 'product links');
+    } catch (error) {
+      console.error('🎬 SLIDESHOW_ACCESS: Error fetching product links:', error);
+      productLinks = [];
+    }
+    
+    // Convert snake_case fields to camelCase for frontend compatibility
+    const accessData = {
+      id: slideshow.id,
+      name: slideshow.name,
+      description: slideshow.description,
+      requiresActivationCode: slideshow.requires_activation_code,
+      isPublic: slideshow.is_public,
+      autoplayInterval: slideshow.autoplay_interval,
+      transition: slideshow.transition,
+      createdAt: slideshow.created_at,
+      updatedAt: slideshow.updated_at,
+      audioUrl: slideshow.audio_url,
+      images: slideshow.images,
+      productLinks: productLinks,
+      // Add access control flag - ONLY based on requiresActivationCode
+      accessRestricted: slideshow.requires_activation_code
+    };
+    
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow found:', accessData.name);
+    console.log('🎬 SLIDESHOW_ACCESS: Access restricted:', accessData.accessRestricted);
+    res.json(accessData);
     
   } catch (error) {
-    console.error('🎬 SLIDESHOWS: Error fetching slideshow:', error);
+    console.error('🎬 SLIDESHOW_ACCESS: Error fetching slideshow:', error);
     res.status(500).json({ error: 'Failed to fetch slideshow' });
   }
 });
@@ -2378,22 +2846,67 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { name, description, autoplayInterval, transition, requiresActivationCode, audio_url } = req.body;
     
-    console.log('🎬 SLIDESHOWS: Updating slideshow:', id);
-    console.log('🎬 SLIDESHOWS: Update data:', { name, description, autoplayInterval, transition, requiresActivationCode, audio_url });
+    console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====');
+    console.log('🎬 SLIDESHOWS: Updating slideshow ID:', id);
+    console.log('🎬 SLIDESHOWS: Request body received:', JSON.stringify(req.body, null, 2));
+    console.log('🎬 SLIDESHOWS: Extracted fields:');
+    console.log('🎬 SLIDESHOWS:   - name:', name);
+    console.log('🎬 SLIDESHOWS:   - description:', description);
+    console.log('🎬 SLIDESHOWS:   - autoplayInterval:', autoplayInterval);
+    console.log('🎬 SLIDESHOWS:   - transition:', transition);
+    console.log('🎬 SLIDESHOWS:   - requiresActivationCode:', requiresActivationCode);
+    console.log('🎬 SLIDESHOWS:   - audio_url:', audio_url);
+    console.log('🎬 SLIDESHOWS:   - audio_url type:', typeof audio_url);
+    console.log('🎬 SLIDESHOWS: User ID:', req.user.userId);
     
     // Check if user owns the slideshow
+    console.log('🎬 SLIDESHOWS: Checking slideshow ownership...');
     const ownerCheck = await pool.query(
       'SELECT user_id FROM slideshows WHERE id = $1',
       [id]
     );
 
     if (ownerCheck.rows.length === 0) {
+      console.log('🎬 SLIDESHOWS: ❌ Slideshow not found');
       return res.status(404).json({ error: 'Slideshow not found' });
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      console.log('🎬 SLIDESHOWS: ❌ Not authorized - owner:', ownerCheck.rows[0].user_id, 'user:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to update this slideshow' });
     }
+
+    console.log('🎬 SLIDESHOWS: ✅ Ownership verified');
+    
+    // Process audio_url - extract just the URL if it's an object
+    let processedAudioUrl = audio_url;
+    if (audio_url && typeof audio_url === 'object' && audio_url.url) {
+      processedAudioUrl = audio_url.url;
+      console.log('🎵 SLIDESHOWS: Audio URL is object, extracting URL:', processedAudioUrl);
+    } else if (audio_url && typeof audio_url === 'string') {
+      // If it's a JSON string, try to parse it and extract the URL
+      if (audio_url.startsWith('{')) {
+        try {
+          const audioData = JSON.parse(audio_url);
+          processedAudioUrl = audioData.url || audio_url;
+          console.log('🎵 SLIDESHOWS: Audio URL is JSON string, extracted URL:', processedAudioUrl);
+        } catch (e) {
+          console.log('🎵 SLIDESHOWS: Failed to parse audio URL JSON, using as-is:', audio_url);
+          processedAudioUrl = audio_url;
+        }
+      } else {
+        console.log('🎵 SLIDESHOWS: Audio URL is string, using as-is:', processedAudioUrl);
+      }
+    }
+    
+    console.log('🎬 SLIDESHOWS: Executing UPDATE query with parameters:');
+    console.log('🎬 SLIDESHOWS:   $1 (name):', name);
+    console.log('🎬 SLIDESHOWS:   $2 (description):', description);
+    console.log('🎬 SLIDESHOWS:   $3 (autoplayInterval):', autoplayInterval);
+    console.log('🎬 SLIDESHOWS:   $4 (transition):', transition);
+    console.log('🎬 SLIDESHOWS:   $5 (requiresActivationCode):', requiresActivationCode);
+    console.log('🎬 SLIDESHOWS:   $6 (processedAudioUrl):', processedAudioUrl);
+    console.log('🎬 SLIDESHOWS:   $7 (id):', id);
 
     const result = await pool.query(
       `UPDATE slideshows 
@@ -2405,19 +2918,59 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
            audio_url = COALESCE($6, audio_url),
            updated_at = NOW()
        WHERE id = $7 RETURNING *`,
-      [name, description, autoplayInterval, transition, requiresActivationCode, audio_url, id]
+      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, id]
     );
 
     const slideshow = result.rows[0];
     
-    console.log('🎬 SLIDESHOWS: Slideshow updated successfully:', slideshow.name);
-    if (audio_url) {
-      console.log('🎵 SLIDESHOWS: Audio URL updated to:', slideshow.audio_url);
+    console.log('🎬 SLIDESHOWS: ✅ UPDATE query successful');
+    console.log('🎬 SLIDESHOWS: Updated slideshow data from database:');
+    console.log('🎬 SLIDESHOWS:   - id:', slideshow.id);
+    console.log('🎬 SLIDESHOWS:   - name:', slideshow.name);
+    console.log('🎬 SLIDESHOWS:   - audio_url:', slideshow.audio_url);
+    console.log('🎬 SLIDESHOWS:   - audio_url type:', typeof slideshow.audio_url);
+    console.log('🎬 SLIDESHOWS:   - autoplay_interval:', slideshow.autoplay_interval);
+    console.log('🎬 SLIDESHOWS:   - requires_activation_code:', slideshow.requires_activation_code);
+    console.log('🎬 SLIDESHOWS:   - updated_at:', slideshow.updated_at);
+    
+    if (processedAudioUrl) {
+      console.log('🎵 SLIDESHOWS: ✅ Audio URL was provided and should be updated');
+      console.log('🎵 SLIDESHOWS: Original audio_url from request:', audio_url);
+      console.log('🎵 SLIDESHOWS: Processed audio_url for database:', processedAudioUrl);
+      console.log('🎵 SLIDESHOWS: Stored audio_url in database:', slideshow.audio_url);
+      
+      if (processedAudioUrl !== slideshow.audio_url) {
+        console.log('🎵 SLIDESHOWS: ⚠️ WARNING: Audio URL mismatch!');
+        console.log('🎵 SLIDESHOWS: Expected:', processedAudioUrl);
+        console.log('🎵 SLIDESHOWS: Got:', slideshow.audio_url);
+      } else {
+        console.log('🎵 SLIDESHOWS: ✅ Audio URL stored correctly');
+      }
+    } else {
+      console.log('🎵 SLIDESHOWS: ℹ️ No audio_url provided in request');
     }
-    res.json({ slideshow });
+    
+    console.log('🎬 SLIDESHOWS: Preparing response object...');
+    const responseSlideshow = {
+      id: slideshow.id,
+      name: slideshow.name,
+      description: slideshow.description,
+      autoplayInterval: slideshow.autoplay_interval,
+      transition: slideshow.transition,
+      requiresActivationCode: slideshow.requires_activation_code,
+      backgroundAudioUrl: slideshow.audio_url,
+      updatedAt: slideshow.updated_at
+    };
+    
+    console.log('🎬 SLIDESHOWS: Response object prepared:');
+    console.log('🎬 SLIDESHOWS:', JSON.stringify(responseSlideshow, null, 2));
+    console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG END =====');
+    
+    res.json({ slideshow: responseSlideshow });
     
   } catch (error) {
-    console.error('🎬 SLIDESHOWS: Error updating slideshow:', error);
+    console.error('🎬 SLIDESHOWS: ❌ Error updating slideshow:', error);
+    console.error('🎬 SLIDESHOWS: Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to update slideshow' });
   }
 });
@@ -2789,6 +3342,137 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
   }
 });
 
+// Stream slideshow audio endpoint - serves audio files for slideshow background music
+app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎵 SLIDESHOW_AUDIO_STREAM: Streaming audio for slideshow:', id);
+    
+    // Set CORS headers for audio streaming
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    
+    // Get slideshow details from database
+    const result = await pool.query(
+      'SELECT * FROM slideshows WHERE id = $1',
+      [id]
+    );
+    
+    if (result.rows.length === 0) {
+      console.log('🎵 SLIDESHOW_AUDIO_STREAM: Slideshow not found:', id);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = result.rows[0];
+    let audioUrl = slideshow.audio_url;
+    
+    if (!audioUrl) {
+      console.log('🎵 SLIDESHOW_AUDIO_STREAM: No audio URL for slideshow:', id);
+      return res.status(404).json({ error: 'No audio file for this slideshow' });
+    }
+    
+    // Fix audio_url if it's stored as JSON object
+    if (typeof audioUrl === 'string' && audioUrl.startsWith('{')) {
+      try {
+        const audioData = JSON.parse(audioUrl);
+        if (audioData && audioData.url) {
+          audioUrl = audioData.url;
+        }
+      } catch (e) {
+        // If it's not valid JSON, try to extract URL using regex
+        console.log('🎵 SLIDESHOW_AUDIO_STREAM: Audio URL is not valid JSON, trying regex extraction');
+        const urlMatch = audioUrl.match(/"url":"([^"]+)"/);
+        if (urlMatch) {
+          audioUrl = urlMatch[1];
+          console.log('🎵 SLIDESHOW_AUDIO_STREAM: Extracted URL from malformed JSON using regex:', audioUrl);
+        } else {
+          console.log('🎵 SLIDESHOW_AUDIO_STREAM: Could not extract URL, using as string');
+        }
+      }
+    }
+    
+    console.log('🎵 SLIDESHOW_AUDIO_STREAM: Audio URL:', audioUrl);
+    
+    // If it's an S3 URL, stream through our S3 service
+    if (audioUrl.includes('amazonaws.com') && s3Service) {
+      try {
+        console.log('🎵 SLIDESHOW_AUDIO_STREAM: Streaming S3 audio');
+        const key = s3Service.extractKeyFromUrl(audioUrl);
+        if (!key) {
+          console.error('🎵 SLIDESHOW_AUDIO_STREAM: Could not extract S3 key from URL:', audioUrl);
+          return res.status(500).json({ error: 'Invalid S3 URL format' });
+        }
+        console.log('🎵 SLIDESHOW_AUDIO_STREAM: Extracted S3 key:', key);
+        
+        // Stream the audio through our S3 service
+        const { stream, metadata } = await s3Service.getStream(key);
+        
+        // Set appropriate headers for audio streaming
+        res.setHeader('Content-Type', metadata.ContentType || 'audio/mpeg');
+        res.setHeader('Content-Length', metadata.ContentLength);
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        // Pipe the response stream directly
+        stream.pipe(res);
+        console.log('🎵 SLIDESHOW_AUDIO_STREAM: Successfully streaming S3 audio');
+        return;
+        
+      } catch (error) {
+        console.error('🎵 SLIDESHOW_AUDIO_STREAM: Error streaming S3 audio:', error);
+        return res.status(500).json({ error: 'Failed to stream S3 audio' });
+      }
+    }
+    
+    // If it's a local file, serve it directly
+    if (audioUrl.startsWith('/') || audioUrl.startsWith('./') || audioUrl.includes('uploads/')) {
+      const filename = audioUrl.split('/').pop();
+      const filePath = path.join(__dirname, 'uploads', filename);
+      if (fs.existsSync(filePath)) {
+        console.log('🎵 SLIDESHOW_AUDIO_STREAM: Serving local file:', filePath);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Accept-Ranges', 'bytes');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.sendFile(filePath);
+      }
+    }
+    
+    // For other URLs, try to proxy them
+    try {
+      console.log('🎵 SLIDESHOW_AUDIO_STREAM: Proxying external URL:', audioUrl);
+      const response = await axios.get(audioUrl, {
+        responseType: 'stream',
+        headers: {
+          'Range': req.headers.range || undefined
+        }
+      });
+      
+      res.setHeader('Content-Type', response.headers['content-type'] || 'audio/mpeg');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      
+      // Copy content-length if present
+      if (response.headers['content-length']) {
+        res.setHeader('Content-Length', response.headers['content-length']);
+      }
+      
+      // Pipe the response stream directly
+      response.data.pipe(res);
+      return;
+    } catch (err) {
+      console.error('🎵 SLIDESHOW_AUDIO_STREAM: Error proxying external URL:', err);
+      // Fall back to redirect for external URLs
+      console.log('🎵 SLIDESHOW_AUDIO_STREAM: Redirecting to external URL');
+      return res.redirect(audioUrl);
+    }
+    
+  } catch (error) {
+    console.error('🎵 SLIDESHOW_AUDIO_STREAM: Error streaming audio:', error);
+    res.status(500).json({ error: 'Failed to stream audio' });
+  }
+});
+
 // ---------- CHAT ROUTES ----------
 app.get('/api/playlists/:playlistId/chat', async (req, res) => {
   try {
@@ -2942,6 +3626,414 @@ app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, asyn
   } catch (error) {
     console.error('Error deleting chat message:', error);
     res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// ---------- CHAT ENDPOINTS ----------
+
+// Get universal chat messages
+app.get('/api/chat/universal', authenticateToken, async (req, res) => {
+  try {
+    const { limit = 50, offset = 0, filterType = 'all', userId, category, messageType } = req.query;
+    
+    console.log('🌍 UNIVERSAL_CHAT: Fetching messages with filters:', { 
+      limit, offset, filterType, userId, category, messageType 
+    });
+
+    let query = `
+      SELECT cm.*, u.username, u.id as user_id
+      FROM universal_chat_messages cm 
+      JOIN users u ON cm.user_id = u.id 
+      WHERE cm.is_deleted = FALSE
+    `;
+    
+    const queryParams = [];
+    let paramIndex = 1;
+
+    // Add filters
+    if (filterType === 'user_store' && userId) {
+      query += ` AND cm.user_id = $${paramIndex}`;
+      queryParams.push(userId);
+      paramIndex++;
+    }
+    
+    if (filterType === 'category' && category) {
+      query += ` AND cm.product_category = $${paramIndex}`;
+      queryParams.push(category);
+      paramIndex++;
+    }
+    
+    if (messageType) {
+      query += ` AND cm.message_type = $${paramIndex}`;
+      queryParams.push(messageType);
+      paramIndex++;
+    }
+
+    query += ` ORDER BY cm.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    queryParams.push(parseInt(limit), parseInt(offset));
+
+    const result = await pool.query(query, queryParams);
+
+    const messages = result.rows.map(msg => ({
+      id: msg.id,
+      userId: msg.user_id,
+      username: msg.username,
+      message: msg.message,
+      messageType: msg.message_type || 'general',
+      category: msg.product_category,
+      createdAt: msg.created_at,
+      updatedAt: msg.updated_at
+    }));
+
+    console.log('🌍 UNIVERSAL_CHAT: Found', messages.length, 'messages');
+    res.json({ messages: messages.reverse() });
+  } catch (error) {
+    console.error('🌍 UNIVERSAL_CHAT: Error fetching messages:', error);
+    res.status(500).json({ error: 'Failed to fetch chat messages' });
+  }
+});
+
+// Post universal chat message
+app.post('/api/chat/universal', authenticateToken, async (req, res) => {
+  try {
+    const { message, messageType = 'general', relatedProductId, relatedStoreUserId, productCategory } = req.body;
+    const userId = req.user.id;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    console.log('🌍 UNIVERSAL_CHAT: Posting message:', { 
+      userId, message: message.trim(), messageType, productCategory 
+    });
+
+    const result = await pool.query(
+      `INSERT INTO universal_chat_messages (user_id, message, message_type, product_category, created_at, updated_at) 
+       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+       RETURNING *`,
+      [userId, message.trim(), messageType, productCategory]
+    );
+
+    const newMessage = result.rows[0];
+
+    // Get username for response
+    const userResult = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+    const username = userResult.rows[0]?.username || 'Unknown';
+
+    const responseMessage = {
+      id: newMessage.id,
+      userId: newMessage.user_id,
+      username: username,
+      message: newMessage.message,
+      messageType: newMessage.message_type,
+      category: newMessage.product_category,
+      createdAt: newMessage.created_at,
+      updatedAt: newMessage.updated_at
+    };
+
+    console.log('🌍 UNIVERSAL_CHAT: Message posted successfully');
+    res.json({ message: responseMessage });
+  } catch (error) {
+    console.error('🌍 UNIVERSAL_CHAT: Error posting message:', error);
+    res.status(500).json({ error: 'Failed to post message' });
+  }
+});
+
+// Delete universal chat message
+app.delete('/api/chat/universal/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    console.log('🌍 UNIVERSAL_CHAT: Deleting message:', messageId, 'by user:', userId);
+
+    // Check if message exists and belongs to user (or user is admin)
+    const messageResult = await pool.query(
+      'SELECT user_id FROM universal_chat_messages WHERE id = $1 AND is_deleted = FALSE',
+      [messageId]
+    );
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const messageOwnerId = messageResult.rows[0].user_id;
+    
+    if (messageOwnerId !== userId && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to delete this message' });
+    }
+
+    await pool.query(
+      'UPDATE universal_chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
+      [messageId]
+    );
+
+    console.log('🌍 UNIVERSAL_CHAT: Message deleted successfully');
+    res.json({ success: true });
+  } catch (error) {
+    console.error('🌍 UNIVERSAL_CHAT: Error deleting message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// Get chat categories
+app.get('/api/chat/categories', authenticateToken, async (req, res) => {
+  try {
+    console.log('🌍 CHAT_CATEGORIES: Fetching categories');
+    
+    // Get distinct categories from universal chat messages
+    const result = await pool.query(
+      `SELECT DISTINCT product_category 
+       FROM universal_chat_messages 
+       WHERE product_category IS NOT NULL AND product_category != '' AND is_deleted = FALSE 
+       ORDER BY product_category`
+    );
+
+    const categories = result.rows.map(row => row.product_category);
+    
+    // Add some default categories if none exist
+    if (categories.length === 0) {
+      categories.push('general', 'products', 'support', 'feedback');
+    }
+
+    console.log('🌍 CHAT_CATEGORIES: Found categories:', categories);
+    res.json({ categories });
+  } catch (error) {
+    console.error('🌍 CHAT_CATEGORIES: Error fetching categories:', error);
+    res.status(500).json({ error: 'Failed to fetch chat categories' });
+  }
+});
+
+// ---------- PRODUCT LINKS ROUTES ----------
+
+// Get product links for a playlist
+app.get('/api/playlists/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const result = await pool.query(`
+      SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+      FROM product_links pl
+      JOIN products p ON pl.product_id = p.id
+      WHERE pl.playlist_id = $1 AND pl.is_active = true
+      ORDER BY pl.display_order, pl.created_at
+    `, [id]);
+
+    // Convert price from cents to dollars and format images
+    const formattedLinks = result.rows.map(link => ({
+      ...link,
+      price: link.price ? (link.price / 100).toFixed(2) : null,
+      image_url: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url
+    }));
+
+    res.json(formattedLinks);
+  } catch (error) {
+    console.error('❌ Get playlist product links error:', error);
+    res.status(500).json({ error: 'Failed to get product links' });
+  }
+});
+
+// Add product link to playlist
+app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productId } = req.body;
+    
+    if (!productId) {
+      return res.status(400).json({ error: 'productId is required' });
+    }
+
+    console.log('🔗 PRODUCT_LINK: Adding product link:', { playlistId: id, productId, userId: req.user.userId });
+
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found or access denied' });
+    }
+
+    // Check if product exists and user owns it
+    const productResult = await pool.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or access denied' });
+    }
+
+    const product = productResult.rows[0];
+
+    // Add link with product details
+    const result = await pool.query(`
+      INSERT INTO product_links (playlist_id, product_id, title, url, description, image_url, display_order)
+      VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM product_links WHERE playlist_id = $1))
+      ON CONFLICT (playlist_id, product_id) DO UPDATE SET
+        title = EXCLUDED.title,
+        url = EXCLUDED.url,
+        description = EXCLUDED.description,
+        image_url = EXCLUDED.image_url,
+        is_active = true,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `, [
+      id, 
+      productId, 
+      product.name,
+      `${process.env.FRONTEND_URL || 'http://localhost:8081'}/store/product/${productId}`,
+      product.description || product.name,
+      product.images && product.images.length > 0 ? product.images[0] : null
+    ]);
+
+    console.log('✅ PRODUCT_LINK: Product link created:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Add playlist product link error:', error);
+    res.status(500).json({ error: 'Failed to add product link' });
+  }
+});
+
+// Remove product link from playlist
+app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, async (req, res) => {
+  try {
+    const { id, productId } = req.params;
+    
+    console.log('🔗 PRODUCT_LINK: Removing product link:', { playlistId: id, productId, userId: req.user.userId });
+
+    // Check if playlist exists and user owns it
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found or access denied' });
+    }
+
+    // Remove link
+    const result = await pool.query(`
+      DELETE FROM product_links 
+      WHERE playlist_id = $1 AND product_id = $2 RETURNING *
+    `, [id, productId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    console.log('✅ PRODUCT_LINK: Product link removed:', result.rows[0]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Remove playlist product link error:', error);
+    res.status(500).json({ error: 'Failed to remove product link' });
+  }
+});
+
+// ---------- SLIDESHOW PRODUCT LINKS ROUTES ----------
+
+// Get product links for a slideshow
+app.get('/api/slideshows/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log('🔗 SLIDESHOW_PRODUCT_LINK: Getting product links for slideshow:', id);
+    
+    const result = await pool.query(`
+      SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+      FROM product_links pl
+      JOIN products p ON pl.product_id = p.id
+      WHERE pl.slideshow_id = $1 AND pl.is_active = true
+      ORDER BY pl.display_order, pl.created_at
+    `, [id]);
+
+    // Convert price from cents to dollars and format images
+    const formattedLinks = result.rows.map(link => ({
+      ...link,
+      price: link.price ? (link.price / 100).toFixed(2) : null,
+      image_url: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url
+    }));
+
+    console.log('🔗 SLIDESHOW_PRODUCT_LINK: Found', formattedLinks.length, 'product links');
+    res.json(formattedLinks);
+  } catch (error) {
+    console.error('❌ Get slideshow product links error:', error);
+    res.status(500).json({ error: 'Failed to get product links' });
+  }
+});
+
+// Add product link to slideshow
+app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { productId } = req.body;
+    
+    if (!productId) {
+      return res.status(400).json({ error: 'productId is required' });
+    }
+
+    console.log('🔗 SLIDESHOW_PRODUCT_LINK: Adding product link:', { slideshowId: id, productId, userId: req.user.userId });
+
+    // Check if slideshow exists and user owns it
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found or access denied' });
+    }
+
+    // Check if product exists and user owns it
+    const productResult = await pool.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Product not found or access denied' });
+    }
+
+    const product = productResult.rows[0];
+
+    // Add link with product details
+    const result = await pool.query(`
+      INSERT INTO product_links (slideshow_id, product_id, title, url, description, image_url, display_order)
+      VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM product_links WHERE slideshow_id = $1))
+      ON CONFLICT (slideshow_id, product_id) DO UPDATE SET
+        title = EXCLUDED.title,
+        url = EXCLUDED.url,
+        description = EXCLUDED.description,
+        image_url = EXCLUDED.image_url,
+        is_active = true,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `, [
+      id, 
+      productId, 
+      product.name,
+      `${process.env.FRONTEND_URL || 'http://localhost:8081'}/store/product/${productId}`,
+      product.description || product.name,
+      product.images && product.images.length > 0 ? product.images[0] : null
+    ]);
+
+    console.log('✅ SLIDESHOW_PRODUCT_LINK: Product link created:', result.rows[0]);
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('❌ Add slideshow product link error:', error);
+    res.status(500).json({ error: 'Failed to add product link' });
+  }
+});
+
+// Remove product link from slideshow
+app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, async (req, res) => {
+  try {
+    const { id, productId } = req.params;
+    
+    console.log('🔗 SLIDESHOW_PRODUCT_LINK: Removing product link:', { slideshowId: id, productId, userId: req.user.userId });
+
+    // Check if slideshow exists and user owns it
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found or access denied' });
+    }
+
+    // Remove link
+    const result = await pool.query(`
+      DELETE FROM product_links 
+      WHERE slideshow_id = $1 AND product_id = $2 RETURNING *
+    `, [id, productId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Product link not found' });
+    }
+
+    console.log('✅ SLIDESHOW_PRODUCT_LINK: Product link removed:', result.rows[0]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Remove slideshow product link error:', error);
+    res.status(500).json({ error: 'Failed to remove product link' });
   }
 });
 
