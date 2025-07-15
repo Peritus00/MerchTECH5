@@ -11,9 +11,9 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import MediaPlayer from '@/components/MediaPlayer';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
-import { slideshowAPI, playlistAPI, mediaAPI } from '@/services/api';
+import { slideshowsAPI, playlistsAPI, mediaAPI } from '@/services/api';
 import { CartHeader } from '@/components/CartHeader';
-import { ShareButton } from '@/components/ShareButton';
+import ShareButton from '@/components/ShareButton';
 
 type ContentType = 'playlist' | 'slideshow' | 'media';
 
@@ -54,7 +54,7 @@ export default function DynamicMediaPlayerPage() {
 
     // Try fetching as a playlist first
     try {
-      const playlistData = await playlistAPI.getById(contentId);
+      const playlistData = await playlistsAPI.getById(contentId);
       if (playlistData) {
         setContent({ type: 'playlist', data: playlistData });
         setIsLoading(false);
@@ -66,7 +66,7 @@ export default function DynamicMediaPlayerPage() {
 
     // Try fetching as a slideshow
     try {
-      const slideshowData = await slideshowAPI.getById(contentId);
+      const slideshowData = await slideshowsAPI.getById(contentId);
       if (slideshowData) {
         setContent({ type: 'slideshow', data: slideshowData });
         setIsLoading(false);
@@ -131,7 +131,7 @@ export default function DynamicMediaPlayerPage() {
           title: getContentName(),
           headerRight: () => (
             <>
-              <ShareButton url={shareUrl} />
+              <ShareButton url={shareUrl} title={getContentName()} />
               <CartHeader />
             </>
           ),
@@ -147,6 +147,7 @@ export default function DynamicMediaPlayerPage() {
         playlist={content?.type === 'playlist' ? content.data : undefined}
         slideshow={content?.type === 'slideshow' ? content.data : undefined}
         autoPlay
+        showChat={false}
       />
     </ThemedView>
   );
