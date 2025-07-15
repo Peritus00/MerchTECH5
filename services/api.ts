@@ -76,7 +76,20 @@ api.interceptors.response.use(
       code: error.code,
       status: error.response?.status,
       statusText: error.response?.statusText,
+      data: error.response?.data,
     });
+    
+    // Handle specific error cases
+    if (error.response?.status === 401) {
+      console.error('🔐 Authentication failed - token may be expired');
+      // Don't automatically logout here as it can cause loops
+    } else if (error.response?.status === 403) {
+      console.error('🔐 Access forbidden - insufficient permissions');
+    } else if (error.response?.status === 404) {
+      console.error('🔍 Resource not found');
+    } else if (error.response?.status >= 500) {
+      console.error('🔥 Server error');
+    }
     
     // Provide more specific error messages for network issues
     if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
@@ -93,10 +106,18 @@ api.interceptors.response.use(
 
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('authToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await AsyncStorage.getItem('authToken');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔐 API: Adding auth token to request:', config.url);
+      } else {
+        console.log('🔐 API: No auth token found for request:', config.url);
+      }
+    } catch (error) {
+      console.error('🔐 API: Error getting auth token:', error);
     }
+    
     // If data is plain object (not FormData), default to JSON
     if (
       config.data &&
@@ -105,6 +126,17 @@ api.interceptors.request.use(
     ) {
       config.headers['Content-Type'] = 'application/json';
     }
+    
+    // Add environment info for debugging
+    console.log('🔧 API: Request config:', {
+      url: config.url,
+      baseURL: config.baseURL,
+      method: config.method,
+      hasAuth: !!config.headers.Authorization,
+      environment: env.nodeEnv,
+      isProduction: env.isProduction
+    });
+    
     return config;
   },
   (error) => {
@@ -243,13 +275,51 @@ export const universalChatAPI = {
 export const productsAPI = {
   async getMyProducts() {
     const res = await api.get(`/products?mine=true&_t=${Date.now()}`);
-    // Extract products from response wrapper
-    return res.data.products || res.data as Product[];
+    // Extract products from response wrapper and ensure it's always an array
+    const products = res.data.products || res.data;
+    return Array.isArray(products) ? products : [];
   },
   async getAllProducts() {
-    const res = await api.get(`/products?_t=${Date.now()}`);
-    // Extract products from response wrapper
-    return res.data.products || res.data as Product[];
+    try {
+      console.log('📦 API: getAllProducts - Starting request');
+      const res = await api.get(`/products?_t=${Date.now()}`);
+      console.log('📦 API: getAllProducts - Response received:', {
+        status: res.status,
+        statusText: res.statusText,
+        hasData: !!res.data,
+        dataType: typeof res.data,
+        dataKeys: res.data ? Object.keys(res.data) : []
+      });
+      
+      // Extract products from response wrapper and ensure it's always an array
+      const products = res.data.products || res.data;
+      console.log('📦 API: getAllProducts response type:', typeof products, 'isArray:', Array.isArray(products));
+      console.log('📦 API: getAllProducts raw response:', res.data);
+      
+      if (!Array.isArray(products)) {
+        console.error('📦 API: getAllProducts - Expected array but got:', typeof products, products);
+        return [];
+      }
+      
+      console.log('📦 API: getAllProducts - Returning', products.length, 'products');
+      return products;
+    } catch (error: any) {
+      console.error('📦 API: getAllProducts - Error occurred:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        code: error.code,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL
+        }
+      });
+      
+      // Always return empty array on error to prevent .map() issues
+      return [];
+    }
   },
   async getProductById(id: string) {
     try {

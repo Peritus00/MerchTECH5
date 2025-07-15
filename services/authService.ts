@@ -1,6 +1,7 @@
 import { User } from '@/types';
 import { authAPI } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { env } from '@/config/environment';
 
 interface AuthResponse {
   user: User;
@@ -245,27 +246,52 @@ class AuthService {
 
   async getCurrentUser(): Promise<User | null> {
     try {
+      console.log('🔐 AuthService: Getting current user...');
+      
       const [token, userJson] = await Promise.all([
         AsyncStorage.getItem(AuthService.TOKEN_KEY),
         AsyncStorage.getItem(AuthService.USER_KEY),
       ]);
 
+      console.log('🔐 AuthService: Token exists:', !!token);
+      console.log('🔐 AuthService: User data exists:', !!userJson);
+
       if (!token || !userJson) {
+        console.log('🔐 AuthService: Missing token or user data');
         return null;
       }
 
       const user = JSON.parse(userJson);
+      console.log('🔐 AuthService: Parsed user:', user.username);
       
       // Validate token is still valid
       if (await this.isTokenValid(token)) {
+        console.log('🔐 AuthService: Token is valid');
         return user;
       } else {
+        console.log('🔐 AuthService: Token expired, attempting refresh...');
         // Token expired, try to refresh
         const refreshed = await this.refreshToken();
         return refreshed ? user : null;
       }
     } catch (error) {
-      console.error('Get current user error:', error);
+      console.error('🔐 AuthService: Get current user error:', error);
+      
+      // In production web environments, AsyncStorage might have issues
+      // Try to clear potentially corrupted data
+      if (typeof window !== 'undefined' && env.isProduction) {
+        console.log('🔐 AuthService: Production web environment - clearing potentially corrupted auth data');
+        try {
+          await AsyncStorage.multiRemove([
+            AuthService.TOKEN_KEY,
+            AuthService.REFRESH_TOKEN_KEY,
+            AuthService.USER_KEY
+          ]);
+        } catch (clearError) {
+          console.error('🔐 AuthService: Error clearing corrupted auth data:', clearError);
+        }
+      }
+      
       // Don't call logout here as it can create circular dependencies
       // Just return null and let the auth context handle the state
       return null;

@@ -60,8 +60,28 @@ export default function StoreScreen() {
   const fetchProducts = async () => {
     try {
       console.log('🏪 Store: Fetching products for user:', user?.username, 'isAdmin:', isAdmin, 'user.id:', user?.id);
+      console.log('🏪 Store: Authentication state:', { 
+        hasUser: !!user, 
+        isAuthenticated: !!user,
+        userKeys: user ? Object.keys(user) : []
+      });
+      
+      // Check if user is authenticated
+      if (!user) {
+        console.warn('🏪 Store: User not authenticated, products may fail to load');
+      }
+      
       const items = await productsAPI.getAllProducts();
-      console.log('🏪 Store: Fetched', items.length, 'total products');
+      console.log('🏪 Store: Raw API response:', items);
+      console.log('🏪 Store: Response type:', typeof items, 'isArray:', Array.isArray(items));
+      console.log('🏪 Store: Fetched', items?.length || 'undefined', 'total products');
+      
+      // Ensure items is an array
+      if (!Array.isArray(items)) {
+        console.error('🏪 Store: API returned non-array:', items);
+        setProducts([]);
+        return;
+      }
       
       const normalize = (p: any): Product => ({
         ...p,
@@ -92,6 +112,10 @@ export default function StoreScreen() {
       setProducts(list);
     } catch (error) {
       console.error('Error fetching products:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      console.error('Error status:', error.response?.status);
+      console.error('Error config:', error.config);
+      setProducts([]); // Set empty array on error
       Alert.alert('Error', 'Failed to load products. Please try again.');
     } finally {
       setIsLoading(false);

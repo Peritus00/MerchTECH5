@@ -115,14 +115,49 @@ const allowedOrigins = [
   'http://localhost:8081',
   'http://localhost:19006',
   'https://merchtech.app',
-  'exp://192.168.1.70:8081'
-];
+  'exp://192.168.1.70:8081',
+  // Add production frontend URLs
+  'https://merchtech5-production.up.railway.app',
+  'https://merchtech.net',
+  'https://www.merchtech.net',
+  // Add Vercel deployment URLs (common patterns)
+  'https://merchtechapp5.vercel.app',
+  'https://merchtech-app.vercel.app',
+  // Add any custom domain that might be configured
+  process.env.FRONTEND_URL,
+  process.env.EXPO_PUBLIC_FRONTEND_URL
+].filter(Boolean); // Remove any undefined values
 
 app.use(cors({
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    console.log('🔗 CORS: Request from origin:', origin);
+    
+    // Allow requests with no origin (like mobile apps or server-to-server)
+    if (!origin) {
+      console.log('🔗 CORS: No origin - allowing request');
+      return callback(null, true);
+    }
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      console.log('🔗 CORS: Origin allowed:', origin);
       callback(null, true);
     } else {
+      console.log('🔗 CORS: Origin blocked:', origin);
+      console.log('🔗 CORS: Allowed origins:', allowedOrigins);
+      
+      // In production, be more permissive for Railway/Vercel deployments
+      if (process.env.NODE_ENV === 'production') {
+        const isRailwayDomain = origin.includes('railway.app');
+        const isVercelDomain = origin.includes('vercel.app');
+        const isMerchtechDomain = origin.includes('merchtech');
+        
+        if (isRailwayDomain || isVercelDomain || isMerchtechDomain) {
+          console.log('🔗 CORS: Production domain pattern allowed:', origin);
+          return callback(null, true);
+        }
+      }
+      
       callback(new Error('Not allowed by CORS'));
     }
   },
