@@ -17,6 +17,10 @@ import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback'
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
+
+// Debug: Check if API is available at import time
+console.log('🔑 IMPORT DEBUG: accessCodeAPI at import time:', typeof accessCodeAPI);
+console.log('🔑 IMPORT DEBUG: accessCodeAPI methods:', accessCodeAPI ? Object.keys(accessCodeAPI) : 'undefined');
 import { Picker } from '@react-native-picker/picker';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -180,6 +184,15 @@ const ActivationCodesScreen = () => {
   const loadMyAccessCodes = async () => {
     try {
       console.log('🔑 Loading my access codes');
+      console.log('🔑 accessCodeAPI available:', typeof accessCodeAPI);
+      console.log('🔑 accessCodeAPI.getMyAccess available:', typeof accessCodeAPI?.getMyAccess);
+      
+      if (!accessCodeAPI || typeof accessCodeAPI.getMyAccess !== 'function') {
+        console.error('🔑 accessCodeAPI is not properly defined');
+        setMyAccessCodes([]);
+        return;
+      }
+      
       const response = await accessCodeAPI.getMyAccess();
       const accessCodes = response?.accessCodes || response || [];
       setMyAccessCodes(accessCodes);
@@ -194,6 +207,15 @@ const ActivationCodesScreen = () => {
   const loadAllGeneratedCodes = async () => {
     try {
       console.log('🔑 Loading all generated codes');
+      console.log('🔑 accessCodeAPI available:', typeof accessCodeAPI);
+      console.log('🔑 accessCodeAPI.getGenerated available:', typeof accessCodeAPI?.getGenerated);
+      
+      if (!accessCodeAPI || typeof accessCodeAPI.getGenerated !== 'function') {
+        console.error('🔑 accessCodeAPI is not properly defined');
+        setAllGeneratedCodes([]);
+        return;
+      }
+      
       const response = await accessCodeAPI.getGenerated();
       const generatedCodes = response?.activationCodes || response || [];
       setAllGeneratedCodes(generatedCodes);
