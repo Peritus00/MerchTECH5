@@ -23,6 +23,7 @@ import { Playlist, Slideshow } from '@/shared/media-schema';
 import { MaterialIcons } from '@expo/vector-icons';
 import { downloadAdvancedQRCode, QRCodeFormat } from '@/services/qrUtils';
 import { captureRef } from 'react-native-view-shot';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AdvancedQREditorProps {
   visible: boolean;
@@ -66,6 +67,11 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   onClose,
   onQRCreated,
 }) => {
+  const { user } = useAuth();
+  
+  // Check if user is admin (djjetfuel)
+  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  
   const [activeTab, setActiveTab] = useState<TabType>('content');
   const [name, setName] = useState('');
   const [contentType, setContentType] = useState<ContentType>('url');
@@ -1505,78 +1511,82 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
             <MaterialIcons name="close" size={24} color="#6b7280" />
           </TouchableOpacity>
           <ThemedText style={styles.title}>Advanced QR Designer</ThemedText>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: '#dc2626' }]}
-              onPress={() => {
-                console.log('🧪 DEBUG BUTTON PRESSED!');
-                console.log('🧪 Current state:', { name, contentType, content, loading });
-                Alert.alert('Debug', `Name: "${name}", Type: "${contentType}", Content: "${content}"`);
-              }}
-            >
-              <ThemedText style={styles.createButtonText}>Debug</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.createButton, { backgroundColor: '#16a34a' }]}
-              onPress={async () => {
-                console.log('🚀 QUICK TEST BUTTON PRESSED!');
-                setLoading(true);
-                try {
-                  const testQrData = {
-                    name: 'Test QR Code',
-                    url: 'https://google.com',
-                    description: 'Quick test QR code',
-                    contentType: 'url' as ContentType,
-                    options: {
-                      size: 200,
-                      foregroundColor: '#000000',
-                      backgroundColor: '#FFFFFF',
-                      cornerRadius: 0,
-                      errorCorrectionLevel: 'H' as const,
-                    },
-                  };
-                  console.log('🚀 Creating test QR with data:', testQrData);
-                  const result = await qrCodeService.createQRCode(testQrData);
-                  console.log('✅ Test QR created successfully:', result);
-                  Alert.alert('Success', 'Test QR code created successfully!');
-                  onQRCreated();
-                  onClose();
-                } catch (error: any) {
-                  console.error('❌ Test QR creation failed:', error);
-                  Alert.alert('Error', `Test QR creation failed: ${error.message}`);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              disabled={loading}
-            >
-              <ThemedText style={styles.createButtonText}>Quick Test</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.createButton, 
-                (loading || getScannabilityScore() < 60) && styles.disabledButton,
-                getScannabilityScore() < 60 && styles.criticalButton
-              ]}
-              onPress={() => {
-                console.log('🔘 CREATE BUTTON TOUCHED!');
-                console.log('🔘 Loading state:', loading);
-                console.log('🔘 Scannability score:', getScannabilityScore());
-                console.log('🔘 Button disabled:', loading || getScannabilityScore() < 60);
-                handleCreate();
-              }}
-              disabled={loading || getScannabilityScore() < 60}
-            >
-              <ThemedText style={[
-                styles.createButtonText,
-                getScannabilityScore() < 60 && styles.criticalButtonText
-              ]}>
-                {loading ? 'Creating...' : 
-                 getScannabilityScore() < 60 ? 'Fix Issues to Create' : 
-                 'Create'}
-              </ThemedText>
-            </TouchableOpacity>
-          </View>
+          {isAdmin ? (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.createButton, { backgroundColor: '#dc2626' }]}
+                onPress={() => {
+                  console.log('🧪 DEBUG BUTTON PRESSED!');
+                  console.log('🧪 Current state:', { name, contentType, content, loading });
+                  Alert.alert('Debug', `Name: "${name}", Type: "${contentType}", Content: "${content}"`);
+                }}
+              >
+                <ThemedText style={styles.createButtonText}>Debug</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.createButton, { backgroundColor: '#16a34a' }]}
+                onPress={async () => {
+                  console.log('🚀 QUICK TEST BUTTON PRESSED!');
+                  setLoading(true);
+                  try {
+                    const testQrData = {
+                      name: 'Test QR Code',
+                      url: 'https://google.com',
+                      description: 'Quick test QR code',
+                      contentType: 'url' as ContentType,
+                      options: {
+                        size: 200,
+                        foregroundColor: '#000000',
+                        backgroundColor: '#FFFFFF',
+                        cornerRadius: 0,
+                        errorCorrectionLevel: 'H' as const,
+                      },
+                    };
+                    console.log('🚀 Creating test QR with data:', testQrData);
+                    const result = await qrCodeService.createQRCode(testQrData);
+                    console.log('✅ Test QR created successfully:', result);
+                    Alert.alert('Success', 'Test QR code created successfully!');
+                    onQRCreated();
+                    onClose();
+                  } catch (error: any) {
+                    console.error('❌ Test QR creation failed:', error);
+                    Alert.alert('Error', `Test QR creation failed: ${error.message}`);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading}
+              >
+                <ThemedText style={styles.createButtonText}>Quick Test</ThemedText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.createButton, 
+                  (loading || getScannabilityScore() < 60) && styles.disabledButton,
+                  getScannabilityScore() < 60 && styles.criticalButton
+                ]}
+                onPress={() => {
+                  console.log('🔘 CREATE BUTTON TOUCHED!');
+                  console.log('🔘 Loading state:', loading);
+                  console.log('🔘 Scannability score:', getScannabilityScore());
+                  console.log('🔘 Button disabled:', loading || getScannabilityScore() < 60);
+                  handleCreate();
+                }}
+                disabled={loading || getScannabilityScore() < 60}
+              >
+                <ThemedText style={[
+                  styles.createButtonText,
+                  getScannabilityScore() < 60 && styles.criticalButtonText
+                ]}>
+                  {loading ? 'Creating...' : 
+                   getScannabilityScore() < 60 ? 'Fix Issues to Create' : 
+                   'Create'}
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }} />
+          )}
         </View>
 
         <View style={styles.content}>
