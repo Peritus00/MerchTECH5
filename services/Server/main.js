@@ -129,42 +129,18 @@ const allowedOrigins = [
 ].filter(Boolean); // Remove any undefined values
 
 app.use(cors({
-  origin: function (origin, callback) {
-    console.log('🔗 CORS: Request from origin:', origin);
-    
-    // Allow requests with no origin (like mobile apps or server-to-server)
-    if (!origin) {
-      console.log('🔗 CORS: No origin - allowing request');
-      return callback(null, true);
-    }
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      console.log('🔗 CORS: Origin allowed:', origin);
-      callback(null, true);
-    } else {
-      console.log('🔗 CORS: Origin blocked:', origin);
-      console.log('🔗 CORS: Allowed origins:', allowedOrigins);
-      
-      // In production, be more permissive for Railway/Vercel deployments
-      if (process.env.NODE_ENV === 'production') {
-        const isRailwayDomain = origin.includes('railway.app');
-        const isVercelDomain = origin.includes('vercel.app');
-        const isMerchtechDomain = origin.includes('merchtech');
-        
-        if (isRailwayDomain || isVercelDomain || isMerchtechDomain) {
-          console.log('🔗 CORS: Production domain pattern allowed:', origin);
-          return callback(null, true);
-        }
-      }
-      
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
+  origin: true, // Allow all origins
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Add a separate, more detailed CORS error logger to help debug future issues
+app.use((req, res, next) => {
+  console.log('🔗 CORS: Request from origin:', req.headers.origin);
+  next();
+});
+
 app.use('/uploads', express.static(uploadsDir));
 
 // Handle domain redirects for legacy URLs
