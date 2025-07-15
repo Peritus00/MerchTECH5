@@ -459,7 +459,9 @@ export const playlistsAPI = {
   },
   async getAll() {
     const response = await api.get('/playlists');
-    return response.data;
+    // Handle both { playlists: [...] } and direct array
+    const data = response.data.playlists || response.data;
+    return Array.isArray(data) ? data : [];
   },
   async getById(id: string) {
     const response = await api.get(`/playlists/${id}`);
@@ -508,7 +510,8 @@ export const slideshowsAPI = {
   async getAll() {
     const response = await api.get('/slideshows');
     // Handle both { slideshows: [...] } and direct array
-    return response.data.slideshows || response.data;
+    const data = response.data.slideshows || response.data;
+    return Array.isArray(data) ? data : [];
   },
   async getById(id: string) {
     try {
@@ -660,7 +663,8 @@ export const qrCodeAPI = {
   async getAll() {
     const response = await api.get('/qrcodes');
     // Handle both { qrCodes: [...] } and direct array
-    return response.data.qrCodes || response.data;
+    const data = response.data.qrCodes || response.data;
+    return Array.isArray(data) ? data : [];
   },
 
   async getById(id: string) {
@@ -688,13 +692,15 @@ export const accessCodeAPI = {
   async getGenerated() {
     const response = await api.get('/activation-codes/generated');
     // Handle both { activationCodes: [...] } and direct array
-    return response.data.activationCodes || response.data;
+    const data = response.data.activationCodes || response.data;
+    return Array.isArray(data) ? data : [];
   },
   // Get all codes owned/claimed by the current user
   async getMyAccess() {
     const response = await api.get('/activation-codes/my-access');
     // Handle both { accessCodes: [...] } and direct array
-    return response.data.accessCodes || response.data;
+    const data = response.data.accessCodes || response.data;
+    return Array.isArray(data) ? data : [];
   },
   // Attach/claim a code
   async attach(code: string) {
