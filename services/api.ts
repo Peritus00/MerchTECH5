@@ -458,7 +458,8 @@ export const slideshowsAPI = {
     try {
       const response = await api.patch(`/slideshows/${id}`, updates);
       console.log('Slideshow updated successfully:', response.data);
-      return response.data;
+      // Backend returns { slideshow: {...} }, extract the slideshow object
+      return response.data.slideshow || response.data;
     } catch (error: any) {
       console.error('Error updating slideshow:', error.response ? error.response.data : error.message);
       throw error;
@@ -508,7 +509,8 @@ export const slideshowsAPI = {
   async updateAudio(slideshowId: number | string, audioUrl: string) {
     console.log(`Updating audio for slideshow ${slideshowId} with URL: ${audioUrl}`);
     const response = await api.patch(`/slideshows/${slideshowId}`, { audio_url: audioUrl });
-    return response.data;
+    // Backend returns { slideshow: {...} }, extract the slideshow object
+    return response.data.slideshow || response.data;
   },
 };
 
