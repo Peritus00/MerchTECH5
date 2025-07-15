@@ -16,10 +16,12 @@ import {
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
-import { accessCodeAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
+import { accessCodeAPI, activationCodesAPI, playlistsAPI, slideshowsAPI } from '@/services/api';
 
 // Debug: Check if API is available at import time
 console.log('🔑 IMPORT DEBUG: accessCodeAPI at import time:', typeof accessCodeAPI);
+console.log('🔑 IMPORT DEBUG: activationCodesAPI at import time:', typeof activationCodesAPI);
+console.log('🔑 IMPORT DEBUG: APIs are same:', accessCodeAPI === activationCodesAPI);
 console.log('🔑 IMPORT DEBUG: accessCodeAPI methods:', accessCodeAPI ? Object.keys(accessCodeAPI) : 'undefined');
 import { Picker } from '@react-native-picker/picker';
 import { ThemedView } from '@/components/ThemedView';

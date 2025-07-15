@@ -654,6 +654,9 @@ export const accessCodeAPI = {
   },
 };
 
+// Backward compatibility alias
+export const activationCodesAPI = accessCodeAPI;
+
 // Playlist Chat API
 export const playlistChatAPI = {
   async getMessages(playlistId: string, limit = 50, offset = 0) {
