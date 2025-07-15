@@ -23,7 +23,7 @@ interface ContentData {
 }
 
 export default function DynamicMediaPlayerPage() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, type: contentType } = useLocalSearchParams<{ id: string; type?: ContentType }>();
   const router = useRouter();
   const [content, setContent] = useState<ContentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -34,13 +34,16 @@ export default function DynamicMediaPlayerPage() {
     // This effect runs only on the client, after hydration,
     // so it's safe to access window here.
     if (Platform.OS === 'web') {
-      setShareUrl(window.location.href);
+      const currentUrl = window.location.href;
+      console.log('Current URL for sharing:', currentUrl);
+      setShareUrl(currentUrl);
     }
 
     if (id) {
-      detectAndLoadContent(id);
+      console.log(`[media-player] Detected ID: ${id}. Starting content load.`);
+      detectAndLoadContent(id, contentType);
     }
-  }, [id]);
+  }, [id, contentType]);
 
   const detectContentTypeFromURL = (): ContentType | null => {
     // This is a simplified example. In a real app, you might have more robust routing.
@@ -48,56 +51,108 @@ export default function DynamicMediaPlayerPage() {
     return null; // Let the fetcher determine the type
   };
 
-  const detectAndLoadContent = async (contentId: string) => {
+  const detectAndLoadContent = async (contentId: string, type?: ContentType) => {
     setIsLoading(true);
     setError(null);
+    console.log(`[media-player] Attempting to load content for ID: ${contentId} (Type hint: ${type})`);
 
-    // Try fetching as a playlist first
-    try {
-      const playlistData = await playlistsAPI.getById(contentId);
-      if (playlistData) {
-        setContent({ type: 'playlist', data: playlistData });
-        setIsLoading(false);
-        return;
+    const loaders: { type: ContentType; load: () => Promise<any> }[] = [
+      {
+        type: 'playlist',
+        load: async () => {
+          const response = await playlistsAPI.getById(contentId);
+          if (response && response.playlist && response.playlist.mediaFiles && response.playlist.mediaFiles.length > 0) {
+            return response.playlist;
+          }
+          return null;
+        },
+      },
+      {
+        type: 'slideshow',
+        load: async () => {
+          const response = await slideshowsAPI.getById(contentId);
+          if (response && response.slideshow && response.slideshow.images && response.slideshow.images.length > 0) {
+            return response.slideshow;
+          }
+          return null;
+        },
+      },
+      {
+        type: 'media',
+        load: async () => {
+          const response = await mediaAPI.getById(contentId);
+          if (response && response.media) {
+            return response.media;
+          }
+          return null;
+        },
+      },
+    ];
+
+    // If a type is provided, try that loader first
+    if (type) {
+      const preferredLoader = loaders.find(l => l.type === type);
+      if (preferredLoader) {
+        try {
+          console.log(`[media-player] Prioritizing fetch for type: ${type}`);
+          const data = await preferredLoader.load();
+          if (data) {
+            console.log(`[media-player] Content found with preferred type ${type}:`, data);
+            setContent({ type: preferredLoader.type, data });
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn(`[media-player] Preferred fetch for type ${type} failed, will try others. Error:`, e);
+        }
       }
-    } catch (e) {
-      // Not a playlist, ignore error and try next type
+    }
+    
+    // Iterate through all loaders if preferred type fails or is not provided
+    for (const loader of loaders) {
+       // Skip the preferred loader if it was already tried
+      if (type && loader.type === type) continue;
+      
+      try {
+        console.log(`[media-player] Checking for ${loader.type}...`);
+        const data = await loader.load();
+        if (data) {
+          console.log(`[media-player] ${loader.type} found:`, data);
+          setContent({ type: loader.type, data });
+          setIsLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.warn(`[media-player] Not a ${loader.type}, or API error:`, e);
+      }
     }
 
-    // Try fetching as a slideshow
-    try {
-      const slideshowData = await slideshowsAPI.getById(contentId);
-      if (slideshowData) {
-        setContent({ type: 'slideshow', data: slideshowData });
-        setIsLoading(false);
-        return;
-      }
-    } catch (e) {
-      // Not a slideshow, ignore error and try next type
-    }
-
-    // Try fetching as a single media file
-    try {
-      const mediaData = await mediaAPI.getById(contentId);
-      if (mediaData) {
-        setContent({ type: 'media', data: mediaData });
-        setIsLoading(false);
-        return;
-      }
-    } catch (e) {
-      // Not a media file either
-    }
-
+    console.error(`[media-player] Content with ID ${contentId} not found across all types.`);
     setError(`Content with ID ${contentId} not found.`);
     setIsLoading(false);
   };
 
-  const mediaFiles = useMemo(() => {
-    if (!content) return [];
-    if (content.type === 'playlist') return content.data.mediaFiles || [];
-    if (content.type === 'slideshow') return content.data.images || [];
-    if (content.type === 'media') return [content.data];
-    return [];
+  const { mediaFiles, playlist, slideshow } = useMemo(() => {
+    if (!content) return { mediaFiles: [], playlist: null, slideshow: null };
+
+    switch (content.type) {
+      case 'playlist':
+        return {
+          mediaFiles: content.data.mediaFiles || [],
+          playlist: content.data,
+          slideshow: null,
+        };
+      case 'slideshow':
+        return {
+          mediaFiles: content.data.images || [],
+          playlist: null,
+          slideshow: content.data,
+        };
+      case 'media':
+        return { mediaFiles: [content.data], playlist: null, slideshow: null };
+      default:
+        return { mediaFiles: [], playlist: null, slideshow: null };
+    }
   }, [content]);
 
   const getContentName = () => {
@@ -144,10 +199,9 @@ export default function DynamicMediaPlayerPage() {
       </View>
       <MediaPlayer
         media={mediaFiles}
-        playlist={content?.type === 'playlist' ? content.data : undefined}
-        slideshow={content?.type === 'slideshow' ? content.data : undefined}
-        autoPlay
-        showChat={false}
+        playlist={playlist}
+        slideshow={slideshow}
+        autoPlay={false}
       />
     </ThemedView>
   );

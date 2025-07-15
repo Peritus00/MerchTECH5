@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { activationCodesAPI } from '@/services/api';
+import { accessCodeAPI } from '@/services/api';
 import * as Linking from 'expo-linking';
 
 interface PurchaseNotificationCardProps {
@@ -143,7 +143,8 @@ const PurchaseNotifications: React.FC = () => {
     
     try {
       // Load available activation codes
-      const codes = await activationCodesAPI.getGenerated();
+      const response = await accessCodeAPI.getGenerated();
+        const codes = response?.activationCodes || response || [];
       setAvailableCodes(codes.filter(code => code.is_active && code.uses_count < (code.max_uses || Infinity)));
       setShowModal(true);
     } catch (error) {

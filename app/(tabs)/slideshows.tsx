@@ -168,7 +168,7 @@ export default function SlideshowsScreen() {
       router.push(`/slideshow-access/${slideshow.id}`);
     } else {
       console.log('➡️ Slideshow is NOT locked. Navigating to FULL ACCESS media player.');
-      router.push(`/media-player/${slideshow.id}`);
+      router.push(`/media-player/${slideshow.id}?type=slideshow`);
     }
   };
 

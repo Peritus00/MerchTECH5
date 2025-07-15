@@ -64,10 +64,10 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
     });
 
     try {
-      const { playlistAPI } = await import('@/services/api');
+      const { playlistsAPI } = await import('@/services/api');
 
       // Update playlist details
-      const updatedPlaylist = await playlistAPI.update(playlist.id, {
+      const updatedPlaylist = await playlistsAPI.update(playlist.id, {
         name: name.trim(),
         description: description.trim() || undefined,
       });
@@ -83,13 +83,13 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         
         // For now, we'll replace all media files
         // TODO: Implement more granular add/remove operations
-        await playlistAPI.updateMedia(playlist.id, newMediaIds);
+        await playlistsAPI.updateMedia(playlist.id, newMediaIds);
         console.log('🔴 EDIT_PLAYLIST: Media files updated');
       }
 
       // Fetch the complete updated playlist from server to ensure consistency
       console.log('🔴 EDIT_PLAYLIST: Fetching complete updated playlist from server...');
-      const completeUpdatedPlaylist = await playlistAPI.getById(playlist.id);
+      const completeUpdatedPlaylist = await playlistsAPI.getById(playlist.id);
       
       console.log('🔴 EDIT_PLAYLIST: Complete updated playlist from server:', completeUpdatedPlaylist);
       onUpdatePlaylist(completeUpdatedPlaylist);

@@ -57,7 +57,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     try {
       console.log('🔴 CreatePlaylistModal: Creating playlist with API...');
 
-      const { playlistAPI } = await import('@/services/api');
+      const { playlistsAPI } = await import('@/services/api');
 
       const playlistData = {
         name: name.trim(),
@@ -69,7 +69,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
       console.log('🔴 CreatePlaylistModal: Playlist data:', playlistData);
 
-      const newPlaylist = await playlistAPI.create(playlistData);
+      const newPlaylist = await playlistsAPI.create(playlistData);
       console.log('🔴 CreatePlaylistModal: API response:', newPlaylist);
 
       // Add the selected media files to the playlist object for immediate UI update

@@ -14,5 +14,11 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  "exclude": [
+    "services/Server/**/*",
+    "node_modules",
+    ".expo",
+    "dist"
   ]
 }

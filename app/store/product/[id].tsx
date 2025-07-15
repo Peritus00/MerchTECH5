@@ -10,6 +10,7 @@ import { productsAPI, checkoutAPI } from '@/services/api';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import ShareButton from '@/components/ShareButton';
 
 const { width } = Dimensions.get('window');
 

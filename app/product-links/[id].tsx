@@ -37,11 +37,11 @@ export default function ProductLinkManagerScreen() {
     try {
       console.log('🔴 PRODUCT_LINKS: Fetching data for playlist:', id);
       
-      const { playlistAPI, slideshowAPI } = await import('@/services/api');
+      const { playlistsAPI, slideshowsAPI } = await import('@/services/api');
       
       if (contentType === 'playlist') {
         try {
-          const playlist = await playlistAPI.getById(id);
+          const playlist = await playlistsAPI.getById(id);
           setPlaylistName(playlist.name);
           console.log('🔴 PRODUCT_LINKS: Loaded playlist:', playlist.name);
         } catch (error) {
@@ -50,7 +50,7 @@ export default function ProductLinkManagerScreen() {
         }
       } else {
         try {
-          const slideshow = await slideshowAPI.getById(id);
+          const slideshow = await slideshowsAPI.getById(id);
           setPlaylistName(slideshow.name);
           console.log('🔴 PRODUCT_LINKS: Loaded slideshow:', slideshow.name);
         } catch (error) {

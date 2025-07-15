@@ -48,7 +48,7 @@ interface Playlist {
   id: number;
   name: string;
   description?: string;
-  requires_activation_code: boolean;
+  requiresActivationCode: boolean;
 }
 
 interface Slideshow {
@@ -180,9 +180,10 @@ const ActivationCodesScreen = () => {
   const loadMyAccessCodes = async () => {
     try {
       console.log('🔑 Loading my access codes');
-      const accessCodes = await activationCodesAPI.getMyAccess();
-      setMyAccessCodes(accessCodes || []);
-      console.log('🔑 Loaded', (accessCodes || []).length, 'access codes');
+      const response = await accessCodeAPI.getMyAccess();
+      const accessCodes = response?.accessCodes || response || [];
+      setMyAccessCodes(accessCodes);
+      console.log('🔑 Loaded', accessCodes.length, 'access codes');
     } catch (error) {
       console.error('🔑 Error loading access codes:', error);
       setMyAccessCodes([]);
@@ -193,9 +194,10 @@ const ActivationCodesScreen = () => {
   const loadAllGeneratedCodes = async () => {
     try {
       console.log('🔑 Loading all generated codes');
-      const generatedCodes = await activationCodesAPI.getGenerated();
-      setAllGeneratedCodes(generatedCodes || []);
-      console.log('🔑 Loaded', (generatedCodes || []).length, 'generated codes');
+      const response = await accessCodeAPI.getGenerated();
+      const generatedCodes = response?.activationCodes || response || [];
+      setAllGeneratedCodes(generatedCodes);
+      console.log('🔑 Loaded', generatedCodes.length, 'generated codes');
     } catch (error) {
       console.error('🔑 Error loading generated codes:', error);
       setAllGeneratedCodes([]);
@@ -249,7 +251,7 @@ const ActivationCodesScreen = () => {
           createParams.slideshowId = contentId.toString();
         }
         console.log('🔑 Creating activation code with params:', createParams);
-        const newCode = await activationCodesAPI.create(createParams);
+        const newCode = await accessCodeAPI.create(createParams);
         createdCodes.push(newCode);
       }
       Alert.alert('Success', `${quantity} activation codes created successfully!`);
@@ -299,7 +301,7 @@ const ActivationCodesScreen = () => {
         createParams.slideshowId = contentId.toString();
       }
       console.log('🔑 Creating activation code with params:', createParams);
-      await activationCodesAPI.create(createParams);
+      await accessCodeAPI.create(createParams);
       Alert.alert('Success', 'Activation code created successfully!');
       setShowCreateModal(false);
       setMaxUses('1');
@@ -327,7 +329,7 @@ const ActivationCodesScreen = () => {
     setIsAttaching(true);
     try {
       console.log('🔑 Attaching activation code:', newCodeInput);
-      await activationCodesAPI.attach(newCodeInput.trim());
+      await accessCodeAPI.attach(newCodeInput.trim());
       Alert.alert('Success', 'Activation code attached to your profile!');
       setNewCodeInput('');
       await loadMyAccessCodes();
@@ -352,8 +354,8 @@ const ActivationCodesScreen = () => {
       console.log('🗑️ DETACH DEBUG: Converting to string:', codeId.toString());
       
       try {
-        console.log('🗑️ DETACH DEBUG: Calling activationCodesAPI.detach...');
-        const result = await activationCodesAPI.detach(codeId.toString());
+        console.log('🗑️ DETACH DEBUG: Calling accessCodeAPI.detach...');
+        const result = await accessCodeAPI.detach(codeId.toString());
         console.log('🗑️ DETACH DEBUG: API call successful, result:', result);
         
         console.log('🗑️ DETACH DEBUG: Showing success message...');
@@ -414,7 +416,7 @@ const ActivationCodesScreen = () => {
       }
 
       console.log('🔑 Updating activation code:', editingCode.id, updates);
-      await activationCodesAPI.update(editingCode.id.toString(), updates);
+      await accessCodeAPI.update(editingCode.id.toString(), updates);
       Alert.alert('Success', 'Activation code updated successfully!');
       setShowEditModal(false);
       setEditingCode(null);
@@ -446,8 +448,8 @@ const ActivationCodesScreen = () => {
       console.log('🗑️ DELETE DEBUG: Converting to string:', codeId.toString());
       
       try {
-        console.log('🗑️ DELETE DEBUG: Calling activationCodesAPI.delete...');
-        const result = await activationCodesAPI.delete(codeId.toString());
+        console.log('🗑️ DELETE DEBUG: Calling accessCodeAPI.delete...');
+        const result = await accessCodeAPI.delete(codeId.toString());
         console.log('🗑️ DELETE DEBUG: API call successful, result:', result);
         
         console.log('🗑️ DELETE DEBUG: Showing success message...');

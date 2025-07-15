@@ -18,7 +18,7 @@ import { ThemedView } from './ThemedView';
 import { AdvancedQRCodeGenerator } from './AdvancedQRCodeGenerator';
 import { aiColorService, ColorPalette, ColorSuggestionRequest } from '@/services/aiColorService';
 import { qrCodeService } from '@/services/qrCodeService';
-import { playlistAPI, slideshowAPI } from '@/services/api';
+import { playlistsAPI, slideshowsAPI } from '@/services/api';
 import { Playlist, Slideshow } from '@/shared/media-schema';
 import { MaterialIcons } from '@expo/vector-icons';
 import { downloadAdvancedQRCode, QRCodeFormat } from '@/services/qrUtils';
@@ -180,11 +180,11 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
     try {
       console.log('📚 Loading playlists and slideshows...');
       const [playlistsData, slideshowsData] = await Promise.all([
-        playlistAPI.getAll().catch((err) => {
+        playlistsAPI.getAll().catch((err) => {
           console.log('📚 Playlist API error:', err);
           return [];
         }),
-        slideshowAPI.getAll().catch((err) => {
+                  slideshowsAPI.getAll().catch((err) => {
           console.log('📚 Slideshow API error:', err);
           return [];
         })

@@ -12,7 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { activationCodesAPI } from '@/services/api';
+import { accessCodeAPI } from '@/services/api';
 import { Audio } from 'expo-av';
 
 interface SlideshowImage {
@@ -133,7 +133,7 @@ const SlideshowPreview: React.FC<SlideshowPreviewProps> = ({
     setIsValidating(true);
     try {
       // Use the backend API to validate the activation code
-      await activationCodesAPI.validate(activationCode.trim(), undefined, String(slideshow.id));
+      await accessCodeAPI.validate(activationCode.trim(), undefined, String(slideshow.id));
       
       // If validation succeeds, show the slideshow
       setIsAuthorized(true);

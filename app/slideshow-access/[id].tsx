@@ -19,7 +19,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { Slideshow } from '@/shared/media-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { activationCodesAPI } from '@/services/api';
+import { accessCodeAPI } from '@/services/api';
 import { Audio } from 'expo-av';
 import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
@@ -266,7 +266,7 @@ export default function SlideshowAccessScreen() {
       // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to media player
       if (!slideshow.requiresActivationCode) {
         console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to media player');
-        router.replace(`/media-player/${id}`);
+        router.replace(`/media-player/${id}?type=slideshow`);
         return;
       }
 
@@ -278,7 +278,8 @@ export default function SlideshowAccessScreen() {
         console.log('🎬 SLIDESHOW_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🎬 SLIDESHOW_ACCESS: Looking for access to slideshow ID:', id, 'as number:', parseInt(id));
         try {
-          const userAccessCodes = await activationCodesAPI.getMyAccess();
+          const response = await accessCodeAPI.getMyAccess();
+        const userAccessCodes = response?.accessCodes || response || [];
           console.log('🎬 SLIDESHOW_ACCESS: User access codes response:', userAccessCodes);
           console.log('🎬 SLIDESHOW_ACCESS: Number of access codes found:', userAccessCodes?.length || 0);
           
@@ -307,7 +308,7 @@ export default function SlideshowAccessScreen() {
           if (hasValidAccess) {
             console.log('🎬 SLIDESHOW_ACCESS: User has valid access code for this slideshow, redirecting directly to media player');
             // Redirect directly to media player for users with valid access codes
-            router.replace(`/media-player/${id}`);
+            router.replace(`/media-player/${id}?type=slideshow`);
             return;
           } else {
             console.log('🎬 SLIDESHOW_ACCESS: User has no valid access codes for this slideshow');
@@ -330,7 +331,7 @@ export default function SlideshowAccessScreen() {
         
         // SECURITY FIX: Validate the stored code before trusting it
         try {
-          const validationResult = await activationCodesAPI.validate(storedCode, undefined, id);
+          const validationResult = await accessCodeAPI.validate(storedCode, undefined, id);
           console.log('🎬 SLIDESHOW_ACCESS: Validation result:', validationResult);
           
           if (validationResult.valid) {
@@ -366,7 +367,7 @@ export default function SlideshowAccessScreen() {
       const hasPurchasedAccess = await checkPurchasedAccess(id);
       if (hasPurchasedAccess) {
         console.log('🎬 SLIDESHOW_ACCESS: User has purchased access, redirecting directly to media player');
-        router.replace(`/media-player/${id}`);
+        router.replace(`/media-player/${id}?type=slideshow`);
         return;
       }
 
@@ -406,7 +407,7 @@ export default function SlideshowAccessScreen() {
       console.log('🎬 SLIDESHOW_ACCESS: Validating activation code:', activationCode);
       
       // Use real API to validate the activation code
-      const validationResult = await activationCodesAPI.validate(activationCode, undefined, id);
+      const validationResult = await accessCodeAPI.validate(activationCode, undefined, id);
       
       if (validationResult.valid) {
         console.log('🎬 SLIDESHOW_ACCESS: Valid activation code:', validationResult);
@@ -464,14 +465,14 @@ export default function SlideshowAccessScreen() {
   const handleAttachCodeAndRedirect = async (code: string) => {
     try {
       console.log('🎬 SLIDESHOW_ACCESS: Attaching code to user account:', code);
-      await activationCodesAPI.attach(code);
+      await accessCodeAPI.attach(code);
       
       // Store the activation code for future access
       await AsyncStorage.setItem(`slideshow_access_${id}`, code);
       
       // Redirect directly to media player with full access
       console.log('🎬 SLIDESHOW_ACCESS: Code attached successfully, redirecting to media player');
-      router.replace(`/media-player/${id}`);
+      router.replace(`/media-player/${id}?type=slideshow`);
     } catch (error) {
       console.error('🎬 SLIDESHOW_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');

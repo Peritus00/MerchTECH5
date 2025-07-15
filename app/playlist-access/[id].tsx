@@ -20,7 +20,7 @@ import MediaPlayer from '@/components/MediaPlayer';
 import PreviewPlayer from '@/components/PreviewPlayer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { activationCodesAPI } from '@/services/api';
+import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
 
 export default function PlaylistAccessScreen() {
@@ -65,10 +65,14 @@ export default function PlaylistAccessScreen() {
     try {
       console.log('🔴 PLAYLIST_ACCESS: Fetching playlist with ID:', id);
 
-      const { playlistAPI } = await import('@/services/api');
-      const playlistData = await playlistAPI.getById(id);
+      const { playlistsAPI } = await import('@/services/api');
+      const response = await playlistsAPI.getById(id);
 
-      console.log('🔴 PLAYLIST_ACCESS: Loaded playlist:', playlistData);
+      console.log('🔴 PLAYLIST_ACCESS: API response:', response);
+
+      // Extract playlist from response - the API returns { playlist: {...} }
+      const playlistData = response.playlist || response;
+      console.log('🔴 PLAYLIST_ACCESS: Extracted playlist data:', playlistData);
 
       // Log media files from server (URLs are now correct from server)
       if (playlistData.mediaFiles) {
@@ -136,7 +140,8 @@ export default function PlaylistAccessScreen() {
         console.log('🔴 PLAYLIST_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🔴 PLAYLIST_ACCESS: Looking for access to playlist ID:', id, 'as number:', parseInt(id));
         try {
-          const userAccessCodes = await activationCodesAPI.getMyAccess();
+          const response = await accessCodeAPI.getMyAccess();
+        const userAccessCodes = response?.accessCodes || response || [];
           console.log('🔴 PLAYLIST_ACCESS: User access codes response:', userAccessCodes);
           console.log('🔴 PLAYLIST_ACCESS: Number of access codes found:', userAccessCodes?.length || 0);
           
@@ -187,7 +192,7 @@ export default function PlaylistAccessScreen() {
         
         // SECURITY FIX: Validate the stored code before trusting it
         try {
-          const validationResult = await activationCodesAPI.validate(storedCode, id);
+          const validationResult = await accessCodeAPI.validate(storedCode, id);
           console.log('🔴 PLAYLIST_ACCESS: Validation result:', validationResult);
           
           if (validationResult.valid) {
@@ -261,7 +266,7 @@ export default function PlaylistAccessScreen() {
       console.log('🔴 PLAYLIST_ACCESS: Validating activation code:', activationCode);
       
       // Use real API to validate the activation code
-      const validationResult = await activationCodesAPI.validate(activationCode, id);
+      const validationResult = await accessCodeAPI.validate(activationCode, id);
       
       if (validationResult.valid) {
         console.log('🔴 PLAYLIST_ACCESS: Valid activation code:', validationResult);
@@ -319,7 +324,7 @@ export default function PlaylistAccessScreen() {
   const handleAttachCodeAndRedirect = async (code: string) => {
     try {
       console.log('🔴 PLAYLIST_ACCESS: Attaching code to user account:', code);
-      await activationCodesAPI.attach(code);
+      await accessCodeAPI.attach(code);
       
       // Store the activation code for future access
       await AsyncStorage.setItem(`playlist_access_${id}`, code);
@@ -367,7 +372,7 @@ export default function PlaylistAccessScreen() {
           }
         } catch (e) { /* ignore */ }
         if (codeToAttach) {
-          await activationCodesAPI.attach(codeToAttach);
+          await accessCodeAPI.attach(codeToAttach);
           await AsyncStorage.removeItem('pending_activation_code');
         }
         // Show app download screen
@@ -408,7 +413,7 @@ export default function PlaylistAccessScreen() {
         }
       } catch (e) { /* ignore */ }
       if (codeToAttach) {
-        await activationCodesAPI.attach(codeToAttach);
+        await accessCodeAPI.attach(codeToAttach);
         await AsyncStorage.removeItem('pending_activation_code');
       }
       

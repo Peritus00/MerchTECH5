@@ -13,6 +13,7 @@ import {
   Image,
   Dimensions,
   Alert,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
@@ -21,10 +22,12 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import { chatAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import { productLinksAPI, universalChatAPI, usersAPI } from '@/services/api';
+import { contentProductsAPI, universalChatAPI, usersAPI, productsAPI, paymentAPI } from '@/services/api';
 import { Playlist } from '@/shared/playlist-schema';
 import { Slideshow } from '@/shared/slideshow-schema';
 import ChatFilters from '@/components/ChatFilters';
+import { useCart } from '@/contexts/CartContext';
+import * as WebBrowser from 'expo-web-browser';
 
 interface ProductLink {
   id: number;
@@ -75,12 +78,44 @@ export default function MediaPlayer({
   showChat = true,
 }: MediaPlayerProps) {
   
+  // Internal state to manage the active list of media files
+  const [activeMedia, setActiveMedia] = useState<MediaFile[]>([]);
+
+  // Effect to synchronize activeMedia with incoming props
+  useEffect(() => {
+    console.log('🔴 MEDIA_PLAYER_COMPONENT: Props received for sync:', {
+      playlist,
+      slideshow,
+      media,
+    });
+
+    if (playlist && playlist.mediaFiles && playlist.mediaFiles.length > 0) {
+      console.log('🔴 MEDIA_PLAYER_COMPONENT: Syncing with playlist media files.');
+      setActiveMedia(playlist.mediaFiles);
+    } else if (slideshow && slideshow.images && slideshow.images.length > 0) {
+      console.log('🔴 MEDIA_PLAYER_COMPONENT: Syncing with slideshow images.');
+      // Ensure slideshow images conform to MediaFile structure
+      const slideshowMedia = slideshow.images.map(img => ({
+        ...img,
+        fileType: 'image',
+        contentType: img.contentType || 'image/jpeg',
+      }));
+      setActiveMedia(slideshowMedia);
+    } else if (media && media.length > 0) {
+      console.log('🔴 MEDIA_PLAYER_COMPONENT: Syncing with direct media prop.');
+      setActiveMedia(media);
+    } else {
+      console.log('🔴 MEDIA_PLAYER_COMPONENT: No media source found to sync.');
+      setActiveMedia([]);
+    }
+  }, [playlist, slideshow, media]);
+
   // DEBUG: Log the props being passed to MediaPlayer
-  console.log('🔴 MEDIA_PLAYER_COMPONENT: Props received:', {
+  console.log('🔴 MEDIA_PLAYER_COMPONENT: Props being processed:', {
     playlist: playlist ? { id: playlist.id, name: playlist.name } : null,
     slideshow: slideshow ? { id: slideshow.id, name: slideshow.name } : null,
-    mediaCount: media.length,
-    media: media,
+    mediaCount: activeMedia.length,
+    media: activeMedia,
     autoPlay,
     showProductLinks,
     showChat
@@ -88,6 +123,7 @@ export default function MediaPlayer({
 
   const { user } = useAuth();
   const router = useRouter();
+  const { addToCart, getTotalItems } = useCart();
   const [currentTrack, setCurrentTrack] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -107,6 +143,35 @@ export default function MediaPlayer({
   const [controlsVisible, setControlsVisible] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const [isVideoControlsHovered, setIsVideoControlsHovered] = useState(false);
+  const [isMobileVideoControlsTouched, setIsMobileVideoControlsTouched] = useState(false);
+  const mobileControlsOpacity = useRef(new Animated.Value(0)).current;
+  const [showControlsHint, setShowControlsHint] = useState(true);
+
+  // Hide controls hint after 3 seconds
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowControlsHint(false);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Functions to handle mobile controls fade
+  const fadeInMobileControls = () => {
+    Animated.timing(mobileControlsOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const fadeOutMobileControls = () => {
+    Animated.timing(mobileControlsOpacity, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
   
   // New state to track the initial load and trigger auto-play on subsequent tracks
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -164,7 +229,7 @@ export default function MediaPlayer({
     };
   }, []);
 
-  const currentMediaFile = media[currentTrack];
+  const currentMediaFile = activeMedia[currentTrack];
   const contentId = playlist?.id || slideshow?.id;
   const contentName = playlist?.name || slideshow?.name;
   
@@ -193,12 +258,34 @@ export default function MediaPlayer({
           }));
         setProductLinks(convertedLinks);
         console.log('🔗 PRODUCT_LINKS: Converted playlist links:', convertedLinks);
+      } else if (slideshow && slideshow.productLinks) {
+        console.log('🔗 PRODUCT_LINKS: Using slideshow product links:', slideshow.productLinks);
+        // Convert slideshow product links to MediaPlayer format and filter out invalid products
+        const convertedLinks = slideshow.productLinks
+          .filter(link => link.isActive && link.id) // Only include active links with valid product IDs
+          .map(link => ({
+            id: parseInt(link.linkId || link.id),
+            product_id: parseInt(link.id),
+            title: link.title,
+            url: link.url,
+            description: link.description,
+            image_url: link.imageUrl,
+            display_order: link.displayOrder,
+            is_active: link.isActive,
+            created_at: '',
+            updated_at: '',
+            product_name: link.productName || link.title, // Use productName if available, fallback to title
+            price: link.price?.replace('$', '') || '0',
+            product_images: link.images || []
+          }));
+        setProductLinks(convertedLinks);
+        console.log('🔗 PRODUCT_LINKS: Converted slideshow links:', convertedLinks);
       } else if (contentId) {
-        // For slideshows and other content, fetch via API
+        // For other content without product links in data, fetch via API
         fetchProductLinks();
       }
     }
-  }, [contentId, showProductLinks, playlist]);
+  }, [contentId, showProductLinks, playlist, slideshow]);
   
   useEffect(() => {
     if (showChat) {
@@ -245,43 +332,33 @@ export default function MediaPlayer({
   
   const fetchProductLinks = async () => {
     if (!contentId) return;
+
+    const contentType = playlist ? 'playlist' : slideshow ? 'slideshow' : null;
+    if (!contentType) return;
+
+    console.log(`🔗 PRODUCT_LINKS: Fetching for content ID: ${contentId}`);
+    console.log(`🔗 PRODUCT_LINKS: Content type: ${contentType}`);
     
     setLoadingProductLinks(true);
     try {
-      console.log('🔗 PRODUCT_LINKS: Fetching for content ID:', contentId);
-      console.log('🔗 PRODUCT_LINKS: Content type:', playlist ? 'playlist' : 'slideshow');
-      
-      let response;
-      if (playlist) {
-        response = await productLinksAPI.getByPlaylistId(contentId);
-        console.log('🔗 PRODUCT_LINKS: Playlist response:', response);
-        // Filter out inactive or invalid product links
-        const validLinks = (response.productLinks || []).filter(link => 
-          link.is_active && link.product_id && link.product_name
-        );
-        setProductLinks(validLinks);
-      } else if (slideshow) {
-        response = await productLinksAPI.getBySlideshowId(contentId);
-        console.log('🔗 PRODUCT_LINKS: Slideshow response:', response);
-        // Filter out inactive or invalid product links
-        const validLinks = (response || []).filter(link => 
-          link.is_active && link.product_id && link.product_name
-        );
-        setProductLinks(validLinks); // Slideshow API returns array directly
+      let links = [];
+      if (contentType === 'playlist') {
+        links = await contentProductsAPI.getByPlaylistId(contentId);
+      } else {
+        links = await contentProductsAPI.getBySlideshowId(contentId);
       }
-      
-      const linksCount = playlist ? (response?.productLinks?.length || 0) : (response?.length || 0);
-      console.log('🔗 PRODUCT_LINKS: Loaded', linksCount, 'links');
-      console.log('🔗 PRODUCT_LINKS: Product links data:', playlist ? (response?.productLinks || []) : (response || []));
+      console.log('🔗 PRODUCT_LINKS: Fetched links:', links);
+      setProductLinks(links.products || []);
     } catch (error) {
       console.error('🔗 PRODUCT_LINKS: Error fetching:', error);
-      setProductLinks([]);
     } finally {
       setLoadingProductLinks(false);
     }
   };
   
   const fetchChatMessages = async () => {
+    if (!contentId) return;
+    
     setLoadingChat(true);
     try {
       console.log('🌍 UNIVERSAL_CHAT: Fetching messages with filter:', chatFilter);
@@ -360,7 +437,7 @@ export default function MediaPlayer({
   const isVideo = currentMediaFile?.type === 'video' || currentMediaFile?.fileType === 'video' || currentMediaFile?.contentType?.startsWith('video/');
   const isAudio = currentMediaFile?.type === 'audio' || currentMediaFile?.fileType === 'audio' || currentMediaFile?.contentType?.startsWith('audio/');
   const isImage = currentMediaFile?.type === 'image' || currentMediaFile?.fileType === 'image' || currentMediaFile?.contentType?.startsWith('image/');
-  const isSlideshow = media.length > 1 && media.every(file => 
+  const isSlideshow = activeMedia.length > 1 && activeMedia.every(file => 
     file.type === 'image' || file.fileType === 'image' || file.contentType?.startsWith('image/')
   );
 
@@ -383,6 +460,22 @@ export default function MediaPlayer({
     }
   }, [audioStatus.didJustFinish]);
 
+  // AUTO-ADVANCE FOR MOBILE VIDEO: Watch the expo-video status
+  useEffect(() => {
+    if (Platform.OS !== 'web' && isVideo && videoPlayer && videoPlayer.duration) {
+      if (!videoPlayer.playing && videoPlayer.currentTime >= videoPlayer.duration - 0.3) {
+        console.log('🔴 MEDIA_PLAYER (Mobile): Video ended, advancing to next track');
+        handleNext();
+        // Auto-play the next video after a short delay
+        setTimeout(() => {
+          if (videoPlayer) {
+            videoPlayer.play();
+          }
+        }, 500);
+      }
+    }
+  }, [isVideo, videoPlayer.playing, videoPlayer.currentTime, videoPlayer.duration]);
+
   // Load track when current track changes
   useEffect(() => {
     if (currentMediaFile) {
@@ -399,82 +492,153 @@ export default function MediaPlayer({
 
   // Background audio setup for both playlists and slideshows
   useEffect(() => {
-    const rawAudioUrl = playlist?.backgroundAudioUrl || slideshow?.audioUrl;
+    const rawAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
     
+    console.log('🎵 BACKGROUND_AUDIO: ===== BACKGROUND AUDIO DEBUG START =====');
     console.log('🎵 BACKGROUND_AUDIO: Effect triggered with:', {
       hasPlaylist: !!playlist,
       hasSlideshow: !!slideshow,
       playlistBgAudio: playlist?.backgroundAudioUrl,
-      slideshowAudio: slideshow?.audioUrl,
+      slideshowAudio: slideshow?.backgroundAudioUrl,
       rawAudioUrl,
-      autoPlay
+      autoPlay,
+      platform: Platform.OS
     });
+    
+    if (playlist) {
+      console.log('🎵 BACKGROUND_AUDIO: Playlist object:', {
+        id: playlist.id,
+        name: playlist.name,
+        backgroundAudioUrl: playlist.backgroundAudioUrl,
+        backgroundAudioUrlType: typeof playlist.backgroundAudioUrl
+      });
+    }
+    
+    if (slideshow) {
+      console.log('🎵 BACKGROUND_AUDIO: Slideshow object:', {
+        id: slideshow.id,
+        name: slideshow.name,
+        backgroundAudioUrl: slideshow.backgroundAudioUrl,
+        backgroundAudioUrlType: typeof slideshow.backgroundAudioUrl
+      });
+    }
     
     if (rawAudioUrl) {
       // Use the helper function to get the proper streaming URL for slideshows
-      const audioUrl = slideshow?.audioUrl ? getSlideshowAudioUrl(rawAudioUrl) : rawAudioUrl;
+      const audioUrl = slideshow?.backgroundAudioUrl ? getSlideshowAudioUrl(rawAudioUrl) : rawAudioUrl;
       
-      console.log('🎵 BACKGROUND_AUDIO: Setting up audio for', playlist ? 'playlist' : 'slideshow');
+      console.log('🎵 BACKGROUND_AUDIO: ✅ Audio URL found - setting up audio');
+      console.log('🎵 BACKGROUND_AUDIO: Content type:', playlist ? 'playlist' : 'slideshow');
       console.log('🎵 BACKGROUND_AUDIO: Original URL:', rawAudioUrl);
       console.log('🎵 BACKGROUND_AUDIO: Streaming URL:', audioUrl);
+      console.log('🎵 BACKGROUND_AUDIO: URL comparison - same?', rawAudioUrl === audioUrl);
       
       if (Platform.OS === 'web') {
+        console.log('🎵 BACKGROUND_AUDIO: Setting up WEB audio player');
+        
         const audio = new Audio(audioUrl);
         audio.loop = true;
         audio.volume = 0.3; // Lower volume for background audio
         audioRef.current = audio;
         
+        console.log('🎵 BACKGROUND_AUDIO: Audio object created with properties:', {
+          src: audio.src,
+          loop: audio.loop,
+          volume: audio.volume,
+          crossOrigin: audio.crossOrigin,
+          preload: audio.preload
+        });
+        
         // Add event listeners for debugging
         audio.addEventListener('loadstart', () => {
-          console.log('🎵 BACKGROUND_AUDIO: Load started');
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Load started');
+        });
+        
+        audio.addEventListener('loadedmetadata', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Metadata loaded');
         });
         
         audio.addEventListener('loadeddata', () => {
-          console.log('🎵 BACKGROUND_AUDIO: Audio data loaded');
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Audio data loaded');
+        });
+        
+        audio.addEventListener('canplay', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Can play');
+        });
+        
+        audio.addEventListener('canplaythrough', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Can play through');
+        });
+        
+        audio.addEventListener('play', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ✅ Play event fired');
+        });
+        
+        audio.addEventListener('pause', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ⏸️ Pause event fired');
+        });
+        
+        audio.addEventListener('ended', () => {
+          console.log('🎵 BACKGROUND_AUDIO: 🔚 Ended event fired');
         });
         
         audio.addEventListener('error', (e) => {
-          console.error('🎵 BACKGROUND_AUDIO: Audio error:', e);
+          console.error('🎵 BACKGROUND_AUDIO: ❌ Audio error event:', e);
+          console.error('🎵 BACKGROUND_AUDIO: Audio error details:', {
+            error: audio.error,
+            code: audio.error?.code,
+            message: audio.error?.message,
+            networkState: audio.networkState,
+            readyState: audio.readyState,
+            src: audio.src
+          });
         });
         
-        if (autoPlay) {
-          console.log('🎵 BACKGROUND_AUDIO: Auto-playing audio');
-          audio.play().catch(error => {
-            console.error('🎵 BACKGROUND_AUDIO: Auto-play failed:', error);
-          });
-        }
+        audio.addEventListener('stalled', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ⚠️ Stalled event fired');
+        });
+        
+        audio.addEventListener('waiting', () => {
+          console.log('🎵 BACKGROUND_AUDIO: ⏳ Waiting event fired');
+        });
+        
+        // Don't auto-play background audio - let user control it
+        console.log('🎵 BACKGROUND_AUDIO: Audio ready but not playing - waiting for user to click play');
         
         return () => {
-          console.log('🎵 BACKGROUND_AUDIO: Cleaning up web audio');
+          console.log('🎵 BACKGROUND_AUDIO: 🧹 Cleaning up web audio');
           if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current = null;
           }
         };
       } else {
+        console.log('🎵 BACKGROUND_AUDIO: Setting up MOBILE audio player');
+        
         // Mobile background audio setup
         const setupMobileBackgroundAudio = async () => {
           try {
-            console.log('🎵 BACKGROUND_AUDIO: Setting up mobile audio');
+            console.log('🎵 BACKGROUND_AUDIO: Creating mobile audio player');
             // Create a separate audio player for background music on mobile
             const bgAudio = useAudioPlayer();
+            console.log('🎵 BACKGROUND_AUDIO: Replacing audio source with URL:', audioUrl);
             await bgAudio.replace(audioUrl);
             bgAudio.loop = true;
             setBackgroundAudioPlayer(bgAudio);
             
-            if (autoPlay) {
-              console.log('🎵 BACKGROUND_AUDIO: Auto-playing mobile audio');
-              await bgAudio.play();
-            }
+            console.log('🎵 BACKGROUND_AUDIO: Mobile audio player setup complete');
+            
+            // Don't auto-play mobile background audio - let user control it
+            console.log('🎵 BACKGROUND_AUDIO: Mobile audio ready but not playing - waiting for user to click play');
           } catch (error) {
-            console.error('🎵 BACKGROUND_AUDIO: Mobile background audio setup failed:', error);
+            console.error('🎵 BACKGROUND_AUDIO: ❌ Mobile background audio setup failed:', error);
           }
         };
         
         setupMobileBackgroundAudio();
         
         return () => {
-          console.log('🎵 BACKGROUND_AUDIO: Cleaning up mobile audio');
+          console.log('🎵 BACKGROUND_AUDIO: 🧹 Cleaning up mobile audio');
           if (backgroundAudioPlayer) {
             backgroundAudioPlayer.pause();
             setBackgroundAudioPlayer(null);
@@ -482,16 +646,25 @@ export default function MediaPlayer({
         };
       }
     } else {
-      console.log('🎵 BACKGROUND_AUDIO: No audio URL found, skipping setup');
+      console.log('🎵 BACKGROUND_AUDIO: ❌ No audio URL found, skipping setup');
+      console.log('🎵 BACKGROUND_AUDIO: Checked sources:', {
+        playlistBackgroundAudioUrl: playlist?.backgroundAudioUrl,
+        slideshowAudioUrl: slideshow?.backgroundAudioUrl,
+        rawAudioUrl
+      });
     }
-  }, [playlist?.backgroundAudioUrl, slideshow?.audioUrl, autoPlay]);
+    
+    console.log('🎵 BACKGROUND_AUDIO: ===== BACKGROUND AUDIO DEBUG END =====');
+  }, [playlist?.backgroundAudioUrl, slideshow?.backgroundAudioUrl, autoPlay]);
 
-  // Slideshow auto-advance - but only if not user paused
+  // Slideshow auto-advance - but only if playing and not user paused
   useEffect(() => {
     if (isSlideshow && isPlaying && !userPaused && slideshowSettings?.autoplayInterval) {
+      console.log('🎬 SLIDESHOW: Starting auto-advance interval:', slideshowSettings.autoplayInterval, 'ms');
       const interval = setInterval(() => {
         setCurrentImageIndex(prev => {
-          const nextIndex = (prev + 1) % media.length;
+          const nextIndex = (prev + 1) % activeMedia.length;
+          console.log('🎬 SLIDESHOW: Auto-advancing to image:', nextIndex + 1, '/', activeMedia.length);
           setCurrentTrack(nextIndex);
           return nextIndex;
         });
@@ -500,20 +673,25 @@ export default function MediaPlayer({
       setSlideshowInterval(interval);
       
       return () => {
-        if (interval) clearInterval(interval);
+        if (interval) {
+          console.log('🎬 SLIDESHOW: Clearing auto-advance interval');
+          clearInterval(interval);
+        }
       };
     } else {
-      // Clear interval if paused
+      // Clear interval if paused or not playing
       if (slideshowInterval) {
+        console.log('🎬 SLIDESHOW: Clearing auto-advance interval (paused or stopped)');
         clearInterval(slideshowInterval);
         setSlideshowInterval(null);
       }
     }
-  }, [isSlideshow, isPlaying, userPaused, slideshowSettings?.autoplayInterval, media.length]);
+  }, [isSlideshow, isPlaying, userPaused, slideshowSettings?.autoplayInterval, activeMedia.length]);
 
   // Auto-play setup - but don't auto-play if user manually paused
   useEffect(() => {
     if (autoPlay && currentMediaFile && !isPlaying && !userPaused) {
+      console.log('🎬 SLIDESHOW: Auto-play is enabled, starting playback after 1 second');
       const timer = setTimeout(() => {
         handlePlay();
       }, 1000);
@@ -595,7 +773,7 @@ export default function MediaPlayer({
   }, []);
 
   const loadTrack = async (trackIndex: number) => {
-    const mediaFile = media[trackIndex];
+    const mediaFile = activeMedia[trackIndex];
     if (!mediaFile) return;
 
     console.log('🔴 MEDIA_PLAYER: Loading track:', mediaFile.title, 'Type:', mediaFile.type || mediaFile.fileType);
@@ -603,9 +781,8 @@ export default function MediaPlayer({
     setIsLoading(true);
     setError(null);
 
-    // Determine if the track should auto-play after loading.
-    // It should play if it's NOT the very first track loaded.
-    const playAfterLoad = !isInitialLoad;
+    // Don't auto-play any tracks - let user control playback
+    const playAfterLoad = false;
     if (isInitialLoad) {
       setIsInitialLoad(false);
     }
@@ -687,8 +864,19 @@ export default function MediaPlayer({
       // Clear user paused flag when manually playing
       setUserPaused(false);
       
-      if (isVideo && videoRef.current) {
-        await videoRef.current.play();
+      if (isVideo) {
+        console.log('🔴 MEDIA_PLAYER: Starting video playback');
+        if (Platform.OS === 'web' && videoRef.current) {
+          try {
+            await videoRef.current.play();
+            console.log('🔴 MEDIA_PLAYER (Web): Video play() called successfully');
+          } catch (error) {
+            console.error('🔴 MEDIA_PLAYER (Web): Video play() failed:', error);
+          }
+        } else if (videoPlayer) {
+          videoPlayer.play();
+          console.log('🔴 MEDIA_PLAYER (Mobile): Video play() called successfully');
+        }
         setIsPlaying(true);
       } else if (isAudio) {
         if (Platform.OS === 'web' && audioRef.current) {
@@ -699,27 +887,31 @@ export default function MediaPlayer({
         }
         setIsPlaying(true);
       } else if (isImage || isSlideshow) {
+        console.log('🎬 SLIDESHOW: Starting slideshow playback');
         setIsPlaying(true);
         
-        // Also control background audio for slideshows
-        const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.audioUrl;
+        // Also control background audio for slideshows - SYNC THEM TOGETHER
+        const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
         if (isSlideshow && backgroundAudioUrl) {
+          console.log('🎵 SLIDESHOW: Starting background audio with slideshow');
           if (Platform.OS === 'web' && audioRef.current) {
             try {
               await audioRef.current.play();
-              console.log('🎵 Background audio started with slideshow');
+              console.log('🎵 SLIDESHOW: ✅ Background audio started with slideshow');
             } catch (audioError) {
-              console.warn('Background audio play failed:', audioError);
+              console.warn('🎵 SLIDESHOW: ❌ Background audio play failed:', audioError);
             }
           } else if (backgroundAudioPlayer) {
             try {
               await backgroundAudioPlayer.play();
-              console.log('🎵 Mobile background audio started with slideshow');
+              console.log('🎵 SLIDESHOW: ✅ Mobile background audio started with slideshow');
             } catch (audioError) {
-              console.warn('Mobile background audio play failed:', audioError);
+              console.warn('🎵 SLIDESHOW: ❌ Mobile background audio play failed:', audioError);
             }
           }
         }
+        
+        console.log('🎬 SLIDESHOW: ✅ Slideshow and audio started together');
       }
       
     } catch (error) {
@@ -733,8 +925,12 @@ export default function MediaPlayer({
       // Set user paused flag to prevent auto-restart
       setUserPaused(true);
       
-      if (isVideo && videoRef.current) {
-        videoRef.current.pause();
+      if (isVideo) {
+        if (Platform.OS === 'web' && videoRef.current) {
+          videoRef.current.pause();
+        } else if (videoPlayer) {
+          videoPlayer.pause();
+        }
       } else if (isAudio) {
       if (Platform.OS === 'web' && audioRef.current) {
         audioRef.current.pause();
@@ -743,17 +939,22 @@ export default function MediaPlayer({
           await audioPlayer.pause();
         }
       } else if (isImage || isSlideshow) {
-        // Also control background audio for slideshows
-        const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.audioUrl;
+        console.log('🎬 SLIDESHOW: Pausing slideshow playback');
+        
+        // Also control background audio for slideshows - SYNC THEM TOGETHER
+        const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
         if (isSlideshow && backgroundAudioUrl) {
+          console.log('🎵 SLIDESHOW: Pausing background audio with slideshow');
           if (Platform.OS === 'web' && audioRef.current) {
             audioRef.current.pause();
-            console.log('🎵 Background audio paused with slideshow');
+            console.log('🎵 SLIDESHOW: ✅ Background audio paused with slideshow');
           } else if (backgroundAudioPlayer) {
             backgroundAudioPlayer.pause();
-            console.log('🎵 Mobile background audio paused with slideshow');
+            console.log('🎵 SLIDESHOW: ✅ Mobile background audio paused with slideshow');
           }
         }
+        
+        console.log('🎬 SLIDESHOW: ✅ Slideshow and audio paused together');
       }
       
       setIsPlaying(false);
@@ -765,25 +966,37 @@ export default function MediaPlayer({
 
   const handleNext = () => {
     // Loop back to the beginning if at the end of the playlist
-    const nextTrack = (currentTrack + 1) % media.length;
+    const nextTrack = (currentTrack + 1) % activeMedia.length;
     console.log(`🔴 MEDIA_PLAYER: Advancing to next track ${nextTrack}`);
     setCurrentTrack(nextTrack);
     // Reset user paused flag when manually changing tracks
     setUserPaused(false);
+    // Auto-play the next track after a short delay to ensure it loads
+    setTimeout(() => {
+      handlePlay();
+    }, 300);
   };
 
   const handlePrevious = () => {
     // Loop to the end if at the beginning of the playlist
-    const prevTrack = (currentTrack - 1 + media.length) % media.length;
+    const prevTrack = (currentTrack - 1 + activeMedia.length) % activeMedia.length;
     console.log(`🔴 MEDIA_PLAYER: Going to previous track ${prevTrack}`);
     setCurrentTrack(prevTrack);
     // Reset user paused flag when manually changing tracks
     setUserPaused(false);
+    // Auto-play the previous track after a short delay to ensure it loads
+    setTimeout(() => {
+      handlePlay();
+    }, 300);
   };
 
   const handleSeek = (value: number) => {
-    if (isVideo && videoRef.current) {
-      videoRef.current.currentTime = value;
+    if (isVideo) {
+      if (Platform.OS === 'web' && videoRef.current) {
+        videoRef.current.currentTime = value;
+      } else if (videoPlayer) {
+        videoPlayer.currentTime = value;
+      }
     } else if (isAudio) {
       if (Platform.OS === 'web' && audioRef.current) {
         audioRef.current.currentTime = value;
@@ -804,20 +1017,88 @@ export default function MediaPlayer({
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const handleProductLinkPress = (link: ProductLink) => {
-    if (Platform.OS === 'web') {
-      window.open(link.url, '_blank');
+  const handleProductLinkPress = async (link: ProductLink) => {
+    console.log('💳 BUY_NOW: Processing direct checkout for:', link.product_name);
+    
+    try {
+      // Fetch the full product data to ensure we have current pricing
+      const response = await productsAPI.getProductById(String(link.product_id));
+      
+      if (!response.product) {
+        console.error('💳 BUY_NOW: Product not found:', link.product_id);
+        Alert.alert('Error', 'Product not found');
+        return;
+      }
+
+      const product = response.product;
+      console.log('💳 BUY_NOW: Product data:', product);
+
+      // Check if product is in stock
+      if (!product.in_stock) {
+        Alert.alert('Out of Stock', 'This product is currently out of stock.');
+        return;
+      }
+
+      // Create Stripe checkout session for direct purchase
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = base;
+      
+      const items = [{ productId: product.id, quantity: 1 }];
+      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
+      
+      if (Platform.OS === 'web') {
+        // Open Stripe checkout in a new window
+        window.open(url, '_blank');
+        console.log('💳 BUY_NOW: Opened Stripe checkout in new window');
+      } else {
+        // For mobile, use WebBrowser to keep app running in background
+        await WebBrowser.openBrowserAsync(url);
+        console.log('💳 BUY_NOW: Opened Stripe checkout in external browser');
+      }
+    } catch (error) {
+      console.error('💳 BUY_NOW: Error creating checkout session:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
   };
 
-  const handleAddToCart = (link: ProductLink) => {
+  const handleAddToCart = async (link: ProductLink) => {
     console.log('🛒 ADD_TO_CART: Adding product to cart:', link.product_name);
-    // Navigate to the product page to add to cart
-    if (Platform.OS === 'web') {
-      window.open(link.url, '_blank');
-    } else {
-      // For mobile, navigate to the product page
-      router.push(`/store/product/${link.product_id}`);
+    console.log('🛒 ADD_TO_CART: Product ID:', link.product_id);
+    
+    try {
+      // Fetch the full product data from the API
+      const response = await productsAPI.getProductById(String(link.product_id));
+      
+      if (!response.product) {
+        console.error('🛒 ADD_TO_CART: Product not found:', link.product_id);
+        Alert.alert('Error', 'Product not found');
+        return;
+      }
+
+      const product = response.product;
+      console.log('🛒 ADD_TO_CART: Product data:', product);
+
+      // Check if product is in stock
+      if (!product.in_stock) {
+        Alert.alert('Out of Stock', 'This product is currently out of stock.');
+        return;
+      }
+
+      // Add to cart using the cart context
+      addToCart(product);
+      
+      Alert.alert(
+        'Added to Cart',
+        `${product.name} has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          { text: 'View Cart', onPress: () => router.push('/store/cart') }
+        ]
+      );
+    } catch (error) {
+      console.error('🛒 ADD_TO_CART: Error:', error);
+      Alert.alert('Error', 'Failed to add product to cart');
     }
   };
 
@@ -848,6 +1129,11 @@ export default function MediaPlayer({
       // Mobile navigation
       router.push(`/store/user/${userId}`);
     }
+  };
+
+  const handleCartPress = () => {
+    console.log('🛒 CART: Navigating to cart');
+    router.push('/store/cart');
   };
 
   const renderChatMessage = ({ item }: { item: ChatMessage }) => (
@@ -953,10 +1239,22 @@ export default function MediaPlayer({
   const renderVideoContent = () => {
     if (Platform.OS !== 'web') {
       return (
-            <View style={styles.videoContainer}>
-              <VideoView
-                style={styles.video}
-                player={videoPlayer}
+        <View 
+          style={styles.videoContainer}
+          onTouchStart={() => {
+            setIsMobileVideoControlsTouched(true);
+            fadeInMobileControls();
+          }}
+          onTouchEnd={() => {
+            setTimeout(() => {
+              setIsMobileVideoControlsTouched(false);
+              fadeOutMobileControls();
+            }, 3000);
+          }}
+        >
+          <VideoView
+            style={styles.video}
+            player={videoPlayer}
             allowsFullscreen={true}
             allowsPictureInPicture={true}
             contentFit="contain"
@@ -976,14 +1274,82 @@ export default function MediaPlayer({
               color="#fff" 
             />
           </TouchableOpacity>
+
+          {/* Video Controls Overlay for Mobile */}
+          <Animated.View 
+            style={[
+              styles.videoControlsOverlay,
+              { opacity: mobileControlsOpacity }
+            ]}
+          >
+            <View style={styles.videoInfo}>
+              <Text style={[styles.videoTitle, isFullscreen && styles.videoTitleFullscreen]}>{currentMediaFile.title}</Text>
+              <Text style={[styles.videoTrackInfo, isFullscreen && styles.videoTrackInfoFullscreen]}>Video {currentTrack + 1} of {activeMedia.length}</Text>
             </View>
+            
+            <View style={[styles.videoControls, isFullscreen && styles.videoControlsFullscreen]}>
+              <View style={styles.progressContainer}>
+                <Text style={styles.timeText}>{formatTime(videoPlayer.currentTime || 0)}</Text>
+                <View style={[styles.progressSlider, isFullscreen && styles.progressSliderFullscreen]}>
+                  <View style={[styles.progressTrack, { width: `${((videoPlayer.currentTime || 0) / (videoPlayer.duration || 1)) * 100}%` }]} />
+                </View>
+                <Text style={styles.timeText}>{formatTime(videoPlayer.duration || 0)}</Text>
+              </View>
+
+              <View style={styles.controlButtons}>
+                <TouchableOpacity
+                  style={[styles.controlButton, isFullscreen && styles.controlButtonFullscreen]}
+                  onPress={handlePrevious}
+                >
+                  <Ionicons name="play-skip-back" size={isFullscreen ? 32 : 24} color={"#007AFF"} />
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={[styles.playButton, isFullscreen && styles.playButtonFullscreen]} 
+                  onPress={videoPlayer.playing ? handlePause : handlePlay}
+                >
+                  <Ionicons 
+                    name={videoPlayer.playing ? "pause" : "play"} 
+                    size={isFullscreen ? 48 : 32} 
+                    color="#fff" 
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.controlButton, isFullscreen && styles.controlButtonFullscreen]}
+                  onPress={handleNext}
+                >
+                  <Ionicons name="play-skip-forward" size={isFullscreen ? 32 : 24} color={"#007AFF"} />
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Animated.View>
+
+          {/* Mobile Controls Hint */}
+          {showControlsHint && (
+            <View style={styles.mobileControlsHint}>
+              <Text style={styles.mobileControlsHintText}>Tap for controls</Text>
+            </View>
+          )}
+        </View>
       );
     }
 
     const videoUrl = getMediaUrl(currentMediaFile);
     
     return (
-      <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div 
+        style={{ width: '100%', height: '100%', position: 'relative' }}
+        onMouseEnter={() => setIsVideoControlsHovered(true)}
+        onMouseLeave={() => setIsVideoControlsHovered(false)}
+      >
+        <style>{`
+          @keyframes fadeOut {
+            0% { opacity: 1; }
+            70% { opacity: 1; }
+            100% { opacity: 0; }
+          }
+        `}</style>
         <video
           ref={videoRef}
           key={currentMediaFile.id}
@@ -996,8 +1362,14 @@ export default function MediaPlayer({
             backgroundColor: '#000',
             borderRadius: isFullscreen ? '0px' : '8px'
           }}
-          onPlay={() => setIsPlaying(true)}
-          onPause={() => setIsPlaying(false)}
+          onPlay={() => {
+            console.log('🔴 MEDIA_PLAYER (Web): Video play event fired');
+            setIsPlaying(true);
+          }}
+          onPause={() => {
+            console.log('🔴 MEDIA_PLAYER (Web): Video pause event fired');
+            setIsPlaying(false);
+          }}
           onLoadedData={() => {
             setIsLoading(false);
             if (videoRef.current) {
@@ -1016,6 +1388,16 @@ export default function MediaPlayer({
           }}
           onWaiting={() => setIsLoading(true)}
           onCanPlay={() => setIsLoading(false)}
+          onEnded={() => {
+            console.log('🔴 MEDIA_PLAYER (Web): Video ended, advancing to next track');
+            handleNext();
+            // Auto-play the next video after a short delay
+            setTimeout(() => {
+              if (videoRef.current) {
+                videoRef.current.play();
+              }
+            }, 500);
+          }}
         />
         
         {/* Custom Fullscreen Button for Web */}
@@ -1040,6 +1422,120 @@ export default function MediaPlayer({
         >
           {isFullscreen ? '⤓' : '⤢'}
         </button>
+
+        {/* Video Controls Overlay for Web */}
+        <div 
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '20px',
+            right: '20px',
+            backgroundColor: `rgba(0,0,0,${isVideoControlsHovered ? 0.8 : 0.3})`,
+            borderRadius: '12px',
+            padding: '20px',
+            zIndex: 5,
+            transition: 'background-color 0.3s ease, opacity 0.3s ease',
+            opacity: isVideoControlsHovered ? 1 : 0,
+            cursor: 'pointer'
+          }}
+
+        >
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '15px'
+          }}>
+            <div style={{
+              textAlign: 'center',
+              color: '#fff'
+            }}>
+              <h3 style={{ margin: '0 0 5px 0', fontSize: isFullscreen ? '20px' : '16px' }}>{currentMediaFile.title}</h3>
+              <p style={{ margin: 0, fontSize: isFullscreen ? '16px' : '14px', opacity: 0.8 }}>Video {currentTrack + 1} of {activeMedia.length}</p>
+            </div>
+            
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px'
+            }}>
+              <span style={{ color: '#fff', fontSize: '14px', minWidth: '45px' }}>{formatTime(position)}</span>
+              <input
+                type="range"
+                min={0}
+                max={duration}
+                value={position}
+                onChange={(e) => handleSeek(parseFloat(e.target.value))}
+                style={{
+                  flex: 1,
+                  height: isFullscreen ? '8px' : '6px',
+                  borderRadius: isFullscreen ? '4px' : '3px',
+                  background: `linear-gradient(to right, #007AFF 0%, #007AFF ${(position / duration) * 100}%, #ccc ${(position / duration) * 100}%, #ccc 100%)`,
+                  outline: 'none',
+                  cursor: 'pointer',
+                }}
+              />
+              <span style={{ color: '#fff', fontSize: '14px', minWidth: '45px' }}>{formatTime(duration)}</span>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: '20px'
+            }}>
+              <button
+                onClick={handlePrevious}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: '#007AFF',
+                  cursor: 'pointer',
+                  fontSize: isFullscreen ? '32px' : '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ⏮
+              </button>
+              
+              <button
+                onClick={isPlaying ? handlePause : handlePlay}
+                style={{
+                  backgroundColor: '#007AFF',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: isFullscreen ? '64px' : '48px',
+                  height: isFullscreen ? '64px' : '48px',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  fontSize: isFullscreen ? '24px' : '18px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                {isPlaying ? '⏸' : '▶'}
+              </button>
+
+              <button
+                onClick={handleNext}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  color: '#007AFF',
+                  cursor: 'pointer',
+                  fontSize: isFullscreen ? '32px' : '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ⏭
+              </button>
+            </div>
+          </div>
+        </div>
         
         {/* Loading Overlay */}
         {isLoading && (
@@ -1079,6 +1575,26 @@ export default function MediaPlayer({
             <Text style={styles.errorText}>{error}</Text>
           </div>
         )}
+
+        {/* Controls Hint Overlay */}
+        {showControlsHint && (
+          <div style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            color: '#fff',
+            padding: '8px 16px',
+            borderRadius: '20px',
+            fontSize: '14px',
+            pointerEvents: 'none',
+            animation: 'fadeOut 3s ease-out forwards',
+            zIndex: 1
+          }}>
+            Hover for controls
+          </div>
+        )}
       </div>
     );
   };
@@ -1108,7 +1624,7 @@ export default function MediaPlayer({
 
         <View style={styles.audioInfo}>
           <Text style={[styles.audioTitle, isFullscreen && styles.audioTitleFullscreen]}>{currentMediaFile.title}</Text>
-          <Text style={[styles.audioArtist, isFullscreen && styles.audioArtistFullscreen]}>Track {currentTrack + 1} of {media.length}</Text>
+          <Text style={[styles.audioArtist, isFullscreen && styles.audioArtistFullscreen]}>Track {currentTrack + 1} of {activeMedia.length}</Text>
         </View>
         
         <View style={[styles.audioControls, isFullscreen && styles.audioControlsFullscreen]}>
@@ -1251,7 +1767,7 @@ export default function MediaPlayer({
         ]}>
           <Text style={[styles.imageTitle, isFullscreen && styles.imageTitleFullscreen]}>{currentMediaFile.title}</Text>
           <Text style={[styles.imageCounter, isFullscreen && styles.imageCounterFullscreen]}>
-            {currentTrack + 1} of {media.length}
+            {currentTrack + 1} of {activeMedia.length}
           </Text>
               </View>
             </View>
@@ -1268,6 +1784,28 @@ export default function MediaPlayer({
 
   const content = (
     <>
+      {/* Header with Cart Icon */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={24} color="#000" />
+        </TouchableOpacity>
+        
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>
+            {contentName || 'Media Player'}
+          </Text>
+        </View>
+        
+        <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
+          <Ionicons name="cart-outline" size={24} color="#000" />
+          {getTotalItems() > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
       {/* Two-panel layout for web, single column for mobile */}
       {Platform.OS === 'web' ? (
         <View style={styles.webMainContent}>
@@ -1285,7 +1823,7 @@ export default function MediaPlayer({
                   {currentMediaFile.title || 'Untitled'}
                 </Text>
                 <Text style={styles.trackCount}>
-                  {currentTrack + 1} of {media.length}
+                  {currentTrack + 1} of {activeMedia.length}
                 </Text>
               </View>
             </View>
@@ -1491,7 +2029,7 @@ export default function MediaPlayer({
                 {currentMediaFile.title || 'Untitled'}
               </Text>
               <Text style={styles.trackCount}>
-                {currentTrack + 1} of {media.length}
+                {currentTrack + 1} of {activeMedia.length}
               </Text>
             </View>
           </View>
@@ -1712,6 +2250,61 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
   },
 
+  // Header styles
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    ...(Platform.OS === 'web' && {
+      position: 'sticky',
+      top: 0,
+      zIndex: 100,
+    }),
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  cartButton: {
+    position: 'relative',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f8f9fa',
+  },
+  cartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ff4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  cartBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
   // Shared content layout styles
   contentContainer: {
     flexDirection: 'column',
@@ -1782,6 +2375,64 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 8,
     zIndex: 10,
+  },
+  videoControlsOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 12,
+    padding: 20,
+    zIndex: 5,
+    ...(Platform.OS === 'ios' || Platform.OS === 'android' ? {
+      // React Native doesn't support CSS transitions, but we can use opacity changes
+    } : {}),
+  },
+  videoInfo: {
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  videoTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 5,
+  },
+  videoTitleFullscreen: {
+    fontSize: 20,
+  },
+  videoTrackInfo: {
+    color: '#fff',
+    fontSize: 14,
+    opacity: 0.8,
+    textAlign: 'center',
+  },
+  videoTrackInfoFullscreen: {
+    fontSize: 16,
+  },
+  videoControls: {
+    gap: 15,
+  },
+  videoControlsFullscreen: {
+    gap: 20,
+  },
+  mobileControlsHint: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -50 }, { translateY: -50 }],
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    zIndex: 1,
+  },
+  mobileControlsHintText: {
+    color: '#fff',
+    fontSize: 14,
+    textAlign: 'center',
   },
   audioArtworkFullscreen: {
     width: 300,
