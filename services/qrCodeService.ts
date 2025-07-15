@@ -6,7 +6,11 @@ export const qrCodeService = {
   async getQRCodes(): Promise<QRCode[]> {
     try {
       console.log('📱 QRCodeService: Fetching QR codes from API');
-      const qrCodes = await qrCodeAPI.getAll();
+      const response = await qrCodeAPI.getAll();
+      console.log('📱 QRCodeService: Raw response:', response);
+      
+      // Handle both response formats: direct array or { qrCodes: [...] }
+      const qrCodes = Array.isArray(response) ? response : (response.qrCodes || []);
       console.log('📱 QRCodeService: Received', qrCodes.length, 'QR codes');
       return qrCodes;
     } catch (error) {
@@ -22,7 +26,11 @@ export const qrCodeService = {
       console.log('📱 QRCodeService: Creating QR code with data:', JSON.stringify(data, null, 2));
       console.log('📱 QRCodeService: About to call qrCodeAPI.create...');
       
-      const qrCode = await qrCodeAPI.create(data);
+      const response = await qrCodeAPI.create(data);
+      console.log('📱 QRCodeService: Raw response:', response);
+      
+      // Handle both response formats: direct object or { qrCode: {...} }
+      const qrCode = response.qrCode || response;
       
       console.log('📱 QRCodeService: qrCodeAPI.create returned successfully');
       console.log('📱 QRCodeService: Result:', JSON.stringify(qrCode, null, 2));
@@ -57,7 +65,11 @@ export const qrCodeService = {
   async updateQRCode(id: number, data: Partial<CreateQRCodeData>): Promise<QRCode> {
     try {
       console.log('📱 QRCodeService: Updating QR code:', id);
-      const qrCode = await qrCodeAPI.update(id.toString(), data);
+      const response = await qrCodeAPI.update(id.toString(), data);
+      console.log('📱 QRCodeService: Raw response:', response);
+      
+      // Handle both response formats: direct object or { qrCode: {...} }
+      const qrCode = response.qrCode || response;
       console.log('📱 QRCodeService: QR code updated successfully');
       return qrCode;
     } catch (error) {
@@ -82,7 +94,11 @@ export const qrCodeService = {
   async getQRCodeById(id: number): Promise<QRCode | null> {
     try {
       console.log('📱 QRCodeService: Fetching QR code by ID:', id);
-      const qrCode = await qrCodeAPI.getById(id.toString());
+      const response = await qrCodeAPI.getById(id.toString());
+      console.log('📱 QRCodeService: Raw response:', response);
+      
+      // Handle both response formats: direct object or { qrCode: {...} }
+      const qrCode = response.qrCode || response;
       console.log('📱 QRCodeService: QR code found');
       return qrCode;
     } catch (error) {
