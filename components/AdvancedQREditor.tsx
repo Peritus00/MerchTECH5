@@ -67,10 +67,15 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   onClose,
   onQRCreated,
 }) => {
-  const { user } = useAuth();
+  console.log('🔘 COMPONENT: AdvancedQREditor function called');
   
-  // Check if user is admin (djjetfuel)
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  try {
+    const { user } = useAuth();
+    console.log('🔘 COMPONENT: useAuth successful, user:', user);
+    
+    // Check if user is admin (djjetfuel)
+    const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+    console.log('🔘 COMPONENT: isAdmin calculated:', isAdmin);
   
   const [activeTab, setActiveTab] = useState<TabType>('content');
   const [name, setName] = useState('');
@@ -1510,7 +1515,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   console.log('🔘 RENDER: contentType:', contentType);
   console.log('🔘 RENDER: selectedPlaylist:', selectedPlaylist);
   
-  return (
+  try {
+    return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <ThemedView style={styles.container}>
         <View style={styles.header}>
@@ -1737,6 +1743,37 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
       </ThemedView>
     </Modal>
   );
+  } catch (error) {
+    console.error('🔘 RENDER ERROR:', error);
+    return (
+      <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+        <ThemedView style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialIcons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+            <ThemedText style={styles.title}>Advanced QR Designer</ThemedText>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#dc2626',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+              onPress={() => Alert.alert('Error', 'Component crashed during render. Check console for details.')}
+            >
+              <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
+                ERROR
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+            <ThemedText>Component crashed during render. Check console for details.</ThemedText>
+          </View>
+        </ThemedView>
+      </Modal>
+    );
+  }
 };
 
 const styles = StyleSheet.create({
