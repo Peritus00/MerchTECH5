@@ -4669,65 +4669,8 @@ app.get('/test-route', (req, res) => {
   res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
 });
 
-// Media player route - now redirects to the proper access routes without loops
-app.get('/media-player/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { type } = req.query;
-    
-    console.log('🎬 MEDIA_PLAYER: Redirecting to access route for:', { id, type });
-    
-    // Redirect to the appropriate access route which now serves HTML directly
-    if (type === 'playlist') {
-      console.log('🎬 MEDIA_PLAYER: Redirecting to playlist-access route');
-      return res.redirect(302, `/playlist-access/${id}`);
-    } else if (type === 'slideshow') {
-      console.log('🎬 MEDIA_PLAYER: Redirecting to slideshow-access route');
-      return res.redirect(302, `/slideshow-access/${id}`);
-    } else {
-      console.log('🎬 MEDIA_PLAYER: Unknown type, returning 400');
-      return res.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Invalid Request - MerchTech</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
-          </style>
-        </head>
-        <body>
-          <h1 class="error">⚠️ Invalid Request</h1>
-          <p>Please specify a valid content type (playlist or slideshow).</p>
-        </body>
-        </html>
-      `);
-    }
-    
-  } catch (error) {
-    console.error('🎬 MEDIA_PLAYER: Error serving media player:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Error - MerchTech</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
-        </style>
-      </head>
-      <body>
-        <h1 class="error">⚠️ Server Error</h1>
-        <p>Something went wrong while loading the media player. Please try again later.</p>
-      </body>
-      </html>
-    `);
-  }
-});
+// Note: /media-player/:id route is handled by the React Native app (Expo Router)
+// We removed the Express route here to prevent conflicts with the React Native routing
 
 // Generate HTML media player page
 function generateMediaPlayerHTML(playlist) {
@@ -5228,66 +5171,18 @@ app.get('/playlist-access/:id', async (req, res) => {
     console.log('🌐 WEB: playlist.is_protected:', playlist.is_protected);
     console.log('🌐 WEB: playlist.requiresActivationCode:', playlist.requiresActivationCode);
 
-    // FIXED LOGIC: Provide web-friendly interface that matches the working play button behavior
+    // FIXED: Redirect to the EXACT same React Native route that the working play button uses!
     if (!isProtected) {
-      console.log('🌐 WEB: ✅ Playlist is NOT protected - serving web media player (same logic as working play button)');
-      
-      if (mediaCount === 0) {
-        return res.send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>${playlist.name} - MerchTech</title>
-            <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-              .message { color: #6b7280; font-size: 1.2rem; }
-            </style>
-          </head>
-          <body>
-            <h1>🎵 ${playlist.name}</h1>
-            <p class="message">This playlist doesn't have any media files yet.</p>
-          </body>
-          </html>
-        `);
-      }
-      
-      // Generate and serve the web media player (same functionality as React Native MediaPlayer)
-      const mediaPlayerHTML = generateMediaPlayerHTML(playlist);
-      console.log('🌐 WEB: Serving web media player with', mediaCount, 'media files');
-      return res.send(mediaPlayerHTML);
+      console.log('🌐 WEB: ✅ Playlist is NOT protected - redirecting to React Native media player (same as working play button)');
+      const reactNativeRoute = `/media-player/${id}?type=playlist`;
+      console.log('🌐 WEB: Redirecting to React Native route:', reactNativeRoute);
+      return res.redirect(302, reactNativeRoute);
       
     } else {
-      console.log('🌐 WEB: 🔒 Playlist IS protected - serving app download page');
-      
-      // For protected playlists, show app download page (same logic as React Native access control)
-      return res.send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>${playlist.name} - MerchTech</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-            .container { max-width: 500px; margin: 0 auto; }
-            .message { color: #6b7280; font-size: 1.2rem; margin-bottom: 2rem; }
-            .button { background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 8px; text-decoration: none; display: inline-block; margin: 10px; }
-            .preview-button { background: #10b981; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>🔒 ${playlist.name}</h1>
-            <p class="message">This playlist requires an activation code to access.</p>
-            <p class="message">Download the MerchTech app for the full experience with activation codes.</p>
-            <a href="/store" class="button">Visit Store</a>
-            <a href="#" class="button preview-button" onclick="alert('Preview feature coming soon!')">30-Second Preview</a>
-          </div>
-        </body>
-        </html>
-      `);
+      console.log('🌐 WEB: 🔒 Playlist IS protected - redirecting to React Native access control');
+      // For protected playlists, redirect to React Native access control screen
+      // This is the same route that the working play button uses for protected playlists
+      return res.redirect(302, `/playlist-access/${id}`);
     }
 
   } catch (error) {
