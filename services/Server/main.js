@@ -1316,6 +1316,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
     });
     
     // Allow public access to all media files for streaming compatibility
+    // Deployment timestamp: 2025-07-16T03:52:00Z
     console.log(`📺 MEDIA_STREAM: Public access granted for media ${id}`);
     
     
