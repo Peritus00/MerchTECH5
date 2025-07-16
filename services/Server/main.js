@@ -1058,7 +1058,7 @@ app.get('/api/images/local/:filename', async (req, res) => {
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media', authenticateToken, async (req, res) => {
   try {
-    const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId } = req.body;
+    const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId, s3_key } = req.body;
     
     if (!title || !url) {
       return res.status(400).json({ error: 'Title and URL are required' });
@@ -1104,10 +1104,10 @@ app.post('/api/media', authenticateToken, async (req, res) => {
     // END SUBSCRIPTION CHECK
 
     const result = await pool.query(
-      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) 
+      `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, s3_key) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
-      [req.user.userId, title, filePath || url, url, filename, fileType, contentType, filesize, duration, uniqueId]
+      [req.user.userId, title, filePath || url, url, filename, fileType, contentType, filesize, duration, uniqueId, s3_key]
     );
 
     res.status(201).json(result.rows[0]);
