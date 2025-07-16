@@ -1404,13 +1404,16 @@ export default function MediaPlayer({
 
   // Render media content based on type
   const renderMediaContent = () => {
-    if (!currentMediaFile) {
-    return (
-        <View style={styles.mediaPlaceholder}>
-          <Text style={styles.placeholderText}>No media to display</Text>
-      </View>
-    );
-  }
+    // If there are no media files, display a message
+    if (!activeMedia || activeMedia.length === 0) {
+      return (
+        <View style={styles.playerContainer}>
+          <Text style={styles.noMediaText}>This content doesn't have any media files.</Text>
+        </View>
+      );
+    }
+    
+    const currentFile = activeMedia[currentTrack];
 
     if (isVideo) {
       return renderVideoContent();
@@ -2449,20 +2452,28 @@ export default function MediaPlayer({
 }
 
 const styles = StyleSheet.create({
-  // Platform-specific container styles
-  webContainer: {
-    ...(Platform.OS === 'web' && {
-      height: '100vh',
-      overflowY: 'auto',
-    }),
-    backgroundColor: '#f5f5f5',
-    paddingBottom: 40, // Add bottom padding to prevent content from sitting at the very bottom
-  },
   container: {
-    flex: 1, // Native container
-    backgroundColor: '#f5f5f5',
+    flex: 1,
+    backgroundColor: '#fff',
+    width: '100%',
+    height: '100%',
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
   },
-
+  playerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+    position: 'relative',
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 800,
+    alignSelf: 'center',
+  },
+  mainContent: {
+    flex: 1,
+    width: '100%',
+  },
   // Header styles
   header: {
     flexDirection: 'row',
