@@ -2521,4 +2521,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default AdvancedQREditor; 
+export default AdvancedQREditor; // Force rebuild Tue Jul 15 20:17:53 CDT 2025
