@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { Audio } from 'expo-av';
 import { chatAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -109,6 +110,30 @@ export default function MediaPlayer({
       setActiveMedia([]);
     }
   }, [playlist, slideshow, media]);
+
+  // iOS Audio Session Configuration
+  useEffect(() => {
+    const initializeAudioSession = async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          playThroughEarpieceAndroid: false,
+        });
+        console.log('🔴 MEDIA_PLAYER: iOS audio session configured successfully');
+      } catch (error) {
+        console.error('🔴 MEDIA_PLAYER: Failed to configure iOS audio session:', error);
+      }
+    };
+
+    if (Platform.OS === 'ios') {
+      initializeAudioSession();
+    }
+  }, []);
 
   // DEBUG: Log the props being passed to MediaPlayer
   console.log('🔴 MEDIA_PLAYER_COMPONENT: Props being processed:', {

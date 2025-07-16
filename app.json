@@ -24,7 +24,9 @@
         "NSCameraUsageDescription": "This app needs access to your camera to take photos for products and QR codes.",
         "NSMicrophoneUsageDescription": "This app needs access to your microphone to record audio files.",
         "NSDocumentsFolderUsageDescription": "This app needs access to your documents to upload media files.",
-        "NSDownloadsFolderUsageDescription": "This app needs access to your downloads folder to upload media files."
+        "NSDownloadsFolderUsageDescription": "This app needs access to your downloads folder to upload media files.",
+        "NSAppleMusicUsageDescription": "This app needs access to your music library to provide enhanced media playback features.",
+        "NSMotionUsageDescription": "This app uses motion data to enhance media playback controls."
       }
     },
     "android": {
