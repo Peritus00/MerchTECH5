@@ -4655,26 +4655,42 @@ app.get('/playlist-access/:id', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <title>Playlist Not Found - MerchTech</title>
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
-            .message { color: #6b7280; }
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: #f8fafc;
+              color: #1f2937;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              min-height: 100vh;
+              margin: 0;
+            }
+            .container { text-align: center; max-width: 400px; padding: 40px; }
+            h1 { color: #ef4444; margin-bottom: 16px; }
+            p { color: #6b7280; margin-bottom: 24px; }
+            a { color: #3b82f6; text-decoration: none; }
           </style>
         </head>
         <body>
-          <h1 class="error">🎵 Playlist Not Found</h1>
-          <p class="message">The playlist you're looking for doesn't exist.</p>
+          <div class="container">
+            <h1>Playlist Not Found</h1>
+            <p>The playlist you're looking for doesn't exist or has been removed.</p>
+            <a href="/">← Back to Home</a>
+          </div>
         </body>
         </html>
       `);
     }
 
-    // For protected playlists, show activation/preview interface
-    // For public playlists, show direct player
-    const isProtected = playlist.requiresActivationCode;
-    const mediaFiles = playlist.mediaFiles || [];
-    const productLinks = playlist.productLinks || [];
+    // Handle protected playlists
+    const isProtected = playlist.is_protected;
+    const mediaFiles = playlist.media_files || [];
+    const mediaCount = mediaFiles.length;
     
-    const htmlContent = `
+    console.log('🌐 WEB: Playlist found:', playlist.name, 'Media count:', mediaCount, 'Protected:', isProtected);
+
+    // Generate HTML for the clean white interface
+    const html = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -4682,465 +4698,733 @@ app.get('/playlist-access/:id', async (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>${playlist.name} - MerchTech</title>
         <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
+          * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+          }
+          
           body { 
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #f8fafc;
+            color: #1f2937;
             min-height: 100vh;
-            color: white;
           }
-          .container { max-width: 800px; margin: 0 auto; padding: 20px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .playlist-title { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-          .playlist-subtitle { opacity: 0.9; font-size: 1.1rem; }
           
-          .activation-section { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 20px; 
-            padding: 30px; 
-            margin-bottom: 30px;
-            text-align: center;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
+          .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background: #fff;
+            min-height: 100vh;
           }
-          .activation-input { 
-            padding: 12px; 
-            border-radius: 10px; 
-            border: none; 
-            width: 250px; 
-            margin: 15px 0;
-            font-size: 1.1rem;
-            text-align: center;
-          }
-          .activation-button, .preview-button { 
-            background: #10b981; 
-            border: none; 
-            color: white; 
-            padding: 12px 24px; 
-            border-radius: 10px; 
-            font-size: 1rem; 
-            cursor: pointer; 
-            margin: 5px;
-            transition: all 0.3s ease;
-          }
-          .preview-button { background: #6366f1; }
-          .activation-button:hover { background: #059669; transform: translateY(-2px); }
-          .preview-button:hover { background: #4f46e5; transform: translateY(-2px); }
           
-          .player-section { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 20px; 
-            padding: 30px; 
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-          }
-          .current-track { 
-            text-align: center; 
-            font-size: 1.3rem; 
-            margin-bottom: 20px; 
-            padding: 15px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-          }
-          .audio-player { 
-            width: 100%; 
-            margin: 20px 0;
-            background: rgba(255,255,255,0.1);
-            border-radius: 10px;
-          }
-          .preview-timer { 
-            text-align: center; 
-            color: #fbbf24; 
-            font-size: 1.2rem; 
-            margin-bottom: 20px;
-            padding: 10px;
-            background: rgba(251, 191, 36, 0.1);
-            border-radius: 10px;
-          }
-          .hidden { display: none; }
-          
-          .track-list { list-style: none; }
-          .track-item { 
-            background: rgba(255,255,255,0.1); 
-            margin: 10px 0; 
-            padding: 15px; 
-            border-radius: 10px;
+          .header { 
             display: flex;
             align-items: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.1);
-          }
-          .track-item:hover { background: rgba(255,255,255,0.2); transform: translateY(-2px); }
-          .track-number { 
-            background: rgba(255,255,255,0.2); 
-            width: 30px; 
-            height: 30px; 
-            border-radius: 50%; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center; 
-            margin-right: 15px;
-            font-weight: bold;
-            font-size: 0.9rem;
-          }
-          .track-title { flex: 1; font-size: 1.1rem; }
-          .play-button { 
-            background: #10b981; 
-            border: none; 
-            color: white; 
-            padding: 8px 12px; 
-            border-radius: 8px; 
-            cursor: pointer;
-            font-size: 0.9rem;
-            transition: all 0.3s ease;
-          }
-          .play-button:hover { background: #059669; transform: scale(1.05); }
-          
-          .products-section { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 20px; 
-            padding: 30px; 
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-          }
-          .products-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
-            gap: 20px; 
-            margin-top: 20px;
-          }
-          .product-card { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 15px; 
-            padding: 20px; 
-            text-align: center;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.1);
-          }
-          .product-card:hover { 
-            background: rgba(255,255,255,0.2); 
-            transform: translateY(-5px); 
-          }
-          .product-image { 
-            width: 100%; 
-            height: 150px; 
-            object-fit: cover; 
-            border-radius: 10px; 
-            margin-bottom: 15px;
-          }
-          .product-title { 
-            font-size: 1.2rem; 
-            margin-bottom: 10px; 
-            font-weight: bold;
-          }
-          .product-price { 
-            color: #10b981; 
-            font-size: 1.4rem; 
-            font-weight: bold; 
-            margin-bottom: 15px;
-          }
-          .buy-button { 
-            background: #10b981; 
-            border: none; 
-            color: white; 
-            padding: 10px 20px; 
-            border-radius: 8px; 
-            cursor: pointer;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            width: 100%;
-          }
-          .buy-button:hover { background: #059669; transform: scale(1.05); }
-          
-          .comments-section { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 20px; 
-            padding: 30px; 
-            margin-bottom: 30px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-          }
-          .comment-form { 
-            margin-bottom: 20px;
-          }
-          .comment-input { 
-            width: 100%; 
-            padding: 12px; 
-            border-radius: 10px; 
-            border: none; 
-            margin-bottom: 10px;
-            font-size: 1rem;
-            resize: vertical;
-            min-height: 80px;
-          }
-          .comment-button { 
-            background: #6366f1; 
-            border: none; 
-            color: white; 
-            padding: 10px 20px; 
-            border-radius: 8px; 
-            cursor: pointer;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-          }
-          .comment-button:hover { background: #4f46e5; transform: translateY(-2px); }
-          .comment-item { 
-            background: rgba(255,255,255,0.1); 
-            margin: 10px 0; 
-            padding: 15px; 
-            border-radius: 10px;
-            border: 1px solid rgba(255,255,255,0.1);
-          }
-          .comment-author { 
-            font-weight: bold; 
-            margin-bottom: 5px; 
-            color: #10b981;
-          }
-          .comment-text { 
-            line-height: 1.5;
-          }
-          .comment-time { 
-            font-size: 0.9rem; 
-            opacity: 0.7; 
-            margin-top: 5px;
+            padding: 16px 20px;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
           }
           
-          .app-download { 
-            background: rgba(255,255,255,0.1); 
-            border-radius: 20px; 
-            padding: 30px; 
-            text-align: center;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.2);
-          }
-          .download-button { 
-            background: #6366f1; 
-            border: none; 
-            color: white; 
-            padding: 15px 30px; 
-            border-radius: 12px; 
-            font-size: 1.1rem; 
-            cursor: pointer;
+          .back-button {
+            display: flex;
+            align-items: center;
+            color: #007AFF;
             text-decoration: none;
-            display: inline-block;
-            transition: all 0.3s ease;
-            margin-top: 15px;
+            font-weight: 500;
+            font-size: 16px;
+            padding: 8px 0;
           }
-          .download-button:hover { background: #4f46e5; transform: translateY(-2px); }
           
-          @media (max-width: 600px) {
-            .container { padding: 10px; }
-            .playlist-title { font-size: 2rem; }
-            .activation-input { width: 200px; }
-            .products-grid { grid-template-columns: 1fr; }
+          .header-content {
+            flex: 1;
+            text-align: center;
+          }
+          
+          .header-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+          }
+          
+          .header-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 2px;
+          }
+          
+          .content {
+            padding: 0;
+          }
+          
+          .playlist-info {
+            padding: 24px;
+            text-align: center;
+            background: #fff;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          
+          .playlist-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f2937;
+            margin-bottom: 4px;
+          }
+          
+          .playlist-subtitle {
+            font-size: 14px;
+            color: #6b7280;
+          }
+          
+          .player-section {
+            background: #fff;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          
+          .current-track {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 16px;
+          }
+          
+          .track-info {
+            text-align: center;
+            color: #6b7280;
+            margin-bottom: 16px;
+          }
+          
+          .audio-controls {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 16px;
+          }
+          
+          .control-button {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 18px;
+            transition: all 0.2s ease;
+          }
+          
+          .control-button:hover {
+            background: #2563eb;
+            transform: scale(1.05);
+          }
+          
+          .play-button {
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: #10b981;
+            font-size: 24px;
+          }
+          
+          .play-button:hover {
+            background: #059669;
+          }
+          
+          .audio-player {
+            width: 100%;
+            margin: 16px 0;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 8px;
+          }
+          
+          .track-list {
+            background: #fff;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          
+          .track-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          }
+          
+          .track-item:hover {
+            background: #e5e7eb;
+          }
+          
+          .track-number {
+            background: #3b82f6;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            margin-right: 12px;
+          }
+          
+          .track-name {
+            flex: 1;
+            font-size: 16px;
+            color: #1f2937;
+          }
+          
+          .track-play-btn {
+            background: #10b981;
+            border: none;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+          }
+          
+          .track-play-btn:hover {
+            background: #059669;
+            transform: scale(1.05);
+          }
+          
+          .products-section {
+            background: #fff;
+            padding: 16px;
+            border-bottom: 1px solid #e5e7eb;
+          }
+          
+          .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+          }
+          
+          .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-left: 8px;
+          }
+          
+          .no-products {
+            text-align: center;
+            color: #6b7280;
+            padding: 32px;
+          }
+          
+          .comments-section {
+            background: #fff;
+            padding: 16px;
+          }
+          
+          .comment-input-container {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+          }
+          
+          .comment-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            font-size: 14px;
+          }
+          
+          .comment-submit {
+            background: #3b82f6;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+          }
+          
+          .comment-submit:hover {
+            background: #2563eb;
+          }
+          
+          .comment-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f3f4f6;
+          }
+          
+          .comment-author {
+            font-weight: 600;
+            color: #1f2937;
+            font-size: 14px;
+            margin-bottom: 4px;
+          }
+          
+          .comment-text {
+            color: #6b7280;
+            font-size: 14px;
+            line-height: 1.4;
+          }
+          
+          .comment-time {
+            color: #9ca3af;
+            font-size: 12px;
+            margin-top: 4px;
+          }
+          
+          .activation-section {
+            background: #fff;
+            padding: 24px;
+            text-align: center;
+            margin-bottom: 16px;
+          }
+          
+          .activation-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 8px;
+          }
+          
+          .activation-input {
+            padding: 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            width: 200px;
+            margin: 12px 0;
+            font-size: 16px;
+            text-align: center;
+          }
+          
+          .activation-button {
+            background: #10b981;
+            border: none;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.2s ease;
+          }
+          
+          .activation-button:hover {
+            background: #059669;
+          }
+          
+          .preview-button {
+            background: #fbbf24;
+            border: none;
+            color: #92400e;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            margin: 8px;
+            transition: all 0.2s ease;
+          }
+          
+          .preview-button:hover {
+            background: #f59e0b;
+          }
+          
+          .preview-timer {
+            background: #fef3c7;
+            color: #92400e;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin: 8px 0;
+            text-align: center;
+          }
+          
+          .hidden {
+            display: none;
+          }
+          
+          .app-download {
+            background: #3b82f6;
+            color: white;
+            padding: 16px;
+            text-align: center;
+            margin-top: 16px;
+          }
+          
+          .app-download h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+          }
+          
+          .app-download p {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 12px;
+          }
+          
+          .download-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+          }
+          
+          .download-btn {
+            background: #fff;
+            color: #3b82f6;
+            padding: 8px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 14px;
+            transition: all 0.2s ease;
+          }
+          
+          .download-btn:hover {
+            background: #f3f4f6;
+          }
+          
+          @media (max-width: 640px) {
+            .container {
+              margin: 0;
+            }
+            
+            .header {
+              padding: 12px 16px;
+            }
+            
+            .playlist-info {
+              padding: 20px 16px;
+            }
+            
+            .playlist-name {
+              font-size: 20px;
+            }
+            
+            .current-track {
+              font-size: 16px;
+            }
+            
+            .track-item {
+              padding: 8px 12px;
+            }
+            
+            .activation-input {
+              width: 180px;
+            }
           }
         </style>
       </head>
       <body>
         <div class="container">
+          <!-- Header -->
           <div class="header">
-            <h1 class="playlist-title">${playlist.name}</h1>
-            <p class="playlist-subtitle">${mediaFiles.length} tracks • by ${playlist.username}</p>
+            <div class="header-content">
+              <div class="header-title">${isProtected ? '30-Second Preview' : 'Playlist'}</div>
+              <div class="header-subtitle">${playlist.name}</div>
+            </div>
           </div>
 
-          ${isProtected ? `
-            <div class="activation-section" id="activationSection">
-              <h2>🔐 This playlist requires an activation code</h2>
-              <p style="margin: 15px 0; opacity: 0.9;">Enter your activation code for full access, or try a 30-second preview</p>
-              <div>
-                <input type="text" id="activationCode" class="activation-input" placeholder="Enter activation code" maxlength="20">
+          <!-- Content -->
+          <div class="content">
+            <!-- Playlist Info -->
+            <div class="playlist-info">
+              <div class="playlist-name">${playlist.name}</div>
+              <div class="playlist-subtitle">${mediaCount} tracks • by ${playlist.user_name || 'Unknown'}</div>
+            </div>
+
+            ${isProtected ? `
+              <!-- Activation Section -->
+              <div class="activation-section">
+                <div class="activation-title">Enter Activation Code</div>
+                <p style="color: #6b7280; margin-bottom: 16px;">This playlist is protected. Enter the activation code to access all tracks.</p>
+                <input type="text" class="activation-input" id="activationCode" placeholder="Activation Code" maxlength="20">
                 <br>
-                <button class="activation-button" onclick="validateActivationCode()">🔓 Unlock Playlist</button>
-                <button class="preview-button" onclick="startPreview()">▶️ 30s Preview</button>
+                <button class="activation-button" onclick="checkActivationCode()">Unlock Playlist</button>
+                <button class="preview-button" onclick="startPreview()">30-Second Preview</button>
               </div>
-            </div>
-          ` : ''}
+            ` : ''}
 
-          <div class="player-section" id="playerSection" ${isProtected ? 'style="display: none;"' : ''}>
-            <div class="current-track" id="currentTrack">Select a track to play</div>
-            <audio id="audioPlayer" class="audio-player" controls preload="none">
-              Your browser does not support the audio element.
-            </audio>
-            
-            <div class="preview-timer hidden" id="previewTimer">
-              Preview: <span id="timeLeft">30</span>s remaining
+            <!-- Player Section -->
+            <div class="player-section" id="playerSection" ${isProtected ? 'style="display: none;"' : ''}>
+              <div class="current-track" id="currentTrack">
+                ${mediaFiles.length > 0 ? mediaFiles[0].filename : 'No tracks available'}
+              </div>
+              ${mediaFiles.length > 0 ? `
+                <div class="track-info">
+                  <span>🎵 ${mediaFiles[0].file_type === 'audio' ? 'Audio' : 'Video'}</span>
+                </div>
+              ` : ''}
+              
+              <div class="audio-controls">
+                <button class="control-button" onclick="previousTrack()">⏮</button>
+                <button class="control-button play-button" id="playButton" onclick="togglePlay()">▶</button>
+                <button class="control-button" onclick="nextTrack()">⏭</button>
+              </div>
+              
+              <audio id="audioPlayer" controls class="audio-player" style="display: none;">
+                ${mediaFiles.length > 0 ? `<source src="${env.apiBaseUrl.replace('/api', '')}/api/media/${mediaFiles[0].id}/stream" type="audio/mpeg">` : ''}
+                Your browser does not support the audio element.
+              </audio>
             </div>
 
-            <ul class="track-list">
-              ${mediaFiles.map((track, index) => `
-                <li class="track-item" onclick="playTrack(${index}, '${track.url}', '${track.title.replace(/'/g, "\\'")}')">
+            <!-- Track List -->
+            <div class="track-list" id="trackList" ${isProtected ? 'style="display: none;"' : ''}>
+              ${mediaFiles.map((file, index) => `
+                <div class="track-item" onclick="playTrack(${index})">
                   <div class="track-number">${index + 1}</div>
-                  <div class="track-title">${track.title}</div>
-                  <button class="play-button">▶️</button>
-                </li>
+                  <div class="track-name">${file.filename}</div>
+                  <button class="track-play-btn" onclick="playTrack(${index}); event.stopPropagation();">▶</button>
+                </div>
               `).join('')}
-            </ul>
-          </div>
+            </div>
 
-          ${productLinks.length > 0 ? `
+            <!-- Products Section -->
             <div class="products-section">
-              <h2>🛍️ Featured Products</h2>
-              <div class="products-grid">
-                ${productLinks.map(product => `
-                  <div class="product-card">
-                    ${product.imageUrl ? `<img src="${product.imageUrl}" alt="${product.title}" class="product-image">` : ''}
-                    <div class="product-title">${product.title}</div>
-                    ${product.price ? `<div class="product-price">$${product.price}</div>` : ''}
-                    <button class="buy-button" onclick="window.open('${product.url}', '_blank')">Buy Now</button>
-                  </div>
-                `).join('')}
+              <div class="section-header">
+                <span>🛍️</span>
+                <div class="section-title">Featured Products</div>
+              </div>
+              <div class="no-products">
+                <div style="font-size: 48px; margin-bottom: 12px;">🔒</div>
+                <div>No products available</div>
               </div>
             </div>
-          ` : ''}
 
-          <div class="comments-section">
-            <h2>💬 Comments</h2>
-            <div class="comment-form">
-              <textarea id="commentInput" class="comment-input" placeholder="Share your thoughts about this playlist..."></textarea>
-              <button class="comment-button" onclick="addComment()">Post Comment</button>
-            </div>
-            <div id="commentsList">
-              <div class="comment-item">
-                <div class="comment-author">Music Lover</div>
-                <div class="comment-text">Love this playlist! Great selection of tracks. 🎵</div>
-                <div class="comment-time">2 hours ago</div>
+            <!-- Comments Section -->
+            <div class="comments-section">
+              <div class="section-header">
+                <span>💬</span>
+                <div class="section-title">Playlist Discussion</div>
               </div>
-              <div class="comment-item">
-                <div class="comment-author">DJ Mike</div>
-                <div class="comment-text">Perfect for my workout sessions. Keep it up!</div>
-                <div class="comment-time">1 day ago</div>
+              
+              <div class="comment-input-container">
+                <input type="text" class="comment-input" placeholder="Add a comment..." id="commentInput">
+                <button class="comment-submit" onclick="addComment()">Post</button>
+              </div>
+              
+              <div id="commentsList">
+                <div class="comment-item">
+                  <div class="comment-author">Music Lover</div>
+                  <div class="comment-text">Great playlist! Love the vibe 🎵</div>
+                  <div class="comment-time">2 hours ago</div>
+                </div>
+                <div class="comment-item">
+                  <div class="comment-author">Fan123</div>
+                  <div class="comment-text">These tracks are amazing! Where can I get the full album?</div>
+                  <div class="comment-time">5 hours ago</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="app-download">
-            <h3>🚀 Get the full MerchTech experience!</h3>
-            <p style="margin: 15px 0; opacity: 0.9;">
-              Download our app for the best experience, save your activation codes, and never lose access to your content.
-            </p>
-            <a href="#" class="download-button">📱 Download App</a>
+            <!-- App Download Promo -->
+            <div class="app-download">
+              <h3>Get the Full Experience</h3>
+              <p>Download our app for offline listening, advanced features, and more!</p>
+              <div class="download-buttons">
+                <a href="#" class="download-btn">📱 Download App</a>
+                <a href="#" class="download-btn">🌐 Web Version</a>
+              </div>
+            </div>
           </div>
         </div>
 
         <script>
-          let currentAudio = null;
-          let isPreviewMode = false;
+          let currentTrackIndex = 0;
+          let audioPlayer = document.getElementById('audioPlayer');
+          let playButton = document.getElementById('playButton');
+          let isPlaying = false;
+          let previewMode = false;
           let previewTimer = null;
-          let timeLeft = 30;
-
-          function playTrack(index, url, title) {
-            const player = document.getElementById('audioPlayer');
-            const currentTrackDiv = document.getElementById('currentTrack');
-            
-            if (currentAudio) {
-              currentAudio.pause();
-            }
-            
-            player.src = url;
-            currentTrackDiv.textContent = title;
-            currentAudio = player;
-            
-            player.play().catch(e => {
-              console.error('Error playing audio:', e);
-              alert('Unable to play this track. Please try another.');
-            });
-
-            if (isPreviewMode) {
-              startPreviewTimer();
-            }
-          }
-
-          function validateActivationCode() {
-            const code = document.getElementById('activationCode').value.trim();
-            if (!code) {
-              alert('Please enter an activation code');
-              return;
-            }
-
-            // For demo, accept any code that's 6+ characters
-            if (code.length >= 6) {
-              document.getElementById('activationSection').style.display = 'none';
-              document.getElementById('playerSection').style.display = 'block';
-              isPreviewMode = false;
-              alert('✅ Access granted! Enjoy the full playlist.');
+          
+          const mediaFiles = ${JSON.stringify(mediaFiles)};
+          
+          function togglePlay() {
+            if (isPlaying) {
+              audioPlayer.pause();
+              playButton.textContent = '▶';
+              isPlaying = false;
             } else {
-              alert('❌ Invalid activation code. Please try again or use the preview option.');
+              audioPlayer.play();
+              playButton.textContent = '⏸';
+              isPlaying = true;
             }
           }
-
-          function startPreview() {
-            document.getElementById('activationSection').style.display = 'none';
-            document.getElementById('playerSection').style.display = 'block';
-            document.getElementById('previewTimer').classList.remove('hidden');
-            isPreviewMode = true;
-            timeLeft = 30;
-            
-            alert('🎵 Starting 30-second preview. Download the app to save your progress!');
-          }
-
-          function startPreviewTimer() {
-            if (previewTimer) clearInterval(previewTimer);
-            
-            previewTimer = setInterval(() => {
-              timeLeft--;
-              document.getElementById('timeLeft').textContent = timeLeft;
+          
+          function playTrack(index) {
+            currentTrackIndex = index;
+            const track = mediaFiles[index];
+            if (track) {
+              document.getElementById('currentTrack').textContent = track.filename;
+              audioPlayer.src = '${env.apiBaseUrl.replace('/api', '')}/api/media/' + track.id + '/stream';
+              audioPlayer.load();
               
-              if (timeLeft <= 0) {
-                clearInterval(previewTimer);
-                if (currentAudio) {
-                  currentAudio.pause();
-                }
-                alert('⏰ Preview time expired! Download the app or enter an activation code for full access.');
-                document.getElementById('activationSection').style.display = 'block';
-                document.getElementById('playerSection').style.display = 'none';
+              if (previewMode) {
+                startPreviewTimer();
               }
-            }, 1000);
+              
+              audioPlayer.play();
+              playButton.textContent = '⏸';
+              isPlaying = true;
+            }
           }
-
+          
+          function previousTrack() {
+            if (currentTrackIndex > 0) {
+              playTrack(currentTrackIndex - 1);
+            }
+          }
+          
+          function nextTrack() {
+            if (currentTrackIndex < mediaFiles.length - 1) {
+              playTrack(currentTrackIndex + 1);
+            }
+          }
+          
+          function checkActivationCode() {
+            const code = document.getElementById('activationCode').value;
+            if (code) {
+              fetch('${env.apiBaseUrl}/activation-codes/validate', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  code: code,
+                  playlist_id: ${id}
+                })
+              })
+              .then(response => response.json())
+              .then(data => {
+                if (data.valid) {
+                  document.querySelector('.activation-section').style.display = 'none';
+                  document.getElementById('playerSection').style.display = 'block';
+                  document.getElementById('trackList').style.display = 'block';
+                  previewMode = false;
+                  
+                  // Auto-play first track
+                  if (mediaFiles.length > 0) {
+                    playTrack(0);
+                  }
+                } else {
+                  alert('Invalid activation code. Please try again.');
+                }
+              })
+              .catch(error => {
+                console.error('Error:', error);
+                alert('Error validating code. Please try again.');
+              });
+            }
+          }
+          
+          function startPreview() {
+            previewMode = true;
+            document.querySelector('.activation-section').style.display = 'none';
+            document.getElementById('playerSection').style.display = 'block';
+            document.getElementById('trackList').style.display = 'block';
+            
+            // Show preview timer
+            const timerDiv = document.createElement('div');
+            timerDiv.className = 'preview-timer';
+            timerDiv.id = 'previewTimer';
+            timerDiv.textContent = '30-second preview active';
+            document.getElementById('playerSection').insertBefore(timerDiv, document.getElementById('playerSection').firstChild);
+            
+            // Auto-play first track
+            if (mediaFiles.length > 0) {
+              playTrack(0);
+            }
+          }
+          
+          function startPreviewTimer() {
+            if (previewTimer) {
+              clearTimeout(previewTimer);
+            }
+            
+            previewTimer = setTimeout(() => {
+              audioPlayer.pause();
+              playButton.textContent = '▶';
+              isPlaying = false;
+              alert('30-second preview ended. Enter activation code to continue listening.');
+            }, 30000);
+          }
+          
           function addComment() {
             const input = document.getElementById('commentInput');
             const comment = input.value.trim();
-            
-            if (!comment) {
-              alert('Please enter a comment');
-              return;
+            if (comment) {
+              const commentsList = document.getElementById('commentsList');
+              const commentDiv = document.createElement('div');
+              commentDiv.className = 'comment-item';
+              commentDiv.innerHTML = \`
+                <div class="comment-author">You</div>
+                <div class="comment-text">\${comment}</div>
+                <div class="comment-time">Just now</div>
+              \`;
+              commentsList.insertBefore(commentDiv, commentsList.firstChild);
+              input.value = '';
             }
-
-            const commentsList = document.getElementById('commentsList');
-            const commentItem = document.createElement('div');
-            commentItem.className = 'comment-item';
-            commentItem.innerHTML = \`
-              <div class="comment-author">Anonymous</div>
-              <div class="comment-text">\${comment}</div>
-              <div class="comment-time">Just now</div>
-            \`;
-            
-            commentsList.insertBefore(commentItem, commentsList.firstChild);
-            input.value = '';
-            
-            alert('💬 Comment posted! Download the app to save your comments and get notifications.');
           }
-
+          
           // Auto-play first track if not protected
-          ${!isProtected && mediaFiles.length > 0 ? `
-            window.addEventListener('load', () => {
-              setTimeout(() => {
-                playTrack(0, '${mediaFiles[0].url}', '${mediaFiles[0].title.replace(/'/g, "\\'")}');
-              }, 1000);
+          ${!isProtected && mediaFiles.length > 0 ? 'document.addEventListener("DOMContentLoaded", function() { playTrack(0); });' : ''}
+          
+          // Handle enter key in comment input
+          document.getElementById('commentInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+              addComment();
+            }
+          });
+          
+          // Handle enter key in activation code input
+          ${isProtected ? `
+            document.getElementById('activationCode').addEventListener('keypress', function(e) {
+              if (e.key === 'Enter') {
+                checkActivationCode();
+              }
             });
           ` : ''}
+          
+          // Handle audio player events
+          audioPlayer.addEventListener('ended', function() {
+            nextTrack();
+          });
+          
+          audioPlayer.addEventListener('play', function() {
+            playButton.textContent = '⏸';
+            isPlaying = true;
+          });
+          
+          audioPlayer.addEventListener('pause', function() {
+            playButton.textContent = '▶';
+            isPlaying = false;
+          });
         </script>
       </body>
       </html>
     `;
-    
-    res.send(htmlContent);
 
+    res.send(html);
   } catch (error) {
-    console.error('🌐 WEB: Error serving playlist page:', error);
+    console.error('🔴 WEB: Error serving playlist access page:', error);
     res.status(500).send(`
       <!DOCTYPE html>
       <html>
@@ -5149,13 +5433,28 @@ app.get('/playlist-access/:id', async (req, res) => {
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Error - MerchTech</title>
         <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1f2937;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+          }
+          .container { text-align: center; max-width: 400px; padding: 40px; }
+          h1 { color: #ef4444; margin-bottom: 16px; }
+          p { color: #6b7280; margin-bottom: 24px; }
+          a { color: #3b82f6; text-decoration: none; }
         </style>
       </head>
       <body>
-        <h1 class="error">🚫 Something went wrong</h1>
-        <p>Please try again later.</p>
+        <div class="container">
+          <h1>Something went wrong</h1>
+          <p>We're sorry, but there was an error loading the playlist. Please try again later.</p>
+          <a href="/">← Back to Home</a>
+        </div>
       </body>
       </html>
     `);
