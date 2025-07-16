@@ -1784,18 +1784,18 @@ async function getPlaylistWithMedia(playlistId) {
     }
 
     return {
-      id: media.id,
-      userId: media.user_id,
-      title: media.title,
-      description: media.description,
-      filename: media.filename,
-      filePath: `/uploads/${media.filename}`,
-      fileType: media.file_type,
-      contentType: media.content_type,
-      displayOrder: media.display_order,
-      createdAt: media.created_at,
-      updatedAt: media.updated_at,
-      type: media.file_type,
+    id: media.id,
+    userId: media.user_id,
+    title: media.title,
+    description: media.description,
+    filename: media.filename,
+    filePath: `/uploads/${media.filename}`,
+    fileType: media.file_type,
+    contentType: media.content_type,
+    displayOrder: media.display_order,
+    createdAt: media.created_at,
+    updatedAt: media.updated_at,
+    type: media.file_type,
       url: signedUrl, // Will be null if s3_key is missing or signing fails
     };
   }));
@@ -4772,7 +4772,7 @@ function generateMediaPlayerHTML(playlist) {
           border-radius: 15px;
           padding: 20px;
           margin-bottom: 20px;
-        }
+  }
         
         .current-track {
           text-align: center;
@@ -4879,18 +4879,18 @@ function generateMediaPlayerHTML(playlist) {
           display: flex;
           flex-direction: column;
           gap: 10px;
-        }
+          }
         
-        .track-item {
+          .track-item { 
           background: rgba(255, 255, 255, 0.1);
-          padding: 15px;
-          border-radius: 10px;
-          cursor: pointer;
-          transition: all 0.3s ease;
+            padding: 15px; 
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
           display: flex;
           align-items: center;
           gap: 15px;
-        }
+          }
         
         .track-item:hover {
           background: rgba(255, 255, 255, 0.2);
@@ -4901,17 +4901,17 @@ function generateMediaPlayerHTML(playlist) {
           border: 2px solid #007AFF;
         }
         
-        .track-number {
+          .track-number { 
           background: rgba(255, 255, 255, 0.2);
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
+            width: 30px; 
+            height: 30px; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
           font-weight: 600;
           font-size: 0.9em;
-        }
+          }
         
         .track-details {
           flex: 1;
@@ -4929,7 +4929,7 @@ function generateMediaPlayerHTML(playlist) {
         }
         
         .loading {
-          text-align: center;
+            text-align: center;
           padding: 20px;
           opacity: 0.7;
         }
@@ -4937,15 +4937,15 @@ function generateMediaPlayerHTML(playlist) {
         .error {
           background: rgba(220, 38, 38, 0.2);
           color: #fca5a5;
-          padding: 15px;
-          border-radius: 10px;
-          text-align: center;
+            padding: 15px; 
+            border-radius: 10px; 
+            text-align: center;
           margin-bottom: 20px;
         }
         
         @media (max-width: 768px) {
           .container {
-            padding: 20px;
+            padding: 20px; 
           }
           
           h1 {
@@ -4967,11 +4967,11 @@ function generateMediaPlayerHTML(playlist) {
             height: 55px;
             font-size: 1.6em;
           }
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
         <h1>${playlist.name}</h1>
         
         <div class="media-player">
@@ -4979,17 +4979,17 @@ function generateMediaPlayerHTML(playlist) {
             <div class="track-title" id="currentTitle">Select a track to play</div>
             <div class="track-info" id="currentInfo">Choose from ${mediaFiles.length} tracks</div>
           </div>
-          
+
           <div id="mediaContainer">
             <div class="loading">Click a track below to start playing</div>
-          </div>
+              </div>
           
           <div class="controls">
             <button class="control-btn" id="prevBtn" onclick="previousTrack()">⏮</button>
             <button class="control-btn play-btn" id="playBtn" onclick="togglePlay()">▶</button>
             <button class="control-btn" id="nextBtn" onclick="nextTrack()">⏭</button>
-          </div>
-          
+            </div>
+
           <div class="progress-container">
             <div class="progress-bar" id="progressBar" onclick="seek(event)">
               <div class="progress-fill" id="progressFill"></div>
@@ -4999,30 +4999,30 @@ function generateMediaPlayerHTML(playlist) {
               <span id="totalTime">0:00</span>
             </div>
           </div>
-        </div>
-        
+            </div>
+
         <div class="playlist">
           <div class="playlist-title">Playlist (${mediaFiles.length} tracks)</div>
           <div class="track-list">
             ${mediaList.map((file, index) => `
               <div class="track-item" onclick="loadTrack(${index})">
-                <div class="track-number">${index + 1}</div>
+                  <div class="track-number">${index + 1}</div>
                 <div class="track-details">
                   <div class="track-name">${file.title}</div>
                   <div class="track-type">${file.type || 'media'}</div>
                 </div>
               </div>
-            `).join('')}
+              `).join('')}
+          </div>
           </div>
         </div>
-      </div>
-      
-      <script>
+
+        <script>
         const mediaFiles = ${JSON.stringify(mediaList)};
         let currentTrack = 0;
         let isPlaying = false;
         let currentMedia = null;
-        
+
         function loadTrack(index) {
           if (index < 0 || index >= mediaFiles.length) return;
           
@@ -5094,12 +5094,12 @@ function generateMediaPlayerHTML(playlist) {
             if (mediaFiles.length > 0) {
               loadTrack(0);
             }
-            return;
-          }
-          
+              return;
+            }
+
           if (isPlaying) {
             currentMedia.pause();
-          } else {
+            } else {
             currentMedia.play();
           }
         }
@@ -5107,8 +5107,8 @@ function generateMediaPlayerHTML(playlist) {
         function previousTrack() {
           const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
           loadTrack(prevIndex);
-        }
-        
+          }
+
         function nextTrack() {
           const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
           loadTrack(nextIndex);
@@ -5126,8 +5126,8 @@ function generateMediaPlayerHTML(playlist) {
           document.getElementById('progressFill').style.width = progress + '%';
           
           updateTimeDisplay();
-        }
-        
+          }
+
         function updateTimeDisplay() {
           if (!currentMedia) return;
           
@@ -5152,18 +5152,18 @@ function generateMediaPlayerHTML(playlist) {
           const rect = progressBar.getBoundingClientRect();
           const pos = (event.clientX - rect.left) / rect.width;
           currentMedia.currentTime = pos * currentMedia.duration;
-        }
-        
+          }
+
         // Initialize with first track if available
         if (mediaFiles.length > 0) {
           // Don't auto-load, let user choose
           document.getElementById('currentTitle').textContent = 'Ready to play';
           document.getElementById('currentInfo').textContent = 'Choose any track below to start';
         }
-      </script>
-    </body>
-    </html>
-  `;
+        </script>
+      </body>
+      </html>
+    `;
 }
 
 app.get('/playlist-access/:id', async (req, res, next) => {
@@ -5178,7 +5178,7 @@ app.get('/playlist-access/:id', async (req, res, next) => {
         // For protected playlists or if not found, let the client app handle it.
         return res.sendFile(path.join(distDir, 'index.html'));
 
-    } catch (error) {
+  } catch (error) {
         next(error);
     }
 });
@@ -5199,20 +5199,20 @@ app.get('*', (req, res) => {
       console.error(`❌ WEB_SERVE_ERROR: Could not send index.html for path ${req.path}:`, err);
       // Check if the file doesn't exist, which likely means the web app wasn't built.
       if (err.code === 'ENOENT') {
-        res.status(500).send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
             <title>500 - Server Configuration Error</title>
             <style>body { font-family: sans-serif; text-align: center; padding-top: 50px; }</style>
-          </head>
-          <body>
+      </head>
+      <body>
             <h1>Error 500: Server Misconfiguration</h1>
             <p>The application's web files (dist/index.html) could not be found.</p>
             <p>This usually means the <code>npm run build</code> or <code>expo export -p web</code> command was not run during deployment.</p>
-          </body>
-          </html>
-        `);
+      </body>
+      </html>
+    `);
       } else {
         res.status(500).send('Error serving the application.');
       }
@@ -5284,7 +5284,7 @@ app.get('*', (req, res) => {
           </body>
           </html>
         `);
-      } else {
+    } else {
         res.status(500).send('Error serving the application.');
       }
     }

@@ -32,6 +32,7 @@ import { Slideshow } from '@/shared/slideshow-schema';
 import ChatFilters from '@/components/ChatFilters';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
+import AudioService from '@/services/audio/AudioService';
 
 interface ProductLink {
   id: number;
@@ -258,26 +259,17 @@ export default function MediaPlayer({
     messageType?: 'general' | 'store_promotion' | 'product_showcase';
   }>({ filterType: 'all' });
   
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const chatScrollRef = useRef<ScrollView>(null);
 
   // Slideshow specific state
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [slideshowInterval, setSlideshowInterval] = useState<NodeJS.Timeout | null>(null);
-  const [backgroundAudioPlayer, setBackgroundAudioPlayer] = useState<any>(null);
   
   // Slideshow settings with default values
   const slideshowSettings = {
     autoplayInterval: slideshow?.autoplayInterval || 5000, // Use slideshow's interval or 5 seconds default
   };
-
-  // Web audio state for fallback
-  const [webAudioLoaded, setWebAudioLoaded] = useState(false);
-  const [webAudioPlaying, setWebAudioPlaying] = useState(false);
-  const [webAudioCurrentTime, setWebAudioCurrentTime] = useState(0);
-  const [webAudioDuration, setWebAudioDuration] = useState(0);
 
   // Auto-hide controls after 3 seconds of inactivity
   const resetControlsTimeout = () => {
@@ -505,64 +497,6 @@ export default function MediaPlayer({
     return primaryUrl;
   };
 
-  // iOS-specific media fallback handler
-  const tryMediaFallback = async (mediaFile: any, originalError: Error) => {
-    console.log('🔴 MEDIA_PLAYER: Attempting iOS media fallback...');
-    console.log('🔴 MEDIA_PLAYER: Original error:', originalError.message);
-    
-    const fallbackOptions = [];
-    
-    // Option 1: Try with streaming endpoint if it's an S3 URL
-    const originalUrl = getMediaUrl(mediaFile);
-    if (originalUrl.includes('amazonaws.com') || originalUrl.includes('s3.')) {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
-      const streamingUrl = `${baseUrl}/api/media/${mediaFile.id}/stream`;
-      fallbackOptions.push({
-        url: streamingUrl,
-        description: 'Streaming endpoint'
-      });
-    }
-    
-    // Option 2: Try with direct URL if we have media ID
-    if (mediaFile.id) {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
-      const directUrl = `${baseUrl}/api/media/${mediaFile.id}`;
-      fallbackOptions.push({
-        url: directUrl,
-        description: 'Direct media endpoint'
-      });
-    }
-    
-    // Option 3: Try with CORS-enabled endpoint
-    if (originalUrl) {
-      const corsUrl = originalUrl + '?cors=true';
-      fallbackOptions.push({
-        url: corsUrl,
-        description: 'CORS-enabled URL'
-      });
-    }
-    
-    console.log('🔴 MEDIA_PLAYER: Trying', fallbackOptions.length, 'fallback options');
-    
-    // Try each fallback option
-    for (let i = 0; i < fallbackOptions.length; i++) {
-      const option = fallbackOptions[i];
-      console.log(`🔴 MEDIA_PLAYER: Trying fallback ${i + 1}: ${option.description} - ${option.url}`);
-      
-      try {
-        await audioPlayer.replace(option.url);
-        console.log(`🔴 MEDIA_PLAYER: ✅ Fallback ${i + 1} succeeded!`);
-        return true;
-      } catch (fallbackError) {
-        console.error(`🔴 MEDIA_PLAYER: ❌ Fallback ${i + 1} failed:`, fallbackError.message);
-        continue;
-      }
-    }
-    
-    console.error('🔴 MEDIA_PLAYER: ❌ All fallback options failed');
-    return false;
-  };
-
   // Helper function to get slideshow audio URL with streaming support
   const getSlideshowAudioUrl = (audioUrl: string) => {
     if (!audioUrl) return '';
@@ -624,175 +558,19 @@ export default function MediaPlayer({
     }
   }, [chatMessages]);
 
-  // Background audio setup for both playlists and slideshows
+  // REFACTORED: Background audio setup
   useEffect(() => {
     const rawAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
-    
-    console.log('🎵 BACKGROUND_AUDIO: ===== BACKGROUND AUDIO DEBUG START =====');
-    console.log('🎵 BACKGROUND_AUDIO: Effect triggered with:', {
-      hasPlaylist: !!playlist,
-      hasSlideshow: !!slideshow,
-      playlistBgAudio: playlist?.backgroundAudioUrl,
-      slideshowAudio: slideshow?.backgroundAudioUrl,
-      rawAudioUrl,
-      autoPlay,
-      platform: Platform.OS
-    });
-    
-    if (playlist) {
-      console.log('🎵 BACKGROUND_AUDIO: Playlist object:', {
-        id: playlist.id,
-        name: playlist.name,
-        backgroundAudioUrl: playlist.backgroundAudioUrl,
-        backgroundAudioUrlType: typeof playlist.backgroundAudioUrl
-      });
-    }
-    
-    if (slideshow) {
-      console.log('🎵 BACKGROUND_AUDIO: Slideshow object:', {
-        id: slideshow.id,
-        name: slideshow.name,
-        backgroundAudioUrl: slideshow.backgroundAudioUrl,
-        backgroundAudioUrlType: typeof slideshow.backgroundAudioUrl
-      });
-    }
-    
     if (rawAudioUrl) {
-      // Use the helper function to get the proper streaming URL for slideshows
       const audioUrl = slideshow?.backgroundAudioUrl ? getSlideshowAudioUrl(rawAudioUrl) : rawAudioUrl;
-      
-      console.log('🎵 BACKGROUND_AUDIO: ✅ Audio URL found - setting up audio');
-      console.log('🎵 BACKGROUND_AUDIO: Content type:', playlist ? 'playlist' : 'slideshow');
-      console.log('🎵 BACKGROUND_AUDIO: Original URL:', rawAudioUrl);
-      console.log('🎵 BACKGROUND_AUDIO: Streaming URL:', audioUrl);
-      console.log('🎵 BACKGROUND_AUDIO: URL comparison - same?', rawAudioUrl === audioUrl);
-      
-      if (Platform.OS === 'web') {
-        console.log('🎵 BACKGROUND_AUDIO: Setting up WEB audio player');
-        
-        const AudioConstructor = (window as any).Audio;
-        const audio = new AudioConstructor(audioUrl);
-        audio.loop = true;
-        audio.volume = 0.3; // Lower volume for background audio
-        audioRef.current = audio;
-        
-        console.log('🎵 BACKGROUND_AUDIO: Audio object created with properties:', {
-          src: audio.src,
-          loop: audio.loop,
-          volume: audio.volume,
-          crossOrigin: audio.crossOrigin,
-          preload: audio.preload
-        });
-        
-        // Add event listeners for debugging
-        audio.addEventListener('loadstart', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Load started');
-        });
-        
-        audio.addEventListener('loadedmetadata', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Metadata loaded');
-        });
-        
-        audio.addEventListener('loadeddata', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Audio data loaded');
-        });
-        
-        audio.addEventListener('canplay', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Can play');
-        });
-        
-        audio.addEventListener('canplaythrough', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Can play through');
-        });
-        
-        audio.addEventListener('play', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ✅ Play event fired');
-        });
-        
-        audio.addEventListener('pause', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ⏸️ Pause event fired');
-        });
-        
-        audio.addEventListener('ended', () => {
-          console.log('🎵 BACKGROUND_AUDIO: 🔚 Ended event fired');
-        });
-        
-        audio.addEventListener('error', (e) => {
-          console.error('🎵 BACKGROUND_AUDIO: ❌ Audio error event:', e);
-          console.error('🎵 BACKGROUND_AUDIO: Audio error details:', {
-            error: audio.error,
-            code: audio.error?.code,
-            message: audio.error?.message,
-            networkState: audio.networkState,
-            readyState: audio.readyState,
-            src: audio.src
-          });
-        });
-        
-        audio.addEventListener('stalled', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ⚠️ Stalled event fired');
-        });
-        
-        audio.addEventListener('waiting', () => {
-          console.log('🎵 BACKGROUND_AUDIO: ⏳ Waiting event fired');
-        });
-        
-        // Don't auto-play background audio - let user control it
-        console.log('🎵 BACKGROUND_AUDIO: Audio ready but not playing - waiting for user to click play');
-        
-        return () => {
-          console.log('🎵 BACKGROUND_AUDIO: 🧹 Cleaning up web audio');
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current = null;
-          }
-        };
-      } else {
-        console.log('🎵 BACKGROUND_AUDIO: Setting up MOBILE audio player');
-        
-        // Mobile background audio setup
-        const setupMobileBackgroundAudio = async (bgAudio: any) => { // <-- Accept player as parameter
-          try {
-            console.log('🎵 BACKGROUND_AUDIO: Creating mobile audio player');
-            // Create a separate audio player for background music on mobile
-            console.log('🎵 BACKGROUND_AUDIO: Setting up mobile audio player');
-            if (AVAudio) {
-              const bgAudio = new AVAudio.Sound();
-              await bgAudio.loadAsync({ uri: audioUrl });
-              await bgAudio.setIsLoopingAsync(true);
-              setBackgroundAudioPlayer(bgAudio);
-            }
-            
-            console.log('🎵 BACKGROUND_AUDIO: Mobile audio player setup complete');
-            
-            // Don't auto-play mobile background audio - let user control it
-            console.log('🎵 BACKGROUND_AUDIO: Mobile audio ready but not playing - waiting for user to click play');
-          } catch (error) {
-            console.error('🎵 BACKGROUND_AUDIO: ❌ Mobile background audio setup failed:', error);
-          }
-        };
-        
-        setupMobileBackgroundAudio(backgroundAudioPlayerMobile); // <-- Pass the player
-        
-        return () => {
-          console.log('🎵 BACKGROUND_AUDIO: 🧹 Cleaning up mobile audio');
-          if (backgroundAudioPlayer) {
-            backgroundAudioPlayer.pause();
-            setBackgroundAudioPlayer(null);
-          }
-        };
-      }
-    } else {
-      console.log('🎵 BACKGROUND_AUDIO: ❌ No audio URL found, skipping setup');
-      console.log('🎵 BACKGROUND_AUDIO: Checked sources:', {
-        playlistBackgroundAudioUrl: playlist?.backgroundAudioUrl,
-        slideshowAudioUrl: slideshow?.backgroundAudioUrl,
-        rawAudioUrl
-      });
+      AudioService.setLooping(true);
+      // We no longer auto-play background audio, it's tied to the main play button
     }
-    
-    console.log('🎵 BACKGROUND_AUDIO: ===== BACKGROUND AUDIO DEBUG END =====');
-  }, [playlist?.backgroundAudioUrl, slideshow?.backgroundAudioUrl, autoPlay]);
+
+    return () => {
+      AudioService.stop(); // Stop background audio on cleanup
+    };
+  }, [playlist?.backgroundAudioUrl, slideshow?.backgroundAudioUrl]);
 
   // Slideshow auto-advance - but only if playing and not user paused
   useEffect(() => {
@@ -917,141 +695,21 @@ export default function MediaPlayer({
     }
 
     const mediaUrl = getMediaUrl(mediaFile);
-    console.log('🔴 MEDIA_PLAYER: ===== LOADING TRACK DEBUG =====');
-    console.log('🔴 MEDIA_PLAYER: Platform:', Platform.OS);
-    console.log('🔴 MEDIA_PLAYER: Track Index:', trackIndex);
-    console.log('🔴 MEDIA_PLAYER: Media File:', {
-      title: mediaFile.title,
-      type: mediaFile.type || mediaFile.fileType,
-      contentType: mediaFile.contentType,
-      url: mediaUrl,
-      urlLength: mediaUrl?.length || 0
-    });
-    console.log('🔴 MEDIA_PLAYER: Media Type Detection:', {
-      isVideo,
-      isAudio,
-      isImage,
-      isSlideshow
-    });
-    
     setIsLoading(true);
     setError(null);
-
-    // Don't auto-play any tracks - let user control playback
-    const playAfterLoad = false;
-    if (isInitialLoad) {
-      setIsInitialLoad(false);
-    }
       
     try {
       if (isVideo) {
         console.log('🔴 MEDIA_PLAYER: Processing VIDEO content...');
-        console.log('🔴 MEDIA_PLAYER: Video URL:', mediaUrl);
-        // Video is handled by videoPlayer hook
+        // Video is handled by videoPlayer hook, no changes needed here
         setIsLoading(false);
-        if (playAfterLoad) {
-          videoPlayer.play();
-        }
       } else if (isAudio) {
-        console.log('🔴 MEDIA_PLAYER: Processing AUDIO content...');
-        console.log('🔴 MEDIA_PLAYER: Audio URL:', mediaUrl);
-        
-        if (Platform.OS === 'web') {
-          console.log('🔴 MEDIA_PLAYER: Using WEB audio fallback');
-          // Web audio fallback
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.src = '';
-          }
-          
-          const AudioConstructor = (window as any).Audio;
-          const audio = new AudioConstructor(mediaUrl);
-          audioRef.current = audio;
-          
-          audio.addEventListener('loadeddata', () => {
-            console.log('🔴 MEDIA_PLAYER (Web): ✅ Audio loaded successfully');
-            setWebAudioLoaded(true);
-            setWebAudioDuration(audio.duration);
-            setIsLoading(false);
-            if (playAfterLoad) {
-              console.log('🔴 MEDIA_PLAYER (Web): Auto-playing subsequent track.');
-              audio.play();
-              setWebAudioPlaying(true);
-            }
-          });
-          
-          audio.addEventListener('timeupdate', () => {
-            setWebAudioCurrentTime(audio.currentTime);
-          });
-          
-          audio.addEventListener('ended', () => {
-            setWebAudioPlaying(false);
-            handleNext();
-          });
-          
-          audio.addEventListener('error', (e) => {
-            console.error('🔴 MEDIA_PLAYER (Web): ❌ Audio error:', e);
-            setError('Failed to load audio');
-            setIsLoading(false);
-          });
-          
-          audio.load();
-        } else {
-          console.log('🔴 MEDIA_PLAYER: Using MOBILE audio (expo-av)');
-          
-          // Mobile audio using expo-av
-          try {
-            console.log('🔴 MEDIA_PLAYER: Loading mobile audio...');
-            if (AVAudio) {
-              const sound = new AVAudio.Sound();
-              await sound.loadAsync({ uri: mediaUrl });
-              setIsLoading(false);
-              if (playAfterLoad) {
-                console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing track.');
-                await sound.playAsync();
-              }
-            } else {
-              console.log('🔴 MEDIA_PLAYER: AVAudio not available, skipping mobile audio');
-              setIsLoading(false);
-            }
-          } catch (error) {
-            console.error('🔴 MEDIA_PLAYER (Mobile): ❌ Audio replace failed:', error);
-            console.error('🔴 MEDIA_PLAYER (Mobile): Error details:', {
-              message: error.message,
-              code: error.code,
-              stack: error.stack,
-              mediaUrl,
-              mediaFile
-            });
-            
-            // Try iOS fallback mechanisms
-            if (Platform.OS === 'ios') {
-              console.log('🔴 MEDIA_PLAYER: Attempting iOS fallback...');
-              const fallbackSuccess = await tryMediaFallback(mediaFile, error);
-              
-              if (fallbackSuccess) {
-                console.log('🔴 MEDIA_PLAYER: ✅ iOS fallback succeeded!');
-                setIsLoading(false);
-                if (playAfterLoad) {
-                  console.log('🔴 MEDIA_PLAYER (iOS Fallback): Auto-playing subsequent track.');
-                  await audioPlayer.play();
-                }
-                return; // Exit early since fallback worked
-              }
-            }
-            
-            setError(`Failed to load audio: ${error.message}`);
-            setIsLoading(false);
-          }
-        }
+        console.log('🔴 MEDIA_PLAYER: Processing AUDIO content via AudioService...');
+        await AudioService.play(mediaUrl);
+        setIsLoading(false);
       } else if (isImage) {
         console.log('🔴 MEDIA_PLAYER: Processing IMAGE content...');
-        console.log('🔴 MEDIA_PLAYER: Image URL:', mediaUrl);
-        // Images load immediately
         setIsLoading(false);
-        if (playAfterLoad) {
-          setIsPlaying(true);
-        }
       } else {
         console.error('🔴 MEDIA_PLAYER: Unknown media type!');
         setError('Unknown media type');
@@ -1059,75 +717,30 @@ export default function MediaPlayer({
       }
     } catch (error) {
       console.error('🔴 MEDIA_PLAYER: ❌ Error loading track:', error);
-      console.error('🔴 MEDIA_PLAYER: Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-        mediaUrl,
-        mediaFile
-      });
       setError(`Failed to load media: ${error.message}`);
       setIsLoading(false);
     }
-    
-    console.log('🔴 MEDIA_PLAYER: ===== END LOADING TRACK DEBUG =====');
   };
 
   const handlePlay = async () => {
     try {
-      // Clear user paused flag when manually playing
       setUserPaused(false);
+      setIsPlaying(true);
       
       if (isVideo) {
-        console.log('🔴 MEDIA_PLAYER: Starting video playback');
         if (Platform.OS === 'web' && videoRef.current) {
-          try {
-            await videoRef.current.play();
-            console.log('🔴 MEDIA_PLAYER (Web): Video play() called successfully');
-          } catch (error) {
-            console.error('🔴 MEDIA_PLAYER (Web): Video play() failed:', error);
-          }
+          await videoRef.current.play();
         } else if (videoPlayer) {
           videoPlayer.play();
-          console.log('🔴 MEDIA_PLAYER (Mobile): Video play() called successfully');
         }
-        setIsPlaying(true);
       } else if (isAudio) {
-        if (Platform.OS === 'web' && audioRef.current) {
-          await audioRef.current.play();
-          setWebAudioPlaying(true);
-    } else {
-          await audioPlayer.play();
-        }
-        setIsPlaying(true);
+        await AudioService.resume();
       } else if (isImage || isSlideshow) {
-        console.log('🎬 SLIDESHOW: Starting slideshow playback');
-        setIsPlaying(true);
-        
-        // Also control background audio for slideshows - SYNC THEM TOGETHER
         const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
-        if (isSlideshow && backgroundAudioUrl) {
-          console.log('🎵 SLIDESHOW: Starting background audio with slideshow');
-          if (Platform.OS === 'web' && audioRef.current) {
-            try {
-              await audioRef.current.play();
-              console.log('🎵 SLIDESHOW: ✅ Background audio started with slideshow');
-            } catch (audioError) {
-              console.warn('🎵 SLIDESHOW: ❌ Background audio play failed:', audioError);
-            }
-          } else if (backgroundAudioPlayer) {
-            try {
-              await backgroundAudioPlayer.play();
-              console.log('🎵 SLIDESHOW: ✅ Mobile background audio started with slideshow');
-            } catch (audioError) {
-              console.warn('🎵 SLIDESHOW: ❌ Mobile background audio play failed:', audioError);
-            }
-          }
+        if (backgroundAudioUrl) {
+          await AudioService.play(getSlideshowAudioUrl(backgroundAudioUrl));
         }
-        
-        console.log('🎬 SLIDESHOW: ✅ Slideshow and audio started together');
       }
-      
     } catch (error) {
       console.error('Error playing media:', error);
       setError('Failed to play media');
@@ -1136,8 +749,8 @@ export default function MediaPlayer({
 
   const handlePause = async () => {
     try {
-      // Set user paused flag to prevent auto-restart
       setUserPaused(true);
+      setIsPlaying(false);
       
       if (isVideo) {
         if (Platform.OS === 'web' && videoRef.current) {
@@ -1145,63 +758,26 @@ export default function MediaPlayer({
         } else if (videoPlayer) {
           videoPlayer.pause();
         }
-      } else if (isAudio) {
-      if (Platform.OS === 'web' && audioRef.current) {
-        audioRef.current.pause();
-          setWebAudioPlaying(false);
-        } else {
-          await audioPlayer.pause();
-        }
-      } else if (isImage || isSlideshow) {
-        console.log('🎬 SLIDESHOW: Pausing slideshow playback');
-        
-        // Also control background audio for slideshows - SYNC THEM TOGETHER
-        const backgroundAudioUrl = playlist?.backgroundAudioUrl || slideshow?.backgroundAudioUrl;
-        if (isSlideshow && backgroundAudioUrl) {
-          console.log('🎵 SLIDESHOW: Pausing background audio with slideshow');
-          if (Platform.OS === 'web' && audioRef.current) {
-            audioRef.current.pause();
-            console.log('🎵 SLIDESHOW: ✅ Background audio paused with slideshow');
-          } else if (backgroundAudioPlayer) {
-            backgroundAudioPlayer.pause();
-            console.log('🎵 SLIDESHOW: ✅ Mobile background audio paused with slideshow');
-          }
-        }
-        
-        console.log('🎬 SLIDESHOW: ✅ Slideshow and audio paused together');
+      } else {
+        await AudioService.pause();
       }
-      
-      setIsPlaying(false);
-      
     } catch (error) {
       console.error('Error pausing media:', error);
     }
   };
 
   const handleNext = () => {
-    // Loop back to the beginning if at the end of the playlist
     const nextTrack = (currentTrack + 1) % activeMedia.length;
-    console.log(`🔴 MEDIA_PLAYER: Advancing to next track ${nextTrack}`);
     setCurrentTrack(nextTrack);
-    // Reset user paused flag when manually changing tracks
     setUserPaused(false);
-    // Auto-play the next track after a short delay to ensure it loads
-    setTimeout(() => {
-      handlePlay();
-    }, 300);
+    setTimeout(() => handlePlay(), 300);
   };
 
   const handlePrevious = () => {
-    // Loop to the end if at the beginning of the playlist
     const prevTrack = (currentTrack - 1 + activeMedia.length) % activeMedia.length;
-    console.log(`🔴 MEDIA_PLAYER: Going to previous track ${prevTrack}`);
     setCurrentTrack(prevTrack);
-    // Reset user paused flag when manually changing tracks
     setUserPaused(false);
-    // Auto-play the previous track after a short delay to ensure it loads
-    setTimeout(() => {
-      handlePlay();
-    }, 300);
+    setTimeout(() => handlePlay(), 300);
   };
 
   const handleSeek = (value: number) => {
@@ -1212,11 +788,7 @@ export default function MediaPlayer({
         videoPlayer.currentTime = value;
       }
     } else if (isAudio) {
-      if (Platform.OS === 'web' && audioRef.current) {
-        audioRef.current.currentTime = value;
-      } else {
-        audioPlayer.seekTo(value * 1000); // Convert to milliseconds
-      }
+      console.warn('Audio seeking is not supported in this version.');
     }
   };
 
@@ -1814,61 +1386,18 @@ export default function MediaPlayer({
   };
 
   const renderAudioContent = () => {
-    const currentDuration = webAudioDuration;
-    const currentPosition = webAudioCurrentTime;
-    const playerIsPlaying = webAudioPlaying;
-
+    // Simplified audio content view since status is not available from the service
     return (
       <View style={styles.audioContainer}>
-        {/* Fullscreen Button for Audio */}
-        <TouchableOpacity 
-          style={styles.audioFullscreenButton}
-          onPress={toggleFullscreen}
-        >
-          <Ionicons 
-            name={isFullscreen ? "contract" : "expand"} 
-            size={24} 
-            color="#fff" 
-          />
-        </TouchableOpacity>
-
         <View style={[styles.audioArtwork, isFullscreen && styles.audioArtworkFullscreen]}>
           <Ionicons name="musical-notes" size={isFullscreen ? 120 : 80} color="#666" />
-          </View>
-
+        </View>
         <View style={styles.audioInfo}>
           <Text style={[styles.audioTitle, isFullscreen && styles.audioTitleFullscreen]}>{currentMediaFile.title}</Text>
           <Text style={[styles.audioArtist, isFullscreen && styles.audioArtistFullscreen]}>Track {currentTrack + 1} of {activeMedia.length}</Text>
         </View>
-        
         <View style={[styles.audioControls, isFullscreen && styles.audioControlsFullscreen]}>
-          <View style={styles.progressContainer}>
-            <Text style={styles.timeText}>{formatTime(currentPosition)}</Text>
-            {Platform.OS === 'web' ? (
-              <input
-                type="range"
-                min={0}
-                max={currentDuration}
-                value={currentPosition}
-                onChange={(e) => handleSeek(parseFloat(e.target.value))}
-                style={{
-                  flex: 1,
-                  margin: '0 10px',
-                  height: isFullscreen ? '8px' : '6px',
-                  borderRadius: isFullscreen ? '4px' : '3px',
-                  background: `linear-gradient(to right, #007AFF 0%, #007AFF ${(currentPosition / currentDuration) * 100}%, #ccc ${(currentPosition / currentDuration) * 100}%, #ccc 100%)`,
-                  outline: 'none',
-                  cursor: 'pointer',
-                }}
-              />
-            ) : (
-              <View style={[styles.progressSlider, isFullscreen && styles.progressSliderFullscreen]}>
-                <View style={[styles.progressTrack, { width: `${(currentPosition / currentDuration) * 100}%` }]} />
-            </View>
-            )}
-            <Text style={styles.timeText}>{formatTime(currentDuration)}</Text>
-          </View>
-
+          {/* Progress bar is removed as we don't have position/duration state */}
           <View style={styles.controlButtons}>
             <TouchableOpacity
               style={[styles.controlButton, isFullscreen && styles.controlButtonFullscreen]}
@@ -1876,15 +1405,13 @@ export default function MediaPlayer({
             >
               <Ionicons name="play-skip-back" size={isFullscreen ? 32 : 24} color={"#007AFF"} />
             </TouchableOpacity>
-            
-            <TouchableOpacity style={[styles.playButton, isFullscreen && styles.playButtonFullscreen]} onPress={playerIsPlaying ? handlePause : handlePlay}>
+            <TouchableOpacity style={[styles.playButton, isFullscreen && styles.playButtonFullscreen]} onPress={isPlaying ? handlePause : handlePlay}>
               <Ionicons 
-                name={playerIsPlaying ? "pause" : "play"} 
+                name={isPlaying ? "pause" : "play"} 
                 size={isFullscreen ? 48 : 32} 
                 color="#fff" 
               />
             </TouchableOpacity>
-
             <TouchableOpacity 
               style={[styles.controlButton, isFullscreen && styles.controlButtonFullscreen]}
               onPress={handleNext}
