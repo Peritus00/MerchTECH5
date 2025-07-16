@@ -17,7 +17,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
-import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Audio as AVAudio } from 'expo-av';
 import { chatAPI } from '@/services/api';
@@ -581,10 +580,7 @@ export default function MediaPlayer({
     file.type === 'image' || file.fileType === 'image' || file.contentType?.startsWith('image/')
   );
 
-  // Use appropriate audio player based on platform
-  const audioPlayer = useAudioPlayer();
-  const backgroundAudioPlayerMobile = useAudioPlayer(); // <-- Add this line for mobile background audio
-  const audioStatus = useAudioPlayerStatus(audioPlayer);
+  // Audio handling will be done with native browser Audio API for web
 
   // Use video player for video content
   const videoPlayer = useVideoPlayer(currentMediaFile && isVideo ? currentMediaFile.url : null, (player) => {
@@ -761,10 +757,10 @@ export default function MediaPlayer({
           try {
             console.log('🎵 BACKGROUND_AUDIO: Creating mobile audio player');
             // Create a separate audio player for background music on mobile
-            // const bgAudio = useAudioPlayer(); // <-- This was the bug, REMOVE this line
-            console.log('🎵 BACKGROUND_AUDIO: Replacing audio source with URL:', audioUrl);
-            await bgAudio.replace(audioUrl);
-            bgAudio.loop = true;
+            console.log('🎵 BACKGROUND_AUDIO: Setting up mobile audio player');
+            const bgAudio = new AVAudio.Sound();
+            await bgAudio.loadAsync({ uri: audioUrl });
+            await bgAudio.setIsLoopingAsync(true);
             setBackgroundAudioPlayer(bgAudio);
             
             console.log('🎵 BACKGROUND_AUDIO: Mobile audio player setup complete');
