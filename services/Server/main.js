@@ -1752,6 +1752,17 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
+  console.log('🔴 GET_PLAYLIST: Media query result:', mediaResult.rows.length, 'media files found');
+  if (mediaResult.rows.length === 0) {
+    console.log('🔴 GET_PLAYLIST: No media files found for playlist', playlistId);
+    // Let's check if media files exist but aren't linked
+    const allMediaResult = await pool.query('SELECT COUNT(*) FROM media');
+    console.log('🔴 GET_PLAYLIST: Total media files in database:', allMediaResult.rows[0].count);
+    
+    const playlistMediaResult = await pool.query('SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1', [playlistId]);
+    console.log('🔴 GET_PLAYLIST: Playlist-media links for playlist', playlistId, ':', playlistMediaResult.rows[0].count);
+  }
+
   const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => ({
     id: media.id,
     userId: media.user_id,
@@ -3879,6 +3890,176 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
   }
 });
 
+// ---------- PLAYLIST MEDIA MANAGEMENT ROUTES ----------
+
+// Add media files to a playlist
+app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mediaFileIds } = req.body;
+    
+    console.log('🔴 PLAYLIST_MEDIA_ADD: Adding media to playlist:', id);
+    console.log('🔴 PLAYLIST_MEDIA_ADD: Media file IDs:', mediaFileIds);
+    
+    // Check if user owns the playlist
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM playlists WHERE id = $1',
+      [id]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    }
+    
+    // Get current max display order
+    const maxOrderResult = await pool.query(
+      'SELECT COALESCE(MAX(display_order), 0) as max_order FROM playlist_media WHERE playlist_id = $1',
+      [id]
+    );
+    let nextOrder = parseInt(maxOrderResult.rows[0].max_order) + 1;
+    
+    // Add media files to playlist
+    if (mediaFileIds && mediaFileIds.length > 0) {
+      for (const mediaId of mediaFileIds) {
+        // Check if media file exists and belongs to user
+        const mediaCheck = await pool.query(
+          'SELECT id FROM media WHERE id = $1 AND user_id = $2',
+          [mediaId, req.user.userId]
+        );
+        
+        if (mediaCheck.rows.length === 0) {
+          return res.status(404).json({ error: `Media file ${mediaId} not found or not authorized` });
+        }
+        
+        // Check if already linked
+        const existingLink = await pool.query(
+          'SELECT id FROM playlist_media WHERE playlist_id = $1 AND media_id = $2',
+          [id, mediaId]
+        );
+        
+        if (existingLink.rows.length === 0) {
+          await pool.query(
+            'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
+            [id, mediaId, nextOrder]
+          );
+          nextOrder++;
+        }
+      }
+    }
+    
+    // Return updated playlist
+    const updatedPlaylist = await getPlaylistWithMedia(id);
+    res.json({ playlist: updatedPlaylist });
+    
+  } catch (error) {
+    console.error('🔴 PLAYLIST_MEDIA_ADD: Error adding media:', error);
+    res.status(500).json({ error: 'Failed to add media to playlist' });
+  }
+});
+
+// Remove media file from a playlist
+app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+    
+    console.log('🔴 PLAYLIST_MEDIA_REMOVE: Removing media from playlist:', id, 'media:', mediaId);
+    
+    // Check if user owns the playlist
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM playlists WHERE id = $1',
+      [id]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    }
+    
+    // Remove media from playlist
+    const result = await pool.query(
+      'DELETE FROM playlist_media WHERE playlist_id = $1 AND media_id = $2',
+      [id, mediaId]
+    );
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Media file not found in playlist' });
+    }
+    
+    // Return updated playlist
+    const updatedPlaylist = await getPlaylistWithMedia(id);
+    res.json({ playlist: updatedPlaylist });
+    
+  } catch (error) {
+    console.error('🔴 PLAYLIST_MEDIA_REMOVE: Error removing media:', error);
+    res.status(500).json({ error: 'Failed to remove media from playlist' });
+  }
+});
+
+// Update playlist media order
+app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { mediaFileIds } = req.body; // Array of media IDs in desired order
+    
+    console.log('🔴 PLAYLIST_MEDIA_UPDATE: Updating playlist media order:', id);
+    console.log('🔴 PLAYLIST_MEDIA_UPDATE: New order:', mediaFileIds);
+    
+    // Check if user owns the playlist
+    const ownerCheck = await pool.query(
+      'SELECT user_id FROM playlists WHERE id = $1',
+      [id]
+    );
+    
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    }
+    
+    // Clear existing media links
+    await pool.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
+    
+    // Add media files in new order
+    if (mediaFileIds && mediaFileIds.length > 0) {
+      for (let i = 0; i < mediaFileIds.length; i++) {
+        const mediaId = mediaFileIds[i];
+        
+        // Check if media file exists and belongs to user
+        const mediaCheck = await pool.query(
+          'SELECT id FROM media WHERE id = $1 AND user_id = $2',
+          [mediaId, req.user.userId]
+        );
+        
+        if (mediaCheck.rows.length === 0) {
+          return res.status(404).json({ error: `Media file ${mediaId} not found or not authorized` });
+        }
+        
+        await pool.query(
+          'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
+          [id, mediaId, i + 1]
+        );
+      }
+    }
+    
+    // Return updated playlist
+    const updatedPlaylist = await getPlaylistWithMedia(id);
+    res.json({ playlist: updatedPlaylist });
+    
+  } catch (error) {
+    console.error('🔴 PLAYLIST_MEDIA_UPDATE: Error updating playlist media:', error);
+    res.status(500).json({ error: 'Failed to update playlist media' });
+  }
+});
+
 // ---------- CHAT ROUTES ----------
 app.get('/api/playlists/:playlistId/chat', async (req, res) => {
   try {
@@ -4565,6 +4746,107 @@ app.get('/playlist-access/:id', async (req, res) => {
       </body>
       </html>
     `);
+  }
+});
+
+// Debug endpoint to check database state
+app.get('/debug/playlist/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔍 DEBUG: Checking playlist', id);
+    
+    // Check if playlist exists
+    const playlistResult = await pool.query(
+      'SELECT * FROM playlists WHERE id = $1',
+      [id]
+    );
+    console.log('📂 PLAYLIST:', playlistResult.rows[0] || 'NOT FOUND');
+    
+    // Check all media files
+    const mediaResult = await pool.query(
+      'SELECT id, title, filename, file_type, user_id FROM media ORDER BY id'
+    );
+    console.log('🎵 ALL MEDIA FILES:', mediaResult.rows.length, 'files');
+    
+    // Check playlist_media relationships for this playlist
+    const playlistMediaResult = await pool.query(
+      'SELECT * FROM playlist_media WHERE playlist_id = $1',
+      [id]
+    );
+    console.log('🔗 PLAYLIST_MEDIA for playlist', id, ':', playlistMediaResult.rows.length, 'links');
+    
+    // Return debug info
+    res.json({
+      playlist: playlistResult.rows[0] || null,
+      totalMediaFiles: mediaResult.rows.length,
+      mediaFiles: mediaResult.rows,
+      playlistMediaLinks: playlistMediaResult.rows,
+      playlistMediaCount: playlistMediaResult.rows.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Debug endpoint to fix playlist media links
+app.post('/debug/fix-playlist/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🔧 FIXING PLAYLIST MEDIA LINKS for playlist', id);
+    
+    // Get playlist info
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1', [id]);
+    const playlist = playlistResult.rows[0];
+    
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    console.log('📂 Playlist:', playlist.name, 'by user', playlist.user_id);
+    
+    // Get all media files belonging to the playlist owner
+    const mediaResult = await pool.query(
+      'SELECT id, title, filename, file_type FROM media WHERE user_id = $1 ORDER BY id',
+      [playlist.user_id]
+    );
+    
+    console.log('🎵 Found', mediaResult.rows.length, 'media files for user', playlist.user_id);
+    
+    // Clear existing playlist-media links for this playlist
+    await pool.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
+    console.log('🗑️ Cleared existing playlist-media links');
+    
+    // Add all user's media files to the playlist
+    for (let i = 0; i < mediaResult.rows.length; i++) {
+      const media = mediaResult.rows[i];
+      await pool.query(
+        'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
+        [id, media.id, i + 1]
+      );
+      console.log(`✅ Added: ${media.title} (${media.file_type}) - Order ${i + 1}`);
+    }
+    
+    console.log('🎉 Successfully linked', mediaResult.rows.length, 'media files to playlist', id);
+    
+    // Verify the fix
+    const verifyResult = await pool.query(
+      'SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1',
+      [id]
+    );
+    console.log('✅ Verification: Playlist', id, 'now has', verifyResult.rows[0].count, 'media files');
+    
+    res.json({
+      success: true,
+      message: `Successfully linked ${mediaResult.rows.length} media files to playlist ${id}`,
+      addedFiles: mediaResult.rows.length,
+      mediaFiles: mediaResult.rows.map(m => ({ id: m.id, title: m.title, type: m.file_type }))
+    });
+    
+  } catch (error) {
+    console.error('❌ Error fixing playlist media links:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

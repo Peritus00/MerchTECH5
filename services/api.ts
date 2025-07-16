@@ -498,7 +498,7 @@ export const playlistsAPI = {
   },
   async updateMedia(playlistId: string, mediaIds: number[]) {
     // This endpoint should handle reordering of all media items in a playlist
-    const response = await api.put(`/playlists/${playlistId}/media`, { media_ids: mediaIds });
+    const response = await api.put(`/playlists/${playlistId}/media`, { mediaFileIds: mediaIds });
     return response.data;
   },
 };
