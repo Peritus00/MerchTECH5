@@ -588,14 +588,7 @@ export default function MediaPlayer({
     player.muted = false; // Mute by default, unmute when playing
   });
 
-  // AUTO-ADVANCE FOR MOBILE: Watch the expo-audio status
-  useEffect(() => {
-    // didJustFinish is the key for seamless mobile playback
-    if (Platform.OS !== 'web' && audioStatus.didJustFinish) {
-      console.log('🔴 MEDIA_PLAYER (Mobile): Track finished, advancing.');
-      handleNext();
-    }
-  }, [audioStatus.didJustFinish]);
+  // AUTO-ADVANCE FOR MOBILE: Handled by native audio events
 
   // AUTO-ADVANCE FOR MOBILE VIDEO: Watch the expo-video status
   useEffect(() => {
@@ -996,19 +989,17 @@ export default function MediaPlayer({
           
           audio.load();
         } else {
-          console.log('🔴 MEDIA_PLAYER: Using MOBILE audio (expo-audio)');
-          console.log('🔴 MEDIA_PLAYER: Audio player status before replace:', audioStatus);
+          console.log('🔴 MEDIA_PLAYER: Using MOBILE audio (expo-av)');
           
-          // Mobile audio using expo-audio
+          // Mobile audio using expo-av
           try {
-            console.log('🔴 MEDIA_PLAYER: Attempting to replace audio URL...');
-            await audioPlayer.replace(mediaUrl);
-            console.log('🔴 MEDIA_PLAYER: ✅ Audio replaced successfully');
-            console.log('🔴 MEDIA_PLAYER: Audio player status after replace:', audioStatus);
+            console.log('🔴 MEDIA_PLAYER: Loading mobile audio...');
+            const sound = new AVAudio.Sound();
+            await sound.loadAsync({ uri: mediaUrl });
             setIsLoading(false);
             if (playAfterLoad) {
-              console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing subsequent track.');
-              await audioPlayer.play();
+              console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing track.');
+              await sound.playAsync();
             }
           } catch (error) {
             console.error('🔴 MEDIA_PLAYER (Mobile): ❌ Audio replace failed:', error);
@@ -1810,9 +1801,9 @@ export default function MediaPlayer({
   };
 
   const renderAudioContent = () => {
-    const currentDuration = Platform.OS === 'web' ? webAudioDuration : (audioStatus.duration || 0) / 1000;
-    const currentPosition = Platform.OS === 'web' ? webAudioCurrentTime : (audioStatus.currentTime || 0) / 1000;
-    const playerIsPlaying = Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing;
+    const currentDuration = webAudioDuration;
+    const currentPosition = webAudioCurrentTime;
+    const playerIsPlaying = webAudioPlaying;
 
     return (
       <View style={styles.audioContainer}>
