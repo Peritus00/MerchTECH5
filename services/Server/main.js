@@ -4726,6 +4726,7 @@ app.get('/playlist-access/:id', async (req, res) => {
     console.log('🌐 WEB: ROUTE CALLED - Serving playlist access page for ID:', id);
     console.log('🌐 WEB: Request URL:', req.url);
     console.log('🌐 WEB: Request method:', req.method);
+    console.log('🌐 WEB: Deployment timestamp:', new Date().toISOString());
 
     // Get playlist data
     console.log('🌐 WEB: Calling getPlaylistWithMedia...');
