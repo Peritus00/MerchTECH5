@@ -1560,7 +1560,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
               }}
             >
               <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
-                SIMPLE CREATE
+                CREATE QR CODE
               </ThemedText>
             </TouchableOpacity>
           </View>
