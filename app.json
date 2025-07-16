@@ -18,6 +18,10 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.peritus00.merchtech",
+      "backgroundModes": [
+        "audio",
+        "background-processing"
+      ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload media files and save QR codes.",
@@ -26,7 +30,11 @@
         "NSDocumentsFolderUsageDescription": "This app needs access to your documents to upload media files.",
         "NSDownloadsFolderUsageDescription": "This app needs access to your downloads folder to upload media files.",
         "NSAppleMusicUsageDescription": "This app needs access to your music library to provide enhanced media playback features.",
-        "NSMotionUsageDescription": "This app uses motion data to enhance media playback controls."
+        "NSMotionUsageDescription": "This app uses motion data to enhance media playback controls.",
+        "UIBackgroundModes": [
+          "audio",
+          "background-processing"
+        ]
       }
     },
     "android": {

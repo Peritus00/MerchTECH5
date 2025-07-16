@@ -111,10 +111,23 @@ export default function MediaPlayer({
     }
   }, [playlist, slideshow, media]);
 
-  // iOS Audio Session Configuration
+  // Enhanced iOS Audio Session Configuration
   useEffect(() => {
     const initializeAudioSession = async () => {
+      console.log('🔴 MEDIA_PLAYER: Initializing iOS audio session...');
+      
       try {
+        // Request audio permissions first
+        const { status } = await Audio.requestPermissionsAsync();
+        console.log('🔴 MEDIA_PLAYER: Audio permissions status:', status);
+        
+        if (status !== 'granted') {
+          console.error('🔴 MEDIA_PLAYER: Audio permissions not granted');
+          setError('Audio permissions required for playback');
+          return;
+        }
+
+        // Configure audio session with enhanced settings
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: false,
           staysActiveInBackground: true,
@@ -124,14 +137,44 @@ export default function MediaPlayer({
           interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
           playThroughEarpieceAndroid: false,
         });
-        console.log('🔴 MEDIA_PLAYER: iOS audio session configured successfully');
+        
+        console.log('🔴 MEDIA_PLAYER: ✅ iOS audio session configured successfully');
+        
+        // Set up audio session interruption handling
+        const audioInterruptionListener = Audio.addAudioInterruptionStatusListener(
+          (interruptionStatus) => {
+            console.log('🔴 MEDIA_PLAYER: Audio interruption status:', interruptionStatus);
+            
+            if (interruptionStatus.type === Audio.INTERRUPTION_TYPE_BEGAN) {
+              console.log('🔴 MEDIA_PLAYER: Audio interrupted - pausing playback');
+              handlePause();
+            } else if (interruptionStatus.type === Audio.INTERRUPTION_TYPE_ENDED) {
+              console.log('🔴 MEDIA_PLAYER: Audio interruption ended');
+              if (interruptionStatus.shouldResume) {
+                console.log('🔴 MEDIA_PLAYER: Resuming playback after interruption');
+                setTimeout(() => handlePlay(), 500);
+              }
+            }
+          }
+        );
+
+        // Cleanup function
+        return () => {
+          console.log('🔴 MEDIA_PLAYER: Cleaning up audio session');
+          if (audioInterruptionListener) {
+            audioInterruptionListener.remove();
+          }
+        };
+        
       } catch (error) {
-        console.error('🔴 MEDIA_PLAYER: Failed to configure iOS audio session:', error);
+        console.error('🔴 MEDIA_PLAYER: ❌ Failed to configure iOS audio session:', error);
+        setError('Failed to initialize audio system');
       }
     };
 
     if (Platform.OS === 'ios') {
-      initializeAudioSession();
+      const cleanup = initializeAudioSession();
+      return cleanup;
     }
   }, []);
 
@@ -440,9 +483,81 @@ export default function MediaPlayer({
     setChatFilter(newFilter);
   };
   
-  // Helper function to get media URL
+  // Helper function to get media URL with iOS fallback support
   const getMediaUrl = (mediaFile: any) => {
-    return mediaFile.url || mediaFile.fileUrl || mediaFile.src || '';
+    const primaryUrl = mediaFile.url || mediaFile.fileUrl || mediaFile.src || '';
+    
+    // For iOS, add additional URL validation and fallback options
+    if (Platform.OS === 'ios' && primaryUrl) {
+      console.log('🔴 MEDIA_PLAYER: iOS URL validation for:', primaryUrl);
+      
+      // Ensure HTTPS for iOS (required for network requests)
+      if (primaryUrl.startsWith('http://')) {
+        const httpsUrl = primaryUrl.replace('http://', 'https://');
+        console.log('🔴 MEDIA_PLAYER: Converting HTTP to HTTPS for iOS:', httpsUrl);
+        return httpsUrl;
+      }
+    }
+    
+    return primaryUrl;
+  };
+
+  // iOS-specific media fallback handler
+  const tryMediaFallback = async (mediaFile: any, originalError: Error) => {
+    console.log('🔴 MEDIA_PLAYER: Attempting iOS media fallback...');
+    console.log('🔴 MEDIA_PLAYER: Original error:', originalError.message);
+    
+    const fallbackOptions = [];
+    
+    // Option 1: Try with streaming endpoint if it's an S3 URL
+    const originalUrl = getMediaUrl(mediaFile);
+    if (originalUrl.includes('amazonaws.com') || originalUrl.includes('s3.')) {
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+      const streamingUrl = `${baseUrl}/api/media/${mediaFile.id}/stream`;
+      fallbackOptions.push({
+        url: streamingUrl,
+        description: 'Streaming endpoint'
+      });
+    }
+    
+    // Option 2: Try with direct URL if we have media ID
+    if (mediaFile.id) {
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+      const directUrl = `${baseUrl}/api/media/${mediaFile.id}`;
+      fallbackOptions.push({
+        url: directUrl,
+        description: 'Direct media endpoint'
+      });
+    }
+    
+    // Option 3: Try with CORS-enabled endpoint
+    if (originalUrl) {
+      const corsUrl = originalUrl + '?cors=true';
+      fallbackOptions.push({
+        url: corsUrl,
+        description: 'CORS-enabled URL'
+      });
+    }
+    
+    console.log('🔴 MEDIA_PLAYER: Trying', fallbackOptions.length, 'fallback options');
+    
+    // Try each fallback option
+    for (let i = 0; i < fallbackOptions.length; i++) {
+      const option = fallbackOptions[i];
+      console.log(`🔴 MEDIA_PLAYER: Trying fallback ${i + 1}: ${option.description} - ${option.url}`);
+      
+      try {
+        await audioPlayer.replace(option.url);
+        console.log(`🔴 MEDIA_PLAYER: ✅ Fallback ${i + 1} succeeded!`);
+        return true;
+      } catch (fallbackError) {
+        console.error(`🔴 MEDIA_PLAYER: ❌ Fallback ${i + 1} failed:`, fallbackError.message);
+        continue;
+      }
+    }
+    
+    console.error('🔴 MEDIA_PLAYER: ❌ All fallback options failed');
+    return false;
   };
 
   // Helper function to get slideshow audio URL with streaming support
@@ -799,9 +914,28 @@ export default function MediaPlayer({
 
   const loadTrack = async (trackIndex: number) => {
     const mediaFile = activeMedia[trackIndex];
-    if (!mediaFile) return;
+    if (!mediaFile) {
+      console.error('🔴 MEDIA_PLAYER: No media file found for track index:', trackIndex);
+      return;
+    }
 
-    console.log('🔴 MEDIA_PLAYER: Loading track:', mediaFile.title, 'Type:', mediaFile.type || mediaFile.fileType);
+    const mediaUrl = getMediaUrl(mediaFile);
+    console.log('🔴 MEDIA_PLAYER: ===== LOADING TRACK DEBUG =====');
+    console.log('🔴 MEDIA_PLAYER: Platform:', Platform.OS);
+    console.log('🔴 MEDIA_PLAYER: Track Index:', trackIndex);
+    console.log('🔴 MEDIA_PLAYER: Media File:', {
+      title: mediaFile.title,
+      type: mediaFile.type || mediaFile.fileType,
+      contentType: mediaFile.contentType,
+      url: mediaUrl,
+      urlLength: mediaUrl?.length || 0
+    });
+    console.log('🔴 MEDIA_PLAYER: Media Type Detection:', {
+      isVideo,
+      isAudio,
+      isImage,
+      isSlideshow
+    });
     
     setIsLoading(true);
     setError(null);
@@ -812,25 +946,32 @@ export default function MediaPlayer({
       setIsInitialLoad(false);
     }
       
-      try {
-        if (isVideo) {
+    try {
+      if (isVideo) {
+        console.log('🔴 MEDIA_PLAYER: Processing VIDEO content...');
+        console.log('🔴 MEDIA_PLAYER: Video URL:', mediaUrl);
         // Video is handled by videoPlayer hook
         setIsLoading(false);
         if (playAfterLoad) {
           videoPlayer.play();
         }
       } else if (isAudio) {
+        console.log('🔴 MEDIA_PLAYER: Processing AUDIO content...');
+        console.log('🔴 MEDIA_PLAYER: Audio URL:', mediaUrl);
+        
         if (Platform.OS === 'web') {
+          console.log('🔴 MEDIA_PLAYER: Using WEB audio fallback');
           // Web audio fallback
           if (audioRef.current) {
             audioRef.current.pause();
             audioRef.current.src = '';
           }
           
-          const audio = new Audio(getMediaUrl(mediaFile));
+          const audio = new Audio(mediaUrl);
           audioRef.current = audio;
           
           audio.addEventListener('loadeddata', () => {
+            console.log('🔴 MEDIA_PLAYER (Web): ✅ Audio loaded successfully');
             setWebAudioLoaded(true);
             setWebAudioDuration(audio.duration);
             setIsLoading(false);
@@ -851,37 +992,84 @@ export default function MediaPlayer({
           });
           
           audio.addEventListener('error', (e) => {
+            console.error('🔴 MEDIA_PLAYER (Web): ❌ Audio error:', e);
             setError('Failed to load audio');
             setIsLoading(false);
           });
           
           audio.load();
         } else {
+          console.log('🔴 MEDIA_PLAYER: Using MOBILE audio (expo-audio)');
+          console.log('🔴 MEDIA_PLAYER: Audio player status before replace:', audioStatus);
+          
           // Mobile audio using expo-audio
           try {
-            await audioPlayer.replace(getMediaUrl(mediaFile));
+            console.log('🔴 MEDIA_PLAYER: Attempting to replace audio URL...');
+            await audioPlayer.replace(mediaUrl);
+            console.log('🔴 MEDIA_PLAYER: ✅ Audio replaced successfully');
+            console.log('🔴 MEDIA_PLAYER: Audio player status after replace:', audioStatus);
             setIsLoading(false);
             if (playAfterLoad) {
               console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing subsequent track.');
               await audioPlayer.play();
             }
-      } catch (error) {
-            setError('Failed to load audio');
+          } catch (error) {
+            console.error('🔴 MEDIA_PLAYER (Mobile): ❌ Audio replace failed:', error);
+            console.error('🔴 MEDIA_PLAYER (Mobile): Error details:', {
+              message: error.message,
+              code: error.code,
+              stack: error.stack,
+              mediaUrl,
+              mediaFile
+            });
+            
+            // Try iOS fallback mechanisms
+            if (Platform.OS === 'ios') {
+              console.log('🔴 MEDIA_PLAYER: Attempting iOS fallback...');
+              const fallbackSuccess = await tryMediaFallback(mediaFile, error);
+              
+              if (fallbackSuccess) {
+                console.log('🔴 MEDIA_PLAYER: ✅ iOS fallback succeeded!');
+                setIsLoading(false);
+                if (playAfterLoad) {
+                  console.log('🔴 MEDIA_PLAYER (iOS Fallback): Auto-playing subsequent track.');
+                  await audioPlayer.play();
+                }
+                return; // Exit early since fallback worked
+              }
+            }
+            
+            setError(`Failed to load audio: ${error.message}`);
             setIsLoading(false);
           }
         }
       } else if (isImage) {
+        console.log('🔴 MEDIA_PLAYER: Processing IMAGE content...');
+        console.log('🔴 MEDIA_PLAYER: Image URL:', mediaUrl);
         // Images load immediately
         setIsLoading(false);
         if (playAfterLoad) {
           setIsPlaying(true);
         }
+      } else {
+        console.error('🔴 MEDIA_PLAYER: Unknown media type!');
+        setError('Unknown media type');
+        setIsLoading(false);
       }
     } catch (error) {
-      console.error('Error loading track:', error);
-      setError('Failed to load media');
+      console.error('🔴 MEDIA_PLAYER: ❌ Error loading track:', error);
+      console.error('🔴 MEDIA_PLAYER: Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+        mediaUrl,
+        mediaFile
+      });
+      setError(`Failed to load media: ${error.message}`);
       setIsLoading(false);
     }
+    
+    console.log('🔴 MEDIA_PLAYER: ===== END LOADING TRACK DEBUG =====');
   };
 
   const handlePlay = async () => {
