@@ -18,7 +18,9 @@
     "server:start": "node ./services/Server/main.js",
     "server:dev": "NODE_ENV=development node ./services/Server/main.js",
     "server:prod": "NODE_ENV=production node ./services/Server/main.js",
-    "build": "NODE_ENV=production expo export --platform web --output-dir dist"
+    "build": "expo export -p web",
+    "fix-db": "node fix-slideshows-db.js",
+    "build:web": "expo export -p web"
   },
   "jest": {
     "preset": "jest-expo"
