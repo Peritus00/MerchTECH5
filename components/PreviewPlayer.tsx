@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { Audio } from 'expo-av';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
@@ -87,30 +86,6 @@ export default function PreviewPlayer({
   const isSlideshow = mediaFiles.length > 1 && mediaFiles.some(file => 
     file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image'
   );
-  
-  // iOS Audio Session Configuration
-  useEffect(() => {
-    const initializeAudioSession = async () => {
-      try {
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: false, // Preview player doesn't need background audio
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
-          playThroughEarpieceAndroid: false,
-        });
-        console.log('🔴 PREVIEW_PLAYER: iOS audio session configured successfully');
-      } catch (error) {
-        console.error('🔴 PREVIEW_PLAYER: Failed to configure iOS audio session:', error);
-      }
-    };
-
-    if (Platform.OS === 'ios') {
-      initializeAudioSession();
-    }
-  }, []);
   
   // Debug logging
   console.log('🔴 PREVIEW_PLAYER: Media analysis:', {
