@@ -23,17 +23,18 @@ console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 const app = express();
 const PORT = process.env.PORT || 5001;
 
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir);
-  console.log('📂 Created uploads directory:', uploadsDir);
-} else {
-  console.log('📂 Uploads directory already exists:', uploadsDir);
-}
+// --- MIDDLEWARE ---
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Serve the static files from the React Native web build
+// --- STATIC FILE SERVING ---
+const uploadsDir = path.join(__dirname, 'uploads');
+app.use('/uploads', express.static(uploadsDir));
 const distDir = path.join(__dirname, '../../dist');
-console.log('Serving static files from:', distDir);
 app.use(express.static(distDir));
 
 const storage = multer.memoryStorage();
@@ -5151,526 +5152,135 @@ function generateMediaPlayerHTML(playlist) {
   `;
 }
 
-app.get('/playlist-access/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log('🌐 WEB: PLAYLIST ACCESS ROUTE - Checking playlist protection for ID:', id);
-    console.log('🌐 WEB: Request URL:', req.url);
-    console.log('🌐 WEB: User-Agent:', req.get('User-Agent'));
+app.get('/playlist-access/:id', async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const playlist = await getPlaylistWithMedia(id);
 
-    // Get playlist data
-    console.log('🌐 WEB: Calling getPlaylistWithMedia...');
-    const playlist = await getPlaylistWithMedia(id);
-    console.log('🌐 WEB: getPlaylistWithMedia result:', playlist ? 'Found playlist' : 'NULL returned');
-    
-    if (!playlist) {
-      console.log('🌐 WEB: Playlist not found, returning 404');
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Playlist Not Found - MerchTech</title>
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
-            .message { color: #6b7280; }
-          </style>
-        </head>
-        <body>
-          <h1 class="error">🎵 Playlist Not Found</h1>
-          <p class="message">The playlist you're looking for doesn't exist.</p>
-        </body>
-        </html>
-      `);
+        if (playlist && !playlist.requiresActivationCode) {
+            return res.redirect(302, `/media-player/${id}?type=playlist`);
+        }
+        
+        // For protected playlists or if not found, let the client app handle it.
+        return res.sendFile(path.join(distDir, 'index.html'));
+
+    } catch (error) {
+        next(error);
     }
-
-    // Check if playlist is protected
-    const isProtected = playlist.is_protected || playlist.requiresActivationCode;
-    const mediaFiles = playlist.mediaFiles || [];
-    const mediaCount = mediaFiles.length;
-    
-    console.log('🌐 WEB: Playlist found:', playlist.name);
-    console.log('🌐 WEB: Media count:', mediaCount);
-    console.log('🌐 WEB: Protected status:', isProtected);
-    console.log('🌐 WEB: playlist.is_protected:', playlist.is_protected);
-    console.log('🌐 WEB: playlist.requiresActivationCode:', playlist.requiresActivationCode);
-
-    // FIXED: Redirect to the EXACT same React Native route that the working play button uses!
-    if (!isProtected) {
-      console.log('🌐 WEB: ✅ Playlist is NOT protected - redirecting to React Native media player (same as working play button)');
-      const reactNativeRoute = `/media-player/${id}?type=playlist`;
-      console.log('🌐 WEB: Redirecting to React Native route:', reactNativeRoute);
-      return res.redirect(302, reactNativeRoute);
-      
-    } else {
-      console.log('🌐 WEB: 🔒 Playlist IS protected - redirecting to React Native access control');
-      // For protected playlists, redirect to React Native access control screen
-      // This is the same route that the working play button uses for protected playlists
-      return res.redirect(302, `/playlist-access/${id}`);
-    }
-
-  } catch (error) {
-    console.error('🔴 WEB: Error in playlist-access route:', error);
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Error - MerchTech</title>
-        <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
-          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
-        </style>
-      </head>
-      <body>
-        <h1 class="error">⚠️ Server Error</h1>
-        <p>Something went wrong while loading the playlist. Please try again later.</p>
-      </body>
-      </html>
-    `);
-  }
 });
 
-// Debug endpoint to check database state
-app.get('/debug/playlist/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log('🔍 DEBUG: Checking playlist', id);
-    
-    // Check if playlist exists
-    const playlistResult = await pool.query(
-      'SELECT * FROM playlists WHERE id = $1',
-      [id]
-    );
-    console.log('📂 PLAYLIST:', playlistResult.rows[0] || 'NOT FOUND');
-    
-    // Check all media files
-    const mediaResult = await pool.query(
-      'SELECT id, title, filename, file_type, user_id FROM media ORDER BY id'
-    );
-    console.log('🎵 ALL MEDIA FILES:', mediaResult.rows.length, 'files');
-    
-    // Check playlist_media relationships for this playlist
-    const playlistMediaResult = await pool.query(
-      'SELECT * FROM playlist_media WHERE playlist_id = $1',
-      [id]
-    );
-    console.log('🔗 PLAYLIST_MEDIA for playlist', id, ':', playlistMediaResult.rows.length, 'links');
-    
-    // Return debug info
-    res.json({
-      playlist: playlistResult.rows[0] || null,
-      totalMediaFiles: mediaResult.rows.length,
-      mediaFiles: mediaResult.rows,
-      playlistMediaLinks: playlistMediaResult.rows,
-      playlistMediaCount: playlistMediaResult.rows.length
-    });
-    
-  } catch (error) {
-    console.error('❌ Debug error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Debug endpoint to fix playlist media links
-app.post('/debug/fix-playlist/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    console.log('🔧 FIXING PLAYLIST MEDIA LINKS for playlist', id);
-    
-    // Get playlist info
-    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1', [id]);
-    const playlist = playlistResult.rows[0];
-    
-    if (!playlist) {
-      return res.status(404).json({ error: 'Playlist not found' });
-    }
-    
-    console.log('📂 Playlist:', playlist.name, 'by user', playlist.user_id);
-    
-    // Get all media files belonging to the playlist owner
-    const mediaResult = await pool.query(
-      'SELECT id, title, filename, file_type FROM media WHERE user_id = $1 ORDER BY id',
-      [playlist.user_id]
-    );
-    
-    console.log('🎵 Found', mediaResult.rows.length, 'media files for user', playlist.user_id);
-    
-    // Clear existing playlist-media links for this playlist
-    await pool.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
-    console.log('🗑️ Cleared existing playlist-media links');
-    
-    // Add all user's media files to the playlist
-    for (let i = 0; i < mediaResult.rows.length; i++) {
-      const media = mediaResult.rows[i];
-      await pool.query(
-        'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
-        [id, media.id, i + 1]
-      );
-      console.log(`✅ Added: ${media.title} (${media.file_type}) - Order ${i + 1}`);
-    }
-    
-    console.log('🎉 Successfully linked', mediaResult.rows.length, 'media files to playlist', id);
-    
-    // Verify the fix
-    const verifyResult = await pool.query(
-      'SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1',
-      [id]
-    );
-    console.log('✅ Verification: Playlist', id, 'now has', verifyResult.rows[0].count, 'media files');
-    
-    res.json({
-      success: true,
-      message: `Successfully linked ${mediaResult.rows.length} media files to playlist ${id}`,
-      addedFiles: mediaResult.rows.length,
-      mediaFiles: mediaResult.rows.map(m => ({ id: m.id, title: m.title, type: m.file_type }))
-    });
-    
-  } catch (error) {
-    console.error('❌ Error fixing playlist media links:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// --- ERROR HANDLING & SERVER STARTUP ---
-// Serve React Native app for all non-API routes
+// This must be the last non-error-handling route
 app.get('*', (req, res) => {
-  console.log('🌐 CATCH_ALL: Serving React Native app for:', req.path);
-  
-  // Don't serve React Native app for API routes
+  // If the request path looks like an API call, it means no API route was matched,
+  // so we should send a 404 instead of the web app.
   if (req.path.startsWith('/api/')) {
-    // For API routes that don't exist, send a 404
-    return res.status(404).json({ error: 'Route not found' });
+    return res.status(404).json({ error: 'API route not found' });
   }
-  
-  // For all other routes, serve the main index.html file
-  // This allows the React Native router to handle the URL
-  const indexPath = path.join(__dirname, '../../dist/index.html');
-  console.log('  --> Serving index.html from:', indexPath);
-  res.sendFile(indexPath, (err) => {
+
+  // For any other route, serve the main index.html file.
+  // This allows the React Native web app's router to handle the path.
+  console.log(`🌐 WEB: Serving index.html for non-API route: ${req.path}`);
+  res.sendFile(path.join(distDir, 'index.html'), (err) => {
     if (err) {
-      console.error('🔴 CATCH_ALL: Error serving index.html:', err);
-      res.status(500).json({ error: 'Error serving application' });
-    } else {
-      console.log('  --> Successfully sent index.html');
+      console.error(`❌ WEB_SERVE_ERROR: Could not send index.html for path ${req.path}:`, err);
+      // Check if the file doesn't exist, which likely means the web app wasn't built.
+      if (err.code === 'ENOENT') {
+        res.status(500).send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>500 - Server Configuration Error</title>
+            <style>body { font-family: sans-serif; text-align: center; padding-top: 50px; }</style>
+          </head>
+          <body>
+            <h1>Error 500: Server Misconfiguration</h1>
+            <p>The application's web files (dist/index.html) could not be found.</p>
+            <p>This usually means the <code>npm run build</code> or <code>expo export -p web</code> command was not run during deployment.</p>
+          </body>
+          </html>
+        `);
+      } else {
+        res.status(500).send('Error serving the application.');
+      }
     }
   });
 });
 
-// 404 handler for API routes only
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'Route not found' });
-  }
-  next();
-});
-app.use((err, req, res, next) => {
-  console.error('🔴 Unhandled Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' })
-});
-
-const initializeDatabase = async () => {
-  const client = await pool.connect();
+app.get('/api/slideshow-access/check-code', async (req, res) => {
   try {
-    console.log('🔧 Initializing database schema...');
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        email VARCHAR(255) UNIQUE NOT NULL,
-        username VARCHAR(50) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
-        is_email_verified BOOLEAN DEFAULT false
-      );
-    `);
-
-    console.log('🔧 Verifying table columns exist...');
-    const columns = [
-      { name: 'verification_token', type: 'VARCHAR(255)' },
-      { name: 'is_admin', type: 'BOOLEAN DEFAULT false' },
-      { name: 'is_suspended', type: 'BOOLEAN DEFAULT false' },
-      { name: 'subscription_tier', type: "VARCHAR(50) DEFAULT 'free'" },
-      { name: 'created_at', type: 'TIMESTAMPTZ DEFAULT NOW()' },
-      { name: 'updated_at', type: 'TIMESTAMPTZ DEFAULT NOW()' },
-      // Admin-configurable limits (NULL means use subscription tier defaults)
-      { name: 'max_products', type: 'INTEGER' },
-      { name: 'max_audio_files', type: 'INTEGER' },
-      { name: 'max_playlists', type: 'INTEGER' },
-      { name: 'max_qr_codes', type: 'INTEGER' },
-      { name: 'max_slideshows', type: 'INTEGER' },
-      { name: 'max_videos', type: 'INTEGER' },
-      { name: 'max_activation_codes', type: 'INTEGER' }
-    ];
-
-    for (const column of columns) {
-      console.log(`   -> Checking for column: ${column.name}`);
-      await client.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${column.name} ${column.type};`);
+    const { code, slideshowId } = req.query;
+    if (!code || !slideshowId) {
+      return res.status(400).json({ error: 'Code and slideshowId are required' });
     }
 
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        images TEXT[],
-        category VARCHAR(100),
-        in_stock BOOLEAN DEFAULT true,
-        is_suspended BOOLEAN DEFAULT false,
-        is_deleted BOOLEAN DEFAULT false,
-        price INTEGER,
-        prices JSONB,
-        metadata JSONB DEFAULT '{}',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
+    const result = await pool.query(
+      `SELECT * FROM activation_codes 
+       WHERE code = $1 
+         AND slideshow_id = $2 
+         AND is_active = true 
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)`,
+      [code, slideshowId]
+    );
 
-    // Ensure new price columns exist for older installations
-    const productColumns = [
-      { name: 'price', type: 'INTEGER' },
-      { name: 'prices', type: 'JSONB' },
-    ];
-
-    for (const col of productColumns) {
-      await client.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ${col.name} ${col.type};`);
+    if (result.rows.length > 0) {
+      res.json({ valid: true });
+    } else {
+      res.json({ valid: false });
     }
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS sales (
-        id SERIAL PRIMARY KEY,
-        product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
-        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-        buyer_email VARCHAR(255),
-        quantity INTEGER NOT NULL DEFAULT 1,
-        total_cents INTEGER NOT NULL,
-        purchased_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS media (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        title VARCHAR(255) NOT NULL,
-        file_path TEXT,
-        url TEXT NOT NULL,
-        filename VARCHAR(255),
-        file_type VARCHAR(50),
-        content_type VARCHAR(100),
-        filesize BIGINT,
-        duration INTEGER,
-        unique_id VARCHAR(100),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS playlists (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        requires_activation_code BOOLEAN DEFAULT false,
-        is_public BOOLEAN DEFAULT false,
-        instagram_url TEXT,
-        twitter_url TEXT,
-        facebook_url TEXT,
-        youtube_url TEXT,
-        website_url TEXT,
-        product_link TEXT,
-        product_link_title VARCHAR(255),
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Ensure all required columns exist (for existing installations)
-    await client.query(`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS description TEXT;`);
-    await client.query(`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS requires_activation_code BOOLEAN DEFAULT false;`);
-    await client.query(`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;`);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS playlist_media (
-        id SERIAL PRIMARY KEY,
-        playlist_id INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
-        media_id INTEGER REFERENCES media(id) ON DELETE CASCADE,
-        display_order INTEGER NOT NULL DEFAULT 1,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS slideshows (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        requires_activation_code BOOLEAN DEFAULT false,
-        is_public BOOLEAN DEFAULT false,
-        autoplay_interval INTEGER DEFAULT 5000,
-        transition VARCHAR(50) DEFAULT 'fade',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS slideshow_images (
-        id SERIAL PRIMARY KEY,
-        slideshow_id INTEGER REFERENCES slideshows(id) ON DELETE CASCADE,
-        image_url TEXT NOT NULL,
-        caption TEXT,
-        display_order INTEGER DEFAULT 1,
-        created_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS activation_codes (
-        id SERIAL PRIMARY KEY,
-        code VARCHAR(255) UNIQUE NOT NULL,
-        playlist_id INTEGER REFERENCES playlists(id) ON DELETE CASCADE,
-        slideshow_id INTEGER REFERENCES slideshows(id) ON DELETE CASCADE,
-        created_by INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        max_uses INTEGER DEFAULT NULL,
-        uses_count INTEGER DEFAULT 0,
-        expires_at TIMESTAMPTZ DEFAULT NULL,
-        is_active BOOLEAN DEFAULT TRUE,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS user_activation_codes (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        activation_code_id INTEGER REFERENCES activation_codes(id) ON DELETE CASCADE,
-        attached_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Create QR codes table
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS qr_codes (
-        id SERIAL PRIMARY KEY,
-        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        url TEXT NOT NULL,
-        qr_code_data TEXT NOT NULL,
-        short_url VARCHAR(255),
-        description TEXT,
-        options JSONB DEFAULT '{}',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-      );
-    `);
-
-    // Create QR scans table for analytics
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS qr_scans (
-        id SERIAL PRIMARY KEY,
-        qr_code_id INTEGER REFERENCES qr_codes(id) ON DELETE CASCADE,
-        scanned_at TIMESTAMPTZ DEFAULT NOW(),
-        location VARCHAR(255),
-        device VARCHAR(255),
-        country_name VARCHAR(100),
-        country_code VARCHAR(2),
-        device_type VARCHAR(50),
-        browser_name VARCHAR(100),
-        operating_system VARCHAR(100),
-        ip_address INET
-      );
-    `);
-
-    console.log('✅ Database schema initialized successfully.');
-  } catch (err) {
-    console.error('❌ Database initialization error:', err);
-    throw err;
-  } finally {
-    client.release();
-  }
-};
-
-const startServer = async () => {
-  try {
-    console.log('🚀 Starting server initialization...');
-    await initializeDatabase();
-    console.log('✅ Database initialized successfully');
-    
-    const server = app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Full server with email logic running on port ${PORT}`);
-      console.log(`🌐 Server accessible at: http://localhost:${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-    });
-    
-    // Store server reference for graceful shutdown
-    global.server = server;
-    
-    return server;
   } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    console.error('❌ Error stack:', error.stack);
-    
-    // In production, try to continue with a basic server
-    if (process.env.NODE_ENV === 'production') {
-      console.log('🔄 Attempting to start basic server without database...');
-      try {
-        const server = app.listen(PORT, '0.0.0.0', () => {
-          console.log(`🚀 Basic server running on port ${PORT} (database failed)`);
-        });
-        global.server = server;
-        return server;
-      } catch (basicError) {
-        console.error('❌ Even basic server failed:', basicError);
-        process.exit(1);
+    console.error('Error checking activation code:', error);
+    res.status(500).json({ error: 'Failed to check activation code' });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// --- WEB APP SERVING (Client-Side Routing) ---
+// This must be after all API routes. It serves the main web application.
+// Any route not caught by the API will be handled by the client-side router.
+// -----------------------------------------------------------------------------
+
+// This must be the last non-error-handling route
+app.get('*', (req, res) => {
+  // If the request path looks like an API call, it means no API route was matched,
+  // so we should send a 404 instead of the web app.
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
+
+  // For any other route, serve the main index.html file.
+  // This allows the React Native web app's router to handle the path.
+  console.log(`🌐 WEB: Serving index.html for non-API route: ${req.path}`);
+  res.sendFile(path.join(distDir, 'index.html'), (err) => {
+    if (err) {
+      console.error(`❌ WEB_SERVE_ERROR: Could not send index.html for path ${req.path}:`, err);
+      // Check if the file doesn't exist, which likely means the web app wasn't built.
+      if (err.code === 'ENOENT') {
+        res.status(500).send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>500 - Server Configuration Error</title>
+            <style>body { font-family: sans-serif; text-align: center; padding-top: 50px; }</style>
+          </head>
+          <body>
+            <h1>Error 500: Server Misconfiguration</h1>
+            <p>The application's web files (dist/index.html) could not be found.</p>
+            <p>This usually means the <code>npm run build</code> or <code>expo export -p web</code> command was not run during deployment.</p>
+          </body>
+          </html>
+        `);
+      } else {
+        res.status(500).send('Error serving the application.');
       }
-    } else {
-      process.exit(1);
     }
-  }
-};
-
-// --- Process Error Handlers ---
-process.on('uncaughtException', (error) => {
-  console.error('🔴 UNCAUGHT EXCEPTION:', error);
-  console.error('🔴 UNCAUGHT EXCEPTION STACK:', error.stack);
-  // Don't exit in production to keep server running
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
+  });
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('🔴 UNHANDLED REJECTION at:', promise, 'reason:', reason);
-  // Don't exit in production to keep server running
-  if (process.env.NODE_ENV !== 'production') {
-    process.exit(1);
-  }
-});
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received: closing HTTP server');
-    if (global.server) {
-        global.server.close(() => {
-            console.log('HTTP server closed');
-            pool.end(() => {
-                console.log('Database pool has ended');
-                process.exit(0);
-            });
-        });
-    } else {
-        console.log('No server instance to close');
-        process.exit(0);
-    }
+// --- SERVER START ---
+const server = app.listen(PORT, '0.0.0.0', () => {
+  const address = server.address();
+  console.log(`✅ Server listening on http://${address.address}:${address.port}`);
+  console.log(`🚀 To test locally, open http://localhost:${PORT}`);
 });
-
-// Start the server
-startServer();
