@@ -1770,21 +1770,35 @@ async function getPlaylistWithMedia(playlistId) {
     console.log('🔴 GET_PLAYLIST: Playlist-media links for playlist', playlistId, ':', playlistMediaResult.rows[0].count);
   }
 
-  const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => ({
-    id: media.id,
-    userId: media.user_id,
-    title: media.title,
-    description: media.description,
-    filename: media.filename,
-    filePath: `/uploads/${media.filename}`,
-    fileType: media.file_type,
-    contentType: media.content_type,
-    displayOrder: media.display_order,
-    createdAt: media.created_at,
-    updatedAt: media.updated_at,
-    type: media.file_type,
-    url: await s3Service.getSignedUrl(media.s3_key),
-  })));
+  const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => {
+    let signedUrl = null;
+    if (media.s3_key) {
+      try {
+        signedUrl = await s3Service.getSignedUrl(media.s3_key);
+      } catch (error) {
+        console.error(`Failed to get signed URL for key ${media.s3_key}:`, error);
+        // signedUrl remains null
+      }
+    } else {
+      console.warn(`Media file with ID ${media.id} is missing an s3_key. It will not be playable.`);
+    }
+
+    return {
+      id: media.id,
+      userId: media.user_id,
+      title: media.title,
+      description: media.description,
+      filename: media.filename,
+      filePath: `/uploads/${media.filename}`,
+      fileType: media.file_type,
+      contentType: media.content_type,
+      displayOrder: media.display_order,
+      createdAt: media.created_at,
+      updatedAt: media.updated_at,
+      type: media.file_type,
+      url: signedUrl, // Will be null if s3_key is missing or signing fails
+    };
+  }));
 
   // Get product links for this playlist
   let productLinks = [];
