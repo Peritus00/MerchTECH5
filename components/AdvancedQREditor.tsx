@@ -1565,29 +1565,41 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
             <TouchableOpacity
               style={[
                 styles.createButton, 
-                (loading || getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)) && styles.disabledButton,
-                getScannabilityScore() < 60 && styles.criticalButton
+                { backgroundColor: '#2563eb', minWidth: 80 }, // Force visible with explicit styling
+                loading && styles.disabledButton,
               ]}
               onPress={() => {
                 console.log('🔘 CREATE BUTTON TOUCHED!');
                 console.log('🔘 Loading state:', loading);
                 console.log('🔘 Scannability score:', getScannabilityScore());
-                console.log('🔘 Button disabled:', loading || getScannabilityScore() < 60);
+                console.log('🔘 Name:', name);
+                console.log('🔘 Content type:', contentType);
+                console.log('🔘 Selected playlist:', selectedPlaylist);
+                console.log('🔘 Content:', content);
+                console.log('🔘 User:', user);
+                console.log('🔘 Is admin:', isAdmin);
+                
+                // Debug validation
+                const isNameValid = !!name.trim();
+                const isContentValid = contentType === 'playlist' ? !!selectedPlaylist : !!content.trim();
+                const isScannabilityValid = getScannabilityScore() >= 60;
+                
+                console.log('🔘 Validation debug:', {
+                  isNameValid,
+                  isContentValid,
+                  isScannabilityValid,
+                  shouldBeEnabled: isNameValid && isContentValid && isScannabilityValid
+                });
+                
                 handleCreate();
               }}
-              disabled={loading || getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)}
+              disabled={loading}
             >
               <ThemedText style={[
                 styles.createButtonText,
-                (getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)) && styles.criticalButtonText
+                { color: '#fff', fontWeight: '600' }
               ]}>
-                {loading ? 'Creating...' : 
-                 getScannabilityScore() < 60 ? 'Fix Issues to Create' :
-                 !name.trim() ? 'Enter Name to Create' :
-                 (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') ? 'Enter Content to Create' :
-                 (contentType === 'playlist' && !selectedPlaylist) ? 'Select Playlist to Create' :
-                 (contentType === 'slideshow' && !selectedSlideshow) ? 'Select Slideshow to Create' :
-                 'Create'}
+                {loading ? 'Creating...' : 'DEBUG CREATE'}
               </ThemedText>
             </TouchableOpacity>
           </View>
