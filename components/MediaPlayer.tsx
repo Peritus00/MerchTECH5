@@ -583,6 +583,7 @@ export default function MediaPlayer({
 
   // Use appropriate audio player based on platform
   const audioPlayer = useAudioPlayer();
+  const backgroundAudioPlayerMobile = useAudioPlayer(); // <-- Add this line for mobile background audio
   const audioStatus = useAudioPlayerStatus(audioPlayer);
 
   // Use video player for video content
@@ -756,11 +757,11 @@ export default function MediaPlayer({
         console.log('🎵 BACKGROUND_AUDIO: Setting up MOBILE audio player');
         
         // Mobile background audio setup
-        const setupMobileBackgroundAudio = async () => {
+        const setupMobileBackgroundAudio = async (bgAudio: any) => { // <-- Accept player as parameter
           try {
             console.log('🎵 BACKGROUND_AUDIO: Creating mobile audio player');
             // Create a separate audio player for background music on mobile
-            const bgAudio = useAudioPlayer();
+            // const bgAudio = useAudioPlayer(); // <-- This was the bug, REMOVE this line
             console.log('🎵 BACKGROUND_AUDIO: Replacing audio source with URL:', audioUrl);
             await bgAudio.replace(audioUrl);
             bgAudio.loop = true;
@@ -775,7 +776,7 @@ export default function MediaPlayer({
           }
         };
         
-        setupMobileBackgroundAudio();
+        setupMobileBackgroundAudio(backgroundAudioPlayerMobile); // <-- Pass the player
         
         return () => {
           console.log('🎵 BACKGROUND_AUDIO: 🧹 Cleaning up mobile audio');
@@ -1404,16 +1405,13 @@ export default function MediaPlayer({
 
   // Render media content based on type
   const renderMediaContent = () => {
-    // If there are no media files, display a message
-    if (!activeMedia || activeMedia.length === 0) {
-      return (
-        <View style={styles.playerContainer}>
-          <Text style={styles.noMediaText}>This content doesn't have any media files.</Text>
-        </View>
-      );
-    }
-    
-    const currentFile = activeMedia[currentTrack];
+    if (!currentMediaFile) {
+    return (
+        <View style={styles.mediaPlaceholder}>
+          <Text style={styles.placeholderText}>No media to display</Text>
+      </View>
+    );
+  }
 
     if (isVideo) {
       return renderVideoContent();
@@ -2452,28 +2450,20 @@ export default function MediaPlayer({
 }
 
 const styles = StyleSheet.create({
+  // Platform-specific container styles
+  webContainer: {
+    ...(Platform.OS === 'web' && {
+      height: '100vh',
+      overflowY: 'auto',
+    }),
+    backgroundColor: '#f5f5f5',
+    paddingBottom: 40, // Add bottom padding to prevent content from sitting at the very bottom
+  },
   container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    width: '100%',
-    height: '100%',
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flex: 1, // Native container
+    backgroundColor: '#f5f5f5',
   },
-  playerContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#000',
-    position: 'relative',
-    overflow: 'hidden',
-    width: '100%',
-    maxWidth: 800,
-    alignSelf: 'center',
-  },
-  mainContent: {
-    flex: 1,
-    width: '100%',
-  },
+
   // Header styles
   header: {
     flexDirection: 'row',
