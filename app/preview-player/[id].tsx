@@ -87,11 +87,12 @@ export default function PreviewPlayerScreen() {
     // Map images to media files for the preview player
     const imageFiles = slideshow.images?.map((image, index) => {
       // Always use streaming endpoint for consistent S3 handling
-      const streamUrl = `${baseUrl}/api/slideshow-images/${image.id}/stream`;
+      // The server now provides the correct streaming URL directly.
+      const streamUrl = image.url;
       
       console.log(`🖼️ Image ${index + 1}:`, {
         id: image.id,
-        originalUrl: image.imageUrl,
+        originalUrl: "REDACTED", // No longer sending originalUrl
         streamUrl: streamUrl,
         caption: image.caption
       });
@@ -108,10 +109,11 @@ export default function PreviewPlayerScreen() {
 
     // Background audio will be handled separately by PreviewPlayer
     if (slideshow.audioUrl) {
+      // The server provides the correct streaming URL for audio.
       const audioStreamUrl = `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`;
       
       console.log('🎵 Background audio available:', {
-        originalUrl: slideshow.audioUrl,
+        originalUrl: "REDACTED", // No longer sending originalUrl
         streamUrl: audioStreamUrl
       });
       
@@ -182,6 +184,7 @@ export default function PreviewPlayerScreen() {
         productLinks={slideshow.productLinks || []}
         onPreviewComplete={handlePreviewComplete}
         backgroundAudioUrl={slideshow.audioUrl ? 
+          // The server provides the correct streaming URL for audio.
           `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
           : undefined}
       />

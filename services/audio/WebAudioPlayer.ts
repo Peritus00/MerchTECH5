@@ -5,9 +5,10 @@ export const WebAudioPlayer = {
     if (audio) {
       audio.pause();
     }
-    // Use string-based property access to prevent bundler mangling
-    const AudioConstructor = window['Audio'];
-    audio = new AudioConstructor(uri);
+    // Use the standard document.createElement to avoid any potential
+    // constructor mangling by the production bundler.
+    audio = document.createElement('audio');
+    audio.src = uri;
     audio.play();
   },
 

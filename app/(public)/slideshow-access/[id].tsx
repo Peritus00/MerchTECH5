@@ -72,13 +72,13 @@ export default function SlideshowAccessScreen() {
     
     // Map images to media files for the preview player
     const imageFiles = slideshow.images.map((image: any, index: number) => {
-      const streamUrl = image.imageUrl.includes('amazonaws.com') 
-        ? `${baseUrl}/api/slideshow-images/${image.id}/stream`
-        : image.imageUrl;
+      // The server now provides the correct streaming URL directly.
+      // No client-side manipulation is needed.
+      const streamUrl = image.url;
         
       console.log(`🎬 SLIDESHOW_ACCESS: Image ${index + 1}:`, {
         id: image.id,
-        originalUrl: image.imageUrl,
+        originalUrl: "REDACTED", // No longer sending originalUrl
         streamUrl: streamUrl,
         caption: image.caption
       });
@@ -98,12 +98,13 @@ export default function SlideshowAccessScreen() {
     // The PreviewPlayer will handle slideshow background audio separately
     // Just log the audio URL for debugging
     if (slideshow.audioUrl) {
+      // The server provides the correct streaming URL for audio as well.
       const audioStreamUrl = slideshow.audioUrl.includes('amazonaws.com')
         ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
         : slideshow.audioUrl;
       
       console.log('🎬 SLIDESHOW_ACCESS: Background audio available:', {
-        originalUrl: slideshow.audioUrl,
+        originalUrl: "REDACTED", // No longer sending originalUrl
         streamUrl: audioStreamUrl
       });
       
@@ -617,6 +618,7 @@ export default function SlideshowAccessScreen() {
               productLinks={slideshow.productLinks || []}
               onPreviewComplete={handlePreviewComplete}
               backgroundAudioUrl={slideshow.audioUrl ? 
+                // The server provides the correct streaming URL for audio.
                 (slideshow.audioUrl.includes('amazonaws.com') 
                   ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
                   : slideshow.audioUrl) 

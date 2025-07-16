@@ -3183,8 +3183,9 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     slideshow.images = imagesResult.rows.map(img => ({
       id: img.id,
       slideshowId: img.slideshow_id,
-      imageUrl: img.image_url,
-      url: img.image_url, // Add url field for MediaPlayer compatibility
+      // The direct S3 URL should not be sent to the client.
+      // Instead, we construct a secure, streamable URL.
+      url: `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/slideshow-images/${img.id}/stream`,
       caption: img.caption,
       title: img.caption || `Image ${img.display_order + 1}`, // Add title field for MediaPlayer compatibility
       displayOrder: img.display_order,
