@@ -43,10 +43,14 @@ function RootLayoutNav() {
     }
 
     const inAuthGroup = segments[0] === 'auth';
-    const inPublicGroup = segments[0] === '(public)';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
     const inTabsGroup = segments[0] === '(tabs)';
+    
+    // Determine if the current route is one that should be publicly accessible
+    const isPublicRoute = 
+      segments[0] === 'slideshow-access' || 
+      segments[0] === 'playlist-access';
 
     // Add a small delay to prevent rapid navigation changes
     const navigationTimeout = setTimeout(() => {
@@ -68,12 +72,13 @@ function RootLayoutNav() {
         }
       } else if (!isLoading) {
         // User is not signed in and we're done loading
-        if (!inAuthGroup && !inNotFoundGroup && !inPublicGroup) {
+        // Only redirect if it's not an auth route, a not-found route, or a designated public route
+        if (!inAuthGroup && !inNotFoundGroup && !isPublicRoute) {
           console.log('🔴 No user found, redirecting to login');
           router.replace('/auth/login');
         }
-      } else if (isLoading && !inAuthGroup && !inNotFoundGroup && !inPublicGroup) {
-        // Still loading but not in auth group - redirect to login immediately
+      } else if (isLoading && !inAuthGroup && !inNotFoundGroup && !isPublicRoute) {
+        // Still loading but not in a public-accessible group - redirect to login immediately
         // This prevents the loading screen from showing on the main app
         console.log('🔴 Still loading and not in auth, redirecting to login immediately');
         router.replace('/auth/login');
@@ -93,7 +98,6 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="(public)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
