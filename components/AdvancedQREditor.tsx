@@ -1503,6 +1503,13 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
     };
   };
 
+  console.log('🔘 RENDER: About to render AdvancedQREditor');
+  console.log('🔘 RENDER: User:', user);
+  console.log('🔘 RENDER: isAdmin:', isAdmin);
+  console.log('🔘 RENDER: name:', name);
+  console.log('🔘 RENDER: contentType:', contentType);
+  console.log('🔘 RENDER: selectedPlaylist:', selectedPlaylist);
+  
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
       <ThemedView style={styles.container}>
@@ -1512,6 +1519,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
           </TouchableOpacity>
           <ThemedText style={styles.title}>Advanced QR Designer</ThemedText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
+            {console.log('🔘 RENDER: Rendering header buttons section')}
             {isAdmin && (
               <>
                 <TouchableOpacity
@@ -1562,6 +1570,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
                 </TouchableOpacity>
               </>
             )}
+            {console.log('🔘 RENDER: About to render Create button')}
             <TouchableOpacity
               style={[
                 styles.createButton, 
