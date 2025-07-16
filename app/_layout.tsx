@@ -53,15 +53,7 @@ function RootLayoutNav() {
       segments[0] === 'playlist-access' ||
       segments[0] === 'media-player';
 
-    // Debug logging
-    console.log('🔍 AUTH DEBUG:', {
-      segments: segments,
-      firstSegment: segments[0],
-      isPublicRoute,
-      user: !!user,
-      isLoading,
-      isInitialized
-    });
+
 
     // Add a small delay to prevent rapid navigation changes
     const navigationTimeout = setTimeout(() => {
@@ -84,18 +76,9 @@ function RootLayoutNav() {
       } else if (!isLoading) {
         // User is not signed in and we're done loading
         // Only redirect if it's not an auth route, a not-found route, or a designated public route
-        console.log('🔍 AUTH REDIRECT CHECK:', {
-          inAuthGroup,
-          inNotFoundGroup,
-          isPublicRoute,
-          shouldRedirect: !inAuthGroup && !inNotFoundGroup && !isPublicRoute
-        });
-        
         if (!inAuthGroup && !inNotFoundGroup && !isPublicRoute) {
           console.log('🔴 No user found, redirecting to login');
           router.replace('/auth/login');
-        } else if (isPublicRoute) {
-          console.log('✅ Public route detected, allowing access without login');
         }
       } else if (isLoading && !inAuthGroup && !inNotFoundGroup && !isPublicRoute) {
         // Still loading but not in a public-accessible group - redirect to login immediately
