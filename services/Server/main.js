@@ -4731,13 +4731,13 @@ app.get('/media-player/:id', async (req, res) => {
 
 // Generate HTML media player page
 function generateMediaPlayerHTML(playlist) {
-  const mediaFiles = playlist.media_files || [];
+  const mediaFiles = playlist.mediaFiles || [];  // Fixed: use mediaFiles not media_files
   const mediaList = mediaFiles.map(file => ({
     id: file.id,
     title: file.title,
     url: `${process.env.BASE_URL || 'https://merchtech5-production.up.railway.app'}/api/media/${file.id}/stream`,
-    type: file.file_type,
-    contentType: file.content_type
+    type: file.fileType,  // Fixed: use fileType not file_type
+    contentType: file.contentType  // Fixed: use contentType not content_type
   }));
 
   return `
@@ -5219,7 +5219,7 @@ app.get('/playlist-access/:id', async (req, res) => {
 
     // Check if playlist is protected
     const isProtected = playlist.is_protected || playlist.requiresActivationCode;
-    const mediaFiles = playlist.media_files || [];
+    const mediaFiles = playlist.mediaFiles || [];  // Fixed: use mediaFiles not media_files
     const mediaCount = mediaFiles.length;
     
     console.log('🌐 WEB: Playlist found:', playlist.name);
