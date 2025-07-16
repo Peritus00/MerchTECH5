@@ -150,8 +150,7 @@ export default function PreviewPlayer({
             webAudioRef.current.pause();
             webAudioRef.current.src = '';
           }
-          const AudioConstructor = (window as any)['Audio'];
-          const audio = new AudioConstructor(currentMedia.url);
+          const audio = new (window as any)['Audio'](currentMedia.url);
           webAudioRef.current = audio;
 
           // Set up event listeners before setting src
@@ -363,8 +362,7 @@ export default function PreviewPlayer({
           console.error('🎵 PREVIEW_PLAYER: Background audio URL test failed:', error);
         });
 
-      const AudioConstructor = (window as any)['Audio'];
-      const audio = new AudioConstructor(backgroundAudioUrl);
+      const audio = new (window as any)['Audio'](backgroundAudioUrl);
       backgroundAudioRef.current = audio;
 
       audio.addEventListener('loadstart', () => {
@@ -520,8 +518,7 @@ export default function PreviewPlayer({
             console.log('🎵 PREVIEW_PLAYER: Background audio URL provided but no audio ref - setting up audio now');
 
             // Setup audio immediately if it wasn't set up before
-            const AudioConstructor = (window as any)['Audio'];
-            const audio = new AudioConstructor(backgroundAudioUrl);
+            const audio = new (window as any)['Audio'](backgroundAudioUrl);
             audio.crossOrigin = 'anonymous';
             audio.loop = true;
             audio.volume = 0.5;

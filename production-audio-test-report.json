@@ -1,0 +1,62 @@
+{
+  "timestamp": "2025-07-16T23:17:13.244Z",
+  "testResults": [
+    {
+      "name": "Browser Compatibility",
+      "status": "PASSED",
+      "duration": 113,
+      "errors": []
+    },
+    {
+      "name": "Production Build Specific Issues",
+      "status": "PASSED",
+      "duration": 19,
+      "errors": []
+    },
+    {
+      "name": "Slideshow Audio Constructor",
+      "status": "FAILED",
+      "duration": 11837,
+      "errors": [
+        "Waiting for selector `[data-testid=\"slideshow-container\"]` failed: Waiting failed: 10000ms exceeded"
+      ]
+    },
+    {
+      "name": "Playlist Audio Constructor",
+      "status": "FAILED",
+      "duration": 11379,
+      "errors": [
+        "Waiting for selector `[data-testid=\"playlist-container\"]` failed: Waiting failed: 10000ms exceeded"
+      ]
+    },
+    {
+      "name": "Preview Player Audio Constructor",
+      "status": "FAILED",
+      "duration": 11216,
+      "errors": [
+        "Waiting for selector `[data-testid=\"preview-player\"]` failed: Waiting failed: 10000ms exceeded"
+      ]
+    },
+    {
+      "name": "Inline Media Player Audio Constructor",
+      "status": "FAILED",
+      "duration": 1220,
+      "errors": [
+        "this.page.waitForTimeout is not a function"
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "type": "console",
+      "message": "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "timestamp": "2025-07-16T23:16:50.509Z"
+    }
+  ],
+  "summary": {
+    "totalTests": 6,
+    "passed": 2,
+    "failed": 4,
+    "totalErrors": 1
+  }
+}
