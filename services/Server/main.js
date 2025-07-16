@@ -1616,8 +1616,27 @@ app.get('/api/playlists/:id', async (req, res) => {
 
     res.json({ playlist });
   } catch (error) {
-    console.error('Error fetching playlist:', error);
-    res.status(500).json({ error: 'Failed to fetch playlist' });
+    console.error('🌐 WEB: Error in playlist-access route:', error);
+    console.error('🌐 WEB: Error stack:', error.stack);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Server Error - MerchTech</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+          .message { color: #6b7280; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">🔥 Server Error</h1>
+        <p class="message">Something went wrong while loading the playlist.</p>
+      </body>
+      </html>
+    `);
   }
 });
 
@@ -1703,6 +1722,7 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
 // Helper function to get playlist with media files
 async function getPlaylistWithMedia(playlistId) {
   console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
+  console.log('🔴 GET_PLAYLIST: playlistId type:', typeof playlistId);
 
   const playlistResult = await pool.query(
     `SELECT p.*, u.username 
@@ -1712,7 +1732,13 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
+  console.log('🔴 GET_PLAYLIST: Query result rows:', playlistResult.rows.length);
+  if (playlistResult.rows.length > 0) {
+    console.log('🔴 GET_PLAYLIST: Found playlist:', playlistResult.rows[0].name);
+  }
+
   if (playlistResult.rows.length === 0) {
+    console.log('🔴 GET_PLAYLIST: No playlist found, returning null');
     return null;
   }
 
@@ -4695,11 +4721,17 @@ const startServer = async () => {
 app.get('/playlist-access/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('🌐 WEB: Serving playlist access page for ID:', id);
+    console.log('🌐 WEB: ROUTE CALLED - Serving playlist access page for ID:', id);
+    console.log('🌐 WEB: Request URL:', req.url);
+    console.log('🌐 WEB: Request method:', req.method);
 
     // Get playlist data
+    console.log('🌐 WEB: Calling getPlaylistWithMedia...');
     const playlist = await getPlaylistWithMedia(id);
+    console.log('🌐 WEB: getPlaylistWithMedia result:', playlist ? 'Found playlist' : 'NULL returned');
+    
     if (!playlist) {
+      console.log('🌐 WEB: Playlist not found, returning 404 HTML');
       return res.status(404).send(`
         <!DOCTYPE html>
         <html>
