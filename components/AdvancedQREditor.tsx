@@ -1565,7 +1565,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
             <TouchableOpacity
               style={[
                 styles.createButton, 
-                (loading || getScannabilityScore() < 60) && styles.disabledButton,
+                (loading || getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)) && styles.disabledButton,
                 getScannabilityScore() < 60 && styles.criticalButton
               ]}
               onPress={() => {
@@ -1575,14 +1575,18 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
                 console.log('🔘 Button disabled:', loading || getScannabilityScore() < 60);
                 handleCreate();
               }}
-              disabled={loading || getScannabilityScore() < 60}
+              disabled={loading || getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)}
             >
               <ThemedText style={[
                 styles.createButtonText,
-                getScannabilityScore() < 60 && styles.criticalButtonText
+                (getScannabilityScore() < 60 || !name.trim() || (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') || (contentType === 'playlist' && !selectedPlaylist) || (contentType === 'slideshow' && !selectedSlideshow)) && styles.criticalButtonText
               ]}>
                 {loading ? 'Creating...' : 
-                 getScannabilityScore() < 60 ? 'Fix Issues to Create' : 
+                 getScannabilityScore() < 60 ? 'Fix Issues to Create' :
+                 !name.trim() ? 'Enter Name to Create' :
+                 (!content.trim() && contentType !== 'playlist' && contentType !== 'slideshow') ? 'Enter Content to Create' :
+                 (contentType === 'playlist' && !selectedPlaylist) ? 'Select Playlist to Create' :
+                 (contentType === 'slideshow' && !selectedSlideshow) ? 'Select Slideshow to Create' :
                  'Create'}
               </ThemedText>
             </TouchableOpacity>
