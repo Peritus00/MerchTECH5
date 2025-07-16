@@ -769,6 +769,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
           description: description.trim(),
           contentType,
           options: finalOptions,
+          ...(contentType === 'playlist' && selectedPlaylist && { playlist_id: selectedPlaylist.id }),
+          ...(contentType === 'slideshow' && selectedSlideshow && { slideshow_id: selectedSlideshow.id }),
         };
 
         console.log('📤 Sending QR data to service:', JSON.stringify(qrData, null, 2));
