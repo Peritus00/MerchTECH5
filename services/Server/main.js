@@ -5185,7 +5185,7 @@ function generateMediaPlayerHTML(playlist) {
 app.get('/playlist-access/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('🌐 WEB: PLAYLIST ACCESS ROUTE - Serving media player for ID:', id);
+    console.log('🌐 WEB: PLAYLIST ACCESS ROUTE - Checking playlist protection for ID:', id);
     console.log('🌐 WEB: Request URL:', req.url);
     console.log('🌐 WEB: User-Agent:', req.get('User-Agent'));
 
@@ -5219,7 +5219,7 @@ app.get('/playlist-access/:id', async (req, res) => {
 
     // Check if playlist is protected
     const isProtected = playlist.is_protected || playlist.requiresActivationCode;
-    const mediaFiles = playlist.mediaFiles || [];  // Fixed: use mediaFiles not media_files
+    const mediaFiles = playlist.mediaFiles || [];
     const mediaCount = mediaFiles.length;
     
     console.log('🌐 WEB: Playlist found:', playlist.name);
@@ -5228,9 +5228,9 @@ app.get('/playlist-access/:id', async (req, res) => {
     console.log('🌐 WEB: playlist.is_protected:', playlist.is_protected);
     console.log('🌐 WEB: playlist.requiresActivationCode:', playlist.requiresActivationCode);
 
-    // FIXED LOGIC: Always serve the media player HTML directly (no more redirects!)
+    // FIXED LOGIC: Provide web-friendly interface that matches the working play button behavior
     if (!isProtected) {
-      console.log('🌐 WEB: ✅ Playlist is NOT protected - serving media player HTML directly');
+      console.log('🌐 WEB: ✅ Playlist is NOT protected - serving web media player (same logic as working play button)');
       
       if (mediaCount === 0) {
         return res.send(`
@@ -5253,15 +5253,15 @@ app.get('/playlist-access/:id', async (req, res) => {
         `);
       }
       
-      // Generate and serve the media player HTML
+      // Generate and serve the web media player (same functionality as React Native MediaPlayer)
       const mediaPlayerHTML = generateMediaPlayerHTML(playlist);
-      console.log('🌐 WEB: Serving media player HTML with', mediaCount, 'media files');
+      console.log('🌐 WEB: Serving web media player with', mediaCount, 'media files');
       return res.send(mediaPlayerHTML);
       
     } else {
-      console.log('🌐 WEB: 🔒 Playlist IS protected - serving access control message');
+      console.log('🌐 WEB: 🔒 Playlist IS protected - serving app download page');
       
-      // For protected playlists, show access control message
+      // For protected playlists, show app download page (same logic as React Native access control)
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -5273,15 +5273,17 @@ app.get('/playlist-access/:id', async (req, res) => {
             body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
             .container { max-width: 500px; margin: 0 auto; }
             .message { color: #6b7280; font-size: 1.2rem; margin-bottom: 2rem; }
-            .button { background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 8px; text-decoration: none; display: inline-block; }
+            .button { background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 8px; text-decoration: none; display: inline-block; margin: 10px; }
+            .preview-button { background: #10b981; }
           </style>
         </head>
         <body>
           <div class="container">
             <h1>🔒 ${playlist.name}</h1>
             <p class="message">This playlist requires an activation code to access.</p>
-            <p class="message">Please use the MerchTech mobile app for the best experience.</p>
+            <p class="message">Download the MerchTech app for the full experience with activation codes.</p>
             <a href="/store" class="button">Visit Store</a>
+            <a href="#" class="button preview-button" onclick="alert('Preview feature coming soon!')">30-Second Preview</a>
           </div>
         </body>
         </html>
