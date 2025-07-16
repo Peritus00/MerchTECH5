@@ -22,7 +22,6 @@ import { Slideshow } from '@/shared/media-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
-import { Audio } from 'expo-av';
 import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
 import { env } from '@/config/environment';
@@ -42,9 +41,6 @@ export default function SlideshowAccessScreen() {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isFullAccess, setIsFullAccess] = useState(false); // Track if user has full access
-  
-  // Audio support
-  const soundRef = useRef<Audio.Sound | null>(null);
   
   // Enhanced registration flow states
   const [showRegistrationFlow, setShowRegistrationFlow] = useState(false);
@@ -166,45 +162,9 @@ export default function SlideshowAccessScreen() {
   //   };
   // }, [showPreview, slideshow]);
 
-  // Enhanced iOS Audio Session Configuration
+  // Cleanup audio when component unmounts
   useEffect(() => {
-    const initializeAudioSession = async () => {
-      if (soundRef.current) {
-        console.log('🎵 SLIDESHOW_ACCESS: Audio session already initialized.');
-        return () => {}; // Return an empty cleanup function
-      }
-
-      if (!slideshow?.audioUrl) {
-        console.log('🎵 SLIDESHOW_ACCESS: No audio URL available, not initializing audio session.');
-        return () => {};
-      }
-
-      try {
-        // Use streaming endpoint for S3 audio URLs
-        const audioUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
-        
-        console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: audioUrl }, 
-          { shouldPlay: true, isLooping: true }
-        );
-        soundRef.current = sound;
-        console.log('🎵 SLIDESHOW_ACCESS: Audio started successfully');
-
-        return () => {
-          console.log('🎵 SLIDESHOW_ACCESS: Stopping audio playback on cleanup');
-          soundRef.current?.unloadAsync();
-          soundRef.current = null;
-        };
-      } catch (err) {
-        console.warn('🎵 SLIDESHOW_ACCESS: Failed to load slideshow audio:', err);
-        return () => {};
-      }
-    };
-
-    if (Platform.OS === 'ios') {
-      initializeAudioSession();
-    }
+    // This effect can be used for other cleanup if needed
   }, []);
 
   const fetchSlideshow = async () => {
@@ -239,13 +199,13 @@ export default function SlideshowAccessScreen() {
         // Test first image URL if available
         if (slideshowData.images.length > 0) {
           const firstImage = slideshowData.images[0];
-          console.log('🎬 SLIDESHOW_ACCESS: Testing first image URL:', firstImage.imageUrl);
-          fetch(firstImage.imageUrl, { method: 'HEAD' })
+          console.log('🎬 SLIDESHOW_ACCESS: Testing first image URL:', firstImage.url);
+          fetch(firstImage.url, { method: 'HEAD' })
             .then(response => {
               console.log('🎬 SLIDESHOW_ACCESS: First image URL test response:', {
                 status: response.status,
                 statusText: response.statusText,
-                url: firstImage.imageUrl
+                url: firstImage.url
               });
             })
             .catch(error => {
@@ -261,19 +221,21 @@ export default function SlideshowAccessScreen() {
       if (error.response && error.response.status === 403) {
         console.log('🎬 SLIDESHOW_ACCESS: 403 error - slideshow exists but access denied, showing access form');
         // Create a minimal slideshow object so the access form can be shown
-        const minimalSlideshow = {
+        const minimalSlideshow: Slideshow = {
           id: parseInt(id),
+          uniqueId: id,
           name: 'Protected Slideshow',
           requiresActivationCode: true,
           images: [],
           description: 'This slideshow requires an activation code to access.',
           isPublic: false,
-          userId: null,
-          audioUrl: null,
+          userId: 0,
+          audioUrl: '', // Use empty string instead of null
           autoplayInterval: 5000,
           transition: 'fade',
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          productLinks: [],
         };
         setSlideshow(minimalSlideshow);
       } else {
@@ -313,8 +275,8 @@ export default function SlideshowAccessScreen() {
         console.log('🎬 SLIDESHOW_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🎬 SLIDESHOW_ACCESS: Looking for access to slideshow ID:', id, 'as number:', parseInt(id));
         try {
-          const response = await accessCodeAPI.getMyAccess();
-        const userAccessCodes = response?.accessCodes || response || [];
+          const response: any = await accessCodeAPI.getMyAccess();
+          const userAccessCodes = Array.isArray(response) ? response : response?.accessCodes || [];
           console.log('🎬 SLIDESHOW_ACCESS: User access codes response:', userAccessCodes);
           console.log('🎬 SLIDESHOW_ACCESS: Number of access codes found:', userAccessCodes?.length || 0);
           
@@ -382,7 +344,6 @@ export default function SlideshowAccessScreen() {
             // Don't show slideshow - show access screen instead
             // setIsFullAccess(true);
             // setShowPreview(true);
-            // startAudio();
             // return;
           } else {
             console.log('🎬 SLIDESHOW_ACCESS: ✅ Stored activation code is no longer valid, removing from storage');
@@ -524,11 +485,9 @@ export default function SlideshowAccessScreen() {
     setShowPreview(true);
     setPreviewTimeLeft(30);
     setCurrentImageIndex(0);
-    startAudio(); // Start audio for preview
   };
 
   const handlePreviewComplete = () => {
-    stopAudio(); // Stop audio when preview completes
     // Redirect to store after preview
     setTimeout(() => {
       router.push('/store');
@@ -537,33 +496,6 @@ export default function SlideshowAccessScreen() {
 
   const handleGoToStore = () => {
     router.push('/store');
-  };
-
-  const startAudio = async () => {
-    if (slideshow?.audioUrl && !soundRef.current) {
-      try {
-        // Use streaming endpoint for S3 audio URLs
-        const audioUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
-        
-        console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: audioUrl }, 
-          { shouldPlay: true, isLooping: true }
-        );
-        soundRef.current = sound;
-        console.log('🎵 SLIDESHOW_ACCESS: Audio started successfully');
-      } catch (err) {
-        console.warn('🎵 SLIDESHOW_ACCESS: Failed to load slideshow audio:', err);
-      }
-    }
-  };
-
-  const stopAudio = () => {
-    if (soundRef.current) {
-      console.log('🎵 SLIDESHOW_ACCESS: Stopping audio playback');
-      soundRef.current.unloadAsync();
-      soundRef.current = null;
-    }
   };
 
   if (isLoading || !slideshow) {
@@ -620,7 +552,6 @@ export default function SlideshowAccessScreen() {
           <TouchableOpacity 
             style={styles.previewBackButton}
             onPress={() => {
-              stopAudio();
               setShowPreview(false);
             }}
           >
@@ -650,8 +581,8 @@ export default function SlideshowAccessScreen() {
               productLinks={slideshow.productLinks || []}
               onPreviewComplete={handlePreviewComplete}
               backgroundAudioUrl={slideshow.audioUrl 
-  ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
-  : undefined}
+                ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
+                : undefined}
             />
             </View>
 
@@ -1029,7 +960,7 @@ const styles = StyleSheet.create({
   previewTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#1f2937',
   },
   previewTimer: {
     flexDirection: 'row',
@@ -1069,6 +1000,7 @@ const styles = StyleSheet.create({
   previewImage: {
     flex: 1,
     width: '100%',
+    resizeMode: 'contain',
   },
   imageOverlay: {
     position: 'absolute',
@@ -1134,9 +1066,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   fullAccessButtonText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+    marginLeft: 8,
   },
   header: {
     flexDirection: 'row',
@@ -1294,128 +1227,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
-  },
-  fullAccessButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#10b981',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: 'center',
-  },
-  fullAccessButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  previewMainContent: {
-    flexDirection: 'row',
-    flex: 1,
-  },
-  previewLeftPanel: {
-    flex: 1,
-    backgroundColor: '#000', // Dark background for media player
-    padding: 16,
-  },
-  previewPlayerSection: {
-    flex: 1,
-    backgroundColor: '#000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  previewChatSection: {
-    flex: 1,
-    backgroundColor: '#000',
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-    marginTop: 16,
-  },
-  chatHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  chatTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#3b82f6',
-    marginLeft: 8,
-  },
-  chatContent: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  chatPlaceholder: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  chatPlaceholderText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 12,
-  },
-  chatPlaceholderSubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  previewProductPanel: {
-    width: 280, // Fixed width for the product panel
-    backgroundColor: '#000', // Dark background for products
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  productHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  productPanelTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginLeft: 8,
-  },
-  adPlaceholder: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  adPlaceholderText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginTop: 12,
-  },
-  adPlaceholderSubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    marginTop: 4,
   },
 });
