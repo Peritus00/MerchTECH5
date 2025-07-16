@@ -50,7 +50,8 @@ function RootLayoutNav() {
     // Determine if the current route is one that should be publicly accessible
     const isPublicRoute = 
       segments[0] === 'slideshow-access' || 
-      segments[0] === 'playlist-access';
+      segments[0] === 'playlist-access' ||
+      segments[0] === 'media-player';
 
     // Add a small delay to prevent rapid navigation changes
     const navigationTimeout = setTimeout(() => {
