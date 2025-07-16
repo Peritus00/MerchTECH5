@@ -1112,25 +1112,89 @@ app.post('/api/media', authenticateToken, async (req, res) => {
 
 app.get('/api/media', authenticateToken, async (req, res) => {
   try {
-    const mine = req.query.mine === 'true';
-    let result;
+    console.log('🔴 MEDIA: Fetching media files for user:', req.user.userId);
     
-    if (mine) {
-      result = await pool.query('SELECT * FROM media WHERE user_id = $1 ORDER BY created_at DESC', [req.user.userId]);
-    } else {
-      result = await pool.query('SELECT * FROM media ORDER BY created_at DESC');
+    // Get admin user ID (djjetfuel@gmail.com)
+    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
+    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    
+    console.log('🔴 MEDIA: Admin user ID:', adminUserId);
+    
+    // Always return user's own files + admin files (if admin exists)
+    let query = 'SELECT * FROM media WHERE user_id = $1';
+    let params = [req.user.userId];
+    
+    if (adminUserId && adminUserId !== req.user.userId) {
+      // If admin exists and user is not the admin, also include admin's files
+      query += ' OR user_id = $2';
+      params.push(adminUserId);
     }
     
-    res.json({ media: result.rows });
+    query += ' ORDER BY created_at DESC';
+    
+    const result = await pool.query(query, params);
+    
+    console.log('🔴 MEDIA: Found', result.rows.length, 'media files for user');
+    
+    // Process media files to handle S3 URLs properly
+    const processedMedia = await Promise.all(result.rows.map(async (media) => {
+      let properUrl = media.url;
+      
+      // Handle S3 files - use streaming endpoint for consistency
+      if (media.s3_key && s3Service) {
+        // Use streaming endpoint for S3 files to ensure consistent playback
+        properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
+      } else if (media.url && media.url.startsWith('data:')) {
+        // Handle base64 files - use streaming endpoint
+        properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
+      } else if (media.filename && !media.s3_key) {
+        // Handle local files
+        properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/uploads/${media.filename}`;
+      }
+      
+      return {
+        ...media,
+        url: properUrl,
+        title: media.title,
+        fileType: media.file_type,
+        contentType: media.content_type,
+        type: media.file_type // Add this field for MediaPlayer component
+      };
+    }));
+    
+    res.json({ media: processedMedia });
   } catch (error) {
     console.error('Error fetching media:', error);
     res.status(500).json({ error: 'Failed to fetch media' });
   }
 });
 
-app.get('/api/media/all', async (req, res) => {
+app.get('/api/media/all', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM media ORDER BY created_at DESC');
+    console.log('🔴 MEDIA_ALL: Fetching all media files for user:', req.user.userId);
+    
+    // Get admin user ID (djjetfuel@gmail.com)
+    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
+    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    
+    console.log('🔴 MEDIA_ALL: Admin user ID:', adminUserId);
+    
+    // Always return user's own files + admin files (if admin exists)
+    let query = 'SELECT * FROM media WHERE user_id = $1';
+    let params = [req.user.userId];
+    
+    if (adminUserId && adminUserId !== req.user.userId) {
+      // If admin exists and user is not the admin, also include admin's files
+      query += ' OR user_id = $2';
+      params.push(adminUserId);
+    }
+    
+    query += ' ORDER BY created_at DESC';
+    
+    const result = await pool.query(query, params);
+    
+    console.log('🔴 MEDIA_ALL: Found', result.rows.length, 'media files for user');
+    
     res.json({ media: result.rows });
   } catch (error) {
     console.error('Error fetching all media:', error);
@@ -1138,7 +1202,7 @@ app.get('/api/media/all', async (req, res) => {
   }
 });
 
-app.get('/api/media/:id', async (req, res) => {
+app.get('/api/media/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
@@ -1148,6 +1212,18 @@ app.get('/api/media/:id', async (req, res) => {
     }
     
     const media = result.rows[0];
+    
+    // Check if user owns this media file or if it's from admin
+    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
+    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    
+    // Allow access if: user owns the file OR file is from admin OR user is admin
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin;
+    
+    if (media.user_id !== req.user.userId && media.user_id !== adminUserId && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden: You can only access your own media files' });
+    }
     
     // Create a proper HTTP URL for the audio file
     const baseUrl = process.env.API_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN 
@@ -1181,7 +1257,7 @@ app.get('/api/media/:id', async (req, res) => {
 });
 
 // Stream media file (supports both base64 data and S3 files)
-app.get('/api/media/:id/stream', async (req, res) => {
+app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
@@ -1191,6 +1267,18 @@ app.get('/api/media/:id/stream', async (req, res) => {
     }
     
     const media = result.rows[0];
+    
+    // Check if user owns this media file or if it's from admin
+    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
+    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    
+    // Allow access if: user owns the file OR file is from admin OR user is admin
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin;
+    
+    if (media.user_id !== req.user.userId && media.user_id !== adminUserId && !isAdmin) {
+      return res.status(403).json({ error: 'Forbidden: You can only stream your own media files' });
+    }
     
     // Set CORS headers for media streaming
     res.setHeader('Access-Control-Allow-Origin', '*');
