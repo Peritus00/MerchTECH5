@@ -4669,8 +4669,28 @@ app.get('/test-route', (req, res) => {
   res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
 });
 
-// Note: /media-player/:id route is handled by the React Native app (Expo Router)
-// We removed the Express route here to prevent conflicts with the React Native routing
+// Media player route - serve the specific HTML file for this route
+app.get('/media-player/:id', (req, res) => {
+  const { id } = req.params;
+  console.log('🎬 MEDIA_PLAYER: Serving media player HTML for ID:', id);
+  
+  // Serve the specific media player HTML file
+  const mediaPlayerPath = path.join(__dirname, '../../dist/media-player/[id].html');
+  console.log('🎬 MEDIA_PLAYER: Serving file:', mediaPlayerPath);
+  
+  res.sendFile(mediaPlayerPath, (err) => {
+    if (err) {
+      console.error('🎬 MEDIA_PLAYER: Error serving media player HTML:', err);
+      // Fallback to index.html if the specific file doesn't exist
+      res.sendFile(path.join(__dirname, '../../dist/index.html'), (fallbackErr) => {
+        if (fallbackErr) {
+          console.error('🎬 MEDIA_PLAYER: Error serving fallback index.html:', fallbackErr);
+          res.status(500).json({ error: 'Error serving media player' });
+        }
+      });
+    }
+  });
+});
 
 // Generate HTML media player page
 function generateMediaPlayerHTML(playlist) {
