@@ -1256,29 +1256,72 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Stream media file (supports both base64 data and S3 files)
-app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
+// Stream media file (supports both base64 data and S3 files) - PUBLIC endpoint for browser media compatibility
+app.get('/api/media/:id/stream', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
+    
     const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
+      console.log(`📺 MEDIA_STREAM: Media ${id} not found`);
       return res.status(404).json({ error: 'Media file not found' });
     }
     
     const media = result.rows[0];
     
-    // Check if user owns this media file or if it's from admin
+    // Get admin user ID for access control
     const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
     const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
     
-    // Allow access if: user owns the file OR file is from admin OR user is admin
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
-    const isAdmin = userResult.rows[0]?.is_admin;
+    // Optional authentication - check for token if present
+    let requestingUser = null;
+    let isAdmin = false;
     
-    if (media.user_id !== req.user.userId && media.user_id !== adminUserId && !isAdmin) {
-      return res.status(403).json({ error: 'Forbidden: You can only stream your own media files' });
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (token) {
+      try {
+        const user = jwt.verify(token, JWT_SECRET);
+        requestingUser = user;
+        
+        // Check if authenticated user is admin
+        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [user.userId]);
+        isAdmin = userResult.rows[0]?.is_admin || false;
+        
+        console.log(`📺 MEDIA_STREAM: Authenticated user ${user.userId} (admin: ${isAdmin})`);
+      } catch (error) {
+        console.log(`📺 MEDIA_STREAM: Invalid token provided, continuing as public access`);
+      }
     }
+    
+    // Security model for public streaming:
+    // 1. Admin files (djjetfuel@gmail.com) are publicly accessible
+    // 2. User files require authentication and ownership
+    // 3. Admin users can access any file
+    
+    const isAdminFile = media.user_id === adminUserId;
+    const isOwnFile = requestingUser && media.user_id === requestingUser.userId;
+    
+    console.log(`📺 MEDIA_STREAM: Access control check:`, {
+      mediaId: id,
+      mediaUserId: media.user_id,
+      adminUserId,
+      isAdminFile,
+      hasAuth: !!requestingUser,
+      isOwnFile,
+      isAdmin
+    });
+    
+    if (!isAdminFile && !isOwnFile && !isAdmin) {
+      console.log(`📺 MEDIA_STREAM: Access denied - not admin file, not own file, not admin user`);
+      return res.status(403).json({ error: 'Forbidden: This media file is not publicly accessible' });
+    }
+    
+    console.log(`📺 MEDIA_STREAM: Access granted for media ${id}`);
+    
     
     // Set CORS headers for media streaming
     res.setHeader('Access-Control-Allow-Origin', '*');
