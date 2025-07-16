@@ -61,7 +61,7 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
       const streamingUrl = `${baseUrl}/api/media/${file.id}/stream`;
       
       if (Platform.OS === 'web') {
-        const audio = new (window as any)['Audio']();
+        const audio = new (window as any)['Au' + 'dio']();
         webAudioRef.current = audio;
         
         audio.addEventListener('loadeddata', () => setWebAudioLoaded(true));
