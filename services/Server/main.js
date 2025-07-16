@@ -3084,6 +3084,43 @@ app.get('/api/slideshows/:slideshowId/products', async (req, res) => {
   }
 });
 
+// Get a specific playlist by ID for access control (no auth required)
+app.get('/api/playlist-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎵 PLAYLIST_ACCESS: Fetching playlist for access:', id);
+    
+    const playlist = await getPlaylistWithMedia(id);
+    
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    // Convert to access format
+    const accessData = {
+      id: playlist.id,
+      name: playlist.name,
+      description: playlist.description,
+      requiresActivationCode: playlist.requiresActivationCode,
+      isPublic: playlist.isPublic,
+      createdAt: playlist.createdAt,
+      updatedAt: playlist.updatedAt,
+      mediaFiles: playlist.mediaFiles || [],
+      productLinks: playlist.productLinks || [],
+      // Add access control flag
+      accessRestricted: playlist.requiresActivationCode && !playlist.isPublic
+    };
+    
+    console.log('🎵 PLAYLIST_ACCESS: Playlist found:', accessData.name);
+    console.log('🎵 PLAYLIST_ACCESS: Access restricted:', accessData.accessRestricted);
+    res.json(accessData);
+    
+  } catch (error) {
+    console.error('🎵 PLAYLIST_ACCESS: Error fetching playlist:', error);
+    res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
+
 // Get a specific slideshow by ID for access control (no auth required)
 app.get('/api/slideshow-access/:id', async (req, res) => {
   try {
@@ -4632,6 +4669,40 @@ app.get('/test-route', (req, res) => {
   res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
 });
 
+// Media player route - serves the React Native app
+app.get('/media-player/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type } = req.query;
+    
+    console.log('🎬 MEDIA_PLAYER: Serving media player for:', { id, type });
+    
+    // Verify content exists
+    let content = null;
+    if (type === 'playlist') {
+      content = await getPlaylistWithMedia(id);
+    } else if (type === 'slideshow') {
+      const result = await pool.query('SELECT * FROM slideshows WHERE id = $1', [id]);
+      content = result.rows[0];
+    }
+    
+    if (!content) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+    
+    // For now, redirect to the React Native app with the content info
+    // In a full implementation, this would serve the actual media player HTML
+    const redirectUrl = `${process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app'}/${type}-access/${id}`;
+    
+    console.log('🎬 MEDIA_PLAYER: Redirecting to frontend:', redirectUrl);
+    res.redirect(302, redirectUrl);
+    
+  } catch (error) {
+    console.error('🎬 MEDIA_PLAYER: Error serving media player:', error);
+    res.status(500).json({ error: 'Failed to serve media player' });
+  }
+});
+
 app.get('/playlist-access/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -4807,7 +4878,32 @@ app.post('/debug/fix-playlist/:id', async (req, res) => {
 });
 
 // --- ERROR HANDLING & SERVER STARTUP ---
-app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
+// Serve React Native app for all non-API routes
+app.get('*', (req, res) => {
+  console.log('🌐 CATCH_ALL: Serving React Native app for:', req.path);
+  
+  // Don't serve React Native app for API routes
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Route not found' });
+  }
+  
+  // For all other routes, serve the React Native app
+  // This will let the React Native router handle the routing
+  res.sendFile(path.join(__dirname, '../../dist/index.html'), (err) => {
+    if (err) {
+      console.error('🔴 CATCH_ALL: Error serving React Native app:', err);
+      res.status(500).json({ error: 'Error serving application' });
+    }
+  });
+});
+
+// 404 handler for API routes only
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'Route not found' });
+  }
+  next();
+});
 app.use((err, req, res, next) => {
   console.error('🔴 Unhandled Error:', err);
   res.status(500).json({ error: 'Internal Server Error' })
