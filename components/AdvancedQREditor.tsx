@@ -1520,95 +1520,25 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
           <ThemedText style={styles.title}>Advanced QR Designer</ThemedText>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {console.log('🔘 RENDER: Rendering header buttons section')}
-            {isAdmin && (
-              <>
-                <TouchableOpacity
-                  style={[styles.createButton, { backgroundColor: '#dc2626' }]}
-                  onPress={() => {
-                    console.log('🧪 DEBUG BUTTON PRESSED!');
-                    console.log('🧪 Current state:', { name, contentType, content, loading });
-                    Alert.alert('Debug', `Name: "${name}", Type: "${contentType}", Content: "${content}"`);
-                  }}
-                >
-                  <ThemedText style={styles.createButtonText}>Debug</ThemedText>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.createButton, { backgroundColor: '#16a34a' }]}
-                  onPress={async () => {
-                    console.log('🚀 QUICK TEST BUTTON PRESSED!');
-                    setLoading(true);
-                    try {
-                      const testQrData = {
-                        name: 'Test QR Code',
-                        url: 'https://google.com',
-                        description: 'Quick test QR code',
-                        contentType: 'url' as ContentType,
-                        options: {
-                          size: 200,
-                          foregroundColor: '#000000',
-                          backgroundColor: '#FFFFFF',
-                          cornerRadius: 0,
-                          errorCorrectionLevel: 'H' as const,
-                        },
-                      };
-                      console.log('🚀 Creating test QR with data:', testQrData);
-                      const result = await qrCodeService.createQRCode(testQrData);
-                      console.log('✅ Test QR created successfully:', result);
-                      Alert.alert('Success', 'Test QR code created successfully!');
-                      onQRCreated();
-                      onClose();
-                    } catch (error: any) {
-                      console.error('❌ Test QR creation failed:', error);
-                      Alert.alert('Error', `Test QR creation failed: ${error.message}`);
-                    } finally {
-                      setLoading(false);
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  <ThemedText style={styles.createButtonText}>Quick Test</ThemedText>
-                </TouchableOpacity>
-              </>
-            )}
-            {console.log('🔘 RENDER: About to render Create button')}
             <TouchableOpacity
-              style={[
-                styles.createButton, 
-                { backgroundColor: '#2563eb', minWidth: 80 }, // Force visible with explicit styling
-                loading && styles.disabledButton,
-              ]}
+              style={{
+                backgroundColor: '#2563eb',
+                paddingHorizontal: 16,
+                paddingVertical: 8,
+                borderRadius: 8,
+                minWidth: 80,
+              }}
               onPress={() => {
-                console.log('🔘 CREATE BUTTON TOUCHED!');
-                console.log('🔘 Loading state:', loading);
-                console.log('🔘 Scannability score:', getScannabilityScore());
+                console.log('🔘 SIMPLE CREATE BUTTON PRESSED!');
                 console.log('🔘 Name:', name);
                 console.log('🔘 Content type:', contentType);
-                console.log('🔘 Selected playlist:', selectedPlaylist);
-                console.log('🔘 Content:', content);
                 console.log('🔘 User:', user);
                 console.log('🔘 Is admin:', isAdmin);
-                
-                // Debug validation
-                const isNameValid = !!name.trim();
-                const isContentValid = contentType === 'playlist' ? !!selectedPlaylist : !!content.trim();
-                const isScannabilityValid = getScannabilityScore() >= 60;
-                
-                console.log('🔘 Validation debug:', {
-                  isNameValid,
-                  isContentValid,
-                  isScannabilityValid,
-                  shouldBeEnabled: isNameValid && isContentValid && isScannabilityValid
-                });
-                
-                handleCreate();
+                Alert.alert('Success', 'Simple Create button works!');
               }}
-              disabled={loading}
             >
-              <ThemedText style={[
-                styles.createButtonText,
-                { color: '#fff', fontWeight: '600' }
-              ]}>
-                {loading ? 'Creating...' : 'DEBUG CREATE'}
+              <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
+                SIMPLE CREATE
               </ThemedText>
             </TouchableOpacity>
           </View>
