@@ -1,7 +1,8 @@
 import { Platform } from 'react-native';
-import { WebAudioPlayer } from './WebAudioPlayer';
-import { MobileAudioPlayer } from './MobileAudioPlayer';
 
-const AudioService = Platform.OS === 'web' ? WebAudioPlayer : MobileAudioPlayer;
+const AudioService = Platform.select({
+  web: require('./WebAudioPlayer').WebAudioPlayer,
+  default: require('./MobileAudioPlayer').MobileAudioPlayer,
+});
 
 export default AudioService; 
