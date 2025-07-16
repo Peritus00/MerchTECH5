@@ -4443,7 +4443,130 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
   }
 });
 
+// ---------- WEB ROUTES FOR QR CODE SCANNING ----------
+// These routes serve HTML pages for people who scan QR codes but don't have the app
 
+// Test route to verify deployment
+app.get('/test-route', (req, res) => {
+  res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
+});
+
+app.get('/playlist-access/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🌐 WEB: ROUTE CALLED - Serving playlist access page for ID:', id);
+    console.log('🌐 WEB: Request URL:', req.url);
+    console.log('🌐 WEB: Request method:', req.method);
+    console.log('🌐 WEB: Deployment timestamp:', new Date().toISOString());
+
+    // Get playlist data
+    console.log('🌐 WEB: Calling getPlaylistWithMedia...');
+    const playlist = await getPlaylistWithMedia(id);
+    console.log('🌐 WEB: getPlaylistWithMedia result:', playlist ? 'Found playlist' : 'NULL returned');
+    
+    if (!playlist) {
+      console.log('🌐 WEB: Playlist not found, returning 404 HTML');
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Playlist Not Found - MerchTech</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+            .message { color: #6b7280; }
+          </style>
+        </head>
+        <body>
+          <h1 class="error">🎵 Playlist Not Found</h1>
+          <p class="message">The playlist you're looking for doesn't exist.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    // For protected playlists, show activation/preview interface
+    // For public playlists, show direct player
+    const isProtected = playlist.requiresActivationCode;
+    const mediaFiles = playlist.mediaFiles || [];
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>${playlist.name} - MerchTech</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+          }
+          .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+          .header { text-align: center; margin-bottom: 30px; }
+          .playlist-title { font-size: 2.5rem; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+          .playlist-subtitle { opacity: 0.9; font-size: 1.1rem; }
+          .message { 
+            background: rgba(255,255,255,0.1); 
+            border-radius: 20px; 
+            padding: 30px; 
+            text-align: center;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+          }
+          .note { 
+            color: #fbbf24; 
+            font-size: 1.1rem; 
+            margin-top: 20px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1 class="playlist-title">${playlist.name}</h1>
+            <p class="playlist-subtitle">by ${playlist.username}</p>
+          </div>
+          
+          <div class="message">
+            <h2>🎵 Music Player</h2>
+            <p>This playlist contains ${mediaFiles.length} track${mediaFiles.length === 1 ? '' : 's'}</p>
+            <p class="note">📱 For the best experience, download the MerchTech app!</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    res.send(htmlContent);
+
+  } catch (error) {
+    console.error('🌐 WEB: Error serving playlist page:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Error - MerchTech</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">🚫 Something went wrong</h1>
+        <p>Please try again later.</p>
+      </body>
+      </html>
+    `);
+  }
+});
 
 // --- ERROR HANDLING & SERVER STARTUP ---
 app.use((req, res, next) => res.status(404).json({ error: 'Route not found' }));
@@ -4717,15 +4840,7 @@ const startServer = async () => {
   }
 };
 
-// ---------- WEB ROUTES FOR QR CODE SCANNING ----------
-// These routes serve HTML pages for people who scan QR codes but don't have the app
-
-// Test route to verify deployment
-app.get('/test-route', (req, res) => {
-  res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
-});
-
-app.get('/playlist-access/:id', async (req, res) => {
+// --- Process Error Handlers ---
   try {
     const { id } = req.params;
     console.log('🌐 WEB: ROUTE CALLED - Serving playlist access page for ID:', id);
