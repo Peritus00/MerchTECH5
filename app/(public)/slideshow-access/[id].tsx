@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -98,10 +99,8 @@ export default function SlideshowAccessScreen() {
     // The PreviewPlayer will handle slideshow background audio separately
     // Just log the audio URL for debugging
     if (slideshow.audioUrl) {
-      // The server provides the correct streaming URL for audio as well.
-      const audioStreamUrl = slideshow.audioUrl.includes('amazonaws.com')
-        ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
-        : slideshow.audioUrl;
+      // The server provides the correct streaming URL for audio.
+      const audioStreamUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
       
       console.log('🎬 SLIDESHOW_ACCESS: Background audio available:', {
         originalUrl: "REDACTED", // No longer sending originalUrl
@@ -509,9 +508,7 @@ export default function SlideshowAccessScreen() {
     if (slideshow?.audioUrl && !soundRef.current) {
       try {
         // Use streaming endpoint for S3 audio URLs
-        const audioUrl = slideshow.audioUrl.includes('amazonaws.com') 
-          ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
-          : slideshow.audioUrl;
+        const audioUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
         
         console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
         const { sound } = await Audio.Sound.createAsync(
@@ -617,12 +614,9 @@ export default function SlideshowAccessScreen() {
               autoplay={false}
               productLinks={slideshow.productLinks || []}
               onPreviewComplete={handlePreviewComplete}
-              backgroundAudioUrl={slideshow.audioUrl ? 
-                // The server provides the correct streaming URL for audio.
-                (slideshow.audioUrl.includes('amazonaws.com') 
-                  ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
-                  : slideshow.audioUrl) 
-                : undefined}
+              backgroundAudioUrl={slideshow.audioUrl 
+  ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
+  : undefined}
             />
             </View>
 
