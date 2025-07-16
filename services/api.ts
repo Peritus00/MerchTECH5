@@ -3,6 +3,7 @@ import { Product } from '@/shared/product-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '@/config/environment';
 import { MediaFile } from '@/shared/media-schema';
+import { Platform } from 'react-native';
 
 // Use centralized environment configuration
 const API_BASE_URL = env.apiBaseUrl;
@@ -405,9 +406,21 @@ export const mediaAPI = {
     return response.data;
   },
 
-  async uploadFile(file: File, onProgress?: (progress: number) => void) {
+  async uploadFile(file: File | any, onProgress?: (progress: number) => void) {
     const formData = new FormData();
-    formData.append('image', file); // 'image' is the field name expected by your backend
+    
+    // Handle different platforms
+    if (Platform.OS === 'web') {
+      // Web platform - file is a File object
+      formData.append('image', file);
+    } else {
+      // Mobile platforms (iOS/Android) - file has uri, name, type properties
+      formData.append('image', {
+        uri: file.uri,
+        name: file.name,
+        type: file.type
+      } as any);
+    }
 
     const config = {
       onUploadProgress: (progressEvent: any) => {

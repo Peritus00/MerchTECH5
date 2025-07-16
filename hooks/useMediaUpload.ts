@@ -64,7 +64,22 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     try {
       updateProgress(0, asset.size || 0, 'uploading');
 
-      const fileToUpload = new File([await (await fetch(asset.uri)).blob()], asset.name, { type: asset.mimeType });
+      let fileToUpload: File;
+      
+      if (Platform.OS === 'web') {
+        // Web platform - convert URI to File object
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        fileToUpload = new File([blob], asset.name, { type: asset.mimeType });
+      } else {
+        // Mobile platforms (iOS/Android) - use URI directly
+        // Create a File-like object that works with React Native
+        fileToUpload = {
+          uri: asset.uri,
+          name: asset.name,
+          type: asset.mimeType || 'application/octet-stream'
+        } as any;
+      }
 
       const uploadResult = await mediaAPI.uploadFile(fileToUpload, (progress) => {
         updateProgress(progress, 100, 'uploading');
@@ -110,6 +125,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   const selectAndUploadFile = async (): Promise<MediaFile | null> => {
     try {
       console.log('🔴 UPLOAD: Starting file selection...');
+      console.log('🔴 UPLOAD: Platform detected:', Platform.OS);
       setUploadProgress({ loaded: 0, total: 0, percentage: 0, stage: 'selecting' });
 
       // Configure document picker for different platforms
@@ -135,6 +151,8 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         multiple: false,
       };
 
+      console.log('🔴 UPLOAD: DocumentPicker options:', documentPickerOptions);
+
       const result = await DocumentPicker.getDocumentAsync(documentPickerOptions);
       
       if (result.canceled) {
@@ -148,7 +166,8 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         name: asset.name,
         size: asset.size,
         type: asset.mimeType,
-        uri: asset.uri?.substring(0, 50) + '...'
+        uri: asset.uri?.substring(0, 50) + '...',
+        platform: Platform.OS
       });
 
       // Validate file size
@@ -168,6 +187,12 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       return await uploadFile(result);
     } catch (error) {
       console.error('🔴 MEDIA: Upload error:', error);
+      console.error('🔴 MEDIA: Error details:', {
+        message: error.message,
+        code: error.code,
+        platform: Platform.OS,
+        stack: error.stack
+      });
       setIsUploading(false);
       throw error;
     }
