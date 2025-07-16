@@ -670,7 +670,8 @@ export default function MediaPlayer({
       if (Platform.OS === 'web') {
         console.log('🎵 BACKGROUND_AUDIO: Setting up WEB audio player');
         
-        const audio = new window.Audio(audioUrl);
+        const AudioConstructor = (window as any).Audio;
+        const audio = new AudioConstructor(audioUrl);
         audio.loop = true;
         audio.volume = 0.3; // Lower volume for background audio
         audioRef.current = audio;
@@ -963,7 +964,8 @@ export default function MediaPlayer({
             audioRef.current.src = '';
           }
           
-          const audio = new window.Audio(mediaUrl);
+          const AudioConstructor = (window as any).Audio;
+          const audio = new AudioConstructor(mediaUrl);
           audioRef.current = audio;
           
           audio.addEventListener('loadeddata', () => {
