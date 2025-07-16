@@ -4669,58 +4669,552 @@ app.get('/test-route', (req, res) => {
   res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
 });
 
-// Media player route - serves the React Native app
+// Media player route - now redirects to the proper access routes without loops
 app.get('/media-player/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { type } = req.query;
     
-    console.log('🎬 MEDIA_PLAYER: Serving media player for:', { id, type });
+    console.log('🎬 MEDIA_PLAYER: Redirecting to access route for:', { id, type });
     
-    // Verify content exists
-    let content = null;
+    // Redirect to the appropriate access route which now serves HTML directly
     if (type === 'playlist') {
-      content = await getPlaylistWithMedia(id);
+      console.log('🎬 MEDIA_PLAYER: Redirecting to playlist-access route');
+      return res.redirect(302, `/playlist-access/${id}`);
     } else if (type === 'slideshow') {
-      const result = await pool.query('SELECT * FROM slideshows WHERE id = $1', [id]);
-      content = result.rows[0];
+      console.log('🎬 MEDIA_PLAYER: Redirecting to slideshow-access route');
+      return res.redirect(302, `/slideshow-access/${id}`);
+    } else {
+      console.log('🎬 MEDIA_PLAYER: Unknown type, returning 400');
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Invalid Request - MerchTech</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+          </style>
+        </head>
+        <body>
+          <h1 class="error">⚠️ Invalid Request</h1>
+          <p>Please specify a valid content type (playlist or slideshow).</p>
+        </body>
+        </html>
+      `);
     }
-    
-    if (!content) {
-      return res.status(404).json({ error: 'Content not found' });
-    }
-    
-    // For now, redirect to the React Native app with the content info
-    // In a full implementation, this would serve the actual media player HTML
-    const redirectUrl = `${process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app'}/${type}-access/${id}`;
-    
-    console.log('🎬 MEDIA_PLAYER: Redirecting to frontend:', redirectUrl);
-    res.redirect(302, redirectUrl);
     
   } catch (error) {
     console.error('🎬 MEDIA_PLAYER: Error serving media player:', error);
-    res.status(500).json({ error: 'Failed to serve media player' });
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Error - MerchTech</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">⚠️ Server Error</h1>
+        <p>Something went wrong while loading the media player. Please try again later.</p>
+      </body>
+      </html>
+    `);
   }
 });
+
+// Generate HTML media player page
+function generateMediaPlayerHTML(playlist) {
+  const mediaFiles = playlist.media_files || [];
+  const mediaList = mediaFiles.map(file => ({
+    id: file.id,
+    title: file.title,
+    url: `${process.env.BASE_URL || 'https://merchtech5-production.up.railway.app'}/api/media/${file.id}/stream`,
+    type: file.file_type,
+    contentType: file.content_type
+  }));
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${playlist.name} - MerchTech</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 20px;
+        }
+        
+        .container {
+          max-width: 800px;
+          width: 100%;
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          border-radius: 20px;
+          padding: 30px;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+          text-align: center;
+          margin-bottom: 30px;
+          font-size: 2.5em;
+          font-weight: 700;
+          text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .media-player {
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 15px;
+          padding: 20px;
+          margin-bottom: 20px;
+        }
+        
+        .current-track {
+          text-align: center;
+          margin-bottom: 20px;
+        }
+        
+        .track-title {
+          font-size: 1.5em;
+          font-weight: 600;
+          margin-bottom: 10px;
+        }
+        
+        .track-info {
+          opacity: 0.8;
+          font-size: 0.9em;
+        }
+        
+        .media-element {
+          width: 100%;
+          border-radius: 10px;
+          margin-bottom: 15px;
+          background: black;
+        }
+        
+        .controls {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          gap: 20px;
+          margin-bottom: 20px;
+        }
+        
+        .control-btn {
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          border-radius: 50%;
+          width: 50px;
+          height: 50px;
+          color: white;
+          font-size: 1.5em;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .control-btn:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: scale(1.05);
+        }
+        
+        .play-btn {
+          background: #007AFF;
+          width: 60px;
+          height: 60px;
+          font-size: 1.8em;
+        }
+        
+        .play-btn:hover {
+          background: #0056CC;
+        }
+        
+        .progress-container {
+          margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+          width: 100%;
+          height: 6px;
+          background: rgba(255, 255, 255, 0.3);
+          border-radius: 3px;
+          overflow: hidden;
+          cursor: pointer;
+        }
+        
+        .progress-fill {
+          height: 100%;
+          background: #007AFF;
+          width: 0%;
+          transition: width 0.1s ease;
+        }
+        
+        .time-display {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 10px;
+          font-size: 0.9em;
+          opacity: 0.8;
+        }
+        
+        .playlist {
+          margin-top: 30px;
+        }
+        
+        .playlist-title {
+          font-size: 1.3em;
+          font-weight: 600;
+          margin-bottom: 15px;
+          text-align: center;
+        }
+        
+        .track-list {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        
+        .track-item {
+          background: rgba(255, 255, 255, 0.1);
+          padding: 15px;
+          border-radius: 10px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+        }
+        
+        .track-item:hover {
+          background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .track-item.active {
+          background: rgba(0, 122, 255, 0.3);
+          border: 2px solid #007AFF;
+        }
+        
+        .track-number {
+          background: rgba(255, 255, 255, 0.2);
+          width: 30px;
+          height: 30px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 600;
+          font-size: 0.9em;
+        }
+        
+        .track-details {
+          flex: 1;
+        }
+        
+        .track-name {
+          font-weight: 600;
+          margin-bottom: 5px;
+        }
+        
+        .track-type {
+          font-size: 0.8em;
+          opacity: 0.7;
+          text-transform: uppercase;
+        }
+        
+        .loading {
+          text-align: center;
+          padding: 20px;
+          opacity: 0.7;
+        }
+        
+        .error {
+          background: rgba(220, 38, 38, 0.2);
+          color: #fca5a5;
+          padding: 15px;
+          border-radius: 10px;
+          text-align: center;
+          margin-bottom: 20px;
+        }
+        
+        @media (max-width: 768px) {
+          .container {
+            padding: 20px;
+          }
+          
+          h1 {
+            font-size: 2em;
+          }
+          
+          .controls {
+            gap: 15px;
+          }
+          
+          .control-btn {
+            width: 45px;
+            height: 45px;
+            font-size: 1.3em;
+          }
+          
+          .play-btn {
+            width: 55px;
+            height: 55px;
+            font-size: 1.6em;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <h1>${playlist.name}</h1>
+        
+        <div class="media-player">
+          <div class="current-track">
+            <div class="track-title" id="currentTitle">Select a track to play</div>
+            <div class="track-info" id="currentInfo">Choose from ${mediaFiles.length} tracks</div>
+          </div>
+          
+          <div id="mediaContainer">
+            <div class="loading">Click a track below to start playing</div>
+          </div>
+          
+          <div class="controls">
+            <button class="control-btn" id="prevBtn" onclick="previousTrack()">⏮</button>
+            <button class="control-btn play-btn" id="playBtn" onclick="togglePlay()">▶</button>
+            <button class="control-btn" id="nextBtn" onclick="nextTrack()">⏭</button>
+          </div>
+          
+          <div class="progress-container">
+            <div class="progress-bar" id="progressBar" onclick="seek(event)">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="time-display">
+              <span id="currentTime">0:00</span>
+              <span id="totalTime">0:00</span>
+            </div>
+          </div>
+        </div>
+        
+        <div class="playlist">
+          <div class="playlist-title">Playlist (${mediaFiles.length} tracks)</div>
+          <div class="track-list">
+            ${mediaList.map((file, index) => `
+              <div class="track-item" onclick="loadTrack(${index})">
+                <div class="track-number">${index + 1}</div>
+                <div class="track-details">
+                  <div class="track-name">${file.title}</div>
+                  <div class="track-type">${file.type || 'media'}</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+      
+      <script>
+        const mediaFiles = ${JSON.stringify(mediaList)};
+        let currentTrack = 0;
+        let isPlaying = false;
+        let currentMedia = null;
+        
+        function loadTrack(index) {
+          if (index < 0 || index >= mediaFiles.length) return;
+          
+          currentTrack = index;
+          const file = mediaFiles[index];
+          
+          // Update UI
+          document.getElementById('currentTitle').textContent = file.title;
+          document.getElementById('currentInfo').textContent = \`Track \${index + 1} of \${mediaFiles.length}\`;
+          
+          // Update active track in playlist
+          document.querySelectorAll('.track-item').forEach((item, i) => {
+            item.classList.toggle('active', i === index);
+          });
+          
+          // Create media element
+          const mediaContainer = document.getElementById('mediaContainer');
+          mediaContainer.innerHTML = '';
+          
+          if (file.type === 'video' || file.contentType?.startsWith('video/')) {
+            currentMedia = document.createElement('video');
+            currentMedia.controls = true;
+            currentMedia.className = 'media-element';
+            currentMedia.style.width = '100%';
+            currentMedia.style.height = 'auto';
+            currentMedia.style.maxHeight = '400px';
+          } else {
+            currentMedia = document.createElement('audio');
+            currentMedia.controls = true;
+            currentMedia.className = 'media-element';
+            currentMedia.style.width = '100%';
+          }
+          
+          currentMedia.src = file.url;
+          currentMedia.onloadedmetadata = () => {
+            updateTimeDisplay();
+          };
+          
+          currentMedia.ontimeupdate = () => {
+            updateProgress();
+          };
+          
+          currentMedia.onended = () => {
+            nextTrack();
+          };
+          
+          currentMedia.onplay = () => {
+            isPlaying = true;
+            updatePlayButton();
+          };
+          
+          currentMedia.onpause = () => {
+            isPlaying = false;
+            updatePlayButton();
+          };
+          
+          mediaContainer.appendChild(currentMedia);
+          
+          // Auto-play after loading
+          setTimeout(() => {
+            if (currentMedia) {
+              currentMedia.play();
+            }
+          }, 100);
+        }
+        
+        function togglePlay() {
+          if (!currentMedia) {
+            if (mediaFiles.length > 0) {
+              loadTrack(0);
+            }
+            return;
+          }
+          
+          if (isPlaying) {
+            currentMedia.pause();
+          } else {
+            currentMedia.play();
+          }
+        }
+        
+        function previousTrack() {
+          const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
+          loadTrack(prevIndex);
+        }
+        
+        function nextTrack() {
+          const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
+          loadTrack(nextIndex);
+        }
+        
+        function updatePlayButton() {
+          const playBtn = document.getElementById('playBtn');
+          playBtn.textContent = isPlaying ? '⏸' : '▶';
+        }
+        
+        function updateProgress() {
+          if (!currentMedia) return;
+          
+          const progress = (currentMedia.currentTime / currentMedia.duration) * 100;
+          document.getElementById('progressFill').style.width = progress + '%';
+          
+          updateTimeDisplay();
+        }
+        
+        function updateTimeDisplay() {
+          if (!currentMedia) return;
+          
+          const current = formatTime(currentMedia.currentTime);
+          const total = formatTime(currentMedia.duration);
+          
+          document.getElementById('currentTime').textContent = current;
+          document.getElementById('totalTime').textContent = total;
+        }
+        
+        function formatTime(seconds) {
+          if (isNaN(seconds)) return '0:00';
+          const mins = Math.floor(seconds / 60);
+          const secs = Math.floor(seconds % 60);
+          return mins + ':' + secs.toString().padStart(2, '0');
+        }
+        
+        function seek(event) {
+          if (!currentMedia) return;
+          
+          const progressBar = document.getElementById('progressBar');
+          const rect = progressBar.getBoundingClientRect();
+          const pos = (event.clientX - rect.left) / rect.width;
+          currentMedia.currentTime = pos * currentMedia.duration;
+        }
+        
+        // Initialize with first track if available
+        if (mediaFiles.length > 0) {
+          // Don't auto-load, let user choose
+          document.getElementById('currentTitle').textContent = 'Ready to play';
+          document.getElementById('currentInfo').textContent = 'Choose any track below to start';
+        }
+      </script>
+    </body>
+    </html>
+  `;
+}
 
 app.get('/playlist-access/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    console.log('🌐 WEB: PLAYLIST ACCESS ROUTE - Checking playlist protection status for ID:', id);
+    console.log('🌐 WEB: PLAYLIST ACCESS ROUTE - Serving media player for ID:', id);
     console.log('🌐 WEB: Request URL:', req.url);
     console.log('🌐 WEB: User-Agent:', req.get('User-Agent'));
 
-    // Get playlist data to check protection status
+    // Get playlist data
     console.log('🌐 WEB: Calling getPlaylistWithMedia...');
     const playlist = await getPlaylistWithMedia(id);
     console.log('🌐 WEB: getPlaylistWithMedia result:', playlist ? 'Found playlist' : 'NULL returned');
     
     if (!playlist) {
       console.log('🌐 WEB: Playlist not found, returning 404');
-      return res.status(404).json({
-        error: 'Playlist not found',
-        message: 'The playlist you are looking for does not exist or has been removed.'
-      });
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Playlist Not Found - MerchTech</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+            .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+            .message { color: #6b7280; }
+          </style>
+        </head>
+        <body>
+          <h1 class="error">🎵 Playlist Not Found</h1>
+          <p class="message">The playlist you're looking for doesn't exist.</p>
+        </body>
+        </html>
+      `);
     }
 
     // Check if playlist is protected
@@ -4734,45 +5228,86 @@ app.get('/playlist-access/:id', async (req, res) => {
     console.log('🌐 WEB: playlist.is_protected:', playlist.is_protected);
     console.log('🌐 WEB: playlist.requiresActivationCode:', playlist.requiresActivationCode);
 
-    // ROUTING LOGIC:
-    // 1. If playlist is NOT protected -> redirect to full media player
-    // 2. If playlist IS protected -> let React Native app handle access control
-    
+    // FIXED LOGIC: Always serve the media player HTML directly (no more redirects!)
     if (!isProtected) {
-      console.log('🌐 WEB: ✅ Playlist is NOT protected - redirecting to full media player');
-      const redirectUrl = `/media-player/${id}?type=playlist`;
-      console.log('🌐 WEB: Redirecting to:', redirectUrl);
-      return res.redirect(302, redirectUrl);
+      console.log('🌐 WEB: ✅ Playlist is NOT protected - serving media player HTML directly');
+      
+      if (mediaCount === 0) {
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>${playlist.name} - MerchTech</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+              .message { color: #6b7280; font-size: 1.2rem; }
+            </style>
+          </head>
+          <body>
+            <h1>🎵 ${playlist.name}</h1>
+            <p class="message">This playlist doesn't have any media files yet.</p>
+          </body>
+          </html>
+        `);
+      }
+      
+      // Generate and serve the media player HTML
+      const mediaPlayerHTML = generateMediaPlayerHTML(playlist);
+      console.log('🌐 WEB: Serving media player HTML with', mediaCount, 'media files');
+      return res.send(mediaPlayerHTML);
+      
     } else {
-      console.log('🌐 WEB: 🔒 Playlist IS protected - serving React Native app for access control');
+      console.log('🌐 WEB: 🔒 Playlist IS protected - serving access control message');
       
-      // For protected playlists, we need to serve the React Native app
-      // The app will handle the access control UI, activation codes, etc.
-      
-      // Check if this is a web browser request
-      const userAgent = req.get('User-Agent') || '';
-      const isWebBrowser = userAgent.includes('Mozilla') || userAgent.includes('Chrome') || userAgent.includes('Safari');
-      
-             console.log('🌐 WEB: Playlist IS protected - serving basic info and redirect message');
-       // For protected playlists, return JSON with info about using the mobile app
-       return res.json({
-         playlist: {
-           id: playlist.id,
-           name: playlist.name,
-           isProtected: isProtected,
-           mediaCount: mediaCount,
-           message: 'This playlist requires an activation code. Please use the mobile app for the best experience.',
-           redirectUrl: '/playlist-access/' + id
-         }
-       });
+      // For protected playlists, show access control message
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>${playlist.name} - MerchTech</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+            .container { max-width: 500px; margin: 0 auto; }
+            .message { color: #6b7280; font-size: 1.2rem; margin-bottom: 2rem; }
+            .button { background: #3b82f6; color: white; padding: 12px 24px; border: none; border-radius: 8px; text-decoration: none; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🔒 ${playlist.name}</h1>
+            <p class="message">This playlist requires an activation code to access.</p>
+            <p class="message">Please use the MerchTech mobile app for the best experience.</p>
+            <a href="/store" class="button">Visit Store</a>
+          </div>
+        </body>
+        </html>
+      `);
     }
 
-      } catch (error) {
+  } catch (error) {
     console.error('🔴 WEB: Error in playlist-access route:', error);
-    res.status(500).json({
-      error: 'Internal server error',
-      message: 'Failed to process playlist access request'
-    });
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Error - MerchTech</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f3f4f6; }
+          .error { color: #dc2626; font-size: 1.5rem; margin-bottom: 1rem; }
+        </style>
+      </head>
+      <body>
+        <h1 class="error">⚠️ Server Error</h1>
+        <p>Something went wrong while loading the playlist. Please try again later.</p>
+      </body>
+      </html>
+    `);
   }
 });
 
