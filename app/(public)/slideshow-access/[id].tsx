@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { router } from 'expo-router';
@@ -165,11 +166,45 @@ export default function SlideshowAccessScreen() {
   //   };
   // }, [showPreview, slideshow]);
 
-  // Cleanup audio when component unmounts
+  // Enhanced iOS Audio Session Configuration
   useEffect(() => {
-    return () => {
-      stopAudio();
+    const initializeAudioSession = async () => {
+      if (soundRef.current) {
+        console.log('🎵 SLIDESHOW_ACCESS: Audio session already initialized.');
+        return () => {}; // Return an empty cleanup function
+      }
+
+      if (!slideshow?.audioUrl) {
+        console.log('🎵 SLIDESHOW_ACCESS: No audio URL available, not initializing audio session.');
+        return () => {};
+      }
+
+      try {
+        // Use streaming endpoint for S3 audio URLs
+        const audioUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
+        
+        console.log('🎵 SLIDESHOW_ACCESS: Starting audio playback:', audioUrl);
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: audioUrl }, 
+          { shouldPlay: true, isLooping: true }
+        );
+        soundRef.current = sound;
+        console.log('🎵 SLIDESHOW_ACCESS: Audio started successfully');
+
+        return () => {
+          console.log('🎵 SLIDESHOW_ACCESS: Stopping audio playback on cleanup');
+          soundRef.current?.unloadAsync();
+          soundRef.current = null;
+        };
+      } catch (err) {
+        console.warn('🎵 SLIDESHOW_ACCESS: Failed to load slideshow audio:', err);
+        return () => {};
+      }
     };
+
+    if (Platform.OS === 'ios') {
+      initializeAudioSession();
+    }
   }, []);
 
   const fetchSlideshow = async () => {
