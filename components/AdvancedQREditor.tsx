@@ -69,14 +69,13 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
 }) => {
   console.log('🔘 COMPONENT: AdvancedQREditor function called');
   
-  try {
-    const { user } = useAuth();
-    console.log('🔘 COMPONENT: useAuth successful, user:', user);
-    
-    // Check if user is admin (djjetfuel)
-    const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
-    console.log('🔘 COMPONENT: isAdmin calculated:', isAdmin);
+  const { user } = useAuth();
+  console.log('🔘 COMPONENT: useAuth successful, user:', user);
   
+  // Check if user is admin (djjetfuel)
+  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  console.log('🔘 COMPONENT: isAdmin calculated:', isAdmin);
+
   const [activeTab, setActiveTab] = useState<TabType>('content');
   const [name, setName] = useState('');
   const [contentType, setContentType] = useState<ContentType>('url');
