@@ -1783,7 +1783,7 @@ async function getPlaylistWithMedia(playlistId) {
     createdAt: media.created_at,
     updatedAt: media.updated_at,
     type: media.file_type,
-    url: await s3Service.getSignedUrl(media.s3_key || media.filename),
+    url: await s3Service.getSignedUrl(media.s3_key),
   })));
 
   // Get product links for this playlist
