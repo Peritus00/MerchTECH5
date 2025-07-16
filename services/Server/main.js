@@ -4682,22 +4682,18 @@ app.get('/playlist-access/:id', async (req, res) => {
       const userAgent = req.get('User-Agent') || '';
       const isWebBrowser = userAgent.includes('Mozilla') || userAgent.includes('Chrome') || userAgent.includes('Safari');
       
-      if (isWebBrowser) {
-        console.log('🌐 WEB: Web browser detected - serving React Native app');
-        // Serve the React Native app bundle
-        return res.sendFile(path.join(__dirname, '../../dist/index.html'));
-      } else {
-        console.log('🌐 WEB: Non-browser request - returning playlist info');
-        return res.json({
-          playlist: {
-            id: playlist.id,
-            name: playlist.name,
-            isProtected: isProtected,
-            mediaCount: mediaCount,
-            message: 'This playlist requires an activation code. Please use the mobile app for the best experience.'
-          }
-        });
-      }
+             console.log('🌐 WEB: Playlist IS protected - serving basic info and redirect message');
+       // For protected playlists, return JSON with info about using the mobile app
+       return res.json({
+         playlist: {
+           id: playlist.id,
+           name: playlist.name,
+           isProtected: isProtected,
+           mediaCount: mediaCount,
+           message: 'This playlist requires an activation code. Please use the mobile app for the best experience.',
+           redirectUrl: '/playlist-access/' + id
+         }
+       });
     }
 
       } catch (error) {
