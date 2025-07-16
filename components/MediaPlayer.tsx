@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { Audio } from 'expo-av';
+import { Audio as AVAudio } from 'expo-av';
 import { chatAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -118,7 +118,7 @@ export default function MediaPlayer({
       
       try {
         // Request audio permissions first
-        const { status } = await Audio.requestPermissionsAsync();
+        const { status } = await AVAudio.requestPermissionsAsync();
         console.log('🔴 MEDIA_PLAYER: Audio permissions status:', status);
         
         if (status !== 'granted') {
@@ -128,27 +128,27 @@ export default function MediaPlayer({
         }
 
         // Configure audio session with enhanced settings
-        await Audio.setAudioModeAsync({
+        await AVAudio.setAudioModeAsync({
           allowsRecordingIOS: false,
           staysActiveInBackground: true,
-          interruptionModeIOS: Audio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
+          interruptionModeIOS: AVAudio.INTERRUPTION_MODE_IOS_DO_NOT_MIX,
           playsInSilentModeIOS: true,
           shouldDuckAndroid: true,
-          interruptionModeAndroid: Audio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
+          interruptionModeAndroid: AVAudio.INTERRUPTION_MODE_ANDROID_DO_NOT_MIX,
           playThroughEarpieceAndroid: false,
         });
         
         console.log('🔴 MEDIA_PLAYER: ✅ iOS audio session configured successfully');
         
         // Set up audio session interruption handling
-        const audioInterruptionListener = Audio.addAudioInterruptionStatusListener(
+        const audioInterruptionListener = AVAudio.addAudioInterruptionStatusListener(
           (interruptionStatus) => {
             console.log('🔴 MEDIA_PLAYER: Audio interruption status:', interruptionStatus);
             
-            if (interruptionStatus.type === Audio.INTERRUPTION_TYPE_BEGAN) {
+            if (interruptionStatus.type === AVAudio.INTERRUPTION_TYPE_BEGAN) {
               console.log('🔴 MEDIA_PLAYER: Audio interrupted - pausing playback');
               handlePause();
-            } else if (interruptionStatus.type === Audio.INTERRUPTION_TYPE_ENDED) {
+            } else if (interruptionStatus.type === AVAudio.INTERRUPTION_TYPE_ENDED) {
               console.log('🔴 MEDIA_PLAYER: Audio interruption ended');
               if (interruptionStatus.shouldResume) {
                 console.log('🔴 MEDIA_PLAYER: Resuming playback after interruption');
@@ -677,7 +677,7 @@ export default function MediaPlayer({
       if (Platform.OS === 'web') {
         console.log('🎵 BACKGROUND_AUDIO: Setting up WEB audio player');
         
-        const audio = new Audio(audioUrl);
+        const audio = new window.Audio(audioUrl);
         audio.loop = true;
         audio.volume = 0.3; // Lower volume for background audio
         audioRef.current = audio;
@@ -968,7 +968,7 @@ export default function MediaPlayer({
             audioRef.current.src = '';
           }
           
-          const audio = new Audio(mediaUrl);
+          const audio = new window.Audio(mediaUrl);
           audioRef.current = audio;
           
           audio.addEventListener('loadeddata', () => {
