@@ -4720,6 +4720,11 @@ const startServer = async () => {
 // ---------- WEB ROUTES FOR QR CODE SCANNING ----------
 // These routes serve HTML pages for people who scan QR codes but don't have the app
 
+// Test route to verify deployment
+app.get('/test-route', (req, res) => {
+  res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
+});
+
 app.get('/playlist-access/:id', async (req, res) => {
   try {
     const { id } = req.params;
