@@ -1539,7 +1539,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
                 console.log('🔘 Content type:', contentType);
                 console.log('🔘 User:', user);
                 console.log('🔘 Is admin:', isAdmin);
-                Alert.alert('Success', 'Simple Create button works!');
+                handleCreate();
               }}
             >
               <ThemedText style={{ color: '#fff', fontWeight: '600' }}>
