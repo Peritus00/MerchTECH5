@@ -1298,9 +1298,9 @@ app.get('/api/media/:id/stream', async (req, res) => {
     }
     
     // Security model for public streaming:
-    // 1. Admin files (djjetfuel@gmail.com) are publicly accessible
-    // 2. User files require authentication and ownership
-    // 3. Admin users can access any file
+    // 1. All media files are publicly accessible for streaming (browsers need this)
+    // 2. Optional authentication for enhanced features or logging
+    // 3. Admin users get full access and logging
     
     const isAdminFile = media.user_id === adminUserId;
     const isOwnFile = requestingUser && media.user_id === requestingUser.userId;
@@ -1315,12 +1315,8 @@ app.get('/api/media/:id/stream', async (req, res) => {
       isAdmin
     });
     
-    if (!isAdminFile && !isOwnFile && !isAdmin) {
-      console.log(`📺 MEDIA_STREAM: Access denied - not admin file, not own file, not admin user`);
-      return res.status(403).json({ error: 'Forbidden: This media file is not publicly accessible' });
-    }
-    
-    console.log(`📺 MEDIA_STREAM: Access granted for media ${id}`);
+    // Allow public access to all media files for streaming compatibility
+    console.log(`📺 MEDIA_STREAM: Public access granted for media ${id}`);
     
     
     // Set CORS headers for media streaming
