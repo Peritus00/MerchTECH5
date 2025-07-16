@@ -31,6 +31,11 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('📂 Uploads directory already exists:', uploadsDir);
 }
 
+// Serve the static files from the React Native web build
+const distDir = path.join(__dirname, '../../dist');
+console.log('Serving static files from:', distDir);
+app.use(express.static(distDir));
+
 const storage = multer.memoryStorage();
 
 const upload = multer({ 
@@ -109,6 +114,7 @@ const transporter = createTransporter();
 
 // --- MIDDLEWARE ---
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const allowedOrigins = [
   'https://app.merchtech.net',
@@ -5336,15 +5342,20 @@ app.get('*', (req, res) => {
   
   // Don't serve React Native app for API routes
   if (req.path.startsWith('/api/')) {
+    // For API routes that don't exist, send a 404
     return res.status(404).json({ error: 'Route not found' });
   }
   
-  // For all other routes, serve the React Native app
-  // This will let the React Native router handle the routing
-  res.sendFile(path.join(__dirname, '../../dist/index.html'), (err) => {
+  // For all other routes, serve the main index.html file
+  // This allows the React Native router to handle the URL
+  const indexPath = path.join(__dirname, '../../dist/index.html');
+  console.log('  --> Serving index.html from:', indexPath);
+  res.sendFile(indexPath, (err) => {
     if (err) {
-      console.error('🔴 CATCH_ALL: Error serving React Native app:', err);
+      console.error('🔴 CATCH_ALL: Error serving index.html:', err);
       res.status(500).json({ error: 'Error serving application' });
+    } else {
+      console.log('  --> Successfully sent index.html');
     }
   });
 });
