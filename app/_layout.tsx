@@ -43,6 +43,7 @@ function RootLayoutNav() {
     }
 
     const inAuthGroup = segments[0] === 'auth';
+    const inPublicGroup = segments[0] === '(public)';
     const inSubscriptionGroup = segments[0] === 'subscription';
     const inNotFoundGroup = segments[0] === '+not-found';
     const inTabsGroup = segments[0] === '(tabs)';
@@ -67,11 +68,11 @@ function RootLayoutNav() {
         }
       } else if (!isLoading) {
         // User is not signed in and we're done loading
-        if (!inAuthGroup && !inNotFoundGroup) {
+        if (!inAuthGroup && !inNotFoundGroup && !inPublicGroup) {
           console.log('🔴 No user found, redirecting to login');
           router.replace('/auth/login');
         }
-      } else if (isLoading && !inAuthGroup && !inNotFoundGroup) {
+      } else if (isLoading && !inAuthGroup && !inNotFoundGroup && !inPublicGroup) {
         // Still loading but not in auth group - redirect to login immediately
         // This prevents the loading screen from showing on the main app
         console.log('🔴 Still loading and not in auth, redirecting to login immediately');
@@ -92,15 +93,14 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(public)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
         <Stack.Screen name="store" options={{ headerShown: false }} />
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="media-player/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="preview-player/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="playlist-access/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="slideshow-access/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="demo-players" options={{ headerShown: false }} />
