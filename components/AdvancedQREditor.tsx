@@ -183,6 +183,9 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   // Debug selectedPlaylist changes
   useEffect(() => {
     console.log('🎵 selectedPlaylist state changed:', selectedPlaylist);
+    console.log('🎵 selectedPlaylist ID:', selectedPlaylist?.id);
+    console.log('🎵 selectedPlaylist name:', selectedPlaylist?.name);
+    console.log('🎵 Stack trace:', new Error().stack);
   }, [selectedPlaylist]);
 
   const loadContent = async () => {
@@ -201,6 +204,14 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
       ]);
       console.log('📚 Loaded playlists:', playlistsData?.length || 0, playlistsData);
       console.log('📚 Loaded slideshows:', slideshowsData?.length || 0, slideshowsData);
+      
+      // Debug each playlist
+      if (playlistsData && playlistsData.length > 0) {
+        console.log('📚 First playlist:', playlistsData[0]);
+        console.log('📚 First playlist ID:', playlistsData[0]?.id);
+        console.log('📚 First playlist name:', playlistsData[0]?.name);
+      }
+      
       setPlaylists(playlistsData || []);
       setSlideshows(slideshowsData || []);
     } catch (error) {
@@ -917,7 +928,11 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
                   ]}
                   onPress={() => {
                     console.log('🎵 Playlist selected:', playlist);
+                    console.log('🎵 Playlist ID:', playlist.id);
+                    console.log('🎵 Playlist name:', playlist.name);
+                    console.log('🎵 Setting selectedPlaylist...');
                     setSelectedPlaylist(playlist);
+                    console.log('🎵 selectedPlaylist set to:', playlist);
                   }}
                 >
                   <MaterialIcons
