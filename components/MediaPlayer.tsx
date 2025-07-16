@@ -18,7 +18,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MediaFile } from '@/shared/media-schema';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import { Audio as AVAudio } from 'expo-av';
+// Only import Audio on non-web platforms to prevent bundling conflicts
+let AVAudio: any = null;
+if (Platform.OS !== 'web') {
+  AVAudio = require('expo-av').Audio;
+}
 import { chatAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
@@ -751,10 +755,12 @@ export default function MediaPlayer({
             console.log('🎵 BACKGROUND_AUDIO: Creating mobile audio player');
             // Create a separate audio player for background music on mobile
             console.log('🎵 BACKGROUND_AUDIO: Setting up mobile audio player');
-            const bgAudio = new AVAudio.Sound();
-            await bgAudio.loadAsync({ uri: audioUrl });
-            await bgAudio.setIsLoopingAsync(true);
-            setBackgroundAudioPlayer(bgAudio);
+            if (AVAudio) {
+              const bgAudio = new AVAudio.Sound();
+              await bgAudio.loadAsync({ uri: audioUrl });
+              await bgAudio.setIsLoopingAsync(true);
+              setBackgroundAudioPlayer(bgAudio);
+            }
             
             console.log('🎵 BACKGROUND_AUDIO: Mobile audio player setup complete');
             
@@ -994,12 +1000,17 @@ export default function MediaPlayer({
           // Mobile audio using expo-av
           try {
             console.log('🔴 MEDIA_PLAYER: Loading mobile audio...');
-            const sound = new AVAudio.Sound();
-            await sound.loadAsync({ uri: mediaUrl });
-            setIsLoading(false);
-            if (playAfterLoad) {
-              console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing track.');
-              await sound.playAsync();
+            if (AVAudio) {
+              const sound = new AVAudio.Sound();
+              await sound.loadAsync({ uri: mediaUrl });
+              setIsLoading(false);
+              if (playAfterLoad) {
+                console.log('🔴 MEDIA_PLAYER (Mobile): Auto-playing track.');
+                await sound.playAsync();
+              }
+            } else {
+              console.log('🔴 MEDIA_PLAYER: AVAudio not available, skipping mobile audio');
+              setIsLoading(false);
             }
           } catch (error) {
             console.error('🔴 MEDIA_PLAYER (Mobile): ❌ Audio replace failed:', error);
