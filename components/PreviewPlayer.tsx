@@ -27,6 +27,7 @@ interface MediaFile {
   fileType: string;
   contentType: string;
   duration?: number; // For slideshow images
+  type?: 'video' | 'audio' | 'image';
 }
 
 interface PreviewPlayerProps {
@@ -58,10 +59,13 @@ export default function PreviewPlayer({
   const [previewEnded, setPreviewEnded] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
-  const [productImageIndexes, setProductImageIndexes] = useState<{[key: string]: number}>({});
-  
+  const [productImageIndexes, setProductImageIndexes] = useState<{
+    [key: string]: number;
+  }>({});
+
   // Slideshow-specific state
-  const [slideshowTimer, setSlideshowTimer] = useState<NodeJS.Timeout | null>(null);
+  const [slideshowTimer, setSlideshowTimer] =
+    useState<NodeJS.Timeout | null>(null);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
 
   // Web audio fallback
@@ -69,135 +73,117 @@ export default function PreviewPlayer({
   const [webAudioLoaded, setWebAudioLoaded] = useState(false);
   const [webAudioPlaying, setWebAudioPlaying] = useState(false);
   const [webAudioCurrentTime, setWebAudioCurrentTime] = useState(0);
-  
+
   // Background audio for slideshows
   const backgroundAudioRef = useRef<HTMLAudioElement | null>(null);
   const [backgroundAudioPlaying, setBackgroundAudioPlaying] = useState(false);
-  
+
   // Overall play state for UI
   const [isPlaying, setIsPlaying] = useState(false);
 
   const currentMedia = mediaFiles[currentTrack];
-  
+
   // Determine if current media is video, audio, or image
-  const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/') || currentMedia?.type === 'video';
-  const isAudio = currentMedia?.fileType === 'audio' || currentMedia?.contentType?.startsWith('audio/') || currentMedia?.type === 'audio';
-  const isImage = currentMedia?.fileType === 'image' || currentMedia?.contentType?.startsWith('image/') || currentMedia?.type === 'image';
-  const isSlideshow = mediaFiles.length > 1 && mediaFiles.some(file => 
-    file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image'
-  );
-  
-  // Debug logging
-  console.log('🔴 PREVIEW_PLAYER: Media analysis:', {
-    currentTrack,
-    mediaFilesLength: mediaFiles.length,
-    currentMedia: currentMedia ? {
-      id: currentMedia.id,
-      title: currentMedia.title,
-      fileType: currentMedia.fileType,
-      contentType: currentMedia.contentType,
-      type: currentMedia.type
-    } : null,
-    isVideo,
-    isAudio,
-    isImage,
-    isSlideshow,
-    backgroundAudioUrl: !!backgroundAudioUrl
-  });
-  
+  const isVideo =
+    currentMedia?.fileType === 'video' ||
+    currentMedia?.contentType?.startsWith('video/') ||
+    currentMedia?.type === 'video';
+  const isAudio =
+    currentMedia?.fileType === 'audio' ||
+    currentMedia?.contentType?.startsWith('audio/') ||
+    currentMedia?.type === 'audio';
+  const isImage =
+    currentMedia?.fileType === 'image' ||
+    currentMedia?.contentType?.startsWith('image/') ||
+    currentMedia?.type === 'image';
+  const isSlideshow =
+    mediaFiles.length > 1 &&
+    mediaFiles.some(
+      (file) =>
+        file.fileType === 'image' ||
+        file.contentType?.startsWith('image/') ||
+        file.type === 'image'
+    );
+
   // Use the new expo-audio hooks for audio
   const audioPlayer = useAudioPlayer();
   const audioStatus = useAudioPlayerStatus(audioPlayer);
-  
+
   // Use the new expo-video hooks for video
-  const videoPlayer = useVideoPlayer(currentMedia && isVideo ? currentMedia.url : null, (player) => {
-    player.loop = false;
-    player.muted = isMuted;
-  });
-  
+  const videoPlayer = useVideoPlayer(
+    currentMedia && isVideo ? currentMedia.url : null,
+    (player) => {
+      player.loop = false;
+      player.muted = isMuted;
+    }
+  );
+
   // Use appropriate player and status based on media type and platform
-  const player = isVideo ? videoPlayer : (Platform.OS === 'web' ? webAudioRef.current : audioPlayer);
-  const status = isVideo ? videoPlayer.status : (Platform.OS === 'web' ? {
-    isLoaded: webAudioLoaded,
-    playing: webAudioPlaying,
-    currentTime: webAudioCurrentTime,
-    duration: webAudioRef.current?.duration || NaN,
-    isBuffering: false
-  } : audioStatus);
+  const player = isVideo
+    ? videoPlayer
+    : Platform.OS === 'web'
+    ? webAudioRef.current
+    : audioPlayer;
+  const status = isVideo
+    ? videoPlayer.status
+    : Platform.OS === 'web'
+    ? {
+        isLoaded: webAudioLoaded,
+        playing: webAudioPlaying,
+        currentTime: webAudioCurrentTime,
+        duration: webAudioRef.current?.duration || NaN,
+        isBuffering: false,
+      }
+    : audioStatus;
 
   // Load track when current track changes
   useEffect(() => {
     if (currentMedia && currentMedia.url) {
-      console.log('🔴 PREVIEW_PLAYER: Loading media:', currentMedia.title, 'Type:', isVideo ? 'video' : isAudio ? 'audio' : 'image', 'URL:', currentMedia.url);
-      console.log('🔴 PREVIEW_PLAYER: Media details:', {
-        id: currentMedia.id,
-        title: currentMedia.title,
-        url: currentMedia.url,
-        fileType: currentMedia.fileType,
-        contentType: currentMedia.contentType,
-        isVideo,
-        isAudio,
-        isImage,
-        isSlideshow
-      });
-      
       try {
         if (isImage) {
           // For images, we don't need to load anything special
-          console.log('🔴 PREVIEW_PLAYER: Image media loaded');
         } else if (isVideo) {
           // Video player handles URL automatically through useVideoPlayer hook
-          console.log('🔴 PREVIEW_PLAYER: Video player will handle URL automatically');
         } else if (Platform.OS === 'web') {
           // Use HTML5 Audio for web
-          console.log('🔴 PREVIEW_PLAYER: Using HTML5 Audio for web');
           if (webAudioRef.current) {
             webAudioRef.current.pause();
-            webAudioRef.current.removeEventListener('loadeddata', () => {});
-            webAudioRef.current.removeEventListener('timeupdate', () => {});
-            webAudioRef.current.removeEventListener('play', () => {});
-            webAudioRef.current.removeEventListener('pause', () => {});
-            webAudioRef.current.removeEventListener('ended', () => {});
-            webAudioRef.current.removeEventListener('error', () => {});
             webAudioRef.current.src = '';
           }
-          
-          const audio = new Audio();
+          const AudioConstructor = (window as any)['Audio'];
+          const audio = new AudioConstructor(currentMedia.url);
           webAudioRef.current = audio;
-          setWebAudioLoaded(false);
-          setWebAudioPlaying(false);
-          setWebAudioCurrentTime(0);
-          
+
           // Set up event listeners before setting src
           audio.addEventListener('loadeddata', () => {
             console.log('🔴 PREVIEW_PLAYER: Web audio loaded successfully');
             setWebAudioLoaded(true);
           });
-          
+
           audio.addEventListener('canplaythrough', () => {
             console.log('🔴 PREVIEW_PLAYER: Web audio can play through');
             setWebAudioLoaded(true);
           });
-          
+
           audio.addEventListener('timeupdate', () => {
             setWebAudioCurrentTime(audio.currentTime);
           });
-          
+
           audio.addEventListener('play', () => {
             console.log('🔴 PREVIEW_PLAYER: Web audio started playing');
             setWebAudioPlaying(true);
           });
-          
+
           audio.addEventListener('pause', () => {
             console.log('🔴 PREVIEW_PLAYER: Web audio paused');
             setWebAudioPlaying(false);
           });
-          
+
           audio.addEventListener('ended', () => {
             console.log('🔴 PREVIEW_PLAYER: Web audio ended');
             setWebAudioPlaying(false);
           });
-          
+
           audio.addEventListener('error', (e) => {
             console.error('🔴 PREVIEW_PLAYER: Web audio error:', e);
             console.error('🔴 PREVIEW_PLAYER: Audio error details:', {
@@ -207,22 +193,20 @@ export default function PreviewPlayer({
               src: audio.src
             });
           });
-          
+
           // Set crossOrigin before src to handle CORS
           audio.crossOrigin = 'anonymous';
           audio.preload = 'auto';
-          
+
           // Set the source URL
           audio.src = currentMedia.url;
-          
+
           // Start loading
           audio.load();
-          
+
           console.log('🔴 PREVIEW_PLAYER: Web audio setup complete, loading started');
         } else {
           // Load audio track with expo-audio for mobile
-          console.log('🔴 PREVIEW_PLAYER: Loading audio with expo-audio for mobile');
-          
           audioPlayer.replace(currentMedia.url).then(() => {
             console.log('🔴 PREVIEW_PLAYER: Audio loaded successfully on mobile');
           }).catch((audioError) => {
@@ -240,7 +224,7 @@ export default function PreviewPlayer({
     if (slideshowPlaying && isSlideshow && !previewEnded && mediaFiles.length > 0) {
       const currentMediaFile = mediaFiles[currentTrack];
       const duration = currentMediaFile?.duration || 5000; // Use the actual duration from the media file, default 5 seconds
-      
+
       console.log(`🔄 SLIDESHOW_CYCLE: Setting timer for ${duration}ms for image "${currentMediaFile?.title}", current track: ${currentTrack}/${mediaFiles.length}`);
       console.log(`🔄 SLIDESHOW_CYCLE: Media file duration setting:`, {
         id: currentMediaFile?.id,
@@ -248,7 +232,7 @@ export default function PreviewPlayer({
         duration: currentMediaFile?.duration,
         usingDuration: duration
       });
-      
+
       const timer = setTimeout(() => {
         console.log(`🔄 SLIDESHOW_CYCLE: Timer fired after ${duration}ms, advancing from track ${currentTrack}`);
         if (currentTrack < mediaFiles.length - 1) {
@@ -261,9 +245,9 @@ export default function PreviewPlayer({
           setCurrentTrack(0);
         }
       }, duration);
-      
+
       setSlideshowTimer(timer);
-      
+
       return () => {
         if (timer) {
           console.log(`🔄 SLIDESHOW_CYCLE: Clearing timer for track ${currentTrack}`);
@@ -289,36 +273,36 @@ export default function PreviewPlayer({
           setCurrentTime(prev => {
             const newTime = prev + 1;
             setTimeLeft(Math.max(0, previewDuration - newTime));
-            
+
             if (newTime >= previewDuration) {
               console.log('🔴 PREVIEW_PLAYER: Preview duration reached, ending slideshow');
               setSlideshowPlaying(false);
               setIsPlaying(false);
               setPreviewEnded(true);
-              
+
               // Stop background audio
               if (backgroundAudioRef.current) {
                 backgroundAudioRef.current.pause();
               }
-              
+
               if (onPreviewComplete) {
                 onPreviewComplete();
               }
             }
-            
+
             return newTime;
           });
         }, 1000);
-        
+
         return () => clearInterval(timer);
       }
     } else {
       // Original audio/video timing logic
-      const currentPlayTime = isVideo ? videoPlayer.currentTime : 
+      const currentPlayTime = isVideo ? videoPlayer.currentTime :
                              (Platform.OS === 'web' ? webAudioCurrentTime : audioStatus.currentTime);
-      const isPlaying = isVideo ? videoPlayer.playing : 
+      const isPlaying = isVideo ? videoPlayer.playing :
                        (Platform.OS === 'web' ? webAudioPlaying : audioStatus.playing);
-      
+
       if (isPlaying && currentPlayTime) {
         const currentSeconds = Math.floor(currentPlayTime);
         setCurrentTime(currentSeconds);
@@ -359,12 +343,12 @@ export default function PreviewPlayer({
       mediaFilesLength: mediaFiles.length,
       shouldSetupAudio: backgroundAudioUrl && Platform.OS === 'web'
     });
-    
+
     // Setup audio if we have a background audio URL and we're on web platform
     // Don't wait for isSlideshow to be true, as it might have timing issues
     if (backgroundAudioUrl && Platform.OS === 'web') {
       console.log('🎵 PREVIEW_PLAYER: Setting up background audio:', backgroundAudioUrl);
-      
+
       // Test if the audio URL is accessible
       fetch(backgroundAudioUrl, { method: 'HEAD' })
         .then(response => {
@@ -378,37 +362,38 @@ export default function PreviewPlayer({
         .catch(error => {
           console.error('🎵 PREVIEW_PLAYER: Background audio URL test failed:', error);
         });
-      
-      const audio = new Audio();
+
+      const AudioConstructor = (window as any)['Audio'];
+      const audio = new AudioConstructor(backgroundAudioUrl);
       backgroundAudioRef.current = audio;
-      
+
       audio.addEventListener('loadstart', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio load started');
       });
-      
+
       audio.addEventListener('loadeddata', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio loaded');
       });
-      
+
       audio.addEventListener('canplaythrough', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio can play through');
       });
-      
+
       audio.addEventListener('play', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio started');
         setBackgroundAudioPlaying(true);
       });
-      
+
       audio.addEventListener('pause', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio paused');
         setBackgroundAudioPlaying(false);
       });
-      
+
       audio.addEventListener('ended', () => {
         console.log('🎵 PREVIEW_PLAYER: Background audio ended');
         setBackgroundAudioPlaying(false);
       });
-      
+
       audio.addEventListener('error', (e) => {
         console.error('🎵 PREVIEW_PLAYER: Background audio error:', e);
         console.error('🎵 PREVIEW_PLAYER: Background audio error details:', {
@@ -418,15 +403,15 @@ export default function PreviewPlayer({
           src: audio.src
         });
       });
-      
+
       audio.crossOrigin = 'anonymous';
       audio.loop = true;
       audio.volume = 0.5;
       audio.src = backgroundAudioUrl;
       audio.load();
-      
+
       console.log('🎵 PREVIEW_PLAYER: Background audio setup complete, loading started');
-      
+
       return () => {
         console.log('🎵 PREVIEW_PLAYER: Cleaning up background audio');
         if (backgroundAudioRef.current) {
@@ -474,7 +459,7 @@ export default function PreviewPlayer({
       setCurrentTime(0);
       setTimeLeft(previewDuration);
       setPreviewEnded(false);
-      
+
       // Clear any existing slideshow timer
       if (slideshowTimer) {
         clearTimeout(slideshowTimer);
@@ -506,7 +491,7 @@ export default function PreviewPlayer({
       if (isImage || isSlideshow) {
         console.log('🔴 PREVIEW_PLAYER: Starting slideshow playback...');
         console.log('🔴 PREVIEW_PLAYER: Current track:', currentTrack, 'Media files length:', mediaFiles.length);
-        
+
         const currentMediaFile = mediaFiles[currentTrack];
         console.log('🔴 PREVIEW_PLAYER: Current media file:', {
           id: currentMediaFile?.id,
@@ -514,13 +499,13 @@ export default function PreviewPlayer({
           duration: currentMediaFile?.duration,
           url: currentMediaFile?.url
         });
-        
+
         // Set playing states to start image rotation - THIS IS THE KEY!
         setIsPlaying(true);
         setSlideshowPlaying(true);
-        
+
         console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow rotation started - images will rotate based on duration settings');
-        
+
         // Start background audio simultaneously with slideshow (like MediaPlayer does)
         if (isSlideshow && backgroundAudioUrl) {
           if (Platform.OS === 'web' && backgroundAudioRef.current) {
@@ -533,22 +518,23 @@ export default function PreviewPlayer({
             }
           } else if (backgroundAudioUrl && !backgroundAudioRef.current) {
             console.log('🎵 PREVIEW_PLAYER: Background audio URL provided but no audio ref - setting up audio now');
-            
+
             // Setup audio immediately if it wasn't set up before
-            const audio = new Audio();
+            const AudioConstructor = (window as any)['Audio'];
+            const audio = new AudioConstructor(backgroundAudioUrl);
             audio.crossOrigin = 'anonymous';
             audio.loop = true;
             audio.volume = 0.5;
             audio.src = backgroundAudioUrl;
             backgroundAudioRef.current = audio;
-            
+
             audio.addEventListener('canplaythrough', () => {
               console.log('🎵 PREVIEW_PLAYER: Immediate audio setup - can play through, starting playback with slideshow');
               audio.play().catch(error => {
                 console.error('🎵 PREVIEW_PLAYER: ❌ Immediate audio play failed:', error);
               });
             });
-            
+
             audio.load();
           } else {
             console.log('🎵 PREVIEW_PLAYER: No background audio available:', {
@@ -558,7 +544,7 @@ export default function PreviewPlayer({
             });
           }
         }
-        
+
         console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow and audio started successfully - user initiated playback');
       } else if (isVideo) {
         console.log('🔴 PREVIEW_PLAYER: Starting video playback...');
@@ -582,10 +568,10 @@ export default function PreviewPlayer({
         }
       } else {
         // Check if it's an audio file
-        const isAudioFile = currentMedia.fileType === 'audio' || 
+        const isAudioFile = currentMedia.fileType === 'audio' ||
                            currentMedia.contentType?.startsWith('audio/') ||
                            currentMedia.fileType?.includes('audio');
-        
+
         if (!isAudioFile) {
           console.log('🔴 PREVIEW_PLAYER: Current track is not an audio file');
           Alert.alert('Error', 'This file is not an audio file and cannot be played.');
@@ -619,16 +605,16 @@ export default function PreviewPlayer({
     try {
       if (isImage || isSlideshow) {
         console.log('🔴 PREVIEW_PLAYER: Pausing slideshow...');
-        
+
         // Set paused states to stop image rotation - THIS IS THE KEY!
         setIsPlaying(false);
         setSlideshowPlaying(false);
-        
+
         if (slideshowTimer) {
           clearTimeout(slideshowTimer);
           setSlideshowTimer(null);
         }
-        
+
         // Pause background audio (like MediaPlayer does)
         if (isSlideshow && backgroundAudioUrl) {
           if (Platform.OS === 'web' && backgroundAudioRef.current) {
@@ -661,7 +647,7 @@ export default function PreviewPlayer({
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
-    
+
     // Auto-play the next track after a short delay
     setTimeout(() => {
       handlePlay();
@@ -677,7 +663,7 @@ export default function PreviewPlayer({
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
-    
+
     // Auto-play the previous track after a short delay
     setTimeout(() => {
       handlePlay();
@@ -724,7 +710,7 @@ export default function PreviewPlayer({
       };
 
       addToCart(product);
-      
+
       Alert.alert(
         'Added to Cart',
         `${product.name} has been added to your cart!`,
@@ -744,10 +730,10 @@ export default function PreviewPlayer({
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = base;
-      
+
       const items = [{ productId: parseInt(productLink.id), quantity: 1 }];
       const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
-      
+
       // Always use WebBrowser to keep app running in background
       await WebBrowser.openBrowserAsync(url);
       console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now from PreviewPlayer');
@@ -761,13 +747,13 @@ export default function PreviewPlayer({
     setProductImageIndexes(prev => {
       const currentIndex = prev[productId] || 0;
       let newIndex;
-      
+
       if (direction === 'next') {
         newIndex = currentIndex < imageCount - 1 ? currentIndex + 1 : 0;
       } else {
         newIndex = currentIndex > 0 ? currentIndex - 1 : imageCount - 1;
       }
-      
+
       return { ...prev, [productId]: newIndex };
     });
   };
@@ -776,7 +762,7 @@ export default function PreviewPlayer({
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
-    
+
     for (let i = 0; i < 5; i++) {
       if (i < fullStars) {
         stars.push(
@@ -792,23 +778,23 @@ export default function PreviewPlayer({
         );
       }
     }
-    
+
     return stars;
   };
 
   // Format price to ensure it displays correctly
   const formatPrice = (price: string | number | null): string => {
     if (!price) return '';
-    
+
     // If price is already a formatted string (e.g., "$10.00"), return as is
     if (typeof price === 'string' && price.startsWith('$')) {
       return price;
     }
-    
+
     // If price is a number or string number, format it
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
     if (isNaN(numPrice)) return '';
-    
+
     return `$${numPrice.toFixed(2)}`;
   };
 
@@ -923,7 +909,7 @@ export default function PreviewPlayer({
                 </Text>
               </View>
             </View>
-            
+
             {/* Cart Icon */}
             <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
               <MaterialIcons name="shopping-cart" size={24} color="#374151" />
@@ -933,7 +919,7 @@ export default function PreviewPlayer({
                 </View>
               )}
             </TouchableOpacity>
-            
+
             <TouchableOpacity style={styles.playButton}>
               <MaterialIcons name="play-arrow" size={20} color="#fff" />
               <Text style={styles.playButtonText}>PREVIEW</Text>
@@ -952,9 +938,9 @@ export default function PreviewPlayer({
                   allowsPictureInPicture={true}
                   contentFit="contain"
                 />
-                
+
                 {/* Custom fullscreen button */}
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.fullscreenButton}
                   onPress={() => {
                     // VideoView handles fullscreen automatically on mobile
@@ -963,24 +949,24 @@ export default function PreviewPlayer({
                       const videoElement = document.querySelector('video');
                       if (videoElement) {
                         if (!document.fullscreenElement) {
-                          videoElement.requestFullscreen?.() || 
-                          videoElement.webkitRequestFullscreen?.() || 
-                          videoElement.mozRequestFullScreen?.() || 
+                          videoElement.requestFullscreen?.() ||
+                          videoElement.webkitRequestFullscreen?.() ||
+                          videoElement.mozRequestFullScreen?.() ||
                           videoElement.msRequestFullscreen?.();
                         } else {
-                          document.exitFullscreen?.() || 
-                          document.webkitExitFullscreen?.() || 
-                          document.mozCancelFullScreen?.() || 
+                          document.exitFullscreen?.() ||
+                          document.webkitExitFullscreen?.() ||
+                          document.mozCancelFullScreen?.() ||
                           document.msExitFullscreen?.();
                         }
                       }
                     }
                   }}
                 >
-                  <Ionicons 
-                    name="expand" 
-                    size={20} 
-                    color="#fff" 
+                  <Ionicons
+                    name="expand"
+                    size={20}
+                    color="#fff"
                   />
                 </TouchableOpacity>
               </View>
@@ -994,17 +980,17 @@ export default function PreviewPlayer({
                   style={styles.slideshowImage}
                   resizeMode="contain"
                 />
-                
+
                 {/* Image navigation for slideshows */}
                 {isSlideshow && mediaFiles.length > 1 && (
                   <>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.imageNavButton, styles.imageNavLeft]}
                       onPress={handlePrevious}
                     >
                       <Ionicons name="chevron-back" size={24} color="#fff" />
                     </TouchableOpacity>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={[styles.imageNavButton, styles.imageNavRight]}
                       onPress={handleNext}
                     >
@@ -1012,7 +998,7 @@ export default function PreviewPlayer({
                     </TouchableOpacity>
                   </>
                 )}
-                
+
                 {/* Image info overlay */}
                 <View style={styles.imageInfoOverlay}>
                   <Text style={styles.imageTitle}>{currentMedia.title}</Text>
@@ -1041,11 +1027,11 @@ export default function PreviewPlayer({
             {/* Progress */}
             <View style={styles.progressContainer}>
               <View style={styles.progressBar}>
-                <View 
+                <View
                   style={[
-                    styles.progressFill, 
+                    styles.progressFill,
                     { width: `${(currentTime / previewDuration) * 100}%` }
-                  ]} 
+                  ]}
                 />
               </View>
               <View style={styles.timeDisplay}>
@@ -1071,7 +1057,7 @@ export default function PreviewPlayer({
                 onPress={isPlaying ? handlePause : handlePlay}
                 disabled={previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)}
                 style={[
-                  styles.playButtonControl, 
+                  styles.playButtonControl,
                   (previewEnded || (!isImage && !isSlideshow && !isVideo && Platform.OS !== 'web' && !audioStatus.isLoaded)) && styles.disabledControl,
                   hasUserInteracted && styles.enhancedPlayButton
                 ]}
@@ -1131,7 +1117,7 @@ export default function PreviewPlayer({
             <MaterialIcons name="storefront" size={24} color="#374151" />
             <Text style={styles.productsTitle}>Featured Products</Text>
           </View>
-          <ScrollView 
+          <ScrollView
             style={styles.productsList}
             showsVerticalScrollIndicator={true}
             bounces={Platform.OS === 'ios'} // iOS-specific bounce behavior
@@ -1154,7 +1140,7 @@ export default function PreviewPlayer({
                   const images = link.images && link.images.length > 0 ? link.images : [link.imageUrl].filter(Boolean);
                   const currentImageIndex = productImageIndexes[link.id] || 0;
                   const currentImage = images[currentImageIndex];
-                  
+
                   return (
                     <View key={link.id} style={styles.enhancedProductCard}>
                       {/* Image Carousel Section */}
@@ -1206,7 +1192,7 @@ export default function PreviewPlayer({
                         <Text style={styles.enhancedProductTitle} numberOfLines={2}>
                           {link.title}
                         </Text>
-                        
+
                         {/* Rating and Reviews */}
                         {link.rating && (
                           <View style={styles.ratingContainer}>
@@ -1250,7 +1236,7 @@ export default function PreviewPlayer({
                             <MaterialIcons name="flash-on" size={16} color="#fff" />
                             <Text style={styles.buyNowButtonText}>Buy Now</Text>
                           </TouchableOpacity>
-                          
+
                           <TouchableOpacity
                             style={styles.addToCartButton}
                             onPress={() => handleAddToCart(link)}
@@ -1279,7 +1265,7 @@ export default function PreviewPlayer({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#000',
   },
   mainContainer: {
     flex: 1,

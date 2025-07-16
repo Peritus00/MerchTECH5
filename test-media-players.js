@@ -1,4 +1,13 @@
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET || 'test-secret';
+
+// Generate test JWT token
+const testToken = jwt.sign(
+  { userId: 1, email: 'test@example.com', isAdmin: false },
+  JWT_SECRET,
+  { expiresIn: '1h' }
+);
 
 async function testMediaPlayers() {
   console.log('🎵 Testing Media Player and Preview Player Pages...\n');
@@ -11,7 +20,10 @@ async function testMediaPlayers() {
     console.log('1️⃣ Testing Content Type Detection Endpoint...');
     try {
       const response = await axios.get(`${baseURL}/content/1/type`, {
-        headers: { 'Authorization': `Bearer ${adminToken}` }
+        headers: {
+          'Authorization': `Bearer ${adminToken}`,
+          'Content-Type': 'application/json'
+        }
       });
       console.log('✅ Content type endpoint exists:', response.data);
     } catch (error) {
@@ -26,7 +38,10 @@ async function testMediaPlayers() {
       is_public: true,
       requires_activation_code: false
     }, {
-      headers: { 'Authorization': `Bearer ${adminToken}` }
+      headers: {
+        'Authorization': `Bearer ${adminToken}`,
+        'Content-Type': 'application/json'
+      }
     });
     const playlistId = playlistResponse.data.id;
     console.log('✅ Playlist created:', playlistId);
