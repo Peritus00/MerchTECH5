@@ -69,6 +69,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   
   // Slideshow-specific state
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [imageLoadError, setImageLoadError] = useState<boolean>(false);
 
   const blurhash =
     'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
@@ -86,17 +87,38 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         setPlaylistTitle(playlist.name || 'Playlist');
       } else if (slideshow) {
         // Convert slideshow images to media format expected by MediaPlayer
-        const slideshowMedia = slideshow.images?.map((image: any) => ({
-          id: image.id,
-          title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
-          s3_key: image.url, // Map url to s3_key for MediaPlayer compatibility
-          media_type: 'image',
-          type: 'image',
-          fileType: 'image',
-          contentType: 'image/jpeg',
-          caption: image.caption,
-          displayOrder: image.displayOrder
-        })) || [];
+        const slideshowMedia = slideshow.images?.map((image: any) => {
+          // Use streaming URL if available, otherwise fall back to direct URL
+          let imageUrl = image.url;
+          
+          // If the URL is a direct S3 URL, try to convert it to streaming URL
+          if (imageUrl && imageUrl.includes('amazonaws.com') && image.id) {
+            const baseUrl = process.env.NODE_ENV === 'production' 
+              ? 'https://merchtech5-production.up.railway.app'
+              : 'http://localhost:5001';
+            const streamingUrl = `${baseUrl}/api/slideshow-images/${image.id}/stream`;
+            
+            console.log('🖼️ SLIDESHOW_URL_CONVERSION:', {
+              original: imageUrl,
+              streaming: streamingUrl,
+              imageId: image.id
+            });
+            
+            imageUrl = streamingUrl;
+          }
+          
+          return {
+            id: image.id,
+            title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
+            s3_key: imageUrl, // Use streaming URL for better compatibility
+            media_type: 'image',
+            type: 'image',
+            fileType: 'image',
+            contentType: 'image/jpeg',
+            caption: image.caption,
+            displayOrder: image.displayOrder
+          };
+        }) || [];
         
         // Don't add background audio as a separate media item
         // It will be handled by the backgroundAudioUrl useMemo above
@@ -237,6 +259,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
 
   const onIndexChanged = (index: number) => {
     setCurrentIndex(index);
+    setImageLoadError(false); // Reset image load error when changing images
     // If we swipe to a new slide that has a video, we might want to automatically
     // seek the video to the beginning.
     if (media[index]?.media_type === 'video') {
@@ -331,22 +354,37 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                   source={{ uri: media[currentIndex].s3_key }}
                   style={styles.slideshowImage}
                   contentFit="contain"
-                  placeholder={{ blurhash }}
+                  placeholder={imageLoadError ? undefined : { blurhash }}
                   transition={500}
+                  onError={(error) => {
+                    console.error('🖼️ SLIDESHOW_IMAGE_ERROR:', error);
+                    console.error('🖼️ Failed to load image:', media[currentIndex].s3_key);
+                    setImageLoadError(true);
+                  }}
+                  onLoad={() => {
+                    console.log('🖼️ SLIDESHOW_IMAGE_LOADED:', media[currentIndex].s3_key);
+                    setImageLoadError(false);
+                  }}
                 />
               )}
               
               {/* Navigation Arrows */}
               <TouchableOpacity 
                 style={[styles.navButton, styles.prevButton]}
-                onPress={() => setCurrentIndex(prev => prev > 0 ? prev - 1 : media.length - 1)}
+                onPress={() => {
+                  setCurrentIndex(prev => prev > 0 ? prev - 1 : media.length - 1);
+                  setImageLoadError(false);
+                }}
               >
                 <MaterialIcons name="chevron-left" size={32} color="#fff" />
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={[styles.navButton, styles.nextButton]}
-                onPress={() => setCurrentIndex(prev => prev < media.length - 1 ? prev + 1 : 0)}
+                onPress={() => {
+                  setCurrentIndex(prev => prev < media.length - 1 ? prev + 1 : 0);
+                  setImageLoadError(false);
+                }}
               >
                 <MaterialIcons name="chevron-right" size={32} color="#fff" />
               </TouchableOpacity>
