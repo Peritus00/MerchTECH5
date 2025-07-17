@@ -647,7 +647,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                                   <View style={styles.imageIndicators}>
                                     {images.map((_: string | undefined, index: number) => (
                                       <View
-                                        key={index}
+                                        key={`image-indicator-${link.id}-${index}`}
                                         style={[
                                           styles.imageIndicator,
                                           index === currentImageIndex && styles.activeImageIndicator
@@ -777,7 +777,11 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         activeDotStyle={styles.activeDot}
         paginationStyle={styles.pagination}
       >
-        {media.map(renderMediaItem)}
+        {media.map((item, index) => (
+          <View key={`media-${item.id}-${index}`}>
+            {renderMediaItem(item, index)}
+          </View>
+        ))}
       </Swiper>
 
       <View style={styles.controls}>
