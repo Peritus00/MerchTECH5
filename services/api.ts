@@ -606,14 +606,18 @@ export const slideshowsAPI = {
 export const slideshowAccessAPI = {
   async getByIdForAccess(id: string) {
     try {
+      console.log('🎬 API: Fetching slideshow access for ID:', id);
       const response = await api.get(`/slideshow-access/${id}`);
+      console.log('🎬 API: Slideshow access response:', response.data);
+      
+      // The server returns the slideshow data directly, not wrapped in { slideshow: ... }
       return response.data;
     } catch (error: any) {
+      console.error('🎬 API: Error fetching slideshow for access:', error);
       if (error.response && error.response.status === 404) {
         console.warn(`Slideshow with ID ${id} not found.`);
         return null;
       }
-      console.error('Error fetching slideshow for access:', error);
       throw error;
     }
   },

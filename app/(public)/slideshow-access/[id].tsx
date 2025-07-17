@@ -38,6 +38,7 @@ export default function SlideshowAccessScreen() {
   const [showPreview, setShowPreview] = useState(false);
   const [previewTimeLeft, setPreviewTimeLeft] = useState(30);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [isFullAccess, setIsFullAccess] = useState(false); // Track if user has full access
@@ -171,8 +172,18 @@ export default function SlideshowAccessScreen() {
     try {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
-          const { slideshowAccessAPI } = await import('@/services/api');
-    const slideshowData = await slideshowAccessAPI.getByIdForAccess(id);
+      const { slideshowAccessAPI } = await import('@/services/api');
+      const slideshowData = await slideshowAccessAPI.getByIdForAccess(id);
+
+      console.log('🎬 SLIDESHOW_ACCESS: Raw API response:', slideshowData);
+      console.log('🎬 SLIDESHOW_ACCESS: Response type:', typeof slideshowData);
+      console.log('🎬 SLIDESHOW_ACCESS: Response keys:', slideshowData ? Object.keys(slideshowData) : 'null/undefined');
+      
+      if (!slideshowData) {
+        console.error('🎬 SLIDESHOW_ACCESS: No slideshow data received');
+        setError('Slideshow not found');
+        return;
+      }
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshowData?.name);
