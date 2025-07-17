@@ -206,7 +206,28 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const backgroundAudioUrl = useMemo(() => {
     // For slideshows, use the slideshow.audioUrl directly
     if (slideshow?.audioUrl) {
-      return slideshow.audioUrl;
+      let audioUrl = slideshow.audioUrl;
+      
+      // Check if this is an S3 URL and needs to be processed
+      if (audioUrl && audioUrl.includes('amazonaws.com') && slideshow.id) {
+        // Generate a streaming URL for the audio file
+        const baseUrl = process.env.NODE_ENV === 'production' 
+          ? 'https://merchtech5-production.up.railway.app'
+          : 'http://localhost:5001';
+        
+        // Use the streaming endpoint which handles CORS properly
+        const streamingUrl = `${baseUrl}/api/slideshows/${slideshow.id}/audio/stream`;
+        
+        console.log('🔊 SLIDESHOW_AUDIO_URL_CONVERSION:', {
+          original: audioUrl,
+          streaming: streamingUrl,
+          slideshowId: slideshow.id
+        });
+        
+        audioUrl = streamingUrl;
+      }
+      
+      return audioUrl;
     }
     
     // For playlists, look for audio files in media
@@ -350,13 +371,30 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
             <View style={styles.slideshowImageContainer}>
               {media[currentIndex] && !imageLoadError && (
                 <ExpoImage
-                  source={{ uri: media[currentIndex].s3_key }}
+                  source={{ 
+                    uri: media[currentIndex].s3_key,
+                    headers: {
+                      // Add cache control headers to prevent caching issues
+                      'Cache-Control': 'no-cache',
+                      // Add a timestamp to bust cache if needed
+                      'X-Timestamp': Date.now().toString()
+                    }
+                  }}
                   style={styles.slideshowImage}
                   contentFit="contain"
                   transition={500}
+                  cachePolicy="none" // Disable caching to ensure fresh content
                   onError={(error) => {
                     console.error('🖼️ SLIDESHOW_IMAGE_ERROR:', error);
                     console.error('🖼️ Failed to load image:', media[currentIndex].s3_key);
+                    
+                    // Log additional details for debugging
+                    console.error('🖼️ Image details:', {
+                      url: media[currentIndex].s3_key,
+                      mediaType: media[currentIndex].media_type,
+                      id: media[currentIndex].id
+                    });
+                    
                     setImageLoadError(true);
                   }}
                   onLoad={() => {
