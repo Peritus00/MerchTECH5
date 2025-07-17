@@ -11,8 +11,9 @@
                 "PUT"
             ],
             "AllowedOrigins": [
-                "https://your-production-domain.com",
-                "https://your-app-domain.com",
+                "https://app.merchtech.net",
+                "https://merchtech.net",
+                "https://*.merchtech.net",
                 "https://merchtech5-production.up.railway.app",
                 "http://localhost:8081",
                 "http://localhost:3000"
