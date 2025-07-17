@@ -125,10 +125,10 @@ export default function PlaylistAccessScreen() {
         mediaFiles: playlist.mediaFiles?.length || 0
       });
 
-      // CRITICAL CHECK: If playlist doesn't require activation code, go directly to media player
+      // CRITICAL CHECK: If playlist doesn't require activation code, go directly to playlist player
       if (!playlist.requiresActivationCode) {
-        console.log('🔴 PLAYLIST_ACCESS: Playlist is NOT protected, redirecting directly to media player');
-        router.replace(`/media-player/${id}`);
+        console.log('🔴 PLAYLIST_ACCESS: Playlist is NOT protected, redirecting directly to playlist player');
+        router.replace(`/playlist-player/${id}`);
         return;
       }
 
@@ -168,8 +168,8 @@ export default function PlaylistAccessScreen() {
           console.log('🔴 PLAYLIST_ACCESS: Has valid access result:', hasValidAccess);
           
           if (hasValidAccess) {
-            console.log('🔴 PLAYLIST_ACCESS: User has valid access code for this playlist, redirecting to media player');
-            router.replace(`/media-player/${id}`);
+            console.log('🔴 PLAYLIST_ACCESS: User has valid access code for this playlist, redirecting to playlist player');
+            router.replace(`/playlist-player/${id}`);
             return;
           } else {
             console.log('🔴 PLAYLIST_ACCESS: User has no valid access codes for this playlist');
@@ -225,8 +225,8 @@ export default function PlaylistAccessScreen() {
       // Check if user has purchased access (you can implement this based on your payment system)
       const hasPurchasedAccess = await checkPurchasedAccess(id);
       if (hasPurchasedAccess) {
-        console.log('🔴 PLAYLIST_ACCESS: User has purchased access, redirecting to media player');
-        router.replace(`/media-player/${id}`);
+        console.log('🔴 PLAYLIST_ACCESS: User has purchased access, redirecting to playlist player');
+        router.replace(`/playlist-player/${id}`);
         return;
       }
 
@@ -329,8 +329,8 @@ export default function PlaylistAccessScreen() {
       // Store the activation code for future access
       await AsyncStorage.setItem(`playlist_access_${id}`, code);
       
-      // Redirect to media player
-      router.replace(`/media-player/${id}`);
+      // Redirect to playlist player
+      router.replace(`/playlist-player/${id}`);
     } catch (error) {
       console.error('🔴 PLAYLIST_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');
@@ -447,7 +447,7 @@ export default function PlaylistAccessScreen() {
         },
         {
           text: '🌐 Continue in Web',
-          onPress: () => router.replace(`/media-player/${id}`),
+          onPress: () => router.replace(`/playlist-player/${id}`),
           style: 'default',
         },
       ]
@@ -697,7 +697,7 @@ export default function PlaylistAccessScreen() {
           <View style={styles.header}>
             <View style={{ width: 24 }} />
             <Text style={styles.headerTitle}>Account Created!</Text>
-            <TouchableOpacity onPress={() => router.replace(`/media-player/${id}`)}>
+            <TouchableOpacity onPress={() => router.replace(`/playlist-player/${id}`)}>
               <MaterialIcons name="close" size={24} color="#1f2937" />
             </TouchableOpacity>
           </View>
@@ -730,7 +730,7 @@ export default function PlaylistAccessScreen() {
 
                 <TouchableOpacity
                   style={styles.webPlayerButton}
-                  onPress={() => router.replace(`/media-player/${id}`)}
+                  onPress={() => router.replace(`/playlist-player/${id}`)}
                 >
                   <MaterialIcons name="play-circle" size={24} color="#3b82f6" />
                   <View style={styles.downloadButtonText}>

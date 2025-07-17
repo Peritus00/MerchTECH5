@@ -139,7 +139,7 @@ export default function SlideshowAccessScreen() {
   }, [slideshow, isAuthenticated, user]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval>;
     
     // Only run timer for limited preview, not full access
     if (showPreview && !isFullAccess && previewTimeLeft > 0) {
@@ -282,10 +282,10 @@ export default function SlideshowAccessScreen() {
         return;
       }
 
-      // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to media player
+      // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to slideshow player
       if (!slideshow.requiresActivationCode) {
-        console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to media player');
-        router.replace(`/media-player/${id}?type=slideshow`);
+        console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to slideshow player');
+        router.replace(`/slideshow-player/${id}`);
         return;
       }
 
@@ -325,9 +325,9 @@ export default function SlideshowAccessScreen() {
           console.log('🎬 SLIDESHOW_ACCESS: Has valid access result:', hasValidAccess);
           
           if (hasValidAccess) {
-            console.log('🎬 SLIDESHOW_ACCESS: User has valid access code for this slideshow, redirecting directly to media player');
-            // Redirect directly to media player for users with valid access codes
-            router.replace(`/media-player/${id}?type=slideshow`);
+            console.log('🎬 SLIDESHOW_ACCESS: User has valid access code for this slideshow, redirecting directly to slideshow player');
+            // Redirect directly to slideshow player for users with valid access codes
+            router.replace(`/slideshow-player/${id}`);
             return;
           } else {
             console.log('🎬 SLIDESHOW_ACCESS: User has no valid access codes for this slideshow');
@@ -384,8 +384,8 @@ export default function SlideshowAccessScreen() {
       // Check if user has purchased access (you can implement this based on your payment system)
       const hasPurchasedAccess = await checkPurchasedAccess(id);
       if (hasPurchasedAccess) {
-        console.log('🎬 SLIDESHOW_ACCESS: User has purchased access, redirecting directly to media player');
-        router.replace(`/media-player/${id}?type=slideshow`);
+        console.log('🎬 SLIDESHOW_ACCESS: User has purchased access, redirecting directly to slideshow player');
+        router.replace(`/slideshow-player/${id}`);
         return;
       }
 
@@ -488,9 +488,9 @@ export default function SlideshowAccessScreen() {
       // Store the activation code for future access
       await AsyncStorage.setItem(`slideshow_access_${id}`, code);
       
-      // Redirect directly to media player with full access
-      console.log('🎬 SLIDESHOW_ACCESS: Code attached successfully, redirecting to media player');
-      router.replace(`/media-player/${id}?type=slideshow`);
+      // Redirect directly to slideshow player with full access
+      console.log('🎬 SLIDESHOW_ACCESS: Code attached successfully, redirecting to slideshow player');
+      router.replace(`/slideshow-player/${id}`);
     } catch (error) {
       console.error('🎬 SLIDESHOW_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');

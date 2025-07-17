@@ -1,95 +1,171 @@
-// Test script to debug slideshow data flow
+const { Pool } = require('pg');
 const axios = require('axios');
+require('dotenv').config();
 
-async function testSlideshowDataFlow() {
-  console.log('🧪 Testing slideshow data flow...');
+// Configuration
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000';
+const PRODUCTION_URL = 'http://192.168.1.70:5001';
+const AUTH_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOjQsImVtYWlsIjoiUGVycmllLkJlbnRvbkBnbWFpbC5jb20iLCJpc0FkbWluIjpmYWxzZSwiaWF0IjoxNzUyNzYwMDc1LCJleHAiOjE3NTI4NDY0NzV9.MyT_nsYwGUf75-3LuKG3yAmEOx864Z8IBWZxpRpHVeA';
+
+async function testDatabaseConnection() {
+  console.log('🔍 Testing database connection...');
   
   try {
-    // Step 1: Fetch slideshow data (like the frontend does)
-    console.log('\n1️⃣ Fetching slideshow data from API...');
-    const response = await axios.get('http://localhost:5001/api/slideshow-access/31');
-    const slideshowData = response.data;
-    
-    console.log('✅ Raw slideshow data received:', {
-      id: slideshowData.id,
-      name: slideshowData.name,
-      imagesCount: slideshowData.images?.length,
-      audioUrl: slideshowData.audioUrl ? 'present' : 'missing'
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: false
     });
     
-    // Step 2: Process images (like formattedMediaFiles does)
-    console.log('\n2️⃣ Processing images...');
-    if (!slideshowData.images) {
-      console.log('❌ No images found in slideshow data');
-      return;
-    }
+    // Test connection
+    const client = await pool.connect();
+    console.log('✅ Database connection successful');
     
-    const imageFiles = slideshowData.images.map((image, index) => {
-      console.log(`   Processing image ${index + 1}:`, {
-        id: image.id,
-        url: image.url,
-        caption: image.caption,
-        title: image.title
-      });
-      
-      return {
-        id: image.id,
-        title: image.caption || `Image ${index + 1}`,
-        url: image.url,
-        fileType: 'image',
-        contentType: 'image/jpeg',
-        type: 'image',
-        duration: slideshowData.autoplayInterval || 5000,
-      };
-    });
+    // Check slideshows table
+    const result = await client.query('SELECT id, name, created_at FROM slideshows ORDER BY id');
+    console.log(`\n📊 Found ${result.rows.length} slideshows in database:`);
     
-    console.log('\n3️⃣ Final processed media files:', JSON.stringify(imageFiles, null, 2));
-    
-    // Step 3: Test image URLs
-    console.log('\n4️⃣ Testing image URLs...');
-    for (let i = 0; i < imageFiles.length; i++) {
-      const imageFile = imageFiles[i];
-      try {
-        const imageResponse = await axios.head(imageFile.url);
-        console.log(`   ✅ Image ${i + 1} (${imageFile.url}): ${imageResponse.status} ${imageResponse.headers['content-type']}`);
-      } catch (error) {
-        console.log(`   ❌ Image ${i + 1} (${imageFile.url}): ${error.message}`);
-      }
-    }
-    
-    // Step 4: Simulate PreviewPlayer logic
-    console.log('\n5️⃣ Simulating PreviewPlayer logic...');
-    const currentTrack = 0;
-    const currentMedia = imageFiles[currentTrack];
-    
-    console.log('Current media:', currentMedia);
-    
-    // Check media type flags
-    const isVideo = currentMedia?.fileType === 'video' || currentMedia?.contentType?.startsWith('video/') || currentMedia?.type === 'video';
-    const isAudio = currentMedia?.fileType === 'audio' || currentMedia?.contentType?.startsWith('audio/') || currentMedia?.type === 'audio';
-    const isImage = currentMedia?.fileType === 'image' || currentMedia?.contentType?.startsWith('image/') || currentMedia?.type === 'image';
-    const isSlideshow = imageFiles.length > 1 && imageFiles.some(file => 
-      file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image'
-    );
-    
-    console.log('Media type flags:', {
-      isVideo,
-      isAudio, 
-      isImage,
-      isSlideshow,
-      mediaFilesLength: imageFiles.length
-    });
-    
-    console.log('\n🎯 CONCLUSION:');
-    if (imageFiles.length > 0 && isImage && isSlideshow) {
-      console.log('✅ Data processing looks correct - the issue is likely in the React component rendering');
+    if (result.rows.length === 0) {
+      console.log('❌ No slideshows found in database');
+      console.log('💡 This explains why slideshow ID 1 returns "Content with ID 1 not found"');
     } else {
-      console.log('❌ Data processing has issues');
+      result.rows.forEach(row => {
+        console.log(`   📋 ID: ${row.id}, Name: "${row.name}", Created: ${new Date(row.created_at).toLocaleDateString()}`);
+      });
     }
+    
+    // Check slideshow_images table
+    const imagesResult = await client.query(`
+      SELECT slideshow_id, COUNT(*) as image_count 
+      FROM slideshow_images 
+      GROUP BY slideshow_id 
+      ORDER BY slideshow_id
+    `);
+    
+    console.log(`\n🖼️ Slideshow images count:`);
+    if (imagesResult.rows.length === 0) {
+      console.log('❌ No slideshow images found');
+    } else {
+      imagesResult.rows.forEach(row => {
+        console.log(`   📸 Slideshow ID: ${row.slideshow_id}, Images: ${row.image_count}`);
+      });
+    }
+    
+    client.release();
+    await pool.end();
+    
+    return result.rows;
     
   } catch (error) {
-    console.error('❌ Test failed:', error.message);
+    console.error('❌ Database connection failed:', error.message);
+    return [];
   }
 }
 
-testSlideshowDataFlow(); 
+async function testServerEndpoint(url, description) {
+  console.log(`\n🌐 Testing ${description}: ${url}`);
+  
+  try {
+    const response = await axios.get(url, {
+      timeout: 5000,
+      headers: {
+        'Authorization': `Bearer ${AUTH_TOKEN}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    console.log(`✅ ${description} - Status: ${response.status}`);
+    console.log(`📝 Response:`, JSON.stringify(response.data, null, 2));
+    return response.data;
+    
+  } catch (error) {
+    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      console.log(`❌ ${description} - Connection failed: ${error.message}`);
+    } else if (error.response) {
+      console.log(`❌ ${description} - Status: ${error.response.status}`);
+      console.log(`📝 Error response:`, JSON.stringify(error.response.data, null, 2));
+    } else {
+      console.log(`❌ ${description} - Error: ${error.message}`);
+    }
+    return null;
+  }
+}
+
+async function testSlideshowAccess(baseUrl, slideshowId) {
+  const url = `${baseUrl}/api/slideshow-access/${slideshowId}`;
+  return await testServerEndpoint(url, `Slideshow Access ID ${slideshowId}`);
+}
+
+async function main() {
+  console.log('🚀 SLIDESHOW DEBUG TEST STARTING...\n');
+  
+  // Test 1: Database connection and slideshow inventory
+  const slideshows = await testDatabaseConnection();
+  
+  // Test 2: Local server accessibility
+  console.log('\n' + '='.repeat(50));
+  console.log('🏠 TESTING LOCAL SERVER');
+  console.log('='.repeat(50));
+  
+  // Test local server with existing slideshow IDs
+  if (slideshows.length > 0) {
+    for (const slideshow of slideshows.slice(0, 3)) { // Test first 3 slideshows
+      await testSlideshowAccess(BASE_URL, slideshow.id);
+    }
+  } else {
+    console.log('⚠️  No slideshows found, testing with ID 1 (should fail)');
+    await testSlideshowAccess(BASE_URL, 1);
+  }
+  
+  // Test 3: Production server accessibility
+  console.log('\n' + '='.repeat(50));
+  console.log('🌍 TESTING PRODUCTION SERVER');
+  console.log('='.repeat(50));
+  
+  // Test production server connectivity
+  try {
+    const healthCheck = await axios.get(`${PRODUCTION_URL}/health`, { timeout: 5000 });
+    console.log('✅ Production server is accessible');
+  } catch (error) {
+    console.log('❌ Production server is not accessible:', error.message);
+  }
+  
+  // Test production slideshow access
+  if (slideshows.length > 0) {
+    for (const slideshow of slideshows.slice(0, 2)) { // Test first 2 slideshows
+      await testSlideshowAccess(PRODUCTION_URL, slideshow.id);
+    }
+  } else {
+    console.log('⚠️  Testing production with ID 1 (should fail if no slideshows exist)');
+    await testSlideshowAccess(PRODUCTION_URL, 1);
+  }
+  
+  // Test 4: Summary and recommendations
+  console.log('\n' + '='.repeat(50));
+  console.log('📋 SUMMARY & RECOMMENDATIONS');
+  console.log('='.repeat(50));
+  
+  if (slideshows.length === 0) {
+    console.log('🔴 ISSUE FOUND: No slideshows exist in database');
+    console.log('💡 SOLUTION: Create a slideshow first before testing slideshow-access');
+    console.log('📝 Steps to fix:');
+    console.log('   1. Go to the app and create a slideshow');
+    console.log('   2. Add some images to the slideshow');
+    console.log('   3. Test with the created slideshow ID');
+  } else {
+    console.log('✅ Database has slideshows - use these IDs for testing:');
+    slideshows.forEach(slideshow => {
+      console.log(`   📋 Test with: /api/slideshow-access/${slideshow.id}`);
+    });
+  }
+  
+  console.log('\n🎯 NEXT STEPS:');
+  console.log('1. Create a slideshow in the app if none exist');
+  console.log('2. Use the correct slideshow ID in your requests');
+  console.log('3. Check that production server is running and accessible');
+  console.log('4. Verify database has the slideshows you expect');
+  
+  console.log('\n✅ DEBUG TEST COMPLETE');
+}
+
+// Run the test
+main().catch(console.error); 
