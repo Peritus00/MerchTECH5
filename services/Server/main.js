@@ -5167,22 +5167,8 @@ function generateMediaPlayerHTML(playlist) {
     `;
 }
 
-app.get('/playlist-access/:id', async (req, res, next) => {
-    try {
-        const { id } = req.params;
-        const playlist = await getPlaylistWithMedia(id);
-
-        if (playlist && !playlist.requiresActivationCode) {
-            return res.redirect(302, `/media-player/${id}?type=playlist`);
-        }
-        
-        // For protected playlists or if not found, let the client app handle it.
-        return res.sendFile(path.join(distDir, 'index.html'));
-
-  } catch (error) {
-        next(error);
-    }
-});
+// REMOVED: app.get('/playlist-access/:id') - This was interfering with React Native app's client-side routing
+// The React Native app handles this route through app/(public)/playlist-access/[id].tsx
 
 // This must be the last non-error-handling route
 app.get('*', (req, res) => {
