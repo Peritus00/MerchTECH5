@@ -33,7 +33,16 @@ import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
-const MediaPlayer = ({ mediaId, type }: { mediaId: string; type: string }) => {
+interface MediaPlayerProps {
+  mediaId?: string;
+  type?: string;
+  media?: any[];
+  playlist?: any;
+  slideshow?: any;
+  autoPlay?: boolean;
+}
+
+const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow, autoPlay = false }: MediaPlayerProps) => {
   const [media, setMedia] = useState<Media[]>([]);
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -49,6 +58,33 @@ const MediaPlayer = ({ mediaId, type }: { mediaId: string; type: string }) => {
     '|rF?hV%2WCj[ayj[a_jAdofQIUWVoffaRiWVoffaRiWV';
 
   const fetchMedia = useCallback(async () => {
+    // If external data is provided, use it instead of fetching
+    if (externalMedia || playlist || slideshow) {
+      console.log('Using external data provided to MediaPlayer');
+      
+      if (externalMedia) {
+        setMedia(externalMedia);
+        setPlaylistTitle(playlist?.name || slideshow?.name || 'Media Player');
+      } else if (playlist) {
+        setMedia(playlist.mediaFiles || []);
+        setPlaylistTitle(playlist.name || 'Playlist');
+      } else if (slideshow) {
+        setMedia(slideshow.images || []);
+        setPlaylistTitle(slideshow.name || 'Slideshow');
+      }
+      
+      setLoading(false);
+      return;
+    }
+
+    // Fallback to fetching data if no external data provided
+    if (!mediaId || !type) {
+      console.error('MediaPlayer: No external data provided and no mediaId/type for fetching');
+      setError('No media data available');
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -77,7 +113,7 @@ const MediaPlayer = ({ mediaId, type }: { mediaId: string; type: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [mediaId, type]);
+  }, [mediaId, type, externalMedia, playlist, slideshow]);
 
   useEffect(() => {
     fetchMedia();
