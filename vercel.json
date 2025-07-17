@@ -33,6 +33,6 @@
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
     "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api",
-    "CACHE_BUST": "20250115-21-FORCE-CREATE-BUTTON-DEPLOY"
+    "CACHE_BUST": "20250116-AUDIO-CONSTRUCTOR-FIX"
   }
 } 
