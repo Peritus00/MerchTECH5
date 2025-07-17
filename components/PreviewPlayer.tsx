@@ -51,6 +51,11 @@ export default function PreviewPlayer({
   onPreviewComplete,
   backgroundAudioUrl,
 }: PreviewPlayerProps) {
+  
+  // SIMPLE TEST LOG - This should always appear if component is rendered
+  console.log('🚨 SIMPLE TEST: PreviewPlayer is being called!');
+  console.log('🚨 SIMPLE TEST: mediaFiles length:', mediaFiles.length);
+  
   // DEBUG: Log what PreviewPlayer receives
   console.log('🐛 DEBUG: PreviewPlayer received props:', {
     mediaFiles: mediaFiles,
