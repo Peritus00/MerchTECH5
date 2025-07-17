@@ -71,8 +71,8 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
 
-  const blurhash =
-    'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
+  // Remove blurhash placeholder that was causing the gradient blob
+  // const blurhash = 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
 
   const fetchMedia = useCallback(async () => {
     // If external data is provided, use it instead of fetching
@@ -300,7 +300,6 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           source={{ uri: item.s3_key }}
           style={styles.media}
           contentFit="contain"
-          placeholder={{ blurhash }}
           transition={300}
         />
       );
@@ -349,12 +348,11 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           <View style={styles.slideshowLeftPanel}>
             {/* Current Image Display */}
             <View style={styles.slideshowImageContainer}>
-              {media[currentIndex] && (
+              {media[currentIndex] && !imageLoadError && (
                 <ExpoImage
                   source={{ uri: media[currentIndex].s3_key }}
                   style={styles.slideshowImage}
                   contentFit="contain"
-                  placeholder={imageLoadError ? undefined : { blurhash }}
                   transition={500}
                   onError={(error) => {
                     console.error('🖼️ SLIDESHOW_IMAGE_ERROR:', error);
@@ -366,6 +364,13 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                     setImageLoadError(false);
                   }}
                 />
+              )}
+              
+              {imageLoadError && (
+                <View style={styles.imageErrorContainer}>
+                  <MaterialIcons name="broken-image" size={64} color="#666" />
+                  <Text style={styles.imageErrorText}>Failed to load image</Text>
+                </View>
               )}
               
               {/* Navigation Arrows */}
@@ -794,6 +799,18 @@ const styles = StyleSheet.create({
   imageCounter: {
     color: '#ccc',
     fontSize: 14,
+  },
+  imageErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  imageErrorText: {
+    color: '#666',
+    fontSize: 16,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
 
