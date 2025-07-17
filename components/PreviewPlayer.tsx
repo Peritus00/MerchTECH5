@@ -51,6 +51,17 @@ export default function PreviewPlayer({
   onPreviewComplete,
   backgroundAudioUrl,
 }: PreviewPlayerProps) {
+  // DEBUG: Log what PreviewPlayer receives
+  console.log('🐛 DEBUG: PreviewPlayer received props:', {
+    mediaFiles: mediaFiles,
+    mediaFilesLength: mediaFiles.length,
+    playlistName: playlistName,
+    autoplay: autoplay,
+    backgroundAudioUrl: backgroundAudioUrl
+  });
+  
+  console.log('🐛 DEBUG: PreviewPlayer mediaFiles detailed:', JSON.stringify(mediaFiles, null, 2));
+
   const [currentTrack, setCurrentTrack] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [timeLeft, setTimeLeft] = useState(previewDuration);
@@ -82,6 +93,9 @@ export default function PreviewPlayer({
   const [isPlaying, setIsPlaying] = useState(false);
 
   const currentMedia = mediaFiles[currentTrack];
+  
+  console.log('🐛 DEBUG: currentMedia:', currentMedia);
+  console.log('🐛 DEBUG: currentTrack:', currentTrack);
 
   // Determine if current media is video, audio, or image
   const isVideo =
@@ -104,6 +118,14 @@ export default function PreviewPlayer({
         file.contentType?.startsWith('image/') ||
         file.type === 'image'
     );
+
+  console.log('🐛 DEBUG: Media type flags:', {
+    isVideo,
+    isAudio,
+    isImage,
+    isSlideshow,
+    mediaFilesLength: mediaFiles.length
+  });
 
   // Use the new expo-audio hooks for audio
   const audioPlayer = useAudioPlayer();

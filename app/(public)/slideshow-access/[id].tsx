@@ -69,11 +69,23 @@ export default function SlideshowAccessScreen() {
     console.log('🎬 SLIDESHOW_ACCESS: Base URL:', baseUrl);
     console.log('🎬 SLIDESHOW_ACCESS: Slideshow autoplay interval:', slideshow.autoplayInterval, 'ms');
     
+    // DEBUG: Log raw slideshow data
+    console.log('🐛 DEBUG: Raw slideshow object:', JSON.stringify(slideshow, null, 2));
+    console.log('🐛 DEBUG: slideshow.images array:', slideshow.images);
+    console.log('🐛 DEBUG: slideshow.images.length:', slideshow.images.length);
+    
     // Map images to media files for the preview player
     const imageFiles = slideshow.images.map((image: any, index: number) => {
       // The server now provides the correct streaming URL directly.
       // No client-side manipulation is needed.
       const streamUrl = image.url;
+      
+      console.log('🐛 DEBUG: Processing image', index + 1, ':', {
+        id: image.id,
+        url: streamUrl,
+        caption: image.caption,
+        displayOrder: image.displayOrder
+      });
         
       console.log(`🎬 SLIDESHOW_ACCESS: Image ${index + 1}:`, {
         id: image.id,
@@ -88,10 +100,13 @@ export default function SlideshowAccessScreen() {
         url: streamUrl,
         fileType: 'image',
         contentType: 'image/jpeg',
-        type: 'image' as 'image',
+        type: 'image' as 'image', // Add type property like the playlist does
         duration: slideshow.autoplayInterval || 5000,
       };
     });
+
+    console.log('🐛 DEBUG: Final imageFiles array:', JSON.stringify(imageFiles, null, 2));
+    console.log('🐛 DEBUG: About to return imageFiles, length:', imageFiles.length);
 
     // Don't add background audio as a separate media file
     // The PreviewPlayer will handle slideshow background audio separately
