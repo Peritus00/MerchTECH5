@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
-import { checkoutAPI } from '@/services/api';
+import { paymentAPI } from '@/services/api';
 import * as WebBrowser from 'expo-web-browser';
 import ShareButton from '@/components/ShareButton'; // Assuming you have this
 import { Product } from '@/shared/product-schema';
@@ -37,6 +37,23 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       setBase(window.location.origin);
     }
   }, []);
+
+  // Helper function to get price from product
+  const getProductPrice = (product: Product): number => {
+    // First try the deprecated price field
+    if (product.price !== undefined && product.price !== null) {
+      return product.price;
+    }
+    
+    // Then try the new prices array
+    if (product.prices && product.prices.length > 0) {
+      // Get the first price and convert from cents to dollars
+      return product.prices[0].unit_amount / 100;
+    }
+    
+    // Default to 0 if no price found
+    return 0;
+  };
 
   const getProductUrl = () => {
     if (Platform.OS === 'web') {
@@ -89,7 +106,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       const items = [{ productId: product.id, quantity: 1 }];
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = `${base}/store/product/${product.id}`;
-      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
       if (url) {
         if (Platform.OS === 'web') {
           window.location.href = url;
@@ -111,11 +128,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
           <ThemedText style={styles.name} numberOfLines={2}>
             {product.name}
           </ThemedText>
-          <ThemedText style={styles.price}>${product.price.toFixed(2)}</ThemedText>
+          <ThemedText style={styles.price}>${getProductPrice(product).toFixed(2)}</ThemedText>
         </View>
       </TouchableOpacity>
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => addToCart(product, 1)}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => addToCart(product, '1')}>
            <MaterialIcons name="add-shopping-cart" size={20} color="#3b82f6" />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton, styles.buyNowButton]} onPress={buyNow}>

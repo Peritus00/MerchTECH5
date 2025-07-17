@@ -16,11 +16,13 @@ import {
   Text,
   ScrollView,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import {
   MaterialCommunityIcons,
   MaterialIcons,
   FontAwesome5,
+  Ionicons,
 } from '@expo/vector-icons';
 import Swiper from 'react-native-swiper';
 import { Video, ResizeMode } from 'expo-av';
@@ -28,8 +30,10 @@ import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
   IAudioPlayer,
 } from '../services/audio/AudioService';
-import { MediaFile } from '../shared/media-schema';
-import { api } from '../services/api';
+import { MediaFile, ProductLink } from '../shared/media-schema';
+import { api, paymentAPI } from '../services/api';
+import { useCart } from '../contexts/CartContext';
+import * as WebBrowser from 'expo-web-browser';
 
 const { width } = Dimensions.get('window');
 
@@ -38,6 +42,7 @@ interface MediaItem {
   id: string | number;
   title?: string;
   s3_key: string;
+  url?: string; // Add url property for slideshow images
   media_type: 'image' | 'audio' | 'video';
   type?: string;
   fileType?: string;
@@ -70,6 +75,110 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   // Slideshow-specific state
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
+  const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
+
+  // Cart functionality
+  const { addToCart, getTotalItems } = useCart();
+
+  // Product handling functions
+  const handleAddToCart = (productLink: ProductLink) => {
+    try {
+      // Convert ProductLink to Product format for cart
+      const product = {
+        id: productLink.id.toString(),
+        name: productLink.title,
+        description: productLink.description || '',
+        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
+        imageUrl: productLink.imageUrl || '',
+        images: productLink.images || [],
+        category: '',
+        in_stock: true,
+        slug: '',
+        hasSizes: false,
+        isSuspended: false,
+        createdAt: new Date().toISOString(),
+        userId: 0,
+        metadata: {},
+        prices: [{
+          id: `price_${productLink.id}`,
+          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
+          currency: 'usd',
+          type: 'one_time' as const,
+        }],
+      };
+
+      addToCart(product);
+
+      Alert.alert(
+        'Added to Cart',
+        `${product.name} has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          { text: 'View Cart', onPress: () => console.log('Navigate to cart') }
+        ]
+      );
+    } catch (error) {
+      console.error('Add to cart error:', error);
+      Alert.alert('Error', 'Failed to add item to cart');
+    }
+  };
+
+  const handleBuyNow = async (productLink: ProductLink) => {
+    try {
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = base;
+
+      const items = [{ productId: productLink.id, quantity: 1 }];
+      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
+
+      // Always use WebBrowser to keep app running in background
+      await WebBrowser.openBrowserAsync(url);
+      console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now from MediaPlayer');
+    } catch (error) {
+      console.error('Buy now error:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+    }
+  };
+
+  const handleImageNavigation = (productId: string, direction: 'prev' | 'next', imageCount: number) => {
+    setProductImageIndexes(prev => {
+      const currentIndex = prev[productId] || 0;
+      const newIndex = direction === 'next' 
+        ? (currentIndex + 1) % imageCount
+        : (currentIndex - 1 + imageCount) % imageCount;
+      
+      return { ...prev, [productId]: newIndex };
+    });
+  };
+
+  const formatPrice = (price: string | number): string => {
+    if (typeof price === 'number') {
+      return `$${price.toFixed(2)}`;
+    }
+    return price.toString();
+  };
+
+  const renderStars = (rating: number) => {
+    const stars = [];
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    
+    for (let i = 0; i < fullStars; i++) {
+      stars.push(<Ionicons key={i} name="star" size={12} color="#f59e0b" />);
+    }
+    
+    if (hasHalfStar) {
+      stars.push(<Ionicons key="half" name="star-half" size={12} color="#f59e0b" />);
+    }
+    
+    const emptyStars = 5 - Math.ceil(rating);
+    for (let i = 0; i < emptyStars; i++) {
+      stars.push(<Ionicons key={`empty-${i}`} name="star-outline" size={12} color="#d1d5db" />);
+    }
+    
+    return stars;
+  };
 
   // Remove blurhash placeholder that was causing the gradient blob
   // const blurhash = 'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
@@ -86,8 +195,19 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         setMedia(playlist.mediaFiles || []);
         setPlaylistTitle(playlist.name || 'Playlist');
       } else if (slideshow) {
+        console.log('🖼️ SLIDESHOW_PROCESSING: Processing slideshow with images:', slideshow.images?.length || 0);
+        console.log('🖼️ SLIDESHOW_PROCESSING: Slideshow images data:', slideshow.images);
+        
         // Convert slideshow images to media format expected by MediaPlayer
         const slideshowMedia = slideshow.images?.map((image: any) => {
+          console.log('🖼️ SLIDESHOW_IMAGE_PROCESSING: Processing image:', {
+            id: image.id,
+            url: image.url,
+            title: image.title,
+            caption: image.caption,
+            displayOrder: image.displayOrder
+          });
+          
           // Use streaming URL if available, otherwise fall back to direct URL
           let imageUrl = image.url;
           
@@ -105,9 +225,11 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
             });
             
             imageUrl = streamingUrl;
+          } else {
+            console.log('🖼️ SLIDESHOW_URL_DIRECT: Using URL as-is (already streaming URL):', imageUrl);
           }
           
-          return {
+          const processedImage = {
             id: image.id,
             title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
             s3_key: imageUrl, // Use streaming URL for better compatibility
@@ -118,7 +240,13 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
             caption: image.caption,
             displayOrder: image.displayOrder
           };
+          
+          console.log('🖼️ SLIDESHOW_IMAGE_PROCESSED:', processedImage);
+          return processedImage;
         }) || [];
+        
+        console.log('🖼️ SLIDESHOW_MEDIA_FINAL: Final media array:', slideshowMedia);
+        console.log('🖼️ SLIDESHOW_MEDIA_COUNT: Setting media with', slideshowMedia.length, 'items');
         
         // Don't add background audio as a separate media item
         // It will be handled by the backgroundAudioUrl useMemo above
@@ -299,12 +427,13 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const renderMediaItem = (item: MediaItem, index: number) => {
     const isActive = index === currentIndex;
     const isVideo = item.media_type === 'video';
+    const itemUri = item.s3_key || item.url || 'https://placehold.co/400x300?text=No+Image';
 
     if (isVideo) {
       return (
         <Video
           ref={isActive ? videoRef : null}
-          source={{ uri: item.s3_key }}
+          source={{ uri: itemUri }}
           rate={1.0}
           volume={1.0}
           isMuted={isMuted || !isActive}
@@ -318,7 +447,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
     } else {
       return (
         <ExpoImage
-          source={{ uri: item.s3_key }}
+          source={{ uri: itemUri }}
           style={styles.media}
           contentFit="contain"
           transition={300}
@@ -372,7 +501,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               {media[currentIndex] && !imageLoadError && (
                 <Image
                   source={{
-                    uri: media[currentIndex].s3_key,
+                    uri: media[currentIndex].s3_key || media[currentIndex].url || 'https://placehold.co/400x300?text=No+Image',
                     headers: {
                       // Add cache control headers to prevent caching issues
                       'Cache-Control': 'no-cache',
@@ -384,11 +513,12 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                   resizeMode="contain"
                   onError={(error) => {
                     console.error('🖼️ SLIDESHOW_IMAGE_ERROR:', error);
-                    console.error('🖼️ Failed to load image:', media[currentIndex].s3_key);
+                    console.error('🖼️ Failed to load image:', media[currentIndex].s3_key || media[currentIndex].url);
 
                     // Log additional details for debugging
                     console.error('🖼️ Image details:', {
-                      url: media[currentIndex].s3_key,
+                      s3_key: media[currentIndex].s3_key,
+                      url: media[currentIndex].url,
                       mediaType: media[currentIndex].media_type,
                       id: media[currentIndex].id,
                     });
@@ -396,7 +526,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                     setImageLoadError(true);
                   }}
                   onLoad={() => {
-                    console.log('🖼️ SLIDESHOW_IMAGE_LOADED:', media[currentIndex].s3_key);
+                    console.log('🖼️ SLIDESHOW_IMAGE_LOADED:', media[currentIndex].s3_key || media[currentIndex].url);
                     setImageLoadError(false);
                   }}
                 />
@@ -466,21 +596,144 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               <MaterialIcons name="storefront" size={24} color="#374151" />
               <Text style={styles.featuredProductsTitle}>Featured Products</Text>
             </View>
-            <View style={styles.featuredProductsContent}>
+            <ScrollView
+              style={styles.featuredProductsContent}
+              showsVerticalScrollIndicator={true}
+              bounces={Platform.OS === 'ios'}
+              overScrollMode={Platform.OS === 'android' ? 'always' : 'auto'}
+              contentContainerStyle={styles.productsListContent}
+              scrollEventThrottle={16}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled={true}
+              {...(Platform.OS === 'web' && {
+                scrollEnabled: true,
+                showsVerticalScrollIndicator: true,
+              })}
+            >
               {slideshow.productLinks && slideshow.productLinks.length > 0 ? (
-                <Text style={styles.featuredProductsText}>
-                  {slideshow.productLinks.length} products available
-                </Text>
+                slideshow.productLinks
+                  .filter((link: ProductLink) => link.isActive)
+                  .sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder)
+                  .map((link: ProductLink) => {
+                    const images = link.images && link.images.length > 0 ? link.images : [link.imageUrl].filter(Boolean);
+                    const currentImageIndex = productImageIndexes[link.id] || 0;
+                    const currentImage = images[currentImageIndex];
+
+                    return (
+                      <View key={link.id} style={styles.enhancedProductCard}>
+                        {/* Image Carousel Section */}
+                        <View style={styles.productImageContainer}>
+                          {currentImage ? (
+                            <>
+                              <Image
+                                source={{ uri: currentImage }}
+                                style={styles.enhancedProductImage}
+                                resizeMode="cover"
+                              />
+                              {images.length > 1 && (
+                                <>
+                                  <TouchableOpacity
+                                    style={[styles.imageNavButton, styles.imageNavLeft]}
+                                    onPress={() => handleImageNavigation(link.id.toString(), 'prev', images.length)}
+                                  >
+                                    <Ionicons name="chevron-back" size={20} color="#fff" />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.imageNavButton, styles.imageNavRight]}
+                                    onPress={() => handleImageNavigation(link.id.toString(), 'next', images.length)}
+                                  >
+                                    <Ionicons name="chevron-forward" size={20} color="#fff" />
+                                  </TouchableOpacity>
+                                  <View style={styles.imageIndicators}>
+                                    {images.map((_: string | undefined, index: number) => (
+                                      <View
+                                        key={index}
+                                        style={[
+                                          styles.imageIndicator,
+                                          index === currentImageIndex && styles.activeImageIndicator
+                                        ]}
+                                      />
+                                    ))}
+                                  </View>
+                                </>
+                              )}
+                            </>
+                          ) : (
+                            <View style={styles.enhancedProductPlaceholder}>
+                              <MaterialIcons name="shopping-bag" size={40} color="#9ca3af" />
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Product Info Section */}
+                        <View style={styles.enhancedProductContent}>
+                          <Text style={styles.enhancedProductTitle} numberOfLines={2}>
+                            {link.title}
+                          </Text>
+
+                          {/* Rating and Reviews */}
+                          {link.rating && (
+                            <View style={styles.ratingContainer}>
+                              <View style={styles.starsContainer}>
+                                {renderStars(link.rating)}
+                              </View>
+                              <Text style={styles.ratingText}>
+                                {link.rating.toFixed(1)}
+                              </Text>
+                              {link.reviewCount && (
+                                <Text style={styles.reviewCount}>
+                                  ({link.reviewCount} reviews)
+                                </Text>
+                              )}
+                            </View>
+                          )}
+
+                          {/* Price */}
+                          {link.price && (
+                            <View style={styles.priceContainer}>
+                              <Text style={styles.currentPrice}>{formatPrice(link.price)}</Text>
+                              {link.originalPrice && link.originalPrice !== link.price && (
+                                <Text style={styles.originalPrice}>{formatPrice(link.originalPrice)}</Text>
+                              )}
+                            </View>
+                          )}
+
+                          {/* Description */}
+                          {link.description && (
+                            <Text style={styles.enhancedProductDescription} numberOfLines={2}>
+                              {link.description}
+                            </Text>
+                          )}
+
+                          {/* Action Buttons */}
+                          <View style={styles.productActionButtons}>
+                            <TouchableOpacity
+                              style={styles.buyNowButton}
+                              onPress={() => handleBuyNow(link)}
+                            >
+                              <MaterialIcons name="flash-on" size={16} color="#fff" />
+                              <Text style={styles.buyNowButtonText}>Buy Now</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.addToCartButton}
+                              onPress={() => handleAddToCart(link)}
+                            >
+                              <MaterialIcons name="add-shopping-cart" size={16} color="#3b82f6" />
+                              <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
               ) : (
                 <View style={styles.noProductsContainer}>
-                  <MaterialIcons name="shopping-bag" size={48} color="#ccc" />
+                  <MaterialIcons name="shopping-bag" size={48} color="#d1d5db" />
                   <Text style={styles.noProductsText}>No products available</Text>
-                  <Text style={styles.noProductsSubtext}>
-                    Products related to this content will appear here
-                  </Text>
                 </View>
               )}
-            </View>
+            </ScrollView>
           </View>
         </View>
 
@@ -800,6 +1053,8 @@ const styles = StyleSheet.create({
   },
   slideshowImage: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   navButton: {
     position: 'absolute',
@@ -849,6 +1104,160 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 12,
     textAlign: 'center',
+  },
+  enhancedProductCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  productImageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 200,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  enhancedProductImage: {
+    width: '100%',
+    height: '100%',
+  },
+  enhancedProductPlaceholder: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  imageNavButton: {
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -20 }],
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  imageNavLeft: {
+    left: 10,
+  },
+  imageNavRight: {
+    right: 10,
+  },
+  imageIndicators: {
+    flexDirection: 'row',
+    position: 'absolute',
+    bottom: 10,
+    alignSelf: 'center',
+  },
+  imageIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    marginHorizontal: 4,
+  },
+  activeImageIndicator: {
+    backgroundColor: 'white',
+  },
+  enhancedProductContent: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  enhancedProductTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  starsContainer: {
+    flexDirection: 'row',
+    marginRight: 8,
+  },
+  ratingText: {
+    fontSize: 14,
+    color: '#f59e0b',
+    fontWeight: '600',
+  },
+  reviewCount: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  currentPrice: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  originalPrice: {
+    fontSize: 14,
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
+    marginLeft: 8,
+  },
+  enhancedProductDescription: {
+    fontSize: 14,
+    color: '#4b5563',
+    marginBottom: 16,
+    lineHeight: 22,
+  },
+  productActionButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  buyNowButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    gap: 5,
+  },
+  buyNowButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  addToCartButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 15,
+    gap: 5,
+  },
+  addToCartButtonText: {
+    color: '#3b82f6',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  productsListContent: {
+    paddingBottom: 20, // Add some padding at the bottom for the last item
   },
 });
 
