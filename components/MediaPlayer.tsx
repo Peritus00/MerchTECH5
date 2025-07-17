@@ -55,7 +55,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
 
   const blurhash =
-    '|rF?hV%2WCj[ayj[a_jAdofQIUWVoffaRiWVoffaRiWV';
+    'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
 
   const fetchMedia = useCallback(async () => {
     // If external data is provided, use it instead of fetching
