@@ -23,15 +23,28 @@ import {
   FontAwesome5,
 } from '@expo/vector-icons';
 import Swiper from 'react-native-swiper';
-import { Video } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
   IAudioPlayer,
 } from '../services/audio/AudioService';
-import { Media } from '../types';
+import { MediaFile } from '../shared/media-schema';
 import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
+
+// Define the media item interface for MediaPlayer
+interface MediaItem {
+  id: string | number;
+  title?: string;
+  s3_key: string;
+  media_type: 'image' | 'audio' | 'video';
+  type?: string;
+  fileType?: string;
+  contentType?: string;
+  caption?: string;
+  displayOrder?: number;
+}
 
 interface MediaPlayerProps {
   mediaId?: string;
@@ -43,7 +56,7 @@ interface MediaPlayerProps {
 }
 
 const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow, autoPlay = false }: MediaPlayerProps) => {
-  const [media, setMedia] = useState<Media[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
   const [playlistTitle, setPlaylistTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +85,23 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         setMedia(playlist.mediaFiles || []);
         setPlaylistTitle(playlist.name || 'Playlist');
       } else if (slideshow) {
-        setMedia(slideshow.images || []);
+        // Convert slideshow images to media format expected by MediaPlayer
+        const slideshowMedia = slideshow.images?.map((image: any) => ({
+          id: image.id,
+          title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
+          s3_key: image.url, // Map url to s3_key for MediaPlayer compatibility
+          media_type: 'image',
+          type: 'image',
+          fileType: 'image',
+          contentType: 'image/jpeg',
+          caption: image.caption,
+          displayOrder: image.displayOrder
+        })) || [];
+        
+        // Don't add background audio as a separate media item
+        // It will be handled by the backgroundAudioUrl useMemo above
+        
+        setMedia(slideshowMedia);
         setPlaylistTitle(slideshow.name || 'Slideshow');
       }
       
@@ -153,10 +182,16 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   }, [media, currentIndex]);
 
   const backgroundAudioUrl = useMemo(() => {
+    // For slideshows, use the slideshow.audioUrl directly
+    if (slideshow?.audioUrl) {
+      return slideshow.audioUrl;
+    }
+    
+    // For playlists, look for audio files in media
     return (
       media.find((item) => item.media_type === 'audio')?.s3_key || null
     );
-  }, [media]);
+  }, [media, slideshow]);
 
   // This effect manages the lifecycle of the background audio player
   useEffect(() => {
@@ -217,7 +252,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
     setIsMuted((prev) => !prev);
   };
 
-  const renderMediaItem = (item: Media, index: number) => {
+  const renderMediaItem = (item: MediaItem, index: number) => {
     const isActive = index === currentIndex;
     const isVideo = item.media_type === 'video';
 
@@ -231,7 +266,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           isMuted={isMuted || !isActive}
           shouldPlay={isActive && isPlaying}
           isLooping
-          resizeMode="contain"
+          resizeMode={ResizeMode.CONTAIN}
           style={styles.media}
           useNativeControls={false}
         />
