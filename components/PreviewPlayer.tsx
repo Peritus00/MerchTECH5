@@ -954,12 +954,26 @@ export default function PreviewPlayer({
             )}
 
             {/* Image Display - For slideshow images */}
+            {console.log('🐛 DEBUG: About to render image, conditions:', {
+              isImageOrSlideshow: isImage || isSlideshow,
+              hasCurrentMedia: !!currentMedia,
+              currentMediaUrl: currentMedia?.url,
+              renderCondition: (isImage || isSlideshow) && currentMedia
+            })}
+            
             {(isImage || isSlideshow) && currentMedia && (
               <View style={styles.imageContainer}>
+                {console.log('🐛 DEBUG: Inside image render block, rendering image with URL:', currentMedia.url)}
                 <Image
                   source={{ uri: currentMedia.url }}
                   style={styles.slideshowImage as any}
                   resizeMode="contain"
+                  onLoad={() => {
+                    console.log('🐛 DEBUG: Image loaded successfully!', currentMedia.url);
+                  }}
+                  onError={(error) => {
+                    console.log('🐛 DEBUG: Image failed to load!', error, currentMedia.url);
+                  }}
                 />
 
                 {/* Image navigation for slideshows */}
