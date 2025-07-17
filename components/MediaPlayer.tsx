@@ -370,31 +370,29 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
             {/* Current Image Display */}
             <View style={styles.slideshowImageContainer}>
               {media[currentIndex] && !imageLoadError && (
-                <ExpoImage
-                  source={{ 
+                <Image
+                  source={{
                     uri: media[currentIndex].s3_key,
                     headers: {
                       // Add cache control headers to prevent caching issues
                       'Cache-Control': 'no-cache',
                       // Add a timestamp to bust cache if needed
-                      'X-Timestamp': Date.now().toString()
-                    }
+                      'X-Timestamp': Date.now().toString(),
+                    },
                   }}
                   style={styles.slideshowImage}
-                  contentFit="contain"
-                  transition={500}
-                  cachePolicy="none" // Disable caching to ensure fresh content
+                  resizeMode="contain"
                   onError={(error) => {
                     console.error('🖼️ SLIDESHOW_IMAGE_ERROR:', error);
                     console.error('🖼️ Failed to load image:', media[currentIndex].s3_key);
-                    
+
                     // Log additional details for debugging
                     console.error('🖼️ Image details:', {
                       url: media[currentIndex].s3_key,
                       mediaType: media[currentIndex].media_type,
-                      id: media[currentIndex].id
+                      id: media[currentIndex].id,
                     });
-                    
+
                     setImageLoadError(true);
                   }}
                   onLoad={() => {
