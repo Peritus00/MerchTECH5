@@ -81,7 +81,7 @@ export default function PreviewPlayer({
 
   // Slideshow-specific state
   const [slideshowTimer, setSlideshowTimer] =
-    useState<NodeJS.Timeout | null>(null);
+    useState<ReturnType<typeof setTimeout> | null>(null);
   const [slideshowPlaying, setSlideshowPlaying] = useState(false);
 
   // Web audio fallback
@@ -416,7 +416,7 @@ export default function PreviewPlayer({
         setBackgroundAudioPlaying(false);
       });
 
-      audio.addEventListener('error', (e) => {
+      audio.addEventListener('error', (e: Event) => {
         console.error('🎵 PREVIEW_PLAYER: Background audio error:', e);
         console.error('🎵 PREVIEW_PLAYER: Background audio error details:', {
           error: audio.error,
@@ -666,7 +666,7 @@ export default function PreviewPlayer({
     try {
       // Convert ProductLink to Product format for cart
       const product = {
-        id: productLink.id,
+        id: productLink.id.toString(),
         name: productLink.title,
         description: productLink.description || '',
         price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
@@ -681,6 +681,12 @@ export default function PreviewPlayer({
         createdAt: new Date().toISOString(),
         userId: 0,
         metadata: {},
+        prices: [{
+          id: `price_${productLink.id}`,
+          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
+          currency: 'usd',
+          type: 'one_time' as const,
+        }],
       };
 
       addToCart(product);
@@ -959,16 +965,23 @@ export default function PreviewPlayer({
             )}
 
             {/* Image Display - For slideshow images */}
-            {console.log('🐛 DEBUG: About to render image, conditions:', {
-              isImageOrSlideshow: isImage || isSlideshow,
-              hasCurrentMedia: !!currentMedia,
-              currentMediaUrl: currentMedia?.url,
-              renderCondition: (isImage || isSlideshow) && currentMedia
-            })}
+            {/* Debug logging moved outside JSX */}
+            {(() => {
+              console.log('🐛 DEBUG: About to render image, conditions:', {
+                isImageOrSlideshow: isImage || isSlideshow,
+                hasCurrentMedia: !!currentMedia,
+                currentMediaUrl: currentMedia?.url,
+                renderCondition: (isImage || isSlideshow) && currentMedia
+              });
+              return null;
+            })()}
             
             {(isImage || isSlideshow) && currentMedia && (
               <View style={styles.imageContainer}>
-                {console.log('🐛 DEBUG: Inside image render block, rendering image with URL:', currentMedia.url)}
+                {(() => {
+                  console.log('🐛 DEBUG: Inside image render block, rendering image with URL:', currentMedia.url);
+                  return null;
+                })()}
                 <Image
                   source={{ uri: currentMedia.url }}
                   style={styles.slideshowImage as any}
