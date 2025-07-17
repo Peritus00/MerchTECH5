@@ -791,13 +791,15 @@ const styles = StyleSheet.create({
   // Additional slideshow styles
   slideshowImageContainer: {
     flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
     position: 'relative',
-    backgroundColor: '#000',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   slideshowImage: {
     flex: 1,
-    width: '100%',
-    height: '100%',
   },
   navButton: {
     position: 'absolute',
