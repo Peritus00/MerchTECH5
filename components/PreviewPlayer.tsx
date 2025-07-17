@@ -16,7 +16,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
 import { useCart } from '@/contexts/CartContext';
-import { checkoutAPI } from '@/services/api';
+import { paymentAPI } from '@/services/api';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
 
@@ -689,7 +689,7 @@ export default function PreviewPlayer({
     try {
       // Convert ProductLink to Product format for cart
       const product = {
-        id: parseInt(productLink.id),
+        id: productLink.id,
         name: productLink.title,
         description: productLink.description || '',
         price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
@@ -728,8 +728,8 @@ export default function PreviewPlayer({
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = base;
 
-      const items = [{ productId: parseInt(productLink.id), quantity: 1 }];
-      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      const items = [{ productId: productLink.id, quantity: 1 }];
+      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
       // Always use WebBrowser to keep app running in background
       await WebBrowser.openBrowserAsync(url);

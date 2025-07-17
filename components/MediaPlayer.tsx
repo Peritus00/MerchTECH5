@@ -206,7 +206,28 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const backgroundAudioUrl = useMemo(() => {
     // For slideshows, use the slideshow.audioUrl directly
     if (slideshow?.audioUrl) {
-      return slideshow.audioUrl;
+      let audioUrl = slideshow.audioUrl;
+      
+      // Check if this is an S3 URL and needs to be processed
+      if (audioUrl && audioUrl.includes('amazonaws.com') && slideshow.id) {
+        // Generate a streaming URL for the audio file
+        const baseUrl = process.env.NODE_ENV === 'production' 
+          ? 'https://merchtech5-production.up.railway.app'
+          : 'http://localhost:5001';
+        
+        // Use the streaming endpoint which handles CORS properly
+        const streamingUrl = `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`;
+        
+        console.log('🔊 SLIDESHOW_AUDIO_URL_CONVERSION:', {
+          original: audioUrl,
+          streaming: streamingUrl,
+          slideshowId: slideshow.id
+        });
+        
+        audioUrl = streamingUrl;
+      }
+      
+      return audioUrl;
     }
     
     // For playlists, look for audio files in media
