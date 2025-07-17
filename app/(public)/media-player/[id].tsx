@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import MediaPlayer from '@/components/MediaPlayer';
+import PreviewPlayer from '@/components/PreviewPlayer';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { slideshowsAPI, playlistsAPI, mediaAPI } from '@/services/api';
@@ -197,12 +198,27 @@ export default function DynamicMediaPlayerPage() {
           <ThemedText style={styles.backButtonText}>{'< Back'}</ThemedText>
         </TouchableOpacity>
       </View>
-      <MediaPlayer
-        media={mediaFiles}
-        playlist={playlist}
-        slideshow={slideshow}
-        autoPlay={false}
-      />
+      {slideshow ? (
+        <PreviewPlayer
+          mediaFiles={mediaFiles}
+          playlistName={slideshow.name}
+          playlistId={slideshow.id}
+          previewDuration={30}
+          autoplay={false}
+          productLinks={slideshow.productLinks || []}
+          onPreviewComplete={() => console.log('Preview completed')}
+          backgroundAudioUrl={slideshow.audioUrl 
+            ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/slideshow-audio/${slideshow.id}/stream`
+            : undefined}
+        />
+      ) : (
+        <MediaPlayer
+          media={mediaFiles}
+          playlist={playlist}
+          slideshow={slideshow}
+          autoPlay={false}
+        />
+      )}
     </ThemedView>
   );
 }
