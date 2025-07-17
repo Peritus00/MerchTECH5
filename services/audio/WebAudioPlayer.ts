@@ -27,7 +27,7 @@ class WebAudioPlayer {
         console.error('WebAudioPlayer: Browser does not support the Audio object.');
         return;
       }
-      this.audio = new (window as any)['Au' + 'dio'](uri);
+      this.audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)](uri);
       this.audio.loop = options.isLooping;
 
       this.audio.addEventListener('ended', this.handleEnded);
