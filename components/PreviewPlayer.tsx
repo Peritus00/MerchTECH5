@@ -465,22 +465,8 @@ export default function PreviewPlayer({
 
   // Handle play
   const handlePlay = async () => {
-    if (previewEnded) return;
-
-    console.log('🔴 PREVIEW_PLAYER: Play button clicked!');
-    console.log('🔴 PREVIEW_PLAYER: Media type:', { isVideo, isAudio, isImage, isSlideshow });
-
-    // Hide overlay on first interaction
-    if (showPlayOverlay) {
-      setShowPlayOverlay(false);
-    }
     setHasUserInteracted(true);
-
-    if (!currentMedia || !currentMedia.url) {
-      console.log('🔴 PREVIEW_PLAYER: No current media or URL available');
-      Alert.alert('Error', 'No media track selected');
-      return;
-    }
+    setShowPlayOverlay(false);
 
     try {
       if (isImage || isSlideshow) {
@@ -499,49 +485,16 @@ export default function PreviewPlayer({
         setIsPlaying(true);
         setSlideshowPlaying(true);
 
-        console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow rotation started - images will rotate based on duration settings');
-
-        // Start background audio simultaneously with slideshow (like MediaPlayer does)
-        if (isSlideshow && backgroundAudioUrl) {
-          if (Platform.OS === 'web' && backgroundAudioRef.current) {
-            console.log('🎵 PREVIEW_PLAYER: Starting background audio with slideshow...');
-            try {
-              await backgroundAudioRef.current.play();
-              console.log('🎵 PREVIEW_PLAYER: ✅ Background audio started successfully with slideshow');
-            } catch (audioError) {
-              console.error('🎵 PREVIEW_PLAYER: ❌ Background audio play failed:', audioError);
-            }
-          } else if (backgroundAudioUrl && !backgroundAudioRef.current) {
-            console.log('🎵 PREVIEW_PLAYER: Background audio URL provided but no audio ref - setting up audio now');
-
-            // Setup audio immediately if it wasn't set up before
-            const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)](backgroundAudioUrl);
-            audio.crossOrigin = 'anonymous';
-            audio.loop = true;
-            audio.volume = 0.5;
-            audio.src = backgroundAudioUrl;
-            backgroundAudioRef.current = audio;
-
-            audio.addEventListener('canplaythrough', () => {
-              console.log('🎵 PREVIEW_PLAYER: Immediate audio setup - can play through, starting playback with slideshow');
-              audio.play().catch(error => {
-                console.error('🎵 PREVIEW_PLAYER: ❌ Immediate audio play failed:', error);
-              });
-            });
-
-            audio.load();
-          } else {
-            console.log('🎵 PREVIEW_PLAYER: No background audio available:', {
-              hasBackgroundAudioUrl: !!backgroundAudioUrl,
-              hasBackgroundAudioRef: !!backgroundAudioRef.current,
-              backgroundAudioUrl: backgroundAudioUrl
-            });
-          }
+        // If background audio is provided, play it
+        if (backgroundAudioRef.current) {
+          console.log('🔴 PREVIEW_PLAYER: Playing background audio for slideshow');
+          backgroundAudioRef.current.play();
+          setBackgroundAudioPlaying(true);
         }
 
-        console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow and audio started successfully - user initiated playback');
+        console.log('🔴 PREVIEW_PLAYER: ✅ Slideshow rotation started - images will rotate based on duration settings');
       } else if (isVideo) {
-        console.log('🔴 PREVIEW_PLAYER: Starting video playback...');
+        console.log('🔴 PREVIEW_PLAYER: Playing video...');
         if (!player) {
           console.log('🔴 PREVIEW_PLAYER: No video player available');
           Alert.alert('Error', 'Video player not initialized');

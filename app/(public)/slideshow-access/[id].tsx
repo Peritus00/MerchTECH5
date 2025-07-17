@@ -88,7 +88,7 @@ export default function SlideshowAccessScreen() {
         url: streamUrl,
         fileType: 'image',
         contentType: 'image/jpeg',
-        type: 'image', // Add type property like the playlist does
+        type: 'image' as 'image',
         duration: slideshow.autoplayInterval || 5000,
       };
     });
@@ -239,14 +239,10 @@ export default function SlideshowAccessScreen() {
           requiresActivationCode: true,
           images: [],
           description: 'This slideshow requires an activation code to access.',
-          isPublic: false,
-          userId: 0,
-          audioUrl: '', // Use empty string instead of null
+          audioUrl: '',
           autoplayInterval: 5000,
           transition: 'fade',
           createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          productLinks: [],
         };
         setSlideshow(minimalSlideshow);
       } else {
@@ -584,17 +580,14 @@ export default function SlideshowAccessScreen() {
           <View style={styles.fullPanel}>
             {/* Media Player Section */}
             <View style={styles.mediaSection}>
-                          <PreviewPlayer
-              mediaFiles={formattedMediaFiles}
-              playlistName={slideshow.name}
-              previewDuration={30}
-              autoplay={false}
-              productLinks={slideshow.productLinks || []}
-              onPreviewComplete={handlePreviewComplete}
-              backgroundAudioUrl={slideshow.audioUrl 
-                ? `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
-                : undefined}
-            />
+              <PreviewPlayer
+                mediaFiles={formattedMediaFiles}
+                playlistName={slideshow.name}
+                playlistId={slideshow.id.toString()}
+                autoplay={false}
+                onPreviewComplete={handlePreviewComplete}
+                backgroundAudioUrl={slideshow.audioUrl || ''}
+              />
             </View>
 
             {/* Chat Section */}
