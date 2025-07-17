@@ -53,6 +53,9 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const [isMuted, setIsMuted] = useState(false);
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
+  
+  // Slideshow-specific state
+  const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const blurhash =
     'LGF5]+Yk^6#M@-5c,1J5@[or[Q6.';
@@ -118,6 +121,32 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   useEffect(() => {
     fetchMedia();
   }, [fetchMedia]);
+
+  // Slideshow auto-play effect
+  useEffect(() => {
+    if (slideshow && isPlaying && media.length > 1) {
+      const interval = slideshow.autoplayInterval || 5000; // Default 5 seconds
+      
+      slideshowIntervalRef.current = setInterval(() => {
+        setCurrentIndex(prev => prev < media.length - 1 ? prev + 1 : 0);
+      }, interval);
+
+      return () => {
+        if (slideshowIntervalRef.current) {
+          clearInterval(slideshowIntervalRef.current);
+        }
+      };
+    }
+  }, [slideshow, isPlaying, media.length]);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (slideshowIntervalRef.current) {
+        clearInterval(slideshowIntervalRef.current);
+      }
+    };
+  }, []);
 
   const currentMediaItem = useMemo(() => {
     return media.length > 0 ? media[currentIndex] : null;
@@ -260,17 +289,43 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         <View style={styles.slideshowMainContent}>
           {/* Left Panel - Slideshow */}
           <View style={styles.slideshowLeftPanel}>
-            <Swiper
-              style={styles.slideshowSwiper}
-              showsButtons={false}
-              loop={false}
-              onIndexChanged={onIndexChanged}
-              dotStyle={styles.slideshowDot}
-              activeDotStyle={styles.slideshowActiveDot}
-              paginationStyle={styles.slideshowPagination}
-            >
-              {media.map(renderMediaItem)}
-            </Swiper>
+            {/* Current Image Display */}
+            <View style={styles.slideshowImageContainer}>
+              {media[currentIndex] && (
+                <ExpoImage
+                  source={{ uri: media[currentIndex].s3_key }}
+                  style={styles.slideshowImage}
+                  contentFit="contain"
+                  placeholder={{ blurhash }}
+                  transition={500}
+                />
+              )}
+              
+              {/* Navigation Arrows */}
+              <TouchableOpacity 
+                style={[styles.navButton, styles.prevButton]}
+                onPress={() => setCurrentIndex(prev => prev > 0 ? prev - 1 : media.length - 1)}
+              >
+                <MaterialIcons name="chevron-left" size={32} color="#fff" />
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.navButton, styles.nextButton]}
+                onPress={() => setCurrentIndex(prev => prev < media.length - 1 ? prev + 1 : 0)}
+              >
+                <MaterialIcons name="chevron-right" size={32} color="#fff" />
+              </TouchableOpacity>
+
+              {/* Image Info Overlay */}
+              <View style={styles.imageInfoOverlay}>
+                <Text style={styles.imageTitle}>
+                  {media[currentIndex]?.title || `Image ${currentIndex + 1}`}
+                </Text>
+                <Text style={styles.imageCounter}>
+                  {currentIndex + 1} of {media.length}
+                </Text>
+              </View>
+            </View>
 
             {/* Slideshow Controls */}
             <View style={styles.slideshowControls}>
@@ -618,6 +673,54 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
+  },
+  // Additional slideshow styles
+  slideshowImageContainer: {
+    flex: 1,
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  slideshowImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  navButton: {
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -25 }],
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  prevButton: {
+    left: 10,
+  },
+  nextButton: {
+    right: 10,
+  },
+  imageInfoOverlay: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 8,
+    padding: 12,
+  },
+  imageTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  imageCounter: {
+    color: '#ccc',
+    fontSize: 14,
   },
 });
 
