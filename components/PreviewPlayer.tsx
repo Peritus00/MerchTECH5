@@ -183,7 +183,7 @@ export default function PreviewPlayer({
             setWebAudioPlaying(false);
           });
 
-          audio.addEventListener('error', (e) => {
+          audio.addEventListener('error', (e: any) => {
             console.error('🔴 PREVIEW_PLAYER: Web audio error:', e);
             console.error('🔴 PREVIEW_PLAYER: Audio error details:', {
               error: audio.error,
@@ -206,11 +206,8 @@ export default function PreviewPlayer({
           console.log('🔴 PREVIEW_PLAYER: Web audio setup complete, loading started');
         } else {
           // Load audio track with expo-audio for mobile
-          audioPlayer.replace(currentMedia.url).then(() => {
-            console.log('🔴 PREVIEW_PLAYER: Audio loaded successfully on mobile');
-          }).catch((audioError) => {
-            console.error('🔴 PREVIEW_PLAYER: Error loading audio on mobile:', audioError);
-          });
+          audioPlayer.replace(currentMedia.url);
+          console.log('🔴 PREVIEW_PLAYER: Audio track replaced on mobile');
         }
       } catch (error) {
         console.error('🔴 PREVIEW_PLAYER: Error loading media:', error);
@@ -330,7 +327,7 @@ export default function PreviewPlayer({
   useEffect(() => {
     // Remove autoplay functionality - user must click play button
     console.log('🔴 PREVIEW_PLAYER: Autoplay disabled - user must click play button');
-  }, [autoplay, status.isLoaded, previewEnded, hasUserInteracted, isImage, isSlideshow, mediaFiles.length]);
+  }, [autoplay, (status as any)?.isLoaded, previewEnded, hasUserInteracted, isImage, isSlideshow, mediaFiles.length]);
 
   // Background audio setup for slideshows
   useEffect(() => {
@@ -795,14 +792,6 @@ export default function PreviewPlayer({
     return `$${numPrice.toFixed(2)}`;
   };
 
-  if (!currentMedia) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No media available for preview</Text>
-      </View>
-    );
-  }
-
   const handleCartPress = () => {
     // Navigate to cart - you can implement this based on your navigation setup
     console.log('Navigate to cart');
@@ -854,6 +843,14 @@ export default function PreviewPlayer({
       }
     }
   }, [audioStatus.playing, audioStatus.currentTime, audioStatus.duration, isVideo, isImage]);
+
+  if (!currentMedia) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No media available for preview</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -946,15 +943,27 @@ export default function PreviewPlayer({
                       const videoElement = document.querySelector('video');
                       if (videoElement) {
                         if (!document.fullscreenElement) {
-                          videoElement.requestFullscreen?.() ||
-                          videoElement.webkitRequestFullscreen?.() ||
-                          videoElement.mozRequestFullScreen?.() ||
-                          videoElement.msRequestFullscreen?.();
+                          if (videoElement.requestFullscreen) {
+                            videoElement.requestFullscreen().catch((err) => {
+                              console.warn('Fullscreen request failed:', err);
+                            });
+                          } else {
+                            // Fallback for older browsers
+                            (videoElement as any).webkitRequestFullscreen?.() ||
+                            (videoElement as any).mozRequestFullScreen?.() ||
+                            (videoElement as any).msRequestFullscreen?.();
+                          }
                         } else {
-                          document.exitFullscreen?.() ||
-                          document.webkitExitFullscreen?.() ||
-                          document.mozCancelFullScreen?.() ||
-                          document.msExitFullscreen?.();
+                          if (document.exitFullscreen) {
+                            document.exitFullscreen().catch((err) => {
+                              console.warn('Exit fullscreen failed:', err);
+                            });
+                          } else {
+                            // Fallback for older browsers
+                            (document as any).webkitExitFullscreen?.() ||
+                            (document as any).mozCancelFullScreen?.() ||
+                            (document as any).msExitFullscreen?.();
+                          }
                         }
                       }
                     }
@@ -974,7 +983,7 @@ export default function PreviewPlayer({
               <View style={styles.imageContainer}>
                 <Image
                   source={{ uri: currentMedia.url }}
-                  style={styles.slideshowImage}
+                  style={styles.slideshowImage as any}
                   resizeMode="contain"
                 />
 
@@ -1146,7 +1155,7 @@ export default function PreviewPlayer({
                           <>
                             <Image
                               source={{ uri: currentImage }}
-                              style={styles.enhancedProductImage}
+                                                             style={styles.enhancedProductImage as any}
                               resizeMode="cover"
                             />
                             {images.length > 1 && (
@@ -1268,12 +1277,12 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     backgroundColor: '#ffffff',
-    minHeight: '100vh', // Ensure full viewport height on web
+    minHeight: '100%' as any, // Ensure full viewport height on web
     ...(Platform.OS === 'web' && {
       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-      height: '100vh',
+      height: '100%' as any,
     }),
-  },
+  } as any,
   leftPanel: {
     flex: 1,
     backgroundColor: '#ffffff',
@@ -1287,7 +1296,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 20,
     minHeight: '100%',
-    maxHeight: '100vh', // Constrain to viewport height
+    maxHeight: '100%' as any, // Constrain to viewport height
   },
   // Playlist Header Styles
   playlistHeader: {
@@ -1577,9 +1586,9 @@ const styles = StyleSheet.create({
       overflow: 'auto',
       WebkitOverflowScrolling: 'touch',
       scrollbarWidth: 'thin',
-      maxHeight: 'calc(100vh - 200px)', // Account for header and padding
+      maxHeight: 'calc(100% - 200px)' as any, // Account for header and padding
     }),
-  },
+  } as any,
   productsListContent: {
     paddingBottom: 20, // Add padding at the bottom for better scrolling
     flexGrow: 1,
