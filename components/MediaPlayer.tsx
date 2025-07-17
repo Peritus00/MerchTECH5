@@ -29,7 +29,7 @@ import createAudioPlayer, {
   IAudioPlayer,
 } from '../services/audio/AudioService';
 import { Media } from '../types';
-import api from '../services/api';
+import { api } from '../services/api';
 
 const { width } = Dimensions.get('window');
 
