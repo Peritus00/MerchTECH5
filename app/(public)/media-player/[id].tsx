@@ -11,7 +11,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import MediaPlayer from '@/components/MediaPlayer';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
-import { slideshowsAPI, playlistsAPI, mediaAPI } from '@/services/api';
+import { slideshowsAPI, slideshowAccessAPI, playlistsAPI, mediaAPI } from '@/services/api';
 import { CartHeader } from '@/components/CartHeader';
 import ShareButton from '@/components/ShareButton';
 
@@ -70,9 +70,10 @@ export default function DynamicMediaPlayerPage() {
       {
         type: 'slideshow',
         load: async () => {
-          const response = await slideshowsAPI.getById(contentId);
-          if (response && response.slideshow && response.slideshow.images && response.slideshow.images.length > 0) {
-            return response.slideshow;
+          // Use slideshow-access API to get streaming URLs instead of direct S3 URLs
+          const response = await slideshowAccessAPI.getByIdForAccess(contentId);
+          if (response && response.images && response.images.length > 0) {
+            return response;
           }
           return null;
         },
