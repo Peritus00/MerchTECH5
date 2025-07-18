@@ -898,7 +898,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   slideshowLeftPanel: {
-    flex: 2,
+    flex: 1.2, // Reduced from 2 to 1.2 (give more space to products)
     backgroundColor: '#000000',
     borderRadius: 12,
     overflow: 'hidden',
@@ -935,7 +935,7 @@ const styles = StyleSheet.create({
     bottom: 60,
   },
   slideshowRightPanel: {
-    flex: 1,
+    flex: 1.8, // Increased from 1 to 1.8 (more space for products)
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,

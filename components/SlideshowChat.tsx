@@ -13,15 +13,15 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
-import { chatAPI } from '@/services/api';
+import { slideshowChatAPI } from '@/services/api';
 import { ChatMessage } from '@/shared/media-schema';
 
-interface PlaylistChatProps {
-  playlistId: string;
-  playlistName: string;
+interface SlideshowChatProps {
+  slideshowId: string;
+  slideshowName: string;
 }
 
-export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatProps) {
+export default function SlideshowChat({ slideshowId, slideshowName }: SlideshowChatProps) {
   const { user, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -32,7 +32,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (playlistId) {
+    if (slideshowId) {
       loadMessages();
       
       // Set up auto-refresh for real-time feel (every 5 seconds)
@@ -48,15 +48,15 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [playlistId]);
+  }, [slideshowId]);
 
   const loadMessages = async () => {
     try {
       setIsLoading(true);
-      console.log('🔴 CHAT: Loading messages for playlist:', playlistId);
-      const response = await chatAPI.getMessages(playlistId);
+      console.log('🎬 SLIDESHOW_CHAT: Loading messages for slideshow:', slideshowId);
+      const response = await slideshowChatAPI.getMessages(slideshowId);
       const fetchedMessages = response.messages || [];
-      console.log('🔴 CHAT: Loaded', fetchedMessages.length, 'messages');
+      console.log('🎬 SLIDESHOW_CHAT: Loaded', fetchedMessages.length, 'messages');
       setMessages(fetchedMessages);
       
       // Scroll to bottom after loading
@@ -64,7 +64,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('Error loading slideshow messages:', error);
       // Don't show error for chat loading failure - just show empty state
     } finally {
       setIsLoading(false);
@@ -74,7 +74,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
   const refreshMessages = async () => {
     try {
       setIsRefreshing(true);
-      const response = await chatAPI.getMessages(playlistId);
+      const response = await slideshowChatAPI.getMessages(slideshowId);
       const fetchedMessages = response.messages || [];
       
       // Only update if we have new messages
@@ -85,7 +85,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
         }, 100);
       }
     } catch (error) {
-      console.error('Error refreshing messages:', error);
+      console.error('Error refreshing slideshow messages:', error);
     } finally {
       setIsRefreshing(false);
     }
@@ -101,10 +101,10 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
     setIsSending(true);
 
     try {
-      console.log('🔴 CHAT: Sending message:', messageText);
-      const response = await chatAPI.sendMessage(playlistId, messageText);
+      console.log('🎬 SLIDESHOW_CHAT: Sending message:', messageText);
+      const response = await slideshowChatAPI.sendMessage(slideshowId, messageText);
       const sentMessage = response.message;
-      console.log('🔴 CHAT: Message sent:', sentMessage);
+      console.log('🎬 SLIDESHOW_CHAT: Message sent:', sentMessage);
       
       // Add the new message to the list
       setMessages(prev => [...prev, sentMessage]);
@@ -114,7 +114,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
         scrollViewRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error: any) {
-      console.error('Error sending message:', error);
+      console.error('Error sending slideshow message:', error);
       const errorMessage = error.response?.data?.error || 'Failed to send message';
       Alert.alert('Error', errorMessage);
       
@@ -125,46 +125,23 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
     }
   };
 
-  const deleteMessage = async (messageId: number) => {
-    Alert.alert(
-      'Delete Message',
-      'Are you sure you want to delete this message?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await chatAPI.deleteMessage(playlistId, messageId.toString());
-              setMessages(prev => prev.filter(msg => msg.id !== messageId));
-            } catch (error: any) {
-              const errorMessage = error.response?.data?.error || 'Failed to delete message';
-              Alert.alert('Error', errorMessage);
-            }
-          },
-        },
-      ]
-    );
+  const deleteMessage = async (messageId: string) => {
+    try {
+      console.log('🎬 SLIDESHOW_CHAT: Deleting message:', messageId);
+      await slideshowChatAPI.deleteMessage(slideshowId, messageId);
+      
+      // Remove the message from the list
+      setMessages(prev => prev.filter(msg => msg.id !== messageId));
+    } catch (error: any) {
+      console.error('Error deleting slideshow message:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to delete message';
+      Alert.alert('Error', errorMessage);
+    }
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-    });
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   const renderMessage = (message: ChatMessage) => {
@@ -180,12 +157,9 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
           styles.messageBubble,
           isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble
         ]}>
-          <Text style={[
-            styles.username,
-            isOwnMessage && styles.ownUsername
-          ]}>
-            {message.username}
-          </Text>
+          {!isOwnMessage && (
+            <Text style={styles.username}>{message.username}</Text>
+          )}
           <Text style={[
             styles.messageText,
             isOwnMessage && styles.ownMessageText
@@ -218,13 +192,13 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
       <View style={styles.container}>
         <View style={styles.header}>
           <MaterialIcons name="chat" size={20} color="#6b7280" />
-          <Text style={styles.headerTitle}>Playlist Discussion</Text>
+          <Text style={styles.headerTitle}>Slideshow Discussion</Text>
         </View>
         <View style={styles.unauthenticatedContainer}>
           <MaterialIcons name="lock" size={48} color="#9ca3af" />
           <Text style={styles.unauthenticatedText}>Sign in to join the conversation</Text>
           <Text style={styles.unauthenticatedSubtext}>
-            Connect with other listeners and share your thoughts about this playlist
+            Connect with other viewers and share your thoughts about this slideshow
           </Text>
         </View>
       </View>
@@ -236,7 +210,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
       {/* Header */}
       <View style={styles.header}>
         <MaterialIcons name="chat" size={20} color="#3b82f6" />
-        <Text style={styles.headerTitle}>Playlist Discussion</Text>
+        <Text style={styles.headerTitle}>Slideshow Discussion</Text>
         {isRefreshing && (
           <ActivityIndicator size="small" color="#3b82f6" />
         )}
@@ -262,7 +236,7 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
             <MaterialIcons name="chat-bubble-outline" size={48} color="#9ca3af" />
             <Text style={styles.emptyText}>No messages yet</Text>
             <Text style={styles.emptySubtext}>
-              Be the first to start the conversation about "{playlistName}"
+              Be the first to start the conversation about "{slideshowName}"
             </Text>
           </View>
         ) : (
@@ -308,31 +282,46 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
     backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
-    maxHeight: 400,
-    minHeight: 200,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#f9fafb',
+    padding: 16,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
-    gap: 8,
   },
   headerTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
+    marginLeft: 8,
     flex: 1,
+  },
+  unauthenticatedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  unauthenticatedText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  unauthenticatedSubtext: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
   messagesContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
   },
   messagesContent: {
     padding: 16,
@@ -343,51 +332,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 32,
-    gap: 8,
   },
   loadingText: {
     fontSize: 14,
     color: '#6b7280',
+    marginTop: 8,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 32,
-    gap: 8,
   },
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#6b7280',
+    color: '#374151',
+    textAlign: 'center',
+    marginTop: 16,
   },
   emptySubtext: {
     fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
-    paddingHorizontal: 16,
-  },
-  unauthenticatedContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  unauthenticatedText: {
-    fontSize: 16,
-    fontWeight: '600',
     color: '#6b7280',
     textAlign: 'center',
-  },
-  unauthenticatedSubtext: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
+    marginTop: 8,
+    lineHeight: 20,
   },
   messageContainer: {
-    marginBottom: 12,
+    marginBottom: 16,
     alignItems: 'flex-start',
   },
   ownMessageContainer: {
@@ -395,9 +367,8 @@ const styles = StyleSheet.create({
   },
   messageBubble: {
     maxWidth: '80%',
+    padding: 12,
     borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
   },
   otherMessageBubble: {
     backgroundColor: '#f3f4f6',
@@ -411,10 +382,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: '#6b7280',
-    marginBottom: 2,
-  },
-  ownUsername: {
-    color: 'rgba(255, 255, 255, 0.8)', // Light white for own messages
+    marginBottom: 4,
   },
   messageText: {
     fontSize: 14,
@@ -429,16 +397,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginTop: 4,
-    gap: 8,
   },
   timestamp: {
     fontSize: 11,
     color: '#9ca3af',
   },
   ownTimestamp: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#e5e7eb',
   },
   deleteButton: {
+    marginLeft: 8,
     padding: 2,
   },
   inputContainer: {
@@ -449,8 +417,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    padding: 16,
     gap: 12,
   },
   textInput: {
@@ -459,19 +426,17 @@ const styles = StyleSheet.create({
     borderColor: '#d1d5db',
     borderRadius: 20,
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
     fontSize: 14,
+    maxHeight: 100,
     color: '#1f2937',
-    backgroundColor: '#f9fafb',
-    maxHeight: 80,
   },
   sendButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
     backgroundColor: '#3b82f6',
-    justifyContent: 'center',
+    borderRadius: 20,
+    padding: 12,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   sendButtonDisabled: {
     backgroundColor: '#9ca3af',

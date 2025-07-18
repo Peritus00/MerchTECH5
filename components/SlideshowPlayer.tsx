@@ -30,6 +30,7 @@ import { ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
+import SlideshowChat from './SlideshowChat';
 
 const { width } = Dimensions.get('window');
 
@@ -170,7 +171,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
           id: image.id,
           title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
           caption: image.caption,
-          url: image.url,
+          url: image.image_url,
           displayOrder: image.displayOrder
         })) || [];
         
@@ -195,7 +196,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         id: image.id,
         title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
         caption: image.caption,
-        url: image.url,
+        url: image.image_url,
         displayOrder: image.displayOrder
       })) || [];
       
@@ -315,8 +316,14 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
       </View>
 
-      {/* Main Content - Horizontal Layout */}
-      <View style={styles.slideshowMainContent}>
+      {/* Scrollable Main Content */}
+      <ScrollView 
+        style={styles.scrollContainer}
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* Main Content - Horizontal Layout */}
+        <View style={styles.slideshowMainContent}>
         {/* Left Panel - Slideshow */}
         <View style={styles.slideshowLeftPanel}>
           {/* Current Image Display */}
@@ -538,24 +545,14 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         </View>
       </View>
 
-      {/* Bottom Panel - Live Chat */}
-      <View style={styles.slideshowChatSection}>
-        <View style={styles.chatHeader}>
-          <MaterialIcons name="chat" size={20} color="#3b82f6" />
-          <Text style={styles.chatTitle}>Live Chat</Text>
-          <View style={styles.chatBadge}>
-            <Text style={styles.chatBadgeText}>0</Text>
-          </View>
+        {/* Bottom Panel - Live Chat */}
+        <View style={styles.slideshowChatSection}>
+          <SlideshowChat
+            slideshowId={slideshowData?.id?.toString() || ''}
+            slideshowName={slideshowData?.name || 'Slideshow'}
+          />
         </View>
-        <View style={styles.chatContent}>
-          <View style={styles.chatEmptyContainer}>
-            <MaterialIcons name="chat" size={48} color="#ccc" />
-            <Text style={styles.chatEmptyText}>
-              Join the conversation! Share your thoughts about this slideshow.
-            </Text>
-          </View>
-        </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -584,6 +581,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8fafc',
   },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   slideshowHeader: {
     paddingVertical: 16,
     paddingHorizontal: 20,
@@ -598,16 +601,17 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   slideshowMainContent: {
-    flex: 1,
     flexDirection: 'row',
     padding: 20,
     gap: 20,
+    minHeight: 500, // Set minimum height for the main content
   },
   slideshowLeftPanel: {
-    flex: 2,
+    flex: 1.2, // Reduced from 2 to 1.2 (give more space to products)
     backgroundColor: '#000000',
     borderRadius: 12,
     overflow: 'hidden',
+    minHeight: 500, // Set minimum height for the slideshow panel
   },
   slideshowImageContainer: {
     flex: 1,
@@ -682,7 +686,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   slideshowRightPanel: {
-    flex: 1,
+    flex: 1.8, // Increased from 1 to 1.8 (more space for products)
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
@@ -691,6 +695,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
+    minHeight: 500, // Set minimum height for the products panel
   },
   featuredProductsHeader: {
     flexDirection: 'row',
@@ -887,7 +892,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    maxHeight: 200,
+    minHeight: 400, // Increased from maxHeight: 200 to minHeight: 400 for better visibility
   },
   chatHeader: {
     flexDirection: 'row',
