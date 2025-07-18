@@ -140,11 +140,10 @@ export default function PlaylistAccessScreen() {
         console.log('🔴 PLAYLIST_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🔴 PLAYLIST_ACCESS: Looking for access to playlist ID:', id, 'as number:', parseInt(id));
         try {
-          const response = await accessCodeAPI.getMyAccess();
-        const userAccessCodes = response?.accessCodes || response || [];
+          const userAccessCodes = await accessCodeAPI.getMyAccess();
           console.log('🔴 PLAYLIST_ACCESS: User access codes response:', userAccessCodes);
           console.log('🔴 PLAYLIST_ACCESS: Number of access codes found:', userAccessCodes?.length || 0);
-          
+
           if (userAccessCodes && userAccessCodes.length > 0) {
             userAccessCodes.forEach((accessCode: any, index: number) => {
               console.log(`🔴 PLAYLIST_ACCESS: Access code ${index + 1}:`, {
@@ -463,19 +462,24 @@ export default function PlaylistAccessScreen() {
     console.log('🔴 PLAYLIST_ACCESS: 30-second preview completed, returning to access screen');
     setShowPreview(false);
     
+    // Redirect to the playlist creator's store
+    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store';
+    
     // Show a brief message that preview is complete
     Alert.alert(
       '⏰ Preview Complete',
-      'Your 30-second preview has ended. Enter an activation code for full access or visit our store.',
+      'Your 30-second preview has ended. Enter an activation code for full access or visit the creator\'s store.',
       [
         { text: 'Enter Code', style: 'default' },
-        { text: 'Visit Store', onPress: () => router.push('/store') }
+        { text: 'Visit Store', onPress: () => router.push(storeUrl) }
       ]
     );
   };
 
   const handleGoToStore = () => {
-    router.push('/store');
+    // Redirect to the playlist creator's store
+    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store';
+    router.push(storeUrl);
   };
 
   if (isLoading || !playlist) {
@@ -528,14 +532,13 @@ export default function PlaylistAccessScreen() {
 
         <PreviewPlayer
           mediaFiles={formattedFiles}
+          playlistName={playlist.name}
           playlistId={id}
-          shouldAutoplay={true}
+          autoplay={true}
           previewDuration={30}
           productLinks={playlist.productLinks || []}
           onPreviewComplete={handlePreviewComplete}
-          onSetPlaybackState={(isPlaying, trackIndex) => {
-            console.log(`Preview playback state: ${isPlaying ? 'Playing' : 'Paused'} track ${trackIndex + 1}`);
-          }}
+          userId={playlist.userId}
         />
         
         <View style={styles.previewActions}>

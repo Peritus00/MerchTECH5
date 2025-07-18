@@ -82,11 +82,33 @@ export const qrCodeService = {
   async deleteQRCode(id: number): Promise<void> {
     try {
       console.log('📱 QRCodeService: Deleting QR code:', id);
-      await qrCodeAPI.delete(id.toString());
+      console.log('📱 QRCodeService: ID type:', typeof id);
+      console.log('📱 QRCodeService: Converting to string:', id.toString());
+      
+      const result = await qrCodeAPI.delete(id.toString());
+      console.log('📱 QRCodeService: Delete API response:', result);
       console.log('📱 QRCodeService: QR code deleted successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('📱 QRCodeService: Error deleting QR code:', error);
-      throw error;
+      console.error('📱 QRCodeService: Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        method: error.config?.method
+      });
+      
+      // Provide more specific error messages
+      if (error.response?.status === 403) {
+        throw new Error('You do not have permission to delete this QR code');
+      } else if (error.response?.status === 404) {
+        throw new Error('QR code not found or already deleted');
+      } else if (error.response?.status === 401) {
+        throw new Error('Authentication required. Please log in again.');
+      } else {
+        throw new Error(error.response?.data?.error || error.message || 'Failed to delete QR code');
+      }
     }
   },
 

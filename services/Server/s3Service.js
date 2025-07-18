@@ -81,6 +81,10 @@ class S3Service {
             uploadedAt: new Date().toISOString(),
           },
         },
+        // 🔧 OPTIMIZED FOR LARGE FILES
+        partSize: 1024 * 1024 * 10, // 10MB parts
+        queueSize: 4, // 4 concurrent uploads
+        leavePartsOnError: false, // Clean up failed parts
       });
       upload.on('httpUploadProgress', (progress) => {
         if (progress.loaded && progress.total) {

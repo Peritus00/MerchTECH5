@@ -109,12 +109,8 @@ export default function PreviewPlayerScreen() {
 
     // Background audio will be handled separately by PreviewPlayer
     if (slideshow.audioUrl) {
-      // The server provides the correct streaming URL for audio.
-      const audioStreamUrl = `${baseUrl}/api/slideshow-audio/${slideshow.id}/stream`;
-      
       console.log('🎵 Background audio available:', {
-        originalUrl: "REDACTED", // No longer sending originalUrl
-        streamUrl: audioStreamUrl
+        audioUrl: slideshow.audioUrl
       });
       
       // Don't add to imageFiles array - PreviewPlayer will handle it separately
@@ -129,12 +125,15 @@ export default function PreviewPlayerScreen() {
   };
 
   const handlePreviewComplete = () => {
+    // Redirect to the slideshow creator's store
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    
     Alert.alert(
       '⏰ Preview Complete',
-      'Your slideshow preview has ended. Enter an activation code for full access or visit our store.',
+      'Your slideshow preview has ended. Enter an activation code for full access or visit the creator\'s store.',
       [
         { text: 'Enter Code', onPress: () => router.push(`/slideshow-access/${id}`) },
-        { text: 'Visit Store', onPress: () => router.push('/store') }
+        { text: 'Visit Store', onPress: () => router.push(storeUrl) }
       ]
     );
   };
@@ -184,9 +183,9 @@ export default function PreviewPlayerScreen() {
         productLinks={slideshow.productLinks || []}
         onPreviewComplete={handlePreviewComplete}
         backgroundAudioUrl={slideshow.audioUrl ? 
-          // The server provides the correct streaming URL for audio.
-          `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`
+          `http://localhost:5001/api/slideshow-audio/${slideshow.id}/stream`
           : undefined}
+        userId={slideshow.userId}
       />
 
       {/* Slideshow Info Section */}

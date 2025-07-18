@@ -621,6 +621,23 @@ export const slideshowAccessAPI = {
       throw error;
     }
   },
+  async getByIdForPreview(id: string) {
+    try {
+      console.log('🎬 API: Fetching slideshow preview for ID:', id);
+      const response = await api.get(`/slideshow-preview/${id}`);
+      console.log('🎬 API: Slideshow preview response:', response.data);
+      
+      // The server returns the slideshow data directly
+      return response.data;
+    } catch (error: any) {
+      console.error('🎬 API: Error fetching slideshow for preview:', error);
+      if (error.response && error.response.status === 404) {
+        console.warn(`Slideshow with ID ${id} not found.`);
+        return null;
+      }
+      throw error;
+    }
+  },
 };
 
 // This is for managing products associated with playlists or slideshows.
@@ -694,8 +711,20 @@ export const qrCodeAPI = {
     return response.data;
   },
   async delete(id: string) {
-    const response = await api.delete(`/qrcodes/${id}`);
-    return response.data;
+    console.log('🌐 API: Attempting to delete QR code with ID:', id);
+    console.log('🌐 API: Delete URL:', `/qrcodes/${id}`);
+    
+    try {
+      const response = await api.delete(`/qrcodes/${id}`);
+      console.log('🌐 API: Delete response status:', response.status);
+      console.log('🌐 API: Delete response data:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('🌐 API: Delete request failed:', error);
+      console.error('🌐 API: Error response:', error.response?.data);
+      console.error('🌐 API: Error status:', error.response?.status);
+      throw error;
+    }
   },
 };
 
@@ -770,3 +799,23 @@ export const playlistChatAPI = {
     return res.data;
   },
 };
+
+// Slideshow Chat API
+export const slideshowChatAPI = {
+  async getMessages(slideshowId: string, limit = 50, offset = 0) {
+    const response = await api.get(`/slideshows/${slideshowId}/chat?limit=${limit}&offset=${offset}`);
+    return response.data;
+  },
+  async sendMessage(slideshowId: string, message: string) {
+    const response = await api.post(`/slideshows/${slideshowId}/chat`, { message });
+    return response.data;
+  },
+  async deleteMessage(slideshowId: string, messageId: string) {
+    console.log('📤 SlideshowChatAPI: Deleting message:', messageId);
+    const res = await api.delete(`/slideshows/${slideshowId}/chat/${messageId}`);
+    return res.data;
+  },
+};
+
+// Main chat API (alias for playlist chat for backward compatibility)
+export const chatAPI = playlistChatAPI;

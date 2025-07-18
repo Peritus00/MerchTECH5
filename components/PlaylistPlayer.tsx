@@ -15,7 +15,6 @@ import {
   SafeAreaView,
   Platform,
   ScrollView,
-  Alert,
   Image,
 } from 'react-native';
 import {
@@ -34,6 +33,7 @@ import { ProductLink } from '@/shared/media-schema';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
+import { Alert } from 'react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -75,7 +75,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
 
-  const { addToCart } = useCart();
+  const { addToCart, cart, getTotalItems } = useCart();
 
   const handleAddToCart = (productLink: ProductLink) => {
     try {
@@ -215,41 +215,24 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     return media.length > 0 ? media[currentIndex] : null;
   }, [media, currentIndex]);
 
-  const backgroundAudioUrl = useMemo(() => {
-    return media.find((item) => item.media_type === 'audio' || item.fileType === 'audio' || item.type === 'audio')?.url || null;
-  }, [media]);
+  // For playlists, we don't use background audio - each track plays individually
+  // This is different from slideshows where we want continuous background music
+  const backgroundAudioUrl = null;
 
-  // Audio player lifecycle
+  // Audio player lifecycle - disabled for playlists since we handle each track individually
   useEffect(() => {
-    if (backgroundAudioUrl) {
+    // Clean up any existing audio player
+    if (audioPlayerRef.current) {
       audioPlayerRef.current?.unload();
-
-      const onEnded = () => {
-        setIsPlaying(false);
-      };
-
-      audioPlayerRef.current = createAudioPlayer(
-        backgroundAudioUrl,
-        onEnded,
-        {
-          shouldPlay: isPlaying,
-          isLooping: true,
-        }
-      );
+      audioPlayerRef.current = null;
     }
+  }, []);
 
-    return () => {
-      audioPlayerRef.current?.unload();
-    };
-  }, [backgroundAudioUrl]);
-
-  // Play/pause synchronization
+  // Play/pause synchronization - only handle the current track's Video component
   useEffect(() => {
     if (isPlaying) {
-      audioPlayerRef.current?.play();
       videoRef.current?.playAsync();
     } else {
-      audioPlayerRef.current?.pause();
       videoRef.current?.pauseAsync();
     }
   }, [isPlaying]);
@@ -263,13 +246,42 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
   }, [currentIndex, media.length]);
 
+  const handleVideoError = useCallback((error: any) => {
+    console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
+    console.log('🎵 VIDEO_ERROR: Current media item:', currentMediaItem);
+    
+    // Show error message and provide skip option
+    Alert.alert(
+      'Media Error',
+      `Unable to play "${currentMediaItem?.title || 'this media file'}". This file may be corrupted or unavailable.`,
+      [
+        {
+          text: 'Skip',
+          onPress: () => {
+            console.log('🎵 VIDEO_ERROR: User chose to skip to next track');
+            goToNextVideo();
+          },
+        },
+        {
+          text: 'Try Again',
+          onPress: () => {
+            console.log('🎵 VIDEO_ERROR: User chose to retry');
+            // Force re-render by changing the key
+            setCurrentIndex(currentIndex);
+          },
+        },
+      ]
+    );
+  }, [currentMediaItem, goToNextVideo, currentIndex]);
+
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (status.isLoaded) {
-      // Capture video dimensions when loaded
-      if (status.naturalSize && !videoDimensions) {
+      // Capture video dimensions when loaded - naturalSize is not available in current expo-av version
+      // Use fallback dimensions for now
+      if (!videoDimensions) {
         setVideoDimensions({
-          width: status.naturalSize.width,
-          height: status.naturalSize.height
+          width: 1920,
+          height: 1080
         });
       }
       
@@ -358,7 +370,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     
     const isImage = !isVideo && !isAudio; // Default to image if not video or audio
     
-    const itemUri = currentItem.url || currentItem.s3_key || 'https://placehold.co/400x300?text=No+Media';
+    // Use streaming endpoint URLs as provided by the server
+    // The server now provides working streaming endpoint URLs
+    const itemUri = currentItem.url?.startsWith('http') 
+      ? currentItem.url 
+      : `http://localhost:5001/api/media/${currentItem.id}/stream`;
 
     console.log('🎵 MEDIA_DETECTION:', {
       title: currentItem.title,
@@ -368,7 +384,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       contentType: currentItem.contentType,
       isVideo,
       isAudio,
-      isImage
+      isImage,
+      originalUrl: currentItem.url,
+      generatedUri: itemUri,
+      mediaId: currentItem.id,
+      apiBaseUrl: api.defaults.baseURL,
+      s3_key: currentItem.s3_key,
+      fullMediaObject: currentItem
     });
 
     // Calculate dynamic video style based on actual video dimensions and zoom level
@@ -393,7 +415,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       }
       // Fallback style while dimensions are loading
       return {
-        width: '112.5%', // Increased from 90% by 25% (90% * 1.25 = 112.5%)
+        width: width * 0.9, // Use 90% of screen width instead of string percentage
         height: 500 * zoomLevel,
         alignSelf: 'center' as const,
         borderRadius: 8,
@@ -402,22 +424,186 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     };
 
     if (isVideo) {
-      return (
-        <Video
-          ref={videoRef}
-          source={{ uri: itemUri }}
-          rate={1.0}
-          volume={1.0}
-          isMuted={isMuted}
-          shouldPlay={isPlaying}
-          isLooping={false} // Changed to false for sequential playback
-          resizeMode={ResizeMode.CONTAIN}
-          style={getVideoStyle()}
-          useNativeControls={false}
-          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-          onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate)}
-        />
-      );
+      console.log('🎵 VIDEO_COMPONENT: Rendering video with URI:', itemUri);
+      
+      // Use native HTML5 video for web, expo-av Video for mobile
+      if (Platform.OS === 'web') {
+        console.log('🎵 HTML5_VIDEO: About to render video element with:', {
+          src: itemUri,
+          isPlaying,
+          isMuted,
+          currentItem: currentItem.title
+        });
+        
+        return (
+          <video
+            ref={(ref) => {
+              console.log('🎵 HTML5_VIDEO: Video ref callback called:', !!ref);
+              if (ref) {
+                // Store reference for play/pause control
+                (videoRef as any).current = {
+                  playAsync: () => {
+                    console.log('🎵 HTML5_VIDEO: playAsync called');
+                    return ref.play();
+                  },
+                  pauseAsync: () => {
+                    console.log('🎵 HTML5_VIDEO: pauseAsync called');
+                    ref.pause();
+                  },
+                  setPositionAsync: (position: number) => { 
+                    console.log('🎵 HTML5_VIDEO: setPositionAsync called:', position);
+                    ref.currentTime = position / 1000; 
+                  },
+                };
+                
+                // Add comprehensive event listeners
+                ref.addEventListener('loadstart', () => {
+                  console.log('🎵 HTML5_VIDEO: loadstart - browser started loading');
+                });
+                
+                ref.addEventListener('durationchange', () => {
+                  console.log('🎵 HTML5_VIDEO: durationchange - duration:', ref.duration);
+                });
+                
+                ref.addEventListener('loadedmetadata', () => {
+                  console.log('🎵 HTML5_VIDEO: loadedmetadata - metadata loaded');
+                });
+                
+                ref.addEventListener('loadeddata', () => {
+                  console.log('🎵 HTML5_VIDEO: loadeddata - first frame loaded');
+                });
+                
+                ref.addEventListener('progress', () => {
+                  console.log('🎵 HTML5_VIDEO: progress - downloading');
+                });
+                
+                ref.addEventListener('canplay', () => {
+                  console.log('🎵 HTML5_VIDEO: canplay - can start playing');
+                });
+                
+                ref.addEventListener('canplaythrough', () => {
+                  console.log('🎵 HTML5_VIDEO: canplaythrough - can play without stopping');
+                });
+                
+                ref.addEventListener('error', (e) => {
+                  console.error('🎵 HTML5_VIDEO: Native error event:', {
+                    error: ref.error,
+                    networkState: ref.networkState,
+                    readyState: ref.readyState,
+                    src: ref.src,
+                    currentSrc: ref.currentSrc
+                  });
+                });
+              }
+            }}
+            src={itemUri}
+            style={{
+              width: videoDimensions ? (videoDimensions.width / videoDimensions.height) * (500 * zoomLevel) : width * 0.9,
+              height: 500 * zoomLevel,
+              alignSelf: 'center',
+              borderRadius: 8,
+              objectFit: 'contain'
+            } as React.CSSProperties}
+            controls={false}
+            muted={isMuted}
+            autoPlay={isPlaying}
+            onError={(e) => {
+              const video = e.target as HTMLVideoElement;
+              console.error('🎵 HTML5_VIDEO_ERROR:', {
+                error: video.error,
+                networkState: video.networkState,
+                readyState: video.readyState,
+                src: video.src,
+                currentSrc: video.currentSrc,
+                errorCode: video.error?.code,
+                errorMessage: video.error?.message,
+                errorCodeMeaning: video.error?.code === 1 ? 'MEDIA_ERR_ABORTED' :
+                                 video.error?.code === 2 ? 'MEDIA_ERR_NETWORK' :
+                                 video.error?.code === 3 ? 'MEDIA_ERR_DECODE' :
+                                 video.error?.code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN'
+              });
+              
+              // Test if the URL is actually accessible
+              fetch(itemUri, { method: 'HEAD' })
+                .then(response => {
+                  console.log('🎵 HTML5_VIDEO_URL_TEST:', {
+                    url: itemUri,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    contentType: response.headers.get('content-type'),
+                    contentLength: response.headers.get('content-length'),
+                    acceptRanges: response.headers.get('accept-ranges')
+                  });
+                })
+                .catch(error => {
+                  console.error('🎵 HTML5_VIDEO_URL_TEST_ERROR:', error);
+                });
+              
+              handleVideoError(e);
+            }}
+            onEnded={() => {
+              console.log('🎵 HTML5_VIDEO: Video ended, going to next');
+              goToNextVideo();
+            }}
+            onLoadStart={() => {
+              console.log('🎵 HTML5_VIDEO: onLoadStart - React event');
+            }}
+            onLoadedData={() => {
+              console.log('🎵 HTML5_VIDEO: onLoadedData - React event');
+            }}
+            onCanPlay={() => {
+              console.log('🎵 HTML5_VIDEO: onCanPlay - React event');
+            }}
+            onCanPlayThrough={() => {
+              console.log('🎵 HTML5_VIDEO: onCanPlayThrough - React event');
+            }}
+            onWaiting={() => {
+              console.log('🎵 HTML5_VIDEO: onWaiting - React event');
+            }}
+            onPlaying={() => {
+              console.log('🎵 HTML5_VIDEO: onPlaying - React event');
+            }}
+            onPause={() => {
+              console.log('🎵 HTML5_VIDEO: onPause - React event');
+            }}
+            onLoadedMetadata={(e) => {
+              const video = e.target as HTMLVideoElement;
+              console.log('🎵 HTML5_VIDEO: Loaded metadata, dimensions:', video.videoWidth, 'x', video.videoHeight);
+              console.log('🎵 HTML5_VIDEO: Video element state:', {
+                readyState: video.readyState,
+                networkState: video.networkState,
+                duration: video.duration,
+                src: video.src,
+                currentSrc: video.currentSrc
+              });
+              setVideoDimensions({
+                width: video.videoWidth,
+                height: video.videoHeight
+              });
+            }}
+          />
+        );
+      } else {
+        // Use expo-av Video for mobile
+        return (
+          <Video
+            ref={videoRef}
+            source={{ uri: itemUri }}
+            rate={1.0}
+            volume={1.0}
+            isMuted={isMuted}
+            shouldPlay={isPlaying}
+            isLooping={false}
+            resizeMode={ResizeMode.CONTAIN}
+            style={getVideoStyle()}
+            useNativeControls={false}
+            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate === 1)}
+            onError={handleVideoError}
+          />
+        );
+      }
     } else if (isAudio) {
       // Audio player interface
       return (
@@ -459,6 +645,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             style={{ width: 0, height: 0, opacity: 0 }}
             useNativeControls={false}
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            onError={handleVideoError}
           />
         </View>
       );
@@ -506,6 +693,18 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     <View style={styles.slideshowContainer}>
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
+        <TouchableOpacity style={styles.cartButton} onPress={() => {
+          // Navigate to cart - you can implement navigation here
+          console.log('Navigate to cart');
+        }}>
+          <MaterialIcons name="shopping-cart" size={24} color="#374151" />
+          {/* Cart item count badge */}
+          {getTotalItems() > 0 && (
+            <View style={styles.cartBadge}>
+              <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
       
       {/* Scrollable Main Content */}
@@ -519,6 +718,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             <View style={styles.videoContainer}>
                 {renderCurrentMedia()}
             </View>
+            
+            {/* Current Track Display */}
+            <View style={styles.currentTrackDisplay}>
+              <Text style={styles.currentTrackTitle}>
+                {currentMediaItem?.title || `Track ${currentIndex + 1}`}
+              </Text>
+              <Text style={styles.currentTrackInfo}>
+                {currentMediaItem?.fileType?.toUpperCase() || 'MEDIA'} • {currentIndex + 1} of {media.length}
+              </Text>
+            </View>
+            
             <View style={styles.controls}>
                 <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
                 <MaterialIcons
@@ -733,12 +943,40 @@ const styles = StyleSheet.create({
         backgroundColor: '#ffffff',
         borderBottomWidth: 1,
         borderBottomColor: '#e5e7eb',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
     },
     slideshowTitle: {
         fontSize: 24,
         fontWeight: 'bold',
         color: '#1f2937',
         textAlign: 'center',
+        flex: 1,
+    },
+    cartButton: {
+        position: 'relative',
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f3f4f6',
+    },
+    cartBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: '#ef4444',
+        borderRadius: 10,
+        minWidth: 20,
+        height: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#ffffff',
+    },
+    cartBadgeText: {
+        color: '#ffffff',
+        fontSize: 12,
+        fontWeight: '600',
     },
     slideshowMainContent: {
         flexDirection: 'row',
@@ -747,14 +985,14 @@ const styles = StyleSheet.create({
         minHeight: 500, // Set minimum height for the main content
     },
     slideshowLeftPanel: {
-        flex: 0.93, // Reduced from 1.2 to 0.93 (31% - give more space to products)
+        flex: 1.344, // Increased to give more space to video (44.8% of total)
         backgroundColor: '#000000',
         borderRadius: 12,
         overflow: 'hidden',
         minHeight: 700, // Increased to accommodate larger video
     },
     slideshowRightPanel: {
-        flex: 2.07, // Increased from 1.8 to 2.07 (69% - 15% increase for products)
+        flex: 1.656, // Decreased by 20% from 2.07 to 1.656 (55.2% - 20% decrease for products)
         backgroundColor: '#ffffff',
         borderRadius: 12,
         padding: 16,
@@ -1134,6 +1372,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   audioSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
+  },
+  currentTrackDisplay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 12,
+    alignItems: 'center',
+  },
+  currentTrackTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  currentTrackInfo: {
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',

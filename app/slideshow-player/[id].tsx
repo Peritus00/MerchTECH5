@@ -10,6 +10,7 @@ export default function SlideshowPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
   const [slideshow, setSlideshow] = useState<any>(null);
+  const [presignedAudioUrl, setPresignedAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
@@ -17,6 +18,13 @@ export default function SlideshowPlayerScreen() {
   useEffect(() => {
     fetchSlideshow();
   }, [id]);
+
+  useEffect(() => {
+    if (slideshow?.audio_url) {
+      // Use the signed URL directly from the slideshow data
+      setPresignedAudioUrl(slideshow.audio_url);
+    }
+  }, [slideshow]);
 
   const fetchSlideshow = async () => {
     try {
@@ -66,7 +74,7 @@ export default function SlideshowPlayerScreen() {
   return (
     <SlideshowPlayer
       slideshowId={id}
-      slideshow={slideshow}
+      slideshow={{ ...slideshow, audioUrl: presignedAudioUrl }}
       autoPlay={false}
     />
   );

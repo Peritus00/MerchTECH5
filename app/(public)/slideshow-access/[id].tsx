@@ -112,12 +112,8 @@ export default function SlideshowAccessScreen() {
     // The PreviewPlayer will handle slideshow background audio separately
     // Just log the audio URL for debugging
     if (slideshow.audioUrl) {
-      // The server provides the correct streaming URL for audio.
-      const audioStreamUrl = `${env.apiBaseUrl.replace('/api', '')}/api/slideshow-audio/${slideshow.id}/stream`;
-      
       console.log('🎬 SLIDESHOW_ACCESS: Background audio available:', {
-        originalUrl: "REDACTED", // No longer sending originalUrl
-        streamUrl: audioStreamUrl
+        audioUrl: slideshow.audioUrl
       });
       
       // Don't add to imageFiles array - PreviewPlayer will handle it separately
@@ -498,26 +494,37 @@ export default function SlideshowAccessScreen() {
   };
 
   const handlePreviewStart = () => {
-    console.log('🎬 SLIDESHOW_ACCESS: Starting inline preview');
-    console.log('🎬 SLIDESHOW_ACCESS: Current slideshow data:', slideshow);
-    console.log('🎬 SLIDESHOW_ACCESS: Current slideshow images:', slideshow?.images);
-    console.log('🎬 SLIDESHOW_ACCESS: formattedMediaFiles length:', formattedMediaFiles?.length);
-    console.log('🎬 SLIDESHOW_ACCESS: formattedMediaFiles:', formattedMediaFiles);
-    setIsFullAccess(false); // This is just a preview, not full access
-    setShowPreview(true);
-    setPreviewTimeLeft(30);
-    setCurrentImageIndex(0);
+    console.log('🎬 SLIDESHOW_ACCESS: Starting slideshow preview');
+    console.log('🎬 SLIDESHOW_ACCESS: Redirecting to preview player for slideshow:', id);
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow data:', slideshow);
+    console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshow?.images?.length || 0);
+    
+    // Add debugging for the route
+    const route = `/slideshow-preview/${id}`;
+    console.log('🎬 SLIDESHOW_ACCESS: Attempting to navigate to route:', route);
+    
+    try {
+      // Redirect to the new slideshow preview player
+      router.push(route);
+      console.log('🎬 SLIDESHOW_ACCESS: Navigation call completed');
+    } catch (error) {
+      console.error('🎬 SLIDESHOW_ACCESS: Navigation error:', error);
+      Alert.alert('Error', 'Failed to start preview. Please try again.');
+    }
   };
 
   const handlePreviewComplete = () => {
-    // Redirect to store after preview
+    // Redirect to the slideshow creator's store after preview
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
     setTimeout(() => {
-      router.push('/store');
+      router.push(storeUrl);
     }, 2000);
   };
 
   const handleGoToStore = () => {
-    router.push('/store');
+    // Redirect to the slideshow creator's store
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    router.push(storeUrl);
   };
 
   if (isLoading || !slideshow) {
@@ -601,7 +608,10 @@ export default function SlideshowAccessScreen() {
                 playlistId={slideshow.id.toString()}
                 autoplay={false}
                 onPreviewComplete={handlePreviewComplete}
-                backgroundAudioUrl={slideshow.audioUrl || ''}
+                backgroundAudioUrl={slideshow.audioUrl ? 
+                  `http://localhost:5001/api/slideshow-audio/${slideshow.id}/stream`
+                  : undefined}
+                userId={slideshow.userId}
               />
             </View>
 
@@ -687,7 +697,7 @@ export default function SlideshowAccessScreen() {
           <MaterialIcons name="slideshow" size={48} color="#3b82f6" />
           <Text style={styles.slideshowName}>{slideshow.name}</Text>
           <Text style={styles.slideshowSubtitle}>
-            {slideshow.images.length} images | Premium Content
+            {slideshow.images?.length || 0} images | Premium Content
           </Text>
           {slideshow.description && (
             <Text style={styles.slideshowDescription}>{slideshow.description}</Text>

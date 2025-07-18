@@ -25,14 +25,33 @@ interface UseMediaUploadResult {
 }
 
 export const useMediaUpload = (): UseMediaUploadResult => {
-  const { setUploadProgress, setIsUploading } = useUpload();
+  const { 
+    setUploadProgress, 
+    setIsUploading, 
+    setUploadError,
+    setCurrentFileName,
+    setEstimatedTimeRemaining,
+    showUploadError,
+    showUploadSuccess,
+    showUploadWarning,
+  } = useUpload();
   const { canCreate } = useSubscriptionLimits();
   const queryClient = useQueryClient();
 
   const updateProgress = (loaded: number, total: number, stage: UploadProgress['stage']) => {
     const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
     setUploadProgress({ loaded, total, percentage, stage });
+    
+    // Calculate estimated time remaining
+    if (stage === 'uploading' && loaded > 0 && total > 0) {
+      const uploadSpeed = loaded / (Date.now() - uploadStartTime) * 1000; // bytes per second
+      const remainingBytes = total - loaded;
+      const estimatedSeconds = Math.round(remainingBytes / uploadSpeed);
+      setEstimatedTimeRemaining(estimatedSeconds);
+    }
   };
+
+  let uploadStartTime = Date.now();
 
   const uploadFile = async (file: DocumentPicker.DocumentPickerResult): Promise<MediaFile> => {
     if (file.canceled || !file.assets || file.assets.length === 0) {
@@ -42,23 +61,31 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     // Check subscription limits before uploading
     const canUpload = canCreate('media');
     if (!canUpload.allowed) {
-      Alert.alert(
-        'Upload Limit Reached',
-        canUpload.message,
-        [{ text: 'OK' }]
-      );
+      showUploadError({ 
+        message: canUpload.message || 'Upload limit reached',
+        code: 'SUBSCRIPTION_LIMIT'
+      });
       throw new Error(canUpload.message);
     }
 
     const asset = file.assets[0];
+    uploadStartTime = Date.now();
     setIsUploading(true);
+    setUploadError(null);
+    setCurrentFileName(asset.name);
+    setEstimatedTimeRemaining(null);
     updateProgress(0, asset.size || 0, 'reading');
 
     const maxSize = Platform.OS === 'web' ? MAX_FILE_SIZE_WEB : MAX_FILE_SIZE_MOBILE;
     if (asset.size && asset.size > maxSize) {
       const sizeMB = Math.round((asset.size / 1024 / 1024) * 100) / 100;
       const maxSizeMB = Math.round((maxSize / 1024 / 1024) * 100) / 100;
-      throw new Error(`File too large. Maximum size is ${maxSizeMB}MB, but your file is ${sizeMB}MB.`);
+      const error = {
+        message: `File too large. Maximum size is ${maxSizeMB}MB, but your file is ${sizeMB}MB.`,
+        code: 'FILE_TOO_LARGE'
+      };
+      showUploadError(error, asset.name);
+      throw new Error(error.message);
     }
 
     try {
@@ -91,7 +118,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         title: asset.name || 'Untitled',
         url: uploadResult.url,
         proxy_url: uploadResult.proxy_url,
-        key: uploadResult.key,
+        s3_key: uploadResult.key,  // Fixed: use s3_key instead of key
         filename: asset.name,
         fileType: getFileType(asset.mimeType || ''),
         contentType: asset.mimeType,
@@ -106,17 +133,41 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       console.log('✅ invalidated media query');
 
       updateProgress(100, 100, 'complete');
+      
+      // Show success notification
+      showUploadSuccess(asset.name);
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
       return uploadedFile;
-    } catch (error) {
+    } catch (error: any) {
       console.error('🔴 UPLOAD: Upload failed:', error);
+      
+      // Parse error response and show appropriate error message
+      let errorMessage = 'Upload failed. Please try again.';
+      let errorCode = 'UNKNOWN_ERROR';
+      
+      if (error.response?.data) {
+        errorMessage = error.response.data.error || error.response.data.message || errorMessage;
+        errorCode = error.response.data.code || errorCode;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Show error notification
+      showUploadError({
+        message: errorMessage,
+        code: errorCode,
+        details: error.response?.data?.details
+      }, asset.name);
+      
       throw error;
     } finally {
       // Hide the indicator after a short delay
       setTimeout(() => {
         setIsUploading(false);
+        setCurrentFileName(null);
+        setEstimatedTimeRemaining(null);
         updateProgress(0, 0, 'selecting');
       }, 2000);
     }
@@ -182,6 +233,10 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       if (asset.size && asset.size > 100 * 1024 * 1024) { // 100MB
         const fileSizeMB = Math.round(asset.size / (1024 * 1024));
         console.log(`⚠️ UPLOAD: Large file detected (${fileSizeMB}MB). This may take several minutes to upload.`);
+        showUploadWarning(
+          `This is a large file (${fileSizeMB}MB). Upload may take several minutes. Please keep the app open during upload.`,
+          asset.name
+        );
       }
 
       return await uploadFile(result);

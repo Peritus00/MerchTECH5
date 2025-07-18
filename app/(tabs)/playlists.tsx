@@ -240,98 +240,23 @@ export default function PlaylistsScreen() {
   };
 
   const handleViewPlaylist = (playlist: Playlist) => {
-    console.log('🔴 PLAYLISTS: ===== PLAY BUTTON CLICKED - DEBUG START =====');
-    console.log('🔴 PLAYLISTS: Play button clicked for playlist:', {
-      id: playlist.id,
-      name: playlist.name,
-      mediaFiles: playlist.mediaFiles?.length || 0,
-      requiresActivationCode: playlist.requiresActivationCode,
-      playlist: playlist
-    });
-
-    // EXTENSIVE DEBUG: Log all playlist properties
-    console.log('🔴 PLAYLISTS: FULL PLAYLIST OBJECT DEBUG:');
-    console.log('🔴 PLAYLISTS:   - playlist.id:', playlist.id);
-    console.log('🔴 PLAYLISTS:   - playlist.name:', playlist.name);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode:', playlist.requiresActivationCode);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode type:', typeof playlist.requiresActivationCode);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode === true:', playlist.requiresActivationCode === true);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode === false:', playlist.requiresActivationCode === false);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode == true:', playlist.requiresActivationCode == true);
-    console.log('🔴 PLAYLISTS:   - playlist.requiresActivationCode == false:', playlist.requiresActivationCode == false);
-    console.log('🔴 PLAYLISTS:   - !!playlist.requiresActivationCode:', !!playlist.requiresActivationCode);
-    console.log('🔴 PLAYLISTS:   - !playlist.requiresActivationCode:', !playlist.requiresActivationCode);
-    
-    // Check for alternative field names that might exist
-    const playlistAny = playlist as any;
-    console.log('🔴 PLAYLISTS: CHECKING FOR ALTERNATIVE FIELD NAMES:');
-    console.log('🔴 PLAYLISTS:   - requires_activation_code:', playlistAny.requires_activation_code);
-    console.log('🔴 PLAYLISTS:   - requires_activation_code type:', typeof playlistAny.requires_activation_code);
-    console.log('🔴 PLAYLISTS:   - isProtected:', playlistAny.isProtected);
-    console.log('🔴 PLAYLISTS:   - protected:', playlistAny.protected);
-    console.log('🔴 PLAYLISTS:   - isPublic:', playlistAny.isPublic);
-    console.log('🔴 PLAYLISTS:   - is_public:', playlistAny.is_public);
-    
-    // Log all properties of the playlist object
-    console.log('🔴 PLAYLISTS: ALL PLAYLIST PROPERTIES:');
-    Object.keys(playlist).forEach(key => {
-      console.log(`🔴 PLAYLISTS:   - ${key}:`, (playlist as any)[key], typeof (playlist as any)[key]);
-    });
-
     try {
-      // Check if playlist has media files
       if (!playlist.mediaFiles || playlist.mediaFiles.length === 0) {
-        console.log('🔴 PLAYLISTS: ❌ Playlist has no media files, showing alert');
-        Alert.alert('No Media', 'This playlist doesn\'t have any media files to play.');
+        Alert.alert('No Media', "This playlist doesn't have any media files to play.");
         return;
       }
 
-      console.log('🔴 PLAYLISTS: ✅ Playlist has media files, proceeding with access control check');
-      console.log('🔴 PLAYLISTS: Media files count:', playlist.mediaFiles.length);
-
-      // SCENARIO LOGIC:
-      // 1. If playlist is NOT protected -> go directly to media player
-      // 2. If playlist IS protected -> go to access control page (handles activation code + preview)
-      
-      console.log('🔴 PLAYLISTS: ===== ACCESS CONTROL CHECK =====');
-      console.log('🔴 PLAYLISTS: Checking if playlist.requiresActivationCode is truthy...');
-      console.log('🔴 PLAYLISTS: playlist.requiresActivationCode value:', playlist.requiresActivationCode);
-      console.log('🔴 PLAYLISTS: !playlist.requiresActivationCode value:', !playlist.requiresActivationCode);
-      
       if (!playlist.requiresActivationCode) {
-        // SCENARIO 1: Not protected - direct access
-        console.log('🔴 PLAYLISTS: ❌ ACCESS CONTROL CHECK FAILED - Playlist is NOT protected');
-        console.log('🔴 PLAYLISTS: Condition (!playlist.requiresActivationCode) evaluated to TRUE');
-        console.log('🔴 PLAYLISTS: This means playlist.requiresActivationCode is:', playlist.requiresActivationCode);
-        console.log('🔴 PLAYLISTS: Navigating directly to media player (BYPASSING ACCESS CONTROL)');
-        const navigationPath = `/media-player/${playlist.id}?type=playlist`;
-        console.log('🔴 PLAYLISTS: Navigation path:', navigationPath);
-        console.log('🔴 PLAYLISTS: Calling router.push...');
+        const navigationPath = `/playlist-player/${playlist.id}?type=playlist`;
         router.push(navigationPath);
-        console.log('🔴 PLAYLISTS: router.push called successfully');
-        
       } else {
-        // SCENARIO 2 & 3: Protected - needs activation code or preview
-        console.log('🔴 PLAYLISTS: ✅ ACCESS CONTROL CHECK PASSED - Playlist IS protected');
-        console.log('🔴 PLAYLISTS: Condition (!playlist.requiresActivationCode) evaluated to FALSE');
-        console.log('🔴 PLAYLISTS: This means playlist.requiresActivationCode is:', playlist.requiresActivationCode);
-        console.log('🔴 PLAYLISTS: Navigating to access control screen');
         const navigationPath = `/playlist-access/${playlist.id}`;
-        console.log('🔴 PLAYLISTS: Navigation path:', navigationPath);
-        console.log('🔴 PLAYLISTS: Calling router.push...');
         router.push(navigationPath);
-        console.log('🔴 PLAYLISTS: router.push called successfully');
       }
-      
-      console.log('🔴 PLAYLISTS: Navigation command sent successfully');
-      
     } catch (error) {
-      console.error('🔴 PLAYLISTS: ❌ Error in handleViewPlaylist:', error);
-      console.error('🔴 PLAYLISTS: Error stack:', error.stack);
+      console.error('Error in handleViewPlaylist:', error);
       Alert.alert('Error', 'Failed to open playlist');
     }
-    
-    console.log('🔴 PLAYLISTS: ===== PLAY BUTTON CLICKED - DEBUG END =====');
   };
 
   const handleToggleProtection = async (playlist: Playlist) => {

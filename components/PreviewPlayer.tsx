@@ -39,6 +39,7 @@ interface PreviewPlayerProps {
   productLinks?: ProductLink[];
   onPreviewComplete?: () => void;
   backgroundAudioUrl?: string; // For slideshow background audio
+  userId?: number; // Creator's user ID for store redirection
 }
 
 // Global background audio manager to persist across re-renders
@@ -163,6 +164,7 @@ function PreviewPlayer({
   productLinks = [],
   onPreviewComplete,
   backgroundAudioUrl,
+  userId,
 }: PreviewPlayerProps) {
   
   // SIMPLE TEST LOG - This should always appear if component is rendered
@@ -319,65 +321,143 @@ function PreviewPlayer({
           // Video player handles URL automatically through useVideoPlayer hook
           console.log('🎬 VIDEO_PLAYER: Video track loading handled by useVideoPlayer hook');
         } else if (Platform.OS === 'web') {
-          // Use HTML5 Audio for web
+          // Use HTML5 Audio for web - ENHANCED ERROR HANDLING
           if (webAudioRef.current) {
             webAudioRef.current.pause();
             webAudioRef.current.src = '';
+            webAudioRef.current.load();
           }
-          const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)](currentMedia.url);
-          webAudioRef.current = audio;
-
-          // Set up event listeners before setting src
-          audio.addEventListener('loadeddata', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio loaded successfully');
-            setWebAudioLoaded(true);
-          });
-
-          audio.addEventListener('canplaythrough', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio can play through');
-            setWebAudioLoaded(true);
-          });
-
-          audio.addEventListener('timeupdate', () => {
-            setWebAudioCurrentTime(audio.currentTime);
-          });
-
-          audio.addEventListener('play', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio started playing');
-            setWebAudioPlaying(true);
-          });
-
-          audio.addEventListener('pause', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio paused');
-            setWebAudioPlaying(false);
-          });
-
-          audio.addEventListener('ended', () => {
-            console.log('🔴 PREVIEW_PLAYER: Web audio ended');
-            setWebAudioPlaying(false);
-          });
-
-          audio.addEventListener('error', (e: any) => {
-            console.error('🔴 PREVIEW_PLAYER: Web audio error:', e);
-            console.error('🔴 PREVIEW_PLAYER: Audio error details:', {
-              error: audio.error,
-              networkState: audio.networkState,
-              readyState: audio.readyState,
-              src: audio.src
+          
+          // Test the audio URL first
+          console.log('🔴 PREVIEW_PLAYER: Testing audio URL accessibility...');
+          fetch(currentMedia.url, { 
+            method: 'HEAD',
+            headers: {
+              'Accept': 'audio/*,*/*;q=0.9'
+            }
+          })
+          .then(response => {
+            console.log('🔴 PREVIEW_PLAYER: Audio URL test response:', {
+              status: response.status,
+              statusText: response.statusText,
+              contentType: response.headers.get('content-type'),
+              contentLength: response.headers.get('content-length'),
+              acceptRanges: response.headers.get('accept-ranges'),
+              url: currentMedia.url
             });
+            
+            if (response.status !== 200) {
+              console.error('🔴 PREVIEW_PLAYER: Audio URL is not accessible:', response.status, response.statusText);
+              return;
+            }
+            
+            // Proceed with audio setup
+            const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)]();
+            webAudioRef.current = audio;
+
+            // Enhanced event listeners with better error handling
+            audio.addEventListener('loadeddata', () => {
+              console.log('🔴 PREVIEW_PLAYER: Web audio loaded successfully');
+              setWebAudioLoaded(true);
+            });
+
+            audio.addEventListener('canplaythrough', () => {
+              console.log('🔴 PREVIEW_PLAYER: Web audio can play through');
+              setWebAudioLoaded(true);
+            });
+
+            audio.addEventListener('timeupdate', () => {
+              setWebAudioCurrentTime(audio.currentTime);
+            });
+
+            audio.addEventListener('play', () => {
+              console.log('🔴 PREVIEW_PLAYER: Web audio started playing');
+              setWebAudioPlaying(true);
+            });
+
+            audio.addEventListener('pause', () => {
+              console.log('🔴 PREVIEW_PLAYER: Web audio paused');
+              setWebAudioPlaying(false);
+            });
+
+            audio.addEventListener('ended', () => {
+              console.log('🔴 PREVIEW_PLAYER: Web audio ended');
+              setWebAudioPlaying(false);
+            });
+
+            audio.addEventListener('error', (e: any) => {
+              console.error('🔴 PREVIEW_PLAYER: Web audio error:', e);
+              console.error('🔴 PREVIEW_PLAYER: Audio error details:', {
+                error: audio.error,
+                networkState: audio.networkState,
+                readyState: audio.readyState,
+                src: audio.src,
+                errorCode: audio.error?.code,
+                errorMessage: audio.error?.message
+              });
+              
+              // Try to recover by using a different approach
+              console.log('🔴 PREVIEW_PLAYER: Attempting audio recovery...');
+              
+              // Clear the failed audio and try with different settings
+              setTimeout(() => {
+                try {
+                  const recoveryAudio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)]();
+                  recoveryAudio.crossOrigin = 'anonymous';
+                  recoveryAudio.preload = 'none'; // Try with no preload
+                  recoveryAudio.src = currentMedia.url;
+                  webAudioRef.current = recoveryAudio;
+                  
+                  recoveryAudio.addEventListener('canplaythrough', () => {
+                    console.log('🔴 PREVIEW_PLAYER: Recovery audio loaded successfully');
+                    setWebAudioLoaded(true);
+                  });
+                  
+                  recoveryAudio.addEventListener('error', (recoveryError: any) => {
+                    console.error('🔴 PREVIEW_PLAYER: Recovery audio also failed:', recoveryError);
+                    // Skip to next track if this one is completely broken
+                    if (mediaFiles.length > 1) {
+                      console.log('🔴 PREVIEW_PLAYER: Skipping broken audio file to next track');
+                      handleNext();
+                    }
+                  });
+                  
+                  recoveryAudio.load();
+                } catch (recoveryError) {
+                  console.error('🔴 PREVIEW_PLAYER: Recovery attempt failed:', recoveryError);
+                }
+              }, 1000);
+            });
+
+            // Enhanced CORS and loading settings
+            audio.crossOrigin = 'anonymous';
+            audio.preload = 'auto';
+            
+            // Add specific audio format support
+            const audioUrl = currentMedia.url;
+            console.log('🔴 PREVIEW_PLAYER: Setting up audio URL:', audioUrl);
+            console.log('🔴 PREVIEW_PLAYER: Audio content type:', currentMedia.contentType);
+            console.log('🔴 PREVIEW_PLAYER: Audio file type:', currentMedia.fileType);
+            
+            // Set the source URL
+            audio.src = audioUrl;
+
+            // Start loading with error handling
+            try {
+              audio.load();
+              console.log('🔴 PREVIEW_PLAYER: Web audio setup complete, loading started');
+            } catch (loadError) {
+              console.error('🔴 PREVIEW_PLAYER: Error during audio load():', loadError);
+            }
+          })
+          .catch(error => {
+            console.error('🔴 PREVIEW_PLAYER: Audio URL test failed:', error);
+            // Try to skip to next track if URL is completely inaccessible
+            if (mediaFiles.length > 1) {
+              console.log('🔴 PREVIEW_PLAYER: Skipping inaccessible audio file to next track');
+              setTimeout(() => handleNext(), 2000);
+            }
           });
-
-          // Set crossOrigin before src to handle CORS
-          audio.crossOrigin = 'anonymous';
-          audio.preload = 'auto';
-
-          // Set the source URL
-          audio.src = currentMedia.url;
-
-          // Start loading
-          audio.load();
-
-          console.log('🔴 PREVIEW_PLAYER: Web audio setup complete, loading started');
         } else {
           // Load audio track with expo-audio for mobile
           audioPlayer.replace(currentMedia.url);
@@ -385,6 +465,11 @@ function PreviewPlayer({
         }
       } catch (error) {
         console.error('🔴 PREVIEW_PLAYER: Error loading media:', error);
+        // If loading fails completely, try to skip to next track
+        if (mediaFiles.length > 1) {
+          console.log('🔴 PREVIEW_PLAYER: Skipping failed media to next track');
+          setTimeout(() => handleNext(), 2000);
+        }
       }
     }
   }, [currentMedia, isVideo, isAudio, isImage, audioPlayer]);
@@ -667,17 +752,57 @@ function PreviewPlayer({
           setIsPlaying(true);
           console.log('🔴 PREVIEW_PLAYER: Video playback started successfully');
         }
-      } else if (Platform.OS === 'web' && webAudioRef.current) {
+      } else if (Platform.OS === 'web') {
         console.log('🔴 PREVIEW_PLAYER: Starting web audio playback...');
+        
+        if (!webAudioRef.current) {
+          console.log('🔴 PREVIEW_PLAYER: No web audio element available');
+          Alert.alert('Error', 'Audio player not initialized');
+          return;
+        }
+        
         if (webAudioLoaded) {
-          await webAudioRef.current.play();
-          setIsPlaying(true);
-          console.log('🔴 PREVIEW_PLAYER: Web audio playback started successfully');
+          try {
+            // Ensure audio is ready and not already playing
+            if (webAudioRef.current.paused) {
+              console.log('🔴 PREVIEW_PLAYER: Web audio is paused, starting playback...');
+              await webAudioRef.current.play();
+              setIsPlaying(true);
+              console.log('🔴 PREVIEW_PLAYER: Web audio playback started successfully');
+            } else {
+              console.log('🔴 PREVIEW_PLAYER: Web audio is already playing');
+              setIsPlaying(true);
+            }
+          } catch (playError) {
+            console.error('🔴 PREVIEW_PLAYER: Web audio play() failed:', playError);
+            
+            // Try to recover by reloading the audio
+            console.log('🔴 PREVIEW_PLAYER: Attempting to recover audio playback...');
+            try {
+              webAudioRef.current.load();
+              setTimeout(async () => {
+                try {
+                  await webAudioRef.current?.play();
+                  setIsPlaying(true);
+                  console.log('🔴 PREVIEW_PLAYER: Audio recovery successful');
+                } catch (recoveryError) {
+                  console.error('🔴 PREVIEW_PLAYER: Audio recovery failed:', recoveryError);
+                  Alert.alert('Playback Error', `Failed to start audio playback: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+                }
+              }, 1000);
+            } catch (recoveryError) {
+              console.error('🔴 PREVIEW_PLAYER: Audio recovery attempt failed:', recoveryError);
+              Alert.alert('Playback Error', `Failed to start audio playback: ${playError instanceof Error ? playError.message : String(playError)}`);
+            }
+          }
         } else {
           console.log('🔴 PREVIEW_PLAYER: Web audio not loaded yet, waiting...');
           Alert.alert('Loading', 'Audio track is still loading. Please wait a moment and try again...');
         }
       } else {
+        // Mobile audio playback with expo-audio
+        console.log('🔴 PREVIEW_PLAYER: Starting mobile audio playback...');
+        
         // Check if it's an audio file
         const isAudioFile = currentMedia.fileType === 'audio' ||
                            currentMedia.contentType?.startsWith('audio/') ||
@@ -689,7 +814,7 @@ function PreviewPlayer({
           return;
         }
 
-        if (!player) {
+        if (!audioPlayer) {
           console.log('🔴 PREVIEW_PLAYER: No audio player available');
           Alert.alert('Error', 'Audio player not initialized');
           return;
@@ -934,6 +1059,18 @@ function PreviewPlayer({
     }
     // For mobile, you would use navigation
     // navigation.navigate('Cart');
+  };
+
+  const handleStoreRedirect = () => {
+    // Redirect to the creator's store if userId is available, otherwise general store
+    const storeUrl = userId ? `/store/user/${userId}` : '/store';
+    console.log('Redirecting to store:', storeUrl);
+    
+    if (Platform.OS === 'web') {
+      window.location.href = storeUrl;
+    }
+    // For mobile, you would use navigation
+    // navigation.navigate('Store', { userId });
   };
 
   const nextTrack = () => {

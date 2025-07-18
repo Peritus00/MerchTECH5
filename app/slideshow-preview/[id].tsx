@@ -80,8 +80,10 @@ export default function SlideshowPreviewScreen() {
   };
 
   const handlePreviewComplete = () => {
-    console.log('🎬 SLIDESHOW_PREVIEW: Preview completed, navigating back to slideshow access');
-    router.back();
+    console.log('🎬 SLIDESHOW_PREVIEW: Preview completed, redirecting to creator\'s store');
+    // Redirect to the slideshow creator's store
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    router.push(storeUrl);
   };
 
   // Memoize the formatted media files to prevent re-renders
@@ -190,6 +192,7 @@ export default function SlideshowPreviewScreen() {
             return audioUrl;
           })()
           : undefined}
+        userId={slideshow.userId}
       />
 
       {/* Slideshow Info Section */}

@@ -35,7 +35,7 @@ class Environment {
       console.log('🔧 Using production API URL:', apiBaseUrl);
     } else {
       // Default to local development server for development
-      apiBaseUrl = 'http://192.168.1.70:5001/api';
+      apiBaseUrl = 'http://localhost:5001/api';
       console.log('🔧 Using local development API URL:', apiBaseUrl);
     }
     

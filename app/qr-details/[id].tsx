@@ -29,15 +29,20 @@ export default function QRCodeDetailsScreen() {
   const [editedQRCode, setEditedQRCode] = useState<QRCode | null>(null);
 
   useEffect(() => {
+    console.log('🔍 QR Details: Component loaded with ID:', id);
+    console.log('🔍 QR Details: ID type:', typeof id);
     fetchQRCode();
   }, [id]);
 
   const fetchQRCode = async () => {
     try {
+      console.log('🔍 QR Details: Fetching QR code with ID:', id);
       const qr = await qrCodeService.getQRCodeById(parseInt(id as string));
+      console.log('🔍 QR Details: Fetched QR code:', qr);
       setQrCode(qr);
       setEditedQRCode(qr);
     } catch (error) {
+      console.error('🔍 QR Details: Failed to fetch QR code:', error);
       Alert.alert('Error', 'Failed to load QR code');
       router.back();
     } finally {
@@ -65,21 +70,42 @@ export default function QRCodeDetailsScreen() {
   };
 
   const handleDelete = () => {
+    console.log('🗑️ QR Delete: Delete button pressed for QR code:', qrCode?.name, 'ID:', id);
+    console.log('🗑️ QR Delete: Current QR code data:', JSON.stringify(qrCode, null, 2));
+    
     Alert.alert(
       'Delete QR Code',
       'Are you sure you want to delete this QR code? This action cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('🗑️ QR Delete: User cancelled deletion');
+          }
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
             try {
+              console.log('🗑️ QR Delete: User confirmed deletion, starting delete for ID:', id);
+              console.log('🗑️ QR Delete: Calling qrCodeService.deleteQRCode with ID:', parseInt(id as string));
+              
               await qrCodeService.deleteQRCode(parseInt(id as string));
+              
+              console.log('🗑️ QR Delete: Delete successful, showing success alert');
               Alert.alert('Deleted', 'QR code deleted successfully');
               router.back();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete QR code');
+            } catch (error: any) {
+              console.error('🗑️ QR Delete: Delete failed:', error);
+              console.error('🗑️ QR Delete: Error details:', {
+                message: error.message,
+                status: error.status,
+                response: error.response?.data
+              });
+              const errorMessage = error.message || 'Failed to delete QR code';
+              Alert.alert('Delete Failed', errorMessage);
             }
           },
         },
@@ -286,7 +312,10 @@ export default function QRCodeDetailsScreen() {
 
             <TouchableOpacity 
               style={[styles.actionButton, styles.deleteButton]}
-              onPress={handleDelete}
+              onPress={() => {
+                console.log('🗑️ QR Delete: TouchableOpacity onPress triggered');
+                handleDelete();
+              }}
             >
               <ThemedText style={[styles.actionButtonText, styles.deleteButtonText]}>
                 Delete

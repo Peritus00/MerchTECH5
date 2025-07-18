@@ -28,8 +28,10 @@ app.use(cors({
   origin: true,
   credentials: true,
 }));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// 🔧 INCREASED LIMITS FOR LARGE VIDEO FILES
+app.use(express.json({ limit: '1gb' })); // Increased from 50mb to 1gb
+app.use(express.urlencoded({ limit: '1gb', extended: true })); // Increased from 50mb to 1gb
 
 // --- STATIC FILE SERVING ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -114,8 +116,7 @@ const createTransporter = () => {
 const transporter = createTransporter();
 
 // --- MIDDLEWARE ---
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+// Note: Express limits already configured above with 1GB limit
 
 const allowedOrigins = [
   'https://app.merchtech.net',
@@ -515,9 +516,21 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
+      
+      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+      let formattedPrice = 0;
+      if (p.price) {
+        let priceInCents = p.price;
+        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+        if (priceInCents > 10000) {
+          priceInCents = priceInCents / 100; // Convert back to proper cents
+        }
+        formattedPrice = priceInCents / 100;
+      }
+      
       return { 
         ...p, 
-        price: p.price ? p.price / 100 : 0, // Convert cents to dollars
+        price: formattedPrice, // Convert cents to dollars
         prices: pricesArr 
       };
     });
@@ -538,9 +551,21 @@ app.get('/api/products/all', async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
+      
+      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+      let formattedPrice = 0;
+      if (p.price) {
+        let priceInCents = p.price;
+        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+        if (priceInCents > 10000) {
+          priceInCents = priceInCents / 100; // Convert back to proper cents
+        }
+        formattedPrice = priceInCents / 100;
+      }
+      
       return { 
         ...p, 
-        price: p.price ? p.price / 100 : 0, // Convert cents to dollars
+        price: formattedPrice, // Convert cents to dollars
         prices: pricesArr 
       };
     });
@@ -577,9 +602,20 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
       pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
     }
 
+    // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+    let formattedPrice = 0;
+    if (product.price) {
+      let priceInCents = product.price;
+      // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+      if (priceInCents > 10000) {
+        priceInCents = priceInCents / 100; // Convert back to proper cents
+      }
+      formattedPrice = priceInCents / 100;
+    }
+
     const productWithPrices = { 
       ...product, 
-      price: product.price ? product.price / 100 : 0, // Convert cents to dollars
+      price: formattedPrice, // Convert cents to dollars
       prices: pricesArr,
       in_stock: product.in_stock !== false // Ensure boolean
     };
@@ -886,10 +922,83 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
                 bufferLength: req.file.buffer ? req.file.buffer.length : 'undefined'
             });
             
+            // 🔍 CRITICAL: Check for buffer truncation
+            if (req.file.buffer && req.file.size !== req.file.buffer.length) {
+                console.error(`🚨 BUFFER TRUNCATION DETECTED [${requestId}]!`);
+                console.error(`   Reported size: ${req.file.size} bytes`);
+                console.error(`   Buffer length: ${req.file.buffer.length} bytes`);
+                console.error(`   Missing bytes: ${req.file.size - req.file.buffer.length} bytes`);
+                console.error(`   Truncation %: ${((req.file.size - req.file.buffer.length) / req.file.size * 100).toFixed(2)}%`);
+                
+                return res.status(400).json({ 
+                    error: 'File upload truncated during processing. This may be due to memory limits or network issues.',
+                    code: 'BUFFER_TRUNCATED',
+                    details: {
+                        expectedSize: req.file.size,
+                        actualSize: req.file.buffer.length,
+                        missingBytes: req.file.size - req.file.buffer.length,
+                        filename: req.file.originalname
+                    }
+                });
+            }
+            
+            console.log(`✅ UPLOAD [${requestId}]: Buffer integrity verified - no truncation detected`);
+            
             // Generate a unique key for the file
             const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
             
             const result = await s3Service.uploadFile(req.file.buffer, key, req.file.mimetype);
+            
+            // 🔍 VALIDATION: Verify upload was successful and complete
+            console.log(`🔍 UPLOAD_VALIDATION [${requestId}]: Verifying S3 upload...`);
+            try {
+                const metadata = await s3Service.getMetadata(result.Key);
+                const expectedSize = req.file.size;
+                const actualSize = metadata.ContentLength;
+                
+                console.log(`🔍 UPLOAD_VALIDATION [${requestId}]: Size check - Expected: ${expectedSize}, Actual: ${actualSize}`);
+                
+                if (actualSize !== expectedSize) {
+                    console.error(`❌ UPLOAD_VALIDATION [${requestId}]: Size mismatch! Expected: ${expectedSize}, Got: ${actualSize}`);
+                    
+                    // Clean up the incomplete file
+                    try {
+                        await s3Service.deleteFile(result.Key);
+                        console.log(`🗑️ UPLOAD_CLEANUP [${requestId}]: Deleted incomplete file from S3`);
+                    } catch (cleanupError) {
+                        console.error(`❌ UPLOAD_CLEANUP [${requestId}]: Failed to cleanup incomplete file:`, cleanupError);
+                    }
+                    
+                    return res.status(500).json({ 
+                        error: 'Upload validation failed: File size mismatch. The file may have been corrupted during upload.',
+                        code: 'UPLOAD_INCOMPLETE',
+                        details: {
+                            expectedSize,
+                            actualSize,
+                            filename: req.file.originalname
+                        }
+                    });
+                }
+                
+                console.log(`✅ UPLOAD_VALIDATION [${requestId}]: Upload verified successfully`);
+                
+            } catch (validationError) {
+                console.error(`❌ UPLOAD_VALIDATION [${requestId}]: Validation failed:`, validationError);
+                
+                // Clean up the potentially incomplete file
+                try {
+                    await s3Service.deleteFile(result.Key);
+                    console.log(`🗑️ UPLOAD_CLEANUP [${requestId}]: Deleted unverified file from S3`);
+                } catch (cleanupError) {
+                    console.error(`❌ UPLOAD_CLEANUP [${requestId}]: Failed to cleanup unverified file:`, cleanupError);
+                }
+                
+                return res.status(500).json({ 
+                    error: 'Upload validation failed: Could not verify file integrity on S3.',
+                    code: 'UPLOAD_VALIDATION_FAILED',
+                    details: validationError.message
+                });
+            }
             
             const proxyUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/images/s3/${result.Key}`;
             
@@ -901,7 +1010,8 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
                 url: result.Location, // Direct S3 URL
                 proxy_url: proxyUrl,   // URL proxied through our server
                 key: result.Key,
-                imageUrl: proxyUrl    // Legacy field for backward compatibility
+                imageUrl: proxyUrl,    // Legacy field for backward compatibility
+                validated: true        // Indicates upload was verified
             });
 
         } catch (error) {
@@ -1064,6 +1174,44 @@ app.post('/api/media', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Title and URL are required' });
     }
 
+    // 🔍 S3 FILE VALIDATION: Verify file exists on S3 before saving to database
+    if (s3_key && s3Service.isConfigured()) {
+      console.log(`🔍 MEDIA_VALIDATION: Verifying S3 file exists for key: ${s3_key}`);
+      try {
+        const metadata = await s3Service.getMetadata(s3_key);
+        const expectedSize = filesize;
+        const actualSize = metadata.ContentLength;
+        
+        console.log(`🔍 MEDIA_VALIDATION: Size check - Expected: ${expectedSize}, Actual: ${actualSize}`);
+        
+        if (expectedSize && actualSize !== expectedSize) {
+          console.error(`❌ MEDIA_VALIDATION: Size mismatch! Expected: ${expectedSize}, Got: ${actualSize}`);
+          return res.status(400).json({ 
+            error: 'File validation failed: File size mismatch on S3. The file may be corrupted or incomplete.',
+            code: 'FILE_SIZE_MISMATCH',
+            details: {
+              expectedSize,
+              actualSize,
+              s3_key
+            }
+          });
+        }
+        
+        console.log(`✅ MEDIA_VALIDATION: S3 file verified successfully`);
+        
+      } catch (validationError) {
+        console.error(`❌ MEDIA_VALIDATION: S3 file validation failed:`, validationError);
+        return res.status(400).json({ 
+          error: 'File validation failed: Could not verify file exists on S3.',
+          code: 'FILE_NOT_FOUND_ON_S3',
+          details: {
+            s3_key,
+            message: validationError.message
+          }
+        });
+      }
+    }
+
     // 🔒 SUBSCRIPTION LIMIT CHECK
     const userResult = await pool.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
@@ -1121,23 +1269,25 @@ app.get('/api/media', authenticateToken, async (req, res) => {
   try {
     console.log('🔴 MEDIA: Fetching media files for user:', req.user.userId);
     
-    // Get admin user ID (djjetfuel@gmail.com)
-    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
-    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    // Check if current user is admin
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
     
-    console.log('🔴 MEDIA: Admin user ID:', adminUserId);
+    console.log('🔴 MEDIA: User is admin:', isAdmin);
     
-    // Always return user's own files + admin files (if admin exists)
-    let query = 'SELECT * FROM media WHERE user_id = $1';
-    let params = [req.user.userId];
+    let query, params;
     
-    if (adminUserId && adminUserId !== req.user.userId) {
-      // If admin exists and user is not the admin, also include admin's files
-      query += ' OR user_id = $2';
-      params.push(adminUserId);
+    if (isAdmin) {
+      // Admin can see all files
+      query = 'SELECT * FROM media ORDER BY created_at DESC';
+      params = [];
+      console.log('🔴 MEDIA: Admin access - returning all media files');
+    } else {
+      // Regular users can only see their own files
+      query = 'SELECT * FROM media WHERE user_id = $1 ORDER BY created_at DESC';
+      params = [req.user.userId];
+      console.log('🔴 MEDIA: Regular user access - returning only own media files');
     }
-    
-    query += ' ORDER BY created_at DESC';
     
     const result = await pool.query(query, params);
     
@@ -1180,23 +1330,25 @@ app.get('/api/media/all', authenticateToken, async (req, res) => {
   try {
     console.log('🔴 MEDIA_ALL: Fetching all media files for user:', req.user.userId);
     
-    // Get admin user ID (djjetfuel@gmail.com)
-    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
-    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
+    // Check if current user is admin
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
     
-    console.log('🔴 MEDIA_ALL: Admin user ID:', adminUserId);
+    console.log('🔴 MEDIA_ALL: User is admin:', isAdmin);
     
-    // Always return user's own files + admin files (if admin exists)
-    let query = 'SELECT * FROM media WHERE user_id = $1';
-    let params = [req.user.userId];
+    let query, params;
     
-    if (adminUserId && adminUserId !== req.user.userId) {
-      // If admin exists and user is not the admin, also include admin's files
-      query += ' OR user_id = $2';
-      params.push(adminUserId);
+    if (isAdmin) {
+      // Admin can see all files
+      query = 'SELECT * FROM media ORDER BY created_at DESC';
+      params = [];
+      console.log('🔴 MEDIA_ALL: Admin access - returning all media files');
+    } else {
+      // Regular users can only see their own files
+      query = 'SELECT * FROM media WHERE user_id = $1 ORDER BY created_at DESC';
+      params = [req.user.userId];
+      console.log('🔴 MEDIA_ALL: Regular user access - returning only own media files');
     }
-    
-    query += ' ORDER BY created_at DESC';
     
     const result = await pool.query(query, params);
     
@@ -1220,15 +1372,12 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
     
     const media = result.rows[0];
     
-    // Check if user owns this media file or if it's from admin
-    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
-    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
-    
-    // Allow access if: user owns the file OR file is from admin OR user is admin
+    // Check if user owns this media file or if user is admin
     const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
-    const isAdmin = userResult.rows[0]?.is_admin;
+    const isAdmin = userResult.rows[0]?.is_admin || false;
     
-    if (media.user_id !== req.user.userId && media.user_id !== adminUserId && !isAdmin) {
+    // Allow access if: user owns the file OR user is admin
+    if (media.user_id !== req.user.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden: You can only access your own media files' });
     }
     
@@ -1263,8 +1412,21 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Handle OPTIONS preflight requests for media streaming
+app.options('/api/media/:id/stream', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '3600');
+  res.status(204).end();
+});
+
 // Stream media file (supports both base64 data and S3 files) - PUBLIC endpoint for browser media compatibility
 app.get('/api/media/:id/stream', async (req, res) => {
+  console.log(`📺 MEDIA_STREAM: Route handler called for media ${req.params.id}`);
+  console.log(`📺 MEDIA_STREAM: Request URL: ${req.url}`);
+  console.log(`📺 MEDIA_STREAM: Request path: ${req.path}`);
+  
   try {
     const { id } = req.params;
     console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
@@ -1326,12 +1488,6 @@ app.get('/api/media/:id/stream', async (req, res) => {
     // Deployment timestamp: 2025-07-16T03:52:00Z
     console.log(`📺 MEDIA_STREAM: Public access granted for media ${id}`);
     
-    
-    // Set CORS headers for media streaming
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
-    
     // Handle S3 files
     let s3Key = media.s3_key;
     
@@ -1351,7 +1507,67 @@ app.get('/api/media/:id/stream', async (req, res) => {
         // Get file metadata from S3
         const metadata = await s3Service.getMetadata(s3Key);
         const fileSize = metadata.ContentLength;
-        const contentType = metadata.ContentType || media.content_type || 'application/octet-stream';
+        
+        // Enhanced content-type detection for audio files
+        let contentType = metadata.ContentType || media.content_type;
+        
+        // If content type is missing or generic, determine from file extension
+        if (!contentType || contentType === 'application/octet-stream') {
+          const extension = path.extname(media.title || media.filename || s3Key).toLowerCase();
+          console.log(`📺 MEDIA_STREAM: Determining content type from extension: ${extension}`);
+          
+          switch (extension) {
+            case '.mp3':
+              contentType = 'audio/mpeg';
+              break;
+            case '.wav':
+              contentType = 'audio/wav';
+              break;
+            case '.m4a':
+              contentType = 'audio/mp4';
+              break;
+            case '.aac':
+              contentType = 'audio/aac';
+              break;
+            case '.ogg':
+              contentType = 'audio/ogg';
+              break;
+            case '.mp4':
+              contentType = 'video/mp4';
+              break;
+            case '.webm':
+              contentType = 'video/webm';
+              break;
+            case '.avi':
+              contentType = 'video/x-msvideo';
+              break;
+            case '.mov':
+              contentType = 'video/quicktime';
+              break;
+            default:
+              contentType = media.file_type === 'audio' ? 'audio/mpeg' : 
+                           media.file_type === 'video' ? 'video/mp4' : 
+                           'application/octet-stream';
+          }
+          
+          console.log(`📺 MEDIA_STREAM: Content type determined as: ${contentType}`);
+        }
+        
+        console.log(`📺 MEDIA_STREAM: S3 metadata for media ${id}:`, {
+          ContentLength: metadata.ContentLength,
+          ContentType: metadata.ContentType,
+          determinedContentType: contentType,
+          s3Key: s3Key,
+          mediaType: media.file_type,
+          title: media.title,
+          filename: media.filename
+        });
+        
+        // Set CORS headers for audio/video access
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
         
         res.setHeader('Content-Type', contentType);
         res.setHeader('Accept-Ranges', 'bytes');
@@ -1366,30 +1582,30 @@ app.get('/api/media/:id/stream', async (req, res) => {
           const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
           const chunksize = (end - start) + 1;
           
-          console.log(`📺 MEDIA_STREAM: Range request for ${s3Key}: bytes=${start}-${end}`);
+          res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
+          res.setHeader('Content-Length', chunksize);
+          res.status(206);
           
-          // Ensure range is valid
-          if (start >= fileSize || end >= fileSize) {
-            return res.status(416).send('Requested range not satisfiable');
-          }
+          // Stream the range from S3
+          const streamResponse = await s3Service.getStream(s3Key, { start, end });
+          streamResponse.stream.pipe(res);
           
-          const { stream } = await s3Service.getStream(s3Key, { start, end });
-          
-          res.writeHead(206, {
-            'Content-Range': `bytes ${start}-${end}/${fileSize}`,
-            'Content-Length': chunksize,
-          });
-          
-          stream.pipe(res);
+          console.log(`📺 MEDIA_STREAM: Successfully streaming S3 range for media ${id}`);
+        console.log(`📺 MEDIA_STREAM: Range response headers sent:`, res.getHeaders());
+        console.log(`📺 MEDIA_STREAM: Range response finished:`, res.finished);
+          return; // Important: return after starting the stream
         } else {
-          // Full file request
-          console.log(`📺 MEDIA_STREAM: Full file request for ${s3Key}`);
+          // Stream the entire file
           res.setHeader('Content-Length', fileSize);
-          const { stream } = await s3Service.getStream(s3Key);
-          stream.pipe(res);
+          
+          const streamResponse = await s3Service.getStream(s3Key);
+          streamResponse.stream.pipe(res);
+          
+          console.log(`📺 MEDIA_STREAM: Successfully streaming S3 file for media ${id}`);
+        console.log(`📺 MEDIA_STREAM: Response headers sent:`, res.getHeaders());
+        console.log(`📺 MEDIA_STREAM: Response finished:`, res.finished);
+          return; // Important: return after starting the stream
         }
-        
-        return;
       } catch (error) {
         console.error(`❌ MEDIA_STREAM: Failed to stream S3 file ${s3Key}:`, error);
         return res.status(500).json({ error: 'Failed to stream S3 file' });
@@ -1445,7 +1661,11 @@ app.get('/api/media/:id/stream', async (req, res) => {
     
   } catch (error) {
     console.error('❌ MEDIA_STREAM: Error streaming media:', error);
-    res.status(500).json({ error: 'Failed to stream media file' });
+    console.error('❌ MEDIA_STREAM: Error stack:', error.stack);
+    console.log(`📺 MEDIA_STREAM: Response finished before error:`, res.finished);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to stream media file' });
+    }
   }
 });
 
@@ -1771,16 +1991,33 @@ async function getPlaylistWithMedia(playlistId) {
   }
 
   const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => {
-    let signedUrl = null;
-    if (media.s3_key) {
-      try {
-        signedUrl = await s3Service.getSignedUrl(media.s3_key);
-      } catch (error) {
-        console.error(`Failed to get signed URL for key ${media.s3_key}:`, error);
-        // signedUrl remains null
+    let properUrl = media.url;
+    
+    // Use streaming endpoint for CORS-free access (streaming endpoint is now working)
+    if (media.s3_key && s3Service) {
+      // Use streaming endpoint to avoid CORS issues with direct S3 access
+      properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
+      console.log(`🔧 CORS_FIX: Using streaming endpoint for media ${media.id}`);
+    } else if (media.url && media.url.startsWith('data:')) {
+      // Handle base64 files - use streaming endpoint
+      properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
+    } else if (media.filename && !media.s3_key) {
+      // Check if local file exists, if not use streaming endpoint for better error handling
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(__dirname, 'uploads', media.filename);
+      
+      if (fs.existsSync(filePath)) {
+        // File exists locally, use direct file URL
+        properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/uploads/${media.filename}`;
+      } else {
+        // File doesn't exist locally, use streaming endpoint for better error handling
+        console.warn(`Media file with ID ${media.id} has no s3_key and local file doesn't exist. Using streaming endpoint for error handling.`);
+        properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
       }
     } else {
-      console.warn(`Media file with ID ${media.id} is missing an s3_key. It will not be playable.`);
+      console.warn(`Media file with ID ${media.id} is missing an s3_key and has no filename. Using streaming endpoint for error handling.`);
+      properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
     }
 
     return {
@@ -1796,7 +2033,8 @@ async function getPlaylistWithMedia(playlistId) {
     createdAt: media.created_at,
     updatedAt: media.updated_at,
     type: media.file_type,
-      url: signedUrl, // Will be null if s3_key is missing or signing fails
+    s3_key: media.s3_key, // Include s3_key for frontend debugging
+      url: properUrl, // Use direct S3 signed URLs for better compatibility
     };
   }));
 
@@ -1812,19 +2050,33 @@ async function getPlaylistWithMedia(playlistId) {
     `, [playlistId]);
 
     // Format product links for frontend
-    productLinks = productLinksResult.rows.map(link => ({
-      id: link.product_id.toString(), // Use product_id, not link.id
-      linkId: link.id.toString(), // Keep link ID for reference
-      title: link.title,
-      url: link.url,
-      description: link.description,
-      imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
-      images: link.product_images || (link.image_url ? [link.image_url] : []),
-      displayOrder: link.display_order,
-      isActive: link.is_active,
-      price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
-      productName: link.product_name
-    }));
+    productLinks = productLinksResult.rows.map(link => {
+      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+      let formattedPrice = null;
+      if (link.price) {
+        let priceInCents = link.price;
+        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+        // This is a temporary fix for the "hi" product that has price 53000 instead of 530
+        if (priceInCents > 10000) {
+          priceInCents = priceInCents / 100; // Convert back to proper cents
+        }
+        formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+      }
+      
+      return {
+        id: link.product_id.toString(), // Use product_id, not link.id
+        linkId: link.id.toString(), // Keep link ID for reference
+        title: link.title,
+        url: link.url,
+        description: link.description,
+        imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+        images: link.product_images || (link.image_url ? [link.image_url] : []),
+        displayOrder: link.display_order,
+        isActive: link.is_active,
+        price: formattedPrice,
+        productName: link.product_name
+      };
+    });
 
     console.log('🔴 GET_PLAYLIST: Found', productLinks.length, 'product links');
   } catch (error) {
@@ -2387,12 +2639,12 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete a QR code (soft delete) (alias for backward compatibility)
+// Delete a QR code (soft delete)
 app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     
-    console.log('📱 QR_CODES: Deleting QR code:', id);
+    console.log('📱 QR_CODES: Deleting QR code:', id, 'for user:', req.user.userId);
     
     // Check if user owns the QR code
     const ownerCheck = await pool.query(
@@ -2400,22 +2652,26 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
       [id]
     );
 
+    console.log('📱 QR_CODES: Owner check result:', ownerCheck.rows);
+
     if (ownerCheck.rows.length === 0) {
+      console.log('📱 QR_CODES: QR code not found or inactive');
       return res.status(404).json({ error: 'QR code not found' });
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      console.log('📱 QR_CODES: Ownership mismatch. Owner:', ownerCheck.rows[0].user_id, 'User:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to delete this QR code' });
     }
 
     // Soft delete by setting is_active to false
-    await pool.query(
-      'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1',
+    const deleteResult = await pool.query(
+      'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
     
-    console.log('📱 QR_CODES: QR code deleted successfully');
-    res.json({ message: 'QR code deleted successfully' });
+    console.log('📱 QR_CODES: QR code deleted successfully:', deleteResult.rows[0]);
+    res.json({ message: 'QR code deleted successfully', qrCode: deleteResult.rows[0] });
     
   } catch (error) {
     console.error('📱 QR_CODES: Error deleting QR code:', error);
@@ -2423,40 +2679,11 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
   }
 });
 
-// Delete a QR code (soft delete)
+// Alias endpoint for consistency
 app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    console.log('📱 QR_CODES: Deleting QR code:', id);
-    
-    // Check if user owns the QR code
-    const ownerCheck = await pool.query(
-      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
-      [id]
-    );
-
-    if (ownerCheck.rows.length === 0) {
-      return res.status(404).json({ error: 'QR code not found' });
-    }
-
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
-      return res.status(403).json({ error: 'Not authorized to delete this QR code' });
-    }
-
-    // Soft delete by setting is_active to false
-    await pool.query(
-      'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1',
-      [id]
-    );
-    
-    console.log('📱 QR_CODES: QR code deleted successfully');
-    res.json({ message: 'QR code deleted successfully' });
-    
-  } catch (error) {
-    console.error('📱 QR_CODES: Error deleting QR code:', error);
-    res.status(500).json({ error: 'Failed to delete QR code' });
-  }
+  // Redirect to the main endpoint
+  req.url = req.url.replace('/api/qr-codes/', '/api/qrcodes/');
+  return app._router.handle(req, res);
 });
 
 // ---------- ACTIVATION CODES API ----------
@@ -2997,19 +3224,33 @@ app.get('/api/slideshows/:id', async (req, res) => {
       `, [id]);
 
       // Format product links for frontend
-      productLinks = productLinksResult.rows.map(link => ({
-        id: link.product_id.toString(), // Use product_id, not link.id
-        linkId: link.id.toString(), // Keep link ID for reference
-        title: link.title,
-        url: link.url,
-        description: link.description,
-        imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
-        images: link.product_images || (link.image_url ? [link.image_url] : []),
-        displayOrder: link.display_order,
-        isActive: link.is_active,
-        price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
-        productName: link.product_name
-      }));
+      productLinks = productLinksResult.rows.map(link => {
+        // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+        let formattedPrice = null;
+        if (link.price) {
+          let priceInCents = link.price;
+          // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+          // This is a temporary fix for the "hi" product that has price 53000 instead of 530
+          if (priceInCents > 10000) {
+            priceInCents = priceInCents / 100; // Convert back to proper cents
+          }
+          formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+        }
+        
+        return {
+          id: link.product_id.toString(), // Use product_id, not link.id
+          linkId: link.id.toString(), // Keep link ID for reference
+          title: link.title,
+          url: link.url,
+          description: link.description,
+          imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+          images: link.product_images || (link.image_url ? [link.image_url] : []),
+          displayOrder: link.display_order,
+          isActive: link.is_active,
+          price: formattedPrice,
+          productName: link.product_name
+        };
+      });
 
       console.log('🎬 SLIDESHOWS: Found', productLinks.length, 'product links');
     } catch (error) {
@@ -3144,71 +3385,109 @@ app.get('/api/playlist-access/:id', async (req, res) => {
 
 // Get a specific slideshow by ID for access control (no auth required)
 app.get('/api/slideshow-access/:id', async (req, res) => {
+  const slideshowId = req.params.id;
+  const activationCode = req.query.code;
+  const client = await pool.connect();
+
   try {
-    const { id } = req.params;
-    console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow for access:', id);
-    
-    const result = await pool.query(
-      `SELECT s.* FROM slideshows s WHERE s.id = $1`,
-      [id]
-    );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Slideshow not found' });
+    // Fetch the slideshow details first
+    console.log(`🎬 GET_SLIDESHOW [${slideshowId}]: Starting fetch for access check.`);
+    const slideshowRes = await client.query('SELECT * FROM slideshows WHERE id = $1', [slideshowId]);
+
+    if (slideshowRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Slideshow not found' });
     }
-    
-    const slideshow = result.rows[0];
-    
-    // Fix audio_url if it's stored as JSON object
-    if (slideshow.audio_url && typeof slideshow.audio_url === 'string') {
-      try {
-        const audioData = JSON.parse(slideshow.audio_url);
-        if (audioData && audioData.url) {
-          slideshow.audio_url = audioData.url;
-        }
-      } catch (e) {
-        // If it's not valid JSON, leave it as is
-        console.log('🎬 SLIDESHOW_ACCESS: Audio URL is not JSON, keeping as string');
+
+    let slideshow = slideshowRes.rows[0];
+
+    // If the slideshow is protected, validate the activation code
+    if (slideshow.requires_activation_code) {
+      if (!activationCode) {
+        return res.status(403).json({ message: 'Activation code required' });
+      }
+
+      const codeRes = await client.query(
+        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (uses_left IS NULL OR uses_left > 0) AND (expires_at IS NULL OR expires_at > NOW())',
+        [activationCode, slideshowId]
+      );
+
+      if (codeRes.rows.length === 0) {
+        return res.status(403).json({ message: 'Invalid or expired activation code' });
       }
     }
+
+    // If we've reached here, access is granted, so we can fetch the full details
+    console.log(`🎬 GET_SLIDESHOW [${slideshowId}]: Access granted. Fetching full details.`);
     
-    // Get images for the slideshow
-    const imagesResult = await pool.query(
-      `SELECT * FROM slideshow_images 
-       WHERE slideshow_id = $1 
-       ORDER BY display_order`,
-      [id]
+    // Step 1: Re-fetch slideshow and user data for consistency, using a LEFT JOIN to be safe
+    const fullSlideshowResult = await client.query(
+      `SELECT s.*, u.username 
+       FROM slideshows s 
+       LEFT JOIN users u ON s.user_id = u.id 
+       WHERE s.id = $1`,
+      [slideshowId]
     );
     
-    slideshow.images = imagesResult.rows.map(img => ({
-      id: img.id,
-      slideshowId: img.slideshow_id,
-      // The direct S3 URL should not be sent to the client.
-      // Instead, we construct a secure, streamable URL.
-      url: `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/slideshow-images/${img.id}/stream`,
-      caption: img.caption,
-      title: img.caption || `Image ${img.display_order + 1}`, // Add title field for MediaPlayer compatibility
-      displayOrder: img.display_order,
-      createdAt: img.created_at,
-      // Add media type fields for MediaPlayer compatibility
-      type: 'image',
-      fileType: 'image',
-      contentType: 'image/jpeg'
-    }));
-    
-    // Get product links for this slideshow
-    let productLinks = [];
-    try {
-      const productLinksResult = await pool.query(`
-        SELECT pl.*, p.name as product_name, p.price, p.images as product_images
-        FROM product_links pl
-        JOIN products p ON pl.product_id = p.id
-        WHERE pl.slideshow_id = $1 AND pl.is_active = true
-        ORDER BY pl.display_order, pl.created_at
-      `, [id]);
+    if (fullSlideshowResult.rows.length === 0) {
+      // This case is unlikely if the first check passed, but it's a good safeguard
+      return res.status(404).json({ message: 'Slideshow data could not be fully retrieved.' });
+    }
 
-      // Format product links for frontend
-      productLinks = productLinksResult.rows.map(link => ({
+    const fullSlideshow = fullSlideshowResult.rows[0];
+
+    // Step 2: Fetch images
+    const imagesResult = await client.query(
+      `SELECT si.id, si.slideshow_id AS "slideshowId", si.image_url, si.caption, si.display_order AS "displayOrder"
+       FROM slideshow_images si
+       WHERE si.slideshow_id = $1 
+       ORDER BY si.display_order`,
+      [slideshowId]
+    );
+    
+    // Generate signed URLs for images
+    const imagesWithSignedUrls = await Promise.all(
+      imagesResult.rows.map(async (image) => {
+        try {
+          if (image.image_url && image.image_url.includes('s3.us-east-2.amazonaws.com/')) {
+            const s3Key = image.image_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+            const signedUrl = await s3Service.getSignedUrl(s3Key, 3600);
+            return { ...image, image_url: signedUrl };
+          }
+          return image;
+        } catch (error) {
+          console.error(`Failed to generate signed URL for image ${image.id}:`, error);
+          return image; // Return original if signing fails
+        }
+      })
+    );
+    
+    fullSlideshow.images = imagesWithSignedUrls;
+
+    // Step 3: Fetch product links with full product data
+    const productLinksResult = await client.query(
+      `SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+       FROM product_links pl
+       JOIN products p ON pl.product_id = p.id
+       WHERE pl.slideshow_id = $1 AND pl.is_active = true
+       ORDER BY pl.display_order, pl.created_at`,
+      [slideshowId]
+    );
+    
+    // Format product links for frontend (same as in /api/slideshows/:id endpoint)
+    fullSlideshow.productLinks = productLinksResult.rows.map(link => {
+      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
+      let formattedPrice = null;
+      if (link.price) {
+        let priceInCents = link.price;
+        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
+        // This is a temporary fix for the "hi" product that has price 53000 instead of 530
+        if (priceInCents > 10000) {
+          priceInCents = priceInCents / 100; // Convert back to proper cents
+        }
+        formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+      }
+      
+      return {
         id: link.product_id.toString(), // Use product_id, not link.id
         linkId: link.id.toString(), // Keep link ID for reference
         title: link.title,
@@ -3218,43 +3497,79 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         images: link.product_images || (link.image_url ? [link.image_url] : []),
         displayOrder: link.display_order,
         isActive: link.is_active,
-        price: link.price ? `$${(link.price / 100).toFixed(2)}` : null,
+        price: formattedPrice,
         productName: link.product_name
-      }));
-
-      console.log('🎬 SLIDESHOW_ACCESS: Found', productLinks.length, 'product links');
-    } catch (error) {
-      console.error('🎬 SLIDESHOW_ACCESS: Error fetching product links:', error);
-      productLinks = [];
+      };
+    });
+    
+    // Step 4: Generate signed URL for audio if it exists
+    if (fullSlideshow.audio_url) {
+      try {
+        // Extract S3 key from the URL
+        const audioUrl = fullSlideshow.audio_url;
+        if (audioUrl.includes('s3.us-east-2.amazonaws.com/')) {
+          const s3Key = audioUrl.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+          console.log(`🎵 SLIDESHOW_ACCESS: Generating signed URL for audio key: ${s3Key}`);
+          
+          const signedUrl = await s3Service.getSignedUrl(s3Key, 3600); // 1 hour expiry
+          fullSlideshow.audio_url = signedUrl;
+          console.log(`🎵 SLIDESHOW_ACCESS: Generated signed URL for audio`);
+        }
+      } catch (error) {
+        console.error(`🎵 SLIDESHOW_ACCESS: Failed to generate signed URL for audio:`, error);
+        // Don't fail the whole request, just leave the original URL
+      }
     }
     
-    // Convert snake_case fields to camelCase for frontend compatibility
-    const accessData = {
-      id: slideshow.id,
-      name: slideshow.name,
-      description: slideshow.description,
-      requiresActivationCode: slideshow.requires_activation_code,
-      isPublic: slideshow.is_public,
-      autoplayInterval: slideshow.autoplay_interval,
-      transition: slideshow.transition,
-      createdAt: slideshow.created_at,
-      updatedAt: slideshow.updated_at,
-      audioUrl: slideshow.audio_url,
-      images: slideshow.images,
-      productLinks: productLinks,
-      // Add access control flag - ONLY based on requiresActivationCode
-      accessRestricted: slideshow.requires_activation_code
-    };
-    
-    console.log('🎬 SLIDESHOW_ACCESS: Slideshow found:', accessData.name);
-    console.log('🎬 SLIDESHOW_ACCESS: Access restricted:', accessData.accessRestricted);
-    res.json(accessData);
-    
-  } catch (error) {
-    console.error('🎬 SLIDESHOW_ACCESS: Error fetching slideshow:', error);
-    res.status(500).json({ error: 'Failed to fetch slideshow' });
+    res.json(fullSlideshow);
+
+  } catch (err) {
+    console.error(`Failed to fetch slideshow access for ID ${slideshowId}:`, err);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
+
+app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    console.log(`🎵 SLIDESHOW_AUDIO_URL: Fetching audio URL for slideshow ${id}`);
+    
+    // Fetch the slideshow details
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1', [id]);
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = slideshowResult.rows[0];
+    let audioUrl = slideshow.audio_url;
+    
+    if (!audioUrl) {
+      return res.status(404).json({ error: 'No audio URL for this slideshow' });
+    }
+    
+    // If audio URL is stored as JSON, extract it
+    if (typeof audioUrl === 'string' && audioUrl.startsWith('{')) {
+      try {
+        const audioData = JSON.parse(audioUrl);
+        if (audioData && audioData.url) {
+          audioUrl = audioData.url;
+        }
+      } catch (e) {
+        // If it's not valid JSON, try to extract URL using regex
+        console.log('🎵 SLIDESHOW_AUDIO_URL: Audio URL is not valid JSON, trying regex extraction');
+        const urlMatch = audioUrl.match(/"url":"([^"]+)"/);
+        if (urlMatch) {
+          audioUrl = urlMatch[1];
+          console.log('🎵 SLIDESHOW_AUDIO_URL: Extracted URL from malformed JSON using regex:', audioUrl);
+        } else {
+          console.log('🎵 SLIDESHOW_AUDIO_URL: Could not extract URL, using as string');
+        }
+      }
+    }
+    
+    res.json({ audioUrl });
+  });
 
 // Create a new slideshow
 app.post('/api/slideshows', authenticateToken, async (req, res) => {
@@ -3818,6 +4133,160 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
   }
 });
 
+// Get slideshow for preview (no activation code required)
+app.get('/api/slideshow-preview/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('🎬 SLIDESHOW_PREVIEW: Fetching slideshow for preview:', id);
+    console.log('🎬 SLIDESHOW_PREVIEW: ID type:', typeof id);
+    
+    // First, let's check what slideshows exist
+    const allSlideshowsResult = await pool.query('SELECT id, name FROM slideshows ORDER BY id');
+    console.log('🎬 SLIDESHOW_PREVIEW: All slideshows in database:', allSlideshowsResult.rows);
+    
+    // Get slideshow details
+    const slideshowResult = await pool.query(
+      `SELECT s.*, u.username 
+       FROM slideshows s 
+       LEFT JOIN users u ON s.user_id = u.id 
+       WHERE s.id = $1`,
+      [id]
+    );
+    
+    console.log('🎬 SLIDESHOW_PREVIEW: Query result for ID', id, ':', slideshowResult.rows);
+    
+    if (slideshowResult.rows.length === 0) {
+      console.log('🎬 SLIDESHOW_PREVIEW: Slideshow not found:', id);
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    const slideshow = slideshowResult.rows[0];
+    console.log('🎬 SLIDESHOW_PREVIEW: Slideshow found:', slideshow.name);
+    
+    // Get images for the slideshow
+    const imagesResult = await pool.query(
+      `SELECT * FROM slideshow_images 
+       WHERE slideshow_id = $1 
+       ORDER BY display_order`,
+      [id]
+    );
+    
+    console.log('🎬 SLIDESHOW_PREVIEW: Found', imagesResult.rows.length, 'images');
+    
+    // Generate signed URLs for images
+    const imagesWithSignedUrls = await Promise.all(
+      imagesResult.rows.map(async (image) => {
+        try {
+          if (image.image_url && image.image_url.includes('s3.us-east-2.amazonaws.com/')) {
+            const s3Key = image.image_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+            const signedUrl = await s3Service.getSignedUrl(s3Key, 3600);
+            return {
+              id: image.id,
+              slideshowId: image.slideshow_id,
+              url: signedUrl,
+              caption: image.caption,
+              displayOrder: image.display_order,
+              createdAt: image.created_at
+            };
+          }
+          return {
+            id: image.id,
+            slideshowId: image.slideshow_id,
+            url: image.image_url,
+            caption: image.caption,
+            displayOrder: image.display_order,
+            createdAt: image.created_at
+          };
+        } catch (error) {
+          console.error(`🎬 SLIDESHOW_PREVIEW: Failed to generate signed URL for image ${image.id}:`, error);
+          return {
+            id: image.id,
+            slideshowId: image.slideshow_id,
+            url: image.image_url,
+            caption: image.caption,
+            displayOrder: image.display_order,
+            createdAt: image.created_at
+          };
+        }
+      })
+    );
+    
+    // Get product links
+    let productLinks = [];
+    try {
+      const productLinksResult = await pool.query(`
+        SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+        FROM product_links pl
+        JOIN products p ON pl.product_id = p.id
+        WHERE pl.slideshow_id = $1 AND pl.is_active = true
+        ORDER BY pl.display_order, pl.created_at
+      `, [id]);
+
+      productLinks = productLinksResult.rows.map(link => {
+        let formattedPrice = null;
+        if (link.price) {
+          let priceInCents = link.price;
+          if (priceInCents > 10000) {
+            priceInCents = priceInCents / 100;
+          }
+          formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+        }
+        
+        return {
+          id: link.product_id.toString(),
+          linkId: link.id.toString(),
+          title: link.title,
+          url: link.url,
+          description: link.description,
+          imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+          images: link.product_images || (link.image_url ? [link.image_url] : []),
+          displayOrder: link.display_order,
+          isActive: link.is_active,
+          price: formattedPrice,
+          productName: link.product_name
+        };
+      });
+    } catch (error) {
+      console.error('🎬 SLIDESHOW_PREVIEW: Error fetching product links:', error);
+      productLinks = [];
+    }
+    
+    // Generate signed URL for audio if it exists
+    let audioUrl = slideshow.audio_url;
+    if (audioUrl) {
+      try {
+        if (audioUrl.includes('s3.us-east-2.amazonaws.com/')) {
+          const s3Key = audioUrl.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+          audioUrl = await s3Service.getSignedUrl(s3Key, 3600);
+        }
+      } catch (error) {
+        console.error('🎬 SLIDESHOW_PREVIEW: Failed to generate signed URL for audio:', error);
+      }
+    }
+    
+    const previewSlideshow = {
+      id: slideshow.id,
+      name: slideshow.name,
+      description: slideshow.description,
+      username: slideshow.username,
+      requiresActivationCode: slideshow.requires_activation_code,
+      autoplayInterval: slideshow.autoplay_interval,
+      audioUrl: audioUrl,
+      images: imagesWithSignedUrls,
+      productLinks: productLinks,
+      createdAt: slideshow.created_at,
+      updatedAt: slideshow.updated_at
+    };
+    
+    console.log('🎬 SLIDESHOW_PREVIEW: Returning preview data with', previewSlideshow.images.length, 'images');
+    res.json(previewSlideshow);
+    
+  } catch (error) {
+    console.error('🎬 SLIDESHOW_PREVIEW: Error fetching slideshow for preview:', error);
+    res.status(500).json({ error: 'Failed to fetch slideshow for preview' });
+  }
+});
+
 // Stream slideshow audio endpoint - serves audio files for slideshow background music
 app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
   try {
@@ -3889,6 +4358,12 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        // For HEAD requests, just return headers without body
+        if (req.method === 'HEAD') {
+          console.log('🎵 SLIDESHOW_AUDIO_STREAM: HEAD request, returning headers only');
+          return res.end();
+        }
         
         // Pipe the response stream directly
         stream.pipe(res);
@@ -3984,14 +4459,25 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     // Add media files to playlist
     if (mediaFileIds && mediaFileIds.length > 0) {
       for (const mediaId of mediaFileIds) {
-        // Check if media file exists and belongs to user
+        // Check if media file exists and user can access it (own file or admin)
         const mediaCheck = await pool.query(
-          'SELECT id FROM media WHERE id = $1 AND user_id = $2',
-          [mediaId, req.user.userId]
+          'SELECT id, user_id FROM media WHERE id = $1',
+          [mediaId]
         );
         
         if (mediaCheck.rows.length === 0) {
-          return res.status(404).json({ error: `Media file ${mediaId} not found or not authorized` });
+          return res.status(404).json({ error: `Media file ${mediaId} not found` });
+        }
+        
+        const mediaFile = mediaCheck.rows[0];
+        
+        // Check if user is admin
+        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+        const isAdmin = userResult.rows[0]?.is_admin || false;
+        
+        // Allow access if: user owns the file OR user is admin
+        if (mediaFile.user_id !== req.user.userId && !isAdmin) {
+          return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
         }
         
         // Check if already linked
@@ -4092,14 +4578,25 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
       for (let i = 0; i < mediaFileIds.length; i++) {
         const mediaId = mediaFileIds[i];
         
-        // Check if media file exists and belongs to user
+        // Check if media file exists and user can access it (own file or admin)
         const mediaCheck = await pool.query(
-          'SELECT id FROM media WHERE id = $1 AND user_id = $2',
-          [mediaId, req.user.userId]
+          'SELECT id, user_id FROM media WHERE id = $1',
+          [mediaId]
         );
         
         if (mediaCheck.rows.length === 0) {
-          return res.status(404).json({ error: `Media file ${mediaId} not found or not authorized` });
+          return res.status(404).json({ error: `Media file ${mediaId} not found` });
+        }
+        
+        const mediaFile = mediaCheck.rows[0];
+        
+        // Check if user is admin
+        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+        const isAdmin = userResult.rows[0]?.is_admin || false;
+        
+        // Allow access if: user owns the file OR user is admin
+        if (mediaFile.user_id !== req.user.userId && !isAdmin) {
+          return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
         }
         
         await pool.query(
@@ -4271,6 +4768,163 @@ app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, asyn
     res.json({ message: 'Message deleted successfully' });
   } catch (error) {
     console.error('Error deleting chat message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+
+// ---------- SLIDESHOW CHAT ROUTES ----------
+app.get('/api/slideshows/:slideshowId/chat', async (req, res) => {
+  try {
+    const { slideshowId } = req.params;
+    const { limit = 50, offset = 0 } = req.query;
+
+    console.log('🎬 SLIDESHOW_CHAT: Fetching messages for slideshow:', slideshowId);
+
+    // Check if slideshow exists and is accessible
+    const slideshowResult = await pool.query(
+      'SELECT id, requires_activation_code, is_public FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    const slideshow = slideshowResult.rows[0];
+
+    // For now, allow all users to view chat for public slideshows
+    // TODO: Add activation code check for protected slideshows if needed
+
+    const result = await pool.query(
+      `SELECT cm.*, u.username 
+       FROM slideshow_chat_messages cm 
+       JOIN users u ON cm.user_id = u.id 
+       WHERE cm.slideshow_id = $1 AND cm.is_deleted = FALSE 
+       ORDER BY cm.created_at DESC 
+       LIMIT $2 OFFSET $3`,
+      [slideshowId, parseInt(limit), parseInt(offset)]
+    );
+
+    const messages = result.rows.map(msg => ({
+      id: msg.id,
+      slideshowId: msg.slideshow_id,
+      userId: msg.user_id,
+      username: msg.username,
+      message: msg.message,
+      createdAt: msg.created_at,
+      updatedAt: msg.updated_at,
+      isDeleted: msg.is_deleted
+    }));
+
+    console.log('🎬 SLIDESHOW_CHAT: Found', messages.length, 'messages');
+    res.json({ messages: messages.reverse() }); // Reverse to show oldest first
+  } catch (error) {
+    console.error('Error fetching slideshow chat messages:', error);
+    res.status(500).json({ error: 'Failed to fetch chat messages' });
+  }
+});
+
+app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res) => {
+  try {
+    const { slideshowId } = req.params;
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message content is required' });
+    }
+
+    if (message.trim().length > 1000) {
+      return res.status(400).json({ error: 'Message too long (max 1000 characters)' });
+    }
+
+    console.log('🎬 SLIDESHOW_CHAT: Creating message for slideshow:', slideshowId, 'by user:', req.user.userId);
+
+    // Check if slideshow exists
+    const slideshowResult = await pool.query(
+      'SELECT id FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+
+    // Insert the message
+    const result = await pool.query(
+      `INSERT INTO slideshow_chat_messages (slideshow_id, user_id, message) 
+       VALUES ($1, $2, $3) RETURNING *`,
+      [slideshowId, req.user.userId, message.trim()]
+    );
+
+    // Get the message with username
+    const messageResult = await pool.query(
+      `SELECT cm.*, u.username 
+       FROM slideshow_chat_messages cm 
+       JOIN users u ON cm.user_id = u.id 
+       WHERE cm.id = $1`,
+      [result.rows[0].id]
+    );
+
+    const newMessage = messageResult.rows[0];
+    const formattedMessage = {
+      id: newMessage.id,
+      slideshowId: newMessage.slideshow_id,
+      userId: newMessage.user_id,
+      username: newMessage.username,
+      message: newMessage.message,
+      createdAt: newMessage.created_at,
+      updatedAt: newMessage.updated_at,
+      isDeleted: newMessage.is_deleted
+    };
+
+    console.log('🎬 SLIDESHOW_CHAT: Message created:', formattedMessage.id);
+    res.status(201).json({ message: formattedMessage });
+  } catch (error) {
+    console.error('Error creating slideshow chat message:', error);
+    res.status(500).json({ error: 'Failed to create message' });
+  }
+});
+
+app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const { slideshowId, messageId } = req.params;
+
+    console.log('🎬 SLIDESHOW_CHAT: Deleting message:', messageId, 'from slideshow:', slideshowId);
+
+    // Check if user owns the message or is admin
+    const messageResult = await pool.query(
+      'SELECT user_id FROM slideshow_chat_messages WHERE id = $1 AND slideshow_id = $2',
+      [messageId, slideshowId]
+    );
+
+    if (messageResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    const messageOwnerId = messageResult.rows[0].user_id;
+    
+    // Check if user is admin
+    const userResult = await pool.query(
+      'SELECT is_admin FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    const isAdmin = userResult.rows[0]?.is_admin || false;
+
+    if (messageOwnerId !== req.user.userId && !isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to delete this message' });
+    }
+
+    // Soft delete the message
+    await pool.query(
+      'UPDATE slideshow_chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
+      [messageId]
+    );
+
+    console.log('🎬 SLIDESHOW_CHAT: Message deleted:', messageId);
+    res.json({ message: 'Message deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting slideshow chat message:', error);
     res.status(500).json({ error: 'Failed to delete message' });
   }
 });
@@ -5285,3 +5939,10 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server listening on http://${address.address}:${address.port}`);
   console.log(`🚀 To test locally, open http://localhost:${PORT}`);
 });
+
+// 🔧 INCREASE SERVER TIMEOUT FOR LARGE UPLOADS
+server.timeout = 10 * 60 * 1000; // 10 minutes timeout
+server.keepAliveTimeout = 10 * 60 * 1000; // 10 minutes keep-alive
+server.headersTimeout = 10 * 60 * 1000; // 10 minutes headers timeout
+
+console.log(`🔧 Server timeouts set to 10 minutes for large uploads`);
