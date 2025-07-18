@@ -1144,6 +1144,47 @@ function PreviewPlayer({
               </View>
             )}
 
+            {/* Audio Player Display - Only show for audio files */}
+            {isAudio && currentMedia && (
+              <View style={styles.audioPlayerContainer}>
+                <View style={styles.audioVisualization}>
+                  <View style={styles.audioWaveform}>
+                    {/* Audio waveform visualization */}
+                    {Array.from({ length: 20 }, (_, i) => (
+                      <View
+                        key={i}
+                        style={[
+                          styles.waveformBar,
+                          {
+                            height: Math.random() * 60 + 20,
+                            backgroundColor: isPlaying ? '#f59e0b' : '#e5e7eb',
+                          },
+                        ]}
+                      />
+                    ))}
+                  </View>
+                  
+                  <View style={styles.audioInfo}>
+                    <MaterialIcons name="music-note" size={64} color="#f59e0b" />
+                    <Text style={styles.audioTitle}>{currentMedia.title}</Text>
+                    <Text style={styles.audioSubtitle}>Audio Preview</Text>
+                  </View>
+                </View>
+                
+                {/* Hidden audio element for web */}
+                {Platform.OS === 'web' && (
+                  <audio
+                    ref={(el) => { webAudioRef.current = el; }}
+                    src={currentMedia.url}
+                    style={{ display: 'none' }}
+                    crossOrigin="anonymous"
+                    preload="metadata"
+                    muted={isMuted}
+                  />
+                )}
+              </View>
+            )}
+
             {/* Image Display - For slideshow images */}
             {/* Debug logging moved outside JSX */}
             {(() => {
@@ -2103,5 +2144,57 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     lineHeight: 16,
+  },
+  
+  // Audio Player Styles
+  audioPlayerContainer: {
+    position: 'relative',
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  audioVisualization: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  audioWaveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+    height: 80,
+  },
+  waveformBar: {
+    width: 4,
+    marginHorizontal: 2,
+    borderRadius: 2,
+    backgroundColor: '#e5e7eb',
+  },
+  audioInfo: {
+    alignItems: 'center',
+  },
+  audioTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  audioSubtitle: {
+    fontSize: 16,
+    color: '#f59e0b',
+    textAlign: 'center',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

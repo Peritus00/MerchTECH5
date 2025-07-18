@@ -341,12 +341,35 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
   };
 
-  const renderCurrentVideo = () => {
+  const renderCurrentMedia = () => {
     const currentItem = media[currentIndex];
     if (!currentItem) return null;
     
-    const isVideo = currentItem.media_type === 'video' || currentItem.fileType === 'video' || currentItem.type === 'video';
+    // Enhanced media type detection
+    const isVideo = currentItem.media_type === 'video' || 
+                   currentItem.fileType === 'video' || 
+                   currentItem.type === 'video' ||
+                   currentItem.contentType?.startsWith('video/');
+    
+    const isAudio = currentItem.media_type === 'audio' || 
+                   currentItem.fileType === 'audio' || 
+                   currentItem.type === 'audio' ||
+                   currentItem.contentType?.startsWith('audio/');
+    
+    const isImage = !isVideo && !isAudio; // Default to image if not video or audio
+    
     const itemUri = currentItem.url || currentItem.s3_key || 'https://placehold.co/400x300?text=No+Media';
+
+    console.log('🎵 MEDIA_DETECTION:', {
+      title: currentItem.title,
+      media_type: currentItem.media_type,
+      fileType: currentItem.fileType,
+      type: currentItem.type,
+      contentType: currentItem.contentType,
+      isVideo,
+      isAudio,
+      isImage
+    });
 
     // Calculate dynamic video style based on actual video dimensions and zoom level
     const getVideoStyle = () => {
@@ -363,7 +386,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         return {
           width: zoomedWidth,
           height: zoomedHeight,
-          alignSelf: 'center',
+          alignSelf: 'center' as const,
           borderRadius: 8,
           transform: [{ scale: 1 }], // Keep scale at 1, we're changing dimensions instead
         };
@@ -372,7 +395,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       return {
         width: '112.5%', // Increased from 90% by 25% (90% * 1.25 = 112.5%)
         height: 500 * zoomLevel,
-        alignSelf: 'center',
+        alignSelf: 'center' as const,
         borderRadius: 8,
         transform: [{ scale: 1 }],
       };
@@ -395,7 +418,52 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate)}
         />
       );
+    } else if (isAudio) {
+      // Audio player interface
+      return (
+        <View style={styles.audioPlayerContainer}>
+          <View style={styles.audioVisualization}>
+            <View style={styles.audioWaveform}>
+              {/* Audio waveform visualization */}
+              {Array.from({ length: 20 }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.waveformBar,
+                    {
+                      height: Math.random() * 60 + 20,
+                      backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
+                      animationDelay: `${i * 0.1}s`,
+                    },
+                  ]}
+                />
+              ))}
+            </View>
+            
+            <View style={styles.audioInfo}>
+              <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+              <Text style={styles.audioTitle}>{currentItem.title}</Text>
+              <Text style={styles.audioSubtitle}>Audio Track</Text>
+            </View>
+          </View>
+          
+          {/* Hidden audio element for playback */}
+          <Video
+            ref={videoRef}
+            source={{ uri: itemUri }}
+            rate={1.0}
+            volume={1.0}
+            isMuted={isMuted}
+            shouldPlay={isPlaying}
+            isLooping={false}
+            style={{ width: 0, height: 0, opacity: 0 }}
+            useNativeControls={false}
+            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          />
+        </View>
+      );
     } else {
+      // Image display
       return (
         <ExpoImage
           source={{ uri: itemUri }}
@@ -449,7 +517,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         <View style={styles.slideshowMainContent}>
         <View style={styles.slideshowLeftPanel}>
             <View style={styles.videoContainer}>
-                {renderCurrentVideo()}
+                {renderCurrentMedia()}
             </View>
             <View style={styles.controls}>
                 <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
@@ -1022,6 +1090,53 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+  },
+  
+  // Audio Player Styles
+  audioPlayerContainer: {
+    width: '100%',
+    height: 500,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  audioVisualization: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  audioWaveform: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 30,
+    height: 80,
+  },
+  waveformBar: {
+    width: 4,
+    marginHorizontal: 2,
+    borderRadius: 2,
+    backgroundColor: '#e5e7eb',
+  },
+  audioInfo: {
+    alignItems: 'center',
+  },
+  audioTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#ffffff',
+    marginTop: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  audioSubtitle: {
+    fontSize: 14,
+    color: '#9ca3af',
+    textAlign: 'center',
   },
 });
 
