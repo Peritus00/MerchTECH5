@@ -74,17 +74,22 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
       console.log('🔴 EDIT_PLAYLIST: Playlist details updated:', updatedPlaylist);
 
-      // Update media files if changed
+      // Update media files if changed (including order changes)
       const currentMediaIds = playlist.mediaFiles?.map(f => f.id) || [];
       const newMediaIds = playlistMediaFiles.map(f => f.id);
       
-      if (JSON.stringify(currentMediaIds.sort()) !== JSON.stringify(newMediaIds.sort())) {
-        console.log('🔴 EDIT_PLAYLIST: Media files changed, updating...');
+      // Compare arrays WITHOUT sorting to detect order changes
+      const mediaFilesChanged = JSON.stringify(currentMediaIds) !== JSON.stringify(newMediaIds);
+      
+      if (mediaFilesChanged) {
+        console.log('🔴 EDIT_PLAYLIST: Media files or order changed, updating...');
+        console.log('🔴 EDIT_PLAYLIST: Current order:', currentMediaIds);
+        console.log('🔴 EDIT_PLAYLIST: New order:', newMediaIds);
         
-        // For now, we'll replace all media files
-        // TODO: Implement more granular add/remove operations
         await playlistsAPI.updateMedia(playlist.id, newMediaIds);
         console.log('🔴 EDIT_PLAYLIST: Media files updated');
+      } else {
+        console.log('🔴 EDIT_PLAYLIST: No media file changes detected');
       }
 
       // Fetch the complete updated playlist from server to ensure consistency
