@@ -24,7 +24,7 @@ import {
   FontAwesome5,
   Ionicons,
 } from '@expo/vector-icons';
-import Swiper from 'react-native-swiper';
+import Swiper from 'react-native-web-swiper';
 import { Video, ResizeMode } from 'expo-av';
 import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
@@ -769,13 +769,9 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
       </View>
 
       <Swiper
-        style={styles.wrapper}
-        showsButtons={false}
+        controlsEnabled={false}
         loop={false}
         onIndexChanged={onIndexChanged}
-        dotStyle={styles.dot}
-        activeDotStyle={styles.activeDot}
-        paginationStyle={styles.pagination}
       >
         {media.map((item, index) => (
           <View key={`media-${item.id}-${index}`}>
