@@ -49,6 +49,7 @@ function RootLayoutNav() {
     
     // Determine if the current route is one that should be publicly accessible
     const isPublicRoute = 
+      segments[0] === '(public)' || // All routes under (public) group
       segments[0] === 'slideshow-access' || 
       segments[0] === 'playlist-access' ||
       segments[0] === 'media-player';
@@ -101,6 +102,7 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(public)" options={{ headerShown: false }} />
         <Stack.Screen name="auth" options={{ headerShown: false }} />
         <Stack.Screen name="subscription" options={{ headerShown: false }} />
         <Stack.Screen name="legal" options={{ headerShown: false }} />
@@ -108,7 +110,9 @@ function RootLayoutNav() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="preview-player/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="slideshow-access/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="slideshow-preview/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="slideshow-player/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="playlist-player/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="demo-players" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
