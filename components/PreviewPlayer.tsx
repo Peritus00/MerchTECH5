@@ -869,32 +869,23 @@ function PreviewPlayer({
     // Auto-play the next track if we were already playing
     if (wasPlaying && hasUserInteracted) {
       console.log('🔴 PREVIEW_PLAYER: Will auto-play next track after loading');
+      console.log('🔴 PREVIEW_PLAYER: Current state before auto-play - isPlaying:', isPlaying, 'webAudioLoaded:', webAudioLoaded, 'hasUserInteracted:', hasUserInteracted);
       
-      // For web audio, wait for the audio to be loaded
-      if (Platform.OS === 'web' && !isVideo) {
-        let attempts = 0;
-        const maxAttempts = 30; // 3 seconds max wait time
-        const checkAudioReady = () => {
-          attempts++;
-          if (webAudioLoaded) {
-            console.log('🔴 PREVIEW_PLAYER: Audio ready, starting auto-play for next track');
-            handlePlay();
-          } else if (attempts >= maxAttempts) {
-            console.log('🔴 PREVIEW_PLAYER: Audio loading timeout, forcing play attempt');
-            handlePlay();
-          } else {
-            console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, waiting... (attempt', attempts, '/', maxAttempts, ')');
-            setTimeout(checkAudioReady, 100);
-          }
-        };
-        setTimeout(checkAudioReady, 200);
-      } else {
-        // For video or mobile audio, use standard delay
-        setTimeout(() => {
-          console.log('🔴 PREVIEW_PLAYER: Starting auto-play for next track');
-          handlePlay();
-        }, 500);
-      }
+      // Simplified approach - just wait a bit longer and try to play
+      setTimeout(() => {
+        console.log('🔴 PREVIEW_PLAYER: Timeout reached, attempting to auto-play next track');
+        console.log('🔴 PREVIEW_PLAYER: State at auto-play time - webAudioLoaded:', webAudioLoaded, 'isPlaying:', isPlaying, 'currentMedia:', currentMedia?.title);
+        
+        // Force set the playing state and call handlePlay
+        console.log('🔴 PREVIEW_PLAYER: Calling handlePlay for auto-play...');
+        handlePlay().then(() => {
+          console.log('🔴 PREVIEW_PLAYER: Auto-play handlePlay completed successfully');
+        }).catch((error) => {
+          console.error('🔴 PREVIEW_PLAYER: Auto-play handlePlay failed:', error);
+        });
+      }, 1000); // Increased delay to ensure track is fully loaded
+    } else {
+      console.log('🔴 PREVIEW_PLAYER: Not auto-playing because wasPlaying:', wasPlaying, 'hasUserInteracted:', hasUserInteracted);
     }
   };
 
@@ -924,32 +915,23 @@ function PreviewPlayer({
     // Auto-play the previous track if we were already playing
     if (wasPlaying && hasUserInteracted) {
       console.log('🔴 PREVIEW_PLAYER: Will auto-play previous track after loading');
+      console.log('🔴 PREVIEW_PLAYER: Current state before auto-play - isPlaying:', isPlaying, 'webAudioLoaded:', webAudioLoaded, 'hasUserInteracted:', hasUserInteracted);
       
-      // For web audio, wait for the audio to be loaded
-      if (Platform.OS === 'web' && !isVideo) {
-        let attempts = 0;
-        const maxAttempts = 30; // 3 seconds max wait time
-        const checkAudioReady = () => {
-          attempts++;
-          if (webAudioLoaded) {
-            console.log('🔴 PREVIEW_PLAYER: Audio ready, starting auto-play for previous track');
-            handlePlay();
-          } else if (attempts >= maxAttempts) {
-            console.log('🔴 PREVIEW_PLAYER: Audio loading timeout, forcing play attempt');
-            handlePlay();
-          } else {
-            console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, waiting... (attempt', attempts, '/', maxAttempts, ')');
-            setTimeout(checkAudioReady, 100);
-          }
-        };
-        setTimeout(checkAudioReady, 200);
-      } else {
-        // For video or mobile audio, use standard delay
-        setTimeout(() => {
-          console.log('🔴 PREVIEW_PLAYER: Starting auto-play for previous track');
-          handlePlay();
-        }, 500);
-      }
+      // Simplified approach - just wait a bit longer and try to play
+      setTimeout(() => {
+        console.log('🔴 PREVIEW_PLAYER: Timeout reached, attempting to auto-play previous track');
+        console.log('🔴 PREVIEW_PLAYER: State at auto-play time - webAudioLoaded:', webAudioLoaded, 'isPlaying:', isPlaying, 'currentMedia:', currentMedia?.title);
+        
+        // Force set the playing state and call handlePlay
+        console.log('🔴 PREVIEW_PLAYER: Calling handlePlay for auto-play...');
+        handlePlay().then(() => {
+          console.log('🔴 PREVIEW_PLAYER: Auto-play handlePlay completed successfully');
+        }).catch((error) => {
+          console.error('🔴 PREVIEW_PLAYER: Auto-play handlePlay failed:', error);
+        });
+      }, 1000); // Increased delay to ensure track is fully loaded
+    } else {
+      console.log('🔴 PREVIEW_PLAYER: Not auto-playing because wasPlaying:', wasPlaying, 'hasUserInteracted:', hasUserInteracted);
     }
   };
 
