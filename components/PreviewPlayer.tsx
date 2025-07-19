@@ -843,17 +843,67 @@ function PreviewPlayer({
     if (mediaFiles.length <= 1) return;
 
     const wasPlaying = isPlaying;
+    
+    // Stop current playback properly
+    if (wasPlaying) {
+      if (Platform.OS === 'web' && webAudioRef.current) {
+        webAudioRef.current.pause();
+      } else if (isVideo) {
+        if (Platform.OS === 'web') {
+          const videoElement = htmlVideoRef.current;
+          if (videoElement) videoElement.pause();
+        } else {
+          videoPlayer.pause();
+        }
+      } else {
+        audioPlayer.pause();
+      }
+      setIsPlaying(false); // Update state to reflect paused status
+    }
+
     const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
     loadTrack(nextIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Only auto-play the next track if we were already playing
+    // Continue playing the next track if we were already playing
     if (wasPlaying && hasUserInteracted) {
-      setTimeout(() => {
-        handlePlay();
-      }, 300);
+      console.log('🔴 PREVIEW_PLAYER: Continuing playback on next track');
+      // Wait for media to load then start playing
+      const attemptPlay = async () => {
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const tryPlay = async () => {
+          attempts++;
+          console.log(`🔴 PREVIEW_PLAYER: Attempting to play next track (attempt ${attempts}/${maxAttempts})`);
+          
+          // Check if media is ready
+          if (isAudio && Platform.OS === 'web') {
+            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
+              if (attempts < maxAttempts) {
+                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
+                setTimeout(tryPlay, 200);
+                return;
+              } else {
+                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, forcing play attempt');
+              }
+            }
+          }
+          
+          // Attempt to play
+          try {
+            await handlePlay();
+          } catch (error) {
+            console.error('🔴 PREVIEW_PLAYER: Failed to auto-play next track:', error);
+          }
+        };
+        
+        tryPlay();
+      };
+      
+      setTimeout(attemptPlay, 300); // Initial delay for track loading
     }
   };
 
@@ -862,17 +912,67 @@ function PreviewPlayer({
     if (mediaFiles.length <= 1) return;
 
     const wasPlaying = isPlaying;
+    
+    // Stop current playback properly
+    if (wasPlaying) {
+      if (Platform.OS === 'web' && webAudioRef.current) {
+        webAudioRef.current.pause();
+      } else if (isVideo) {
+        if (Platform.OS === 'web') {
+          const videoElement = htmlVideoRef.current;
+          if (videoElement) videoElement.pause();
+        } else {
+          videoPlayer.pause();
+        }
+      } else {
+        audioPlayer.pause();
+      }
+      setIsPlaying(false); // Update state to reflect paused status
+    }
+
     const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
     loadTrack(prevIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Only auto-play the previous track if we were already playing
+    // Continue playing the previous track if we were already playing
     if (wasPlaying && hasUserInteracted) {
-      setTimeout(() => {
-        handlePlay();
-      }, 300);
+      console.log('🔴 PREVIEW_PLAYER: Continuing playback on previous track');
+      // Wait for media to load then start playing
+      const attemptPlay = async () => {
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const tryPlay = async () => {
+          attempts++;
+          console.log(`🔴 PREVIEW_PLAYER: Attempting to play previous track (attempt ${attempts}/${maxAttempts})`);
+          
+          // Check if media is ready
+          if (isAudio && Platform.OS === 'web') {
+            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
+              if (attempts < maxAttempts) {
+                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
+                setTimeout(tryPlay, 200);
+                return;
+              } else {
+                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, forcing play attempt');
+              }
+            }
+          }
+          
+          // Attempt to play
+          try {
+            await handlePlay();
+          } catch (error) {
+            console.error('🔴 PREVIEW_PLAYER: Failed to auto-play previous track:', error);
+          }
+        };
+        
+        tryPlay();
+      };
+      
+      setTimeout(attemptPlay, 300); // Initial delay for track loading
     }
   };
 
