@@ -71,7 +71,7 @@ class BackgroundAudioManager {
     this.cleanup();
 
     try {
-      const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)]();
+              const audio = new Audio();
       
       audio.addEventListener('loadeddata', () => {
         console.log('🎵 BACKGROUND_AUDIO_MANAGER: Audio loaded successfully');
@@ -698,44 +698,35 @@ function PreviewPlayer({
           // Check if audio is ready to play
           if (audio.readyState < 2) { // HAVE_CURRENT_DATA = 2
             console.log('🔴 PREVIEW_PLAYER: Audio not ready, current readyState:', audio.readyState);
-            console.log('🔴 PREVIEW_PLAYER: Waiting for audio to load...');
+            console.log('🔴 PREVIEW_PLAYER: Giving audio time to load...');
             
-            // Wait for audio to be ready
-            const waitForReady = new Promise((resolve, reject) => {
+            // Simple timeout approach - just wait a bit and then try to play
+            await new Promise(resolve => {
               const timeout = setTimeout(() => {
-                reject(new Error('Audio loading timeout'));
-              }, 10000); // Increased timeout to 10 seconds for larger files
+                console.log('🔴 PREVIEW_PLAYER: Timeout reached, proceeding with playback attempt');
+                resolve(true);
+              }, 3000); // Shorter 3-second timeout
               
               const onReady = () => {
                 clearTimeout(timeout);
                 audio.removeEventListener('canplay', onReady);
-                audio.removeEventListener('error', onError);
+                audio.removeEventListener('canplaythrough', onReady);
+                console.log('🔴 PREVIEW_PLAYER: Audio ready event fired early');
                 resolve(true);
               };
               
-              const onError = (e: any) => {
-                clearTimeout(timeout);
-                audio.removeEventListener('canplay', onReady);
-                audio.removeEventListener('error', onError);
-                reject(e);
-              };
-              
               if (audio.readyState >= 2) {
-                onReady();
+                console.log('🔴 PREVIEW_PLAYER: Audio became ready immediately');
+                clearTimeout(timeout);
+                resolve(true);
               } else {
-                audio.addEventListener('canplay', onReady);
-                audio.addEventListener('error', onError);
+                // Listen for ready events but don't fail if they don't fire
+                audio.addEventListener('canplay', onReady, { once: true });
+                audio.addEventListener('canplaythrough', onReady, { once: true });
               }
             });
-            
-            try {
-              await waitForReady;
-              console.log('🔴 PREVIEW_PLAYER: Audio is now ready to play');
-            } catch (error) {
-              console.error('🔴 PREVIEW_PLAYER: Audio failed to become ready:', error);
-              // Don't show disruptive alert, just log and try to play anyway
-              console.log('🔴 PREVIEW_PLAYER: Attempting to play despite loading issues...');
-            }
+          } else {
+            console.log('🔴 PREVIEW_PLAYER: Audio already ready, readyState:', audio.readyState);
           }
           
           // Verify the source is still valid
