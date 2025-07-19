@@ -867,9 +867,9 @@ function PreviewPlayer({
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Continue playing the next track if we were already playing
-    if (wasPlaying && hasUserInteracted) {
-      console.log('🔴 PREVIEW_PLAYER: Continuing playback on next track');
+    // Auto-play next track when user clicks next button (after initial interaction)
+    if (hasUserInteracted) { // Always auto-play when user clicks next after starting preview
+      console.log('🔴 PREVIEW_PLAYER: Auto-playing next track (user clicked next button)');
       // Wait for media to load then start playing
       const attemptPlay = async () => {
         let attempts = 0;
@@ -880,10 +880,20 @@ function PreviewPlayer({
           console.log(`🔴 PREVIEW_PLAYER: Attempting to play next track (attempt ${attempts}/${maxAttempts})`);
           
           // Check if media is ready
-          if (isAudio && Platform.OS === 'web') {
-            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
+          if (Platform.OS === 'web') {
+            let mediaReady = false;
+            
+            if (isAudio) {
+              mediaReady = !!(webAudioRef.current && webAudioRef.current.readyState >= 2);
+            } else if (isVideo) {
+              mediaReady = !!(htmlVideoRef.current && htmlVideoRef.current.readyState >= 2);
+            } else {
+              mediaReady = true; // For images/slideshows
+            }
+            
+            if (!mediaReady) {
               if (attempts < maxAttempts) {
-                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
+                console.log(`🔴 PREVIEW_PLAYER: ${isAudio ? 'Audio' : 'Video'} not ready yet, retrying in 200ms...`);
                 setTimeout(tryPlay, 200);
                 return;
               } else {
@@ -936,9 +946,9 @@ function PreviewPlayer({
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Continue playing the previous track if we were already playing
-    if (wasPlaying && hasUserInteracted) {
-      console.log('🔴 PREVIEW_PLAYER: Continuing playback on previous track');
+    // Auto-play previous track when user clicks previous button (after initial interaction)
+    if (hasUserInteracted) { // Always auto-play when user clicks previous after starting preview
+      console.log('🔴 PREVIEW_PLAYER: Auto-playing previous track (user clicked previous button)');
       // Wait for media to load then start playing
       const attemptPlay = async () => {
         let attempts = 0;
@@ -949,10 +959,20 @@ function PreviewPlayer({
           console.log(`🔴 PREVIEW_PLAYER: Attempting to play previous track (attempt ${attempts}/${maxAttempts})`);
           
           // Check if media is ready
-          if (isAudio && Platform.OS === 'web') {
-            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
+          if (Platform.OS === 'web') {
+            let mediaReady = false;
+            
+            if (isAudio) {
+              mediaReady = !!(webAudioRef.current && webAudioRef.current.readyState >= 2);
+            } else if (isVideo) {
+              mediaReady = !!(htmlVideoRef.current && htmlVideoRef.current.readyState >= 2);
+            } else {
+              mediaReady = true; // For images/slideshows
+            }
+            
+            if (!mediaReady) {
               if (attempts < maxAttempts) {
-                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
+                console.log(`🔴 PREVIEW_PLAYER: ${isAudio ? 'Audio' : 'Video'} not ready yet, retrying in 200ms...`);
                 setTimeout(tryPlay, 200);
                 return;
               } else {
