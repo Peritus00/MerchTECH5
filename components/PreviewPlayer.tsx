@@ -361,9 +361,15 @@ function PreviewPlayer({
             // Create and configure new audio element
             const audio = new Audio();
             
-            // Set properties BEFORE setting src
+            // Set properties BEFORE setting src - enhanced for WAV compatibility
             audio.preload = 'metadata';
             audio.crossOrigin = 'anonymous';
+            
+            // Add specific handling for WAV files which might have loading issues
+            if (currentMedia.contentType === 'audio/x-wav' || currentMedia.title.endsWith('.wav')) {
+              console.log('🔴 PREVIEW_PLAYER: Detected WAV file, using enhanced loading settings');
+              audio.preload = 'auto'; // More aggressive preloading for WAV files
+            }
             
             // Add event listeners BEFORE setting src
             audio.addEventListener('loadstart', () => {
@@ -698,7 +704,7 @@ function PreviewPlayer({
             const waitForReady = new Promise((resolve, reject) => {
               const timeout = setTimeout(() => {
                 reject(new Error('Audio loading timeout'));
-              }, 5000);
+              }, 10000); // Increased timeout to 10 seconds for larger files
               
               const onReady = () => {
                 clearTimeout(timeout);
@@ -727,8 +733,8 @@ function PreviewPlayer({
               console.log('🔴 PREVIEW_PLAYER: Audio is now ready to play');
             } catch (error) {
               console.error('🔴 PREVIEW_PLAYER: Audio failed to become ready:', error);
-              Alert.alert('Audio Error', 'Audio failed to load properly');
-              return;
+              // Don't show disruptive alert, just log and try to play anyway
+              console.log('🔴 PREVIEW_PLAYER: Attempting to play despite loading issues...');
             }
           }
           
@@ -752,24 +758,32 @@ function PreviewPlayer({
           } catch (error) {
             console.error('🔴 PREVIEW_PLAYER: Web audio play() failed:', error);
             
-            // Try to recover by reloading the audio
-            console.log('🔴 PREVIEW_PLAYER: Attempting to recover audio playback...');
+            // Enhanced recovery for problematic files (especially WAV)
+            console.log('🔴 PREVIEW_PLAYER: Attempting enhanced recovery for audio playback...');
             try {
+              // Force reload and try different approach
               audio.load();
+              
+              // Wait a bit longer for problematic files
+              const recoveryDelay = (currentMedia.contentType === 'audio/x-wav' || currentMedia.title.endsWith('.wav')) ? 2000 : 1000;
+              
               setTimeout(async () => {
                 try {
+                  // Try to play with more permissive settings
                   await audio.play();
                   setIsPlaying(true);
                   setWebAudioPlaying(true);
-                  console.log('🔴 PREVIEW_PLAYER: Audio recovery successful');
+                  console.log('🔴 PREVIEW_PLAYER: Enhanced audio recovery successful');
                 } catch (recoveryError) {
-                  console.error('🔴 PREVIEW_PLAYER: Audio recovery failed:', recoveryError);
-                  Alert.alert('Playback Error', `Failed to start audio playback: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
+                  console.error('🔴 PREVIEW_PLAYER: Enhanced audio recovery failed:', recoveryError);
+                  // Don't show alert, just log the error and continue
+                  console.log('🔴 PREVIEW_PLAYER: Audio playback failed, but continuing with preview');
                 }
-              }, 1000);
+              }, recoveryDelay);
             } catch (recoveryError) {
               console.error('🔴 PREVIEW_PLAYER: Audio recovery attempt failed:', recoveryError);
-              Alert.alert('Playback Error', `Failed to start audio playback: ${error instanceof Error ? error.message : String(error)}`);
+              // Don't show disruptive alert, just continue
+              console.log('🔴 PREVIEW_PLAYER: Continuing preview despite audio issues');
             }
           }
         } else {
@@ -867,9 +881,9 @@ function PreviewPlayer({
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Auto-play next track when user clicks next button (after initial interaction)
-    if (hasUserInteracted) { // Always auto-play when user clicks next after starting preview
-      console.log('🔴 PREVIEW_PLAYER: Auto-playing next track (user clicked next button)');
+    // Continue playing the next track if we were already playing
+    if (wasPlaying && hasUserInteracted) {
+      console.log('🔴 PREVIEW_PLAYER: Continuing playback on next track');
       // Wait for media to load then start playing
       const attemptPlay = async () => {
         let attempts = 0;
@@ -880,24 +894,15 @@ function PreviewPlayer({
           console.log(`🔴 PREVIEW_PLAYER: Attempting to play next track (attempt ${attempts}/${maxAttempts})`);
           
           // Check if media is ready
-          if (Platform.OS === 'web') {
-            let mediaReady = false;
-            
-            if (isAudio) {
-              mediaReady = !!(webAudioRef.current && webAudioRef.current.readyState >= 2);
-            } else if (isVideo) {
-              mediaReady = !!(htmlVideoRef.current && htmlVideoRef.current.readyState >= 2);
-            } else {
-              mediaReady = true; // For images/slideshows
-            }
-            
-            if (!mediaReady) {
+          if (isAudio && Platform.OS === 'web') {
+            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
               if (attempts < maxAttempts) {
-                console.log(`🔴 PREVIEW_PLAYER: ${isAudio ? 'Audio' : 'Video'} not ready yet, retrying in 200ms...`);
+                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
                 setTimeout(tryPlay, 200);
                 return;
               } else {
-                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, forcing play attempt');
+                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, trying to play anyway');
+                // Don't return here, attempt to play anyway
               }
             }
           }
@@ -946,9 +951,9 @@ function PreviewPlayer({
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Auto-play previous track when user clicks previous button (after initial interaction)
-    if (hasUserInteracted) { // Always auto-play when user clicks previous after starting preview
-      console.log('🔴 PREVIEW_PLAYER: Auto-playing previous track (user clicked previous button)');
+    // Continue playing the previous track if we were already playing
+    if (wasPlaying && hasUserInteracted) {
+      console.log('🔴 PREVIEW_PLAYER: Continuing playback on previous track');
       // Wait for media to load then start playing
       const attemptPlay = async () => {
         let attempts = 0;
@@ -959,24 +964,15 @@ function PreviewPlayer({
           console.log(`🔴 PREVIEW_PLAYER: Attempting to play previous track (attempt ${attempts}/${maxAttempts})`);
           
           // Check if media is ready
-          if (Platform.OS === 'web') {
-            let mediaReady = false;
-            
-            if (isAudio) {
-              mediaReady = !!(webAudioRef.current && webAudioRef.current.readyState >= 2);
-            } else if (isVideo) {
-              mediaReady = !!(htmlVideoRef.current && htmlVideoRef.current.readyState >= 2);
-            } else {
-              mediaReady = true; // For images/slideshows
-            }
-            
-            if (!mediaReady) {
+          if (isAudio && Platform.OS === 'web') {
+            if (!webAudioRef.current || webAudioRef.current.readyState < 2) {
               if (attempts < maxAttempts) {
-                console.log(`🔴 PREVIEW_PLAYER: ${isAudio ? 'Audio' : 'Video'} not ready yet, retrying in 200ms...`);
+                console.log('🔴 PREVIEW_PLAYER: Audio not ready yet, retrying in 200ms...');
                 setTimeout(tryPlay, 200);
                 return;
               } else {
-                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, forcing play attempt');
+                console.log('🔴 PREVIEW_PLAYER: Max attempts reached, trying to play anyway');
+                // Don't return here, attempt to play anyway
               }
             }
           }
