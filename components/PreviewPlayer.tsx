@@ -874,11 +874,20 @@ function PreviewPlayer({
       // Simplified approach - just wait a bit longer and try to play
       setTimeout(() => {
         console.log('🔴 PREVIEW_PLAYER: Timeout reached, attempting to auto-play next track');
-        console.log('🔴 PREVIEW_PLAYER: State at auto-play time - webAudioLoaded:', webAudioLoaded, 'isPlaying:', isPlaying, 'currentMedia:', currentMedia?.title);
-        console.log('🔴 PREVIEW_PLAYER: Media type check - isVideo:', isVideo, 'isAudio:', isAudio);
         
-        // Check the media type and play accordingly
-        if (isVideo) {
+        // Get CURRENT state instead of using stale closure values
+        const currentMediaItem = mediaFiles[currentTrack];
+        const currentIsVideo = currentMediaItem?.fileType === 'video';
+        const currentIsAudio = currentMediaItem?.fileType === 'audio';
+        
+        console.log('🔴 PREVIEW_PLAYER: Current track info at auto-play time:');
+        console.log('🔴 PREVIEW_PLAYER: - currentTrack:', currentTrack);
+        console.log('🔴 PREVIEW_PLAYER: - currentMediaItem:', currentMediaItem?.title);
+        console.log('🔴 PREVIEW_PLAYER: - currentIsVideo:', currentIsVideo);
+        console.log('🔴 PREVIEW_PLAYER: - currentIsAudio:', currentIsAudio);
+        
+        // Check the CURRENT media type and play accordingly
+        if (currentIsVideo) {
           console.log('🔴 PREVIEW_PLAYER: Auto-playing video track');
           // For video, directly play the video element
           if (Platform.OS === 'web') {
@@ -914,7 +923,7 @@ function PreviewPlayer({
               console.log('🔴 PREVIEW_PLAYER: Auto-play mobile video started');
             }
           }
-        } else {
+        } else if (currentIsAudio) {
           console.log('🔴 PREVIEW_PLAYER: Auto-playing audio track');
           // For audio, call handlePlay
           handlePlay().then(() => {
@@ -922,6 +931,8 @@ function PreviewPlayer({
           }).catch((error) => {
             console.error('🔴 PREVIEW_PLAYER: Auto-play handlePlay failed:', error);
           });
+        } else {
+          console.log('🔴 PREVIEW_PLAYER: Unknown media type, cannot auto-play');
         }
       }, 1000); // Increased delay to ensure track is fully loaded
     } else {
@@ -960,55 +971,66 @@ function PreviewPlayer({
       // Simplified approach - just wait a bit longer and try to play
       setTimeout(() => {
         console.log('🔴 PREVIEW_PLAYER: Timeout reached, attempting to auto-play previous track');
-        console.log('🔴 PREVIEW_PLAYER: State at auto-play time - webAudioLoaded:', webAudioLoaded, 'isPlaying:', isPlaying, 'currentMedia:', currentMedia?.title);
-        console.log('🔴 PREVIEW_PLAYER: Media type check - isVideo:', isVideo, 'isAudio:', isAudio);
         
-                 // Check the media type and play accordingly
-         if (isVideo) {
-           console.log('🔴 PREVIEW_PLAYER: Auto-playing video track');
-           // For video, directly play the video element
-           if (Platform.OS === 'web') {
-             const videoElement = document.getElementById('html5-video') as HTMLVideoElement;
-             if (videoElement) {
-               console.log('🔴 PREVIEW_PLAYER: Found video element, starting playback');
-               videoElement.play()
-                 .then(() => {
-                   console.log('🔴 PREVIEW_PLAYER: Auto-play video started successfully');
-                   setIsPlaying(true);
-                   // Reset timer and overlay for video auto-play
-                   setShowPlayOverlay(false);
-                   setCurrentTime(0);
-                   setTimeLeft(previewDuration);
-                   setPreviewEnded(false);
-                 })
-                 .catch((error) => {
-                   console.error('🔴 PREVIEW_PLAYER: Auto-play video failed:', error);
-                 });
-             } else {
-               console.error('🔴 PREVIEW_PLAYER: Video element not found for auto-play');
-             }
-           } else {
-             // For mobile video
-             if (videoPlayer) {
-               videoPlayer.play();
-               setIsPlaying(true);
-               // Reset timer and overlay for mobile video auto-play
-               setShowPlayOverlay(false);
-               setCurrentTime(0);
-               setTimeLeft(previewDuration);
-               setPreviewEnded(false);
-               console.log('🔴 PREVIEW_PLAYER: Auto-play mobile video started');
-             }
-           }
-         } else {
-           console.log('🔴 PREVIEW_PLAYER: Auto-playing audio track');
-           // For audio, call handlePlay
-           handlePlay().then(() => {
-             console.log('🔴 PREVIEW_PLAYER: Auto-play handlePlay completed successfully');
-           }).catch((error) => {
-             console.error('🔴 PREVIEW_PLAYER: Auto-play handlePlay failed:', error);
-           });
-         }
+        // Get CURRENT state instead of using stale closure values
+        const currentMediaItem = mediaFiles[currentTrack];
+        const currentIsVideo = currentMediaItem?.fileType === 'video';
+        const currentIsAudio = currentMediaItem?.fileType === 'audio';
+        
+        console.log('🔴 PREVIEW_PLAYER: Current track info at auto-play time:');
+        console.log('🔴 PREVIEW_PLAYER: - currentTrack:', currentTrack);
+        console.log('🔴 PREVIEW_PLAYER: - currentMediaItem:', currentMediaItem?.title);
+        console.log('🔴 PREVIEW_PLAYER: - currentIsVideo:', currentIsVideo);
+        console.log('🔴 PREVIEW_PLAYER: - currentIsAudio:', currentIsAudio);
+        
+        // Check the CURRENT media type and play accordingly
+        if (currentIsVideo) {
+          console.log('🔴 PREVIEW_PLAYER: Auto-playing video track');
+          // For video, directly play the video element
+          if (Platform.OS === 'web') {
+            const videoElement = document.getElementById('html5-video') as HTMLVideoElement;
+            if (videoElement) {
+              console.log('🔴 PREVIEW_PLAYER: Found video element, starting playback');
+              videoElement.play()
+                .then(() => {
+                  console.log('🔴 PREVIEW_PLAYER: Auto-play video started successfully');
+                  setIsPlaying(true);
+                  // Reset timer and overlay for video auto-play
+                  setShowPlayOverlay(false);
+                  setCurrentTime(0);
+                  setTimeLeft(previewDuration);
+                  setPreviewEnded(false);
+                })
+                .catch((error) => {
+                  console.error('🔴 PREVIEW_PLAYER: Auto-play video failed:', error);
+                });
+            } else {
+              console.error('🔴 PREVIEW_PLAYER: Video element not found for auto-play');
+            }
+          } else {
+            // For mobile video
+            if (videoPlayer) {
+              videoPlayer.play();
+              setIsPlaying(true);
+              // Reset timer and overlay for mobile video auto-play
+              setShowPlayOverlay(false);
+              setCurrentTime(0);
+              setTimeLeft(previewDuration);
+              setPreviewEnded(false);
+              console.log('🔴 PREVIEW_PLAYER: Auto-play mobile video started');
+            }
+          }
+        } else if (currentIsAudio) {
+          console.log('🔴 PREVIEW_PLAYER: Auto-playing audio track');
+          // For audio, call handlePlay
+          handlePlay().then(() => {
+            console.log('🔴 PREVIEW_PLAYER: Auto-play handlePlay completed successfully');
+          }).catch((error) => {
+            console.error('🔴 PREVIEW_PLAYER: Auto-play handlePlay failed:', error);
+          });
+        } else {
+          console.log('🔴 PREVIEW_PLAYER: Unknown media type, cannot auto-play');
+        }
       }, 1000); // Increased delay to ensure track is fully loaded
     } else {
       console.log('🔴 PREVIEW_PLAYER: Not auto-playing because wasPlaying:', wasPlaying, 'hasUserInteracted:', hasUserInteracted);
