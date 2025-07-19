@@ -842,32 +842,38 @@ function PreviewPlayer({
   const handleNext = () => {
     if (mediaFiles.length <= 1) return;
 
+    const wasPlaying = isPlaying;
     const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
     loadTrack(nextIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Auto-play the next track after a short delay
-    setTimeout(() => {
-      handlePlay();
-    }, 300);
+    // Only auto-play the next track if we were already playing
+    if (wasPlaying && hasUserInteracted) {
+      setTimeout(() => {
+        handlePlay();
+      }, 300);
+    }
   };
 
   // Handle previous
   const handlePrevious = () => {
     if (mediaFiles.length <= 1) return;
 
+    const wasPlaying = isPlaying;
     const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
     loadTrack(prevIndex);
     setCurrentTime(0);
     setTimeLeft(previewDuration);
     setPreviewEnded(false);
 
-    // Auto-play the previous track after a short delay
-    setTimeout(() => {
-      handlePlay();
-    }, 300);
+    // Only auto-play the previous track if we were already playing
+    if (wasPlaying && hasUserInteracted) {
+      setTimeout(() => {
+        handlePlay();
+      }, 300);
+    }
   };
 
   // Toggle mute

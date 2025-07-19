@@ -534,7 +534,7 @@ export default function PlaylistAccessScreen() {
           mediaFiles={formattedFiles}
           playlistName={playlist.name}
           playlistId={id}
-          autoplay={true}
+          autoplay={false}
           previewDuration={30}
           productLinks={playlist.productLinks || []}
           onPreviewComplete={handlePreviewComplete}
