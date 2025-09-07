@@ -106,6 +106,7 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 // --- Brevo Email Transporter ---
+// Forcing a clean redeployment to fix email issue - 2025-09-07
 const transporter = nodemailer.createTransport({
   host: 'smtp-relay.brevo.com',
   port: 587,
