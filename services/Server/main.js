@@ -553,23 +553,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      
-      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
-      let formattedPrice = 0;
-      if (p.price) {
-        let priceInCents = p.price;
-        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
-        if (priceInCents > 10000) {
-          priceInCents = priceInCents / 100; // Convert back to proper cents
-        }
-        formattedPrice = priceInCents / 100;
-      }
-      
-      return { 
-        ...p, 
-        price: formattedPrice, // Convert cents to dollars
-        prices: pricesArr 
-      };
+      return { ...p, prices: pricesArr };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
@@ -588,23 +572,7 @@ app.get('/api/products/all', async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      
-      // Fix price formatting - if price is abnormally high (> 10000 cents = $100), it might be stored incorrectly
-      let formattedPrice = 0;
-      if (p.price) {
-        let priceInCents = p.price;
-        // If price is greater than $100 (10000 cents), it might be stored as dollars*100 instead of cents
-        if (priceInCents > 10000) {
-          priceInCents = priceInCents / 100; // Convert back to proper cents
-        }
-        formattedPrice = priceInCents / 100;
-      }
-      
-      return { 
-        ...p, 
-        price: formattedPrice, // Convert cents to dollars
-        prices: pricesArr 
-      };
+      return { ...p, prices: pricesArr };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
@@ -666,16 +634,9 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
 
 // Update product (owner or admin)
 app.patch('/api/products/:id', authenticateToken, async (req, res) => {
-  console.log('🟠 SERVER: PATCH /api/products/:id called');
-  console.log('🟠 Product ID:', req.params.id);
-  console.log('🟠 Request body:', JSON.stringify(req.body, null, 2));
-  console.log('🟠 User:', req.user);
-  
   try {
     const { id } = req.params;
-    // Fetch product to verify rights
     const prodRes = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
-    console.log('🟠 Product lookup result:', prodRes.rows.length, 'rows');
     
     if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const product = prodRes.rows[0];
@@ -684,25 +645,10 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
     }
 
     const { name, description, inStock, metadata, isSuspended, images, price, prices, category } = req.body;
-    console.log('🟠 Extracted fields:', { name, description, inStock, metadata, isSuspended, images, price, prices, category });
-
-    // Merge new metadata with existing
     const newMetadata = { ...product.metadata, ...metadata };
-    console.log('🟠 Merged metadata:', newMetadata);
-
-    // Properly format JSON fields for PostgreSQL
     const formattedMetadata = newMetadata ? JSON.stringify(newMetadata) : null;
     const formattedPrices = prices ? JSON.stringify(prices) : null;
-    console.log('🟠 Formatted metadata:', formattedMetadata);
-    console.log('🟠 Formatted prices:', formattedPrices);
 
-    // Convert price to cents for database storage if provided
-    const priceInCents = price !== undefined ? Math.round(parseFloat(price) * 100) : undefined;
-    if (price !== undefined) {
-      console.log('🟠 Price conversion:', price, '→', priceInCents, 'cents');
-    }
-
-    console.log('🟠 Executing UPDATE query...');
     await pool.query(
       `UPDATE products SET 
         name = COALESCE($1, name), 
@@ -716,25 +662,13 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
         category = COALESCE($9, category),
         updated_at = NOW() 
        WHERE id = $10`,
-      [name, description, inStock, formattedMetadata, isSuspended, images, priceInCents, formattedPrices, category, id]
+      [name, description, inStock, formattedMetadata, isSuspended, images, price, formattedPrices, category, id]
     );
-    console.log('✅ UPDATE query completed');
-
-    // Note: prices update would normally involve stripe API; omitted for brevity.
 
     const updated = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
-    console.log('✅ Updated product:', updated.rows[0]);
-    
-    // Convert price back to dollars for frontend
-    const updatedProduct = updated.rows[0];
-    if (updatedProduct.price) {
-      updatedProduct.price = updatedProduct.price / 100;
-    }
-    
-    res.json({ product: updatedProduct });
+    res.json({ product: updated.rows[0] });
   } catch (err) {
-    console.error('🔴 SERVER: Update product error:', err);
-    console.error('🔴 Stack trace:', err.stack);
+    console.error('Update product error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -742,27 +676,18 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    console.log(`Attempting to delete product with id: ${id}`);
-    console.log(`Request by user: ${req.user.userId}, isAdmin: ${req.user.isAdmin}`);
-
     const prodRes = await pool.query('SELECT user_id FROM products WHERE id = $1', [id]);
 
     if (prodRes.rows.length === 0) {
-      console.log(`Product with id: ${id} not found.`);
       return res.status(404).json({ error: 'Product not found' });
     }
 
     const product = prodRes.rows[0];
-    console.log(`Found product. Owner user_id: ${product.user_id}`);
-
     if (!req.user.isAdmin && product.user_id !== req.user.userId) {
-      console.log(`Forbidden. User ${req.user.userId} is not owner ${product.user_id} and not admin.`);
       return res.status(403).json({ error: 'Forbidden' });
     }
 
     await pool.query('UPDATE products SET is_deleted = true, updated_at = NOW() WHERE id = $1', [id]);
-    console.log(`Product with id: ${id} successfully marked as deleted.`);
-
     res.status(200).json({ message: 'Product deleted successfully' });
   } catch (err) {
     console.error('Error deleting product:', err);
@@ -771,21 +696,14 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
 });
 
 app.post('/api/products', authenticateToken, async (req, res) => {
-  console.log('🟠 SERVER: POST /api/products called');
-  console.log('🟠 Request body:', JSON.stringify(req.body, null, 2));
-  console.log('�� User:', req.user);
-  
   try {
     const { name, description, images, metadata, inStock, prices, price, category } = req.body;
-    console.log('🟠 Extracted fields:', { name, description, images, metadata, inStock, prices, price, category });
     const { userId } = req.user;
 
-    // Basic validation
     if (!name || !prices || prices.length === 0) {
       return res.status(400).json({ error: 'Product name and price are required.' });
     }
 
-    // 🔒 SUBSCRIPTION LIMIT CHECK
     const userResult = await pool.query('SELECT subscription_tier, max_products FROM users WHERE id = $1', [userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
@@ -793,27 +711,21 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     const countResult = await pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
-    // Check for admin-set custom limit first, then fall back to subscription tier limits
     let maxProducts;
     if (user?.max_products !== null && user?.max_products !== undefined) {
-      // Admin has set a custom limit
       maxProducts = user.max_products;
-      console.log(`📋 Using admin-set custom limit: ${maxProducts} products for user ${userId}`);
     } else {
-      // Use subscription tier limits
       const limits = {
         free: { maxProducts: 1 },
         basic: { maxProducts: 3 },
         premium: { maxProducts: 10 }
       };
       maxProducts = (limits[userTier] || limits.free).maxProducts;
-      console.log(`📋 Using subscription tier limit: ${maxProducts} products for ${userTier} plan`);
     }
     
     if (currentCount >= maxProducts) {
-      console.log(`🚫 Product creation blocked: User ${userId} has ${currentCount}/${maxProducts} products`);
       return res.status(403).json({ 
-        error: `Product limit reached. You have reached your limit of ${maxProducts} products. Please contact support if you need to increase your limit.`,
+        error: `Product limit reached. You have reached your limit of ${maxProducts} products.`,
         limit: maxProducts,
         current: currentCount,
         subscriptionTier: userTier,
@@ -821,42 +733,21 @@ app.post('/api/products', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`✅ Product creation allowed: User ${userId} has ${currentCount}/${maxProducts} products`);
-    // END SUBSCRIPTION CHECK
-
-    // Properly format JSON fields for PostgreSQL
     const formattedMetadata = metadata ? JSON.stringify(metadata) : JSON.stringify({});
     const formattedPrices = prices ? JSON.stringify(prices) : null;
-    console.log('🟠 Formatted metadata:', formattedMetadata);
-    console.log('🟠 Formatted prices:', formattedPrices);
 
-    // Convert price to cents for database storage
-    const priceInCents = Math.round(parseFloat(price) * 100);
-    console.log('🟠 Price conversion:', price, '→', priceInCents, 'cents');
-
-    console.log('🟠 Executing INSERT query...');
     const result = await pool.query(
       `INSERT INTO products (user_id, name, description, images, metadata, in_stock, price, prices, category)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
-      [userId, name, description, images, formattedMetadata, inStock, priceInCents, formattedPrices, category]
+      [userId, name, description, images, formattedMetadata, inStock, price, formattedPrices, category]
     );
-    console.log('✅ INSERT completed, result:', result.rows[0]);
-
+    
     const newProduct = result.rows[0];
-
-    // Convert price back to dollars for frontend
-    newProduct.price = newProduct.price / 100;
-
-    // In a real app, you'd also create Stripe Price objects here
-    // and associate them. For now, we assume prices are managed elsewhere
-    // and are passed in for context. We'll attach them to the response.
     newProduct.prices = prices;
-
     res.status(201).json({ product: newProduct });
   } catch (err) {
-    console.error('🔴 SERVER: Create product error:', err);
-    console.error('🔴 Stack trace:', err.stack);
+    console.error('Create product error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
