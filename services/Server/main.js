@@ -349,22 +349,16 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Automatically send verification email
     try {
-      const verificationToken = jwt.sign({ userId: newUser.id, email: newUser.email }, JWT_SECRET, { expiresIn: '24h' });
-      await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, newUser.id]);
-      
-      const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
-      
       await transporter.sendMail({
         from: '"MerchTech QR" <help@merchtech.net>',
         to: email,
         subject: 'Verify Your MerchTech Account',
-        html: `<p>Welcome to MerchTech! Please click the link below to verify your email address:</p><a href="${verificationUrl}">Verify Email</a>`,
+        html: `Thank you for registering! Please verify your email by clicking this link: <a href="${process.env.FRONTEND_URL}/auth/verify-email?token=${token}">Verify Email</a>`,
       });
-      
-      console.log(`✅ REGISTRATION: Verification email sent to ${email}`);
+      console.log(`Verification email sent to ${email}`);
     } catch (emailError) {
-      console.error('🔴 REGISTRATION: Failed to send verification email:', emailError);
-      // Don't fail registration if email sending fails
+      console.error(`🔴 Failed to send verification email to ${email}:`, emailError);
+      // Do not block registration if email fails. Log the error for follow-up.
     }
 
     res.status(201).json({ user: newUser, token });
