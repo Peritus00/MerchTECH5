@@ -13,7 +13,6 @@ const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
 const s3Service = require('./s3Service');
-const brevo = require('@getbrevo/brevo');
 const axios = require('axios');
 
 console.log('DEBUG: Server script starting...');
@@ -107,13 +106,15 @@ if (process.env.STRIPE_SECRET_KEY) {
 }
 
 // --- Brevo Email Transporter ---
-const createTransporter = () => {
-    const emailAPI = new brevo.TransactionalEmailsApi();
-    // Set authentication for the API
-    emailAPI.authentications.apiKey.apiKey = process.env.BREVO_API_KEY;
-    return emailAPI;
-};
-const transporter = createTransporter();
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: '8e773a002@smtp-brevo.com',
+    pass: process.env.BREVO_SMTP_KEY,
+  },
+});
 
 // --- MIDDLEWARE ---
 // Note: Express limits already configured above with 1GB limit
@@ -332,8 +333,30 @@ app.post('/api/auth/register', async (req, res) => {
     );
     const newUser = result.rows[0];
     const token = jwt.sign({ userId: newUser.id, email: newUser.email, isAdmin: newUser.is_admin }, JWT_SECRET, { expiresIn: '24h' });
+
+    // Automatically send verification email
+    try {
+      const verificationToken = jwt.sign({ userId: newUser.id, email: newUser.email }, JWT_SECRET, { expiresIn: '24h' });
+      await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, newUser.id]);
+      
+      const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
+      
+      await transporter.sendMail({
+        from: '"MerchTech QR" <help@merchtech.net>',
+        to: email,
+        subject: 'Verify Your MerchTech Account',
+        html: `<p>Welcome to MerchTech! Please click the link below to verify your email address:</p><a href="${verificationUrl}">Verify Email</a>`,
+      });
+      
+      console.log(`✅ REGISTRATION: Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error('🔴 REGISTRATION: Failed to send verification email:', emailError);
+      // Don't fail registration if email sending fails
+    }
+
     res.status(201).json({ user: newUser, token });
   } catch (error) {
+    console.error('🔴 REGISTRATION ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
