@@ -2197,14 +2197,6 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
       const prod = productsMap.get(String(it.productId));
       if (!prod) continue;
       
-      // Debug: Log product data to see what images are available
-      console.log('💳 CHECKOUT: Product data for', prod.name, ':', {
-        id: prod.id,
-        images: prod.images,
-        imageType: typeof prod.images,
-        imageLength: prod.images ? prod.images.length : 'undefined'
-      });
-
       // Check if product is in stock
       if (!prod.in_stock) {
         console.log(`🚫 Product ${prod.name} is out of stock, skipping from checkout`);
@@ -2221,74 +2213,58 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
       }
       if (unitAmount <= 0) continue;
 
-      console.log('Adding line item', prod.name, unitAmount);
-
-      // Handle product images - use actual product images with proper content type
+      // Handle product images
       let productImages = [];
-      console.log('💳 CHECKOUT: Processing images for product', prod.name, '- Images available:', !!prod.images, 'Length:', prod.images ? prod.images.length : 'N/A');
-      
       if (prod.images && prod.images.length > 0) {
         const firstImage = prod.images[0];
-        console.log('💳 CHECKOUT: Original image URL:', firstImage);
-        
         if (firstImage) {
-          // Use the actual product image
           productImages = [firstImage];
-          console.log('💳 CHECKOUT: Using actual product image for Stripe:', firstImage);
         }
-      } else {
-        console.log('💳 CHECKOUT: No images found for product', prod.name);
       }
-
-      console.log('💳 CHECKOUT: Final productImages array:', productImages);
-      console.log('💳 CHECKOUT: Sending to Stripe - Product:', prod.name, 'Images:', productImages.length > 0 ? productImages : 'NO IMAGES');
 
       const lineItem = {
         price_data: {
           currency: 'usd',
           product_data: {
             name: prod.name,
-            images: productImages.length > 0 ? productImages : undefined,
+            description: prod.description || 'No description available.',
+            images: productImages,
           },
           unit_amount: unitAmount,
         },
-        quantity: it.quantity || 1,
+        quantity: it.quantity,
       };
-
-      console.log('💳 CHECKOUT: Complete line item being sent to Stripe:', JSON.stringify(lineItem, null, 2));
+      
       line_items.push(lineItem);
     }
 
     if (line_items.length === 0) {
-      return res.status(400).json({ error: 'No valid items for checkout' });
+      return res.status(400).json({ error: 'All items are out of stock or have invalid prices' });
     }
-
-    console.log('💳 CHECKOUT: Creating Stripe session with line_items:', JSON.stringify(line_items, null, 2));
     
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
-      mode: 'payment',
       line_items,
-      success_url: successUrl || `${req.protocol}://${req.get('host')}/store/checkout/success`,
-      cancel_url: cancelUrl || `${req.protocol}://${req.get('host')}/store/checkout/cancel`,
+      mode: 'payment',
+      success_url: successUrl || `${process.env.FRONTEND_URL}/store/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/store/checkout-cancel`,
       metadata: {
         userId: req.user.userId,
-      },
+      }
     });
 
     console.log('✅ CHECKOUT: Stripe session created successfully. Session ID:', session.id);
-    console.log('💳 CHECKOUT: Session URL:', session.url);
-    
-    res.json({ url: session.url });
-  } catch (err) {
-    console.error('Checkout session error:', err);
+    res.json({ sessionId: session.id, success: true, url: session.url });
+
+  } catch (error) {
+    console.error('🔴 CHECKOUT ERROR:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
 
 // ---------- QR CODES API ----------
 
-// Get all QR codes for the current user (alias for backward compatibility)
+// Get all QR codes for the logged-in user
 app.get('/api/qrcodes', authenticateToken, async (req, res) => {
   try {
     console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
