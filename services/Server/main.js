@@ -244,9 +244,21 @@ app.get('/health', (req, res) => {
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT id, email, username, is_admin, subscription_tier, created_at, updated_at, is_suspended,
-             max_products, max_audio_files, max_playlists, max_qr_codes, max_slideshows, 
-             max_videos, max_activation_codes
+      SELECT id, 
+             email, 
+             username, 
+             created_at, 
+             updated_at, 
+             is_admin, 
+             is_suspended, 
+             subscription_tier,
+             max_products,
+             max_audio_files,
+             max_playlists,
+             max_qr_codes,
+             max_slideshows,
+             max_videos,
+             max_activation_codes
       FROM users 
       ORDER BY created_at DESC
     `);
