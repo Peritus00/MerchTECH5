@@ -39,7 +39,7 @@ const UserPermissionCard = ({
   user: User;
   onEdit: () => void;
   onSuspend: (suspend: boolean) => void;
-  onDelete: () => void;
+  onDelete: (user: User) => void;
 }) => {
   const getTierColor = (tier: string) => {
     switch (tier) {
@@ -145,7 +145,7 @@ const UserPermissionCard = ({
 
             <TouchableOpacity
               style={styles.deleteButton}
-              onPress={onDelete}
+              onPress={() => onDelete(user)}
               activeOpacity={0.7}
             >
               <MaterialIcons name="delete" size={18} color="#ef4444" />
@@ -355,7 +355,7 @@ export default function UserPermissionsScreen() {
               user={userItem}
               onEdit={() => handleEditUser(userItem)}
               onSuspend={(suspend) => handleSuspendUser(userItem.id, suspend)}
-              onDelete={() => handleDeleteUser(userItem)}
+              onDelete={handleDeleteUser}
             />
           ))
         )}
