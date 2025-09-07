@@ -312,9 +312,21 @@ app.post('/api/auth/login', async (req, res) => {
     const user = result.rows[0];
     const isValidPassword = await bcrypt.compare(password, user.password_hash);
     if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
-    const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.is_admin }, JWT_SECRET, { expiresIn: '24h' });
+    
+    // **FIX**: Ensure isAdmin is included in the token payload
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        isAdmin: user.is_admin // This was missing
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+    
     res.json({ user, token });
   } catch (error) {
+    console.error('🔴 LOGIN ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
