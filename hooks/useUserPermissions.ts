@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '@/services/api';
 import { User } from '@/types';
+import axios from 'axios';
 
 interface UseUserPermissionsResult {
   users: User[];
@@ -171,14 +172,19 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
       const response = await api.delete(`/admin/users/${userId}`);
       
       if (response.status === 200) {
-        setUsers(prev => prev.filter(u => u.id !== userId));
+        setUsers(prev => prev.filter(u => u.id !== Number(userId)));
         Alert.alert('Success', 'User deleted successfully');
         return true;
       } else {
-        throw new Error('Failed to delete user');
+        const errorData = response.data || { error: 'Failed to delete user' };
+        throw new Error(errorData.error);
       }
     } catch (error) {
-      if (error instanceof Error) {
+      if (axios.isAxiosError(error)) {
+        const errorMessage = error.response?.data?.error || error.message;
+        console.error('Error deleting user:', errorMessage);
+        Alert.alert('Error', `Failed to delete user: ${errorMessage}`);
+      } else if (error instanceof Error) {
         console.error('Error deleting user:', error.message);
         Alert.alert('Error', `Failed to delete user: ${error.message}`);
       } else {

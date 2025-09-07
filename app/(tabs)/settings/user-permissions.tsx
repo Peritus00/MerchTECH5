@@ -17,6 +17,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import EditUserPermissionsModal from '@/components/EditUserPermissionsModal';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
+import ConfirmationModal from '@/components/ConfirmationModal';
 import { User } from '@/types';
 
 const UserStatsCard = ({ title, value, icon, color }: { title: string; value: number; icon: string; color: string }) => (
@@ -168,6 +169,8 @@ export default function UserPermissionsScreen() {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   React.useEffect(() => {
     if (currentUser === null) {
@@ -210,37 +213,31 @@ export default function UserPermissionsScreen() {
     try {
       const success = await deleteUser(userId);
       if (success) {
-        Alert.alert('Success', 'User deleted successfully');
+        // The alert is now handled in the hook
         await refreshUsers();
       } else {
-        Alert.alert('Error', 'Failed to delete user.');
+        // The alert is now handled in the hook
       }
     } catch (error: any) {
       Alert.alert('Error', error.message || 'An unexpected error occurred during deletion.');
     }
   };
 
-  const handleDeleteUser = async (userId: number) => {
-    const targetUser = users.find(u => u.id === userId);
-    if (!targetUser) return;
-
-    if (targetUser.username === 'djjetfuel') {
+  const handleDeleteUser = (user: User) => {
+    if (user.username === 'djjetfuel') {
       Alert.alert('Error', 'Cannot delete the protected master admin account');
       return;
     }
+    setUserToDelete(user);
+    setDeleteModalVisible(true);
+  };
 
-    Alert.alert(
-      'Delete User',
-      `Are you sure you want to permanently delete ${targetUser.username}? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => executeDelete(userId),
-        },
-      ]
-    );
+  const confirmDeleteUser = () => {
+    if (userToDelete) {
+      executeDelete(userToDelete.id);
+    }
+    setDeleteModalVisible(false);
+    setUserToDelete(null);
   };
 
   const handleEditUser = (userToEdit: User) => {
@@ -358,7 +355,7 @@ export default function UserPermissionsScreen() {
               user={userItem}
               onEdit={() => handleEditUser(userItem)}
               onSuspend={(suspend) => handleSuspendUser(userItem.id, suspend)}
-              onDelete={() => handleDeleteUser(userItem.id)}
+              onDelete={() => handleDeleteUser(userItem)}
             />
           ))
         )}
@@ -370,6 +367,16 @@ export default function UserPermissionsScreen() {
           visible={editModalVisible}
           onClose={() => setEditModalVisible(false)}
           onUpdatePermissions={handleUpdatePermissions}
+        />
+      )}
+
+      {userToDelete && (
+        <ConfirmationModal
+          visible={deleteModalVisible}
+          title="Delete User"
+          message={`Are you sure you want to permanently delete ${userToDelete.username}? This action cannot be undone.`}
+          onConfirm={confirmDeleteUser}
+          onClose={() => setDeleteModalVisible(false)}
         />
       )}
     </ThemedView>
