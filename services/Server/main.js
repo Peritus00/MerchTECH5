@@ -14,6 +14,7 @@ const os = require('os');
 const { Readable } = require('stream');
 const s3Service = require('./s3Service');
 const axios = require('axios');
+const helmet = require('helmet');
 
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
@@ -22,7 +23,13 @@ console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 const app = express();
 const PORT = process.env.PORT || 5001;
 
+// Log environment-specific variables for debugging
+console.log('🔧 Initializing server...');
+console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`   - Frontend URL: ${process.env.FRONTEND_URL}`);
+
 // --- MIDDLEWARE ---
+app.use(helmet());
 app.use(cors({
   origin: true,
   credentials: true,
