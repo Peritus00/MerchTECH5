@@ -46,7 +46,7 @@ export default function SubscriptionCheckoutScreen() {
           : `yourappscheme://subscription/checkout?tier=${tier}`,
       };
 
-      const response = await fetch(`${API_BASE_URL}/stripe/create-checkout-session`, {
+      const response = await fetch(`${API_BASE_URL}/api/stripe/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

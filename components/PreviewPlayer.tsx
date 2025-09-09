@@ -542,7 +542,7 @@ function PreviewPlayer({
   // Load initial track
   useEffect(() => {
     if (mediaFiles.length > 0) {
-      loadTrack(0);
+      loadTrack(0, true); // Reset timer for initial load
     }
   }, [mediaFiles]);
 
@@ -619,11 +619,16 @@ function PreviewPlayer({
   }, [audioPlayer, slideshowTimer]);
 
   // Load track function
-  const loadTrack = (index: number) => {
+  const loadTrack = (index: number, resetTimer: boolean = false) => {
     if (index >= 0 && index < mediaFiles.length) {
       setCurrentTrack(index);
-      setCurrentTime(0);
-      setTimeLeft(previewDuration);
+      
+      // Only reset the preview timer if explicitly requested (e.g., initial load)
+      if (resetTimer) {
+        setCurrentTime(0);
+        setTimeLeft(previewDuration);
+      }
+      
       setPreviewEnded(false);
 
       // Clear any existing slideshow timer
@@ -862,8 +867,7 @@ function PreviewPlayer({
 
     const nextIndex = currentTrack < mediaFiles.length - 1 ? currentTrack + 1 : 0;
     loadTrack(nextIndex);
-    setCurrentTime(0);
-    setTimeLeft(previewDuration);
+    // DO NOT RESET THE PREVIEW TIMER - let it continue counting down
     setPreviewEnded(false);
 
     // Auto-play the next track if we were already playing
@@ -898,10 +902,8 @@ function PreviewPlayer({
                 .then(() => {
                   console.log('🔴 PREVIEW_PLAYER: Auto-play video started successfully');
                   setIsPlaying(true);
-                  // Reset timer and overlay for video auto-play
+                  // Reset overlay for video auto-play but DON'T reset timer
                   setShowPlayOverlay(false);
-                  setCurrentTime(0);
-                  setTimeLeft(previewDuration);
                   setPreviewEnded(false);
                 })
                 .catch((error) => {
@@ -915,10 +917,8 @@ function PreviewPlayer({
             if (videoPlayer) {
               videoPlayer.play();
               setIsPlaying(true);
-              // Reset timer and overlay for mobile video auto-play
+              // Reset overlay for mobile video auto-play but DON'T reset timer
               setShowPlayOverlay(false);
-              setCurrentTime(0);
-              setTimeLeft(previewDuration);
               setPreviewEnded(false);
               console.log('🔴 PREVIEW_PLAYER: Auto-play mobile video started');
             }
@@ -959,8 +959,7 @@ function PreviewPlayer({
 
     const prevIndex = currentTrack > 0 ? currentTrack - 1 : mediaFiles.length - 1;
     loadTrack(prevIndex);
-    setCurrentTime(0);
-    setTimeLeft(previewDuration);
+    // DO NOT RESET THE PREVIEW TIMER - let it continue counting down
     setPreviewEnded(false);
 
     // Auto-play the previous track if we were already playing
@@ -995,10 +994,8 @@ function PreviewPlayer({
                 .then(() => {
                   console.log('🔴 PREVIEW_PLAYER: Auto-play video started successfully');
                   setIsPlaying(true);
-                  // Reset timer and overlay for video auto-play
+                  // Reset overlay for video auto-play but DON'T reset timer
                   setShowPlayOverlay(false);
-                  setCurrentTime(0);
-                  setTimeLeft(previewDuration);
                   setPreviewEnded(false);
                 })
                 .catch((error) => {
@@ -1012,10 +1009,8 @@ function PreviewPlayer({
             if (videoPlayer) {
               videoPlayer.play();
               setIsPlaying(true);
-              // Reset timer and overlay for mobile video auto-play
+              // Reset overlay for mobile video auto-play but DON'T reset timer
               setShowPlayOverlay(false);
-              setCurrentTime(0);
-              setTimeLeft(previewDuration);
               setPreviewEnded(false);
               console.log('🔴 PREVIEW_PLAYER: Auto-play mobile video started');
             }
