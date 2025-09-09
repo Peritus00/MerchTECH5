@@ -104,13 +104,8 @@ try {
   console.error('❌ S3 service initialization failed:', error);
 }
 
-// Initialize Stripe only if the secret key is available
-let stripe = null;
-if (process.env.STRIPE_SECRET_KEY) {
-  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-} else {
-  console.warn('⚠️ STRIPE_SECRET_KEY not found - Stripe functionality will be disabled');
-}
+// Initialize Stripe after loading environment variables
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- Brevo Email Transporter ---
 // Forcing a clean redeployment to fix email issue - 2025-09-07
