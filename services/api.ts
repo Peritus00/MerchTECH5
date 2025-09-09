@@ -390,6 +390,9 @@ export const paymentAPI = {
   },
 };
 
+// Alias for backward compatibility
+export const checkoutAPI = paymentAPI;
+
 export const mediaAPI = {
   async getAll() {
     const response = await api.get('/media');

@@ -2065,11 +2065,68 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
   }
 });
 
-// Legacy alias expected by older test script
+// Stripe create checkout session (subscription endpoint)
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
-  // Forward to the new handler
-  req.url = '/api/checkout/session';
-  return app._router.handle(req, res);
+  try {
+    const { tier, newUser, subscriptionTier, amount } = req.body;
+    
+    // Handle both old and new parameter formats
+    const selectedTier = tier || subscriptionTier;
+    if (!selectedTier) {
+      return res.status(400).json({ error: 'Tier is required' });
+    }
+
+    // Get user info
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const user = userResult.rows[0];
+
+    // Define subscription tiers with pricing
+    const tiers = {
+      basic: { price: amount || 999, name: 'Basic Plan' },
+      pro: { price: amount || 1999, name: 'Pro Plan' },
+      premium: { price: amount || 4999, name: 'Premium Plan' },
+      enterprise: { price: amount || 4999, name: 'Enterprise Plan' }
+    };
+
+    const tierInfo = tiers[selectedTier];
+    if (!tierInfo) {
+      return res.status(400).json({ error: 'Invalid tier' });
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: tierInfo.name,
+            description: `Subscription to ${tierInfo.name}`,
+          },
+          unit_amount: tierInfo.price,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/subscription`,
+      customer_email: user.email,
+      metadata: {
+        userId: user.id.toString(),
+        tier: selectedTier,
+        newUser: newUser || 'false',
+      },
+    });
+
+    console.log('✅ SUBSCRIPTION CHECKOUT: Session created successfully. Session ID:', session.id);
+    res.json({ url: session.url, sessionId: session.id, success: true });
+  } catch (error) {
+    console.error('🔴 SUBSCRIPTION CHECKOUT ERROR:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
 });
 
 // ---------- CHECKOUT ROUTE ----------
