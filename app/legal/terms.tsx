@@ -22,7 +22,7 @@ export default function TermsOfServiceScreen() {
           </ThemedText>
 
           <ThemedText style={styles.bodyText}>
-            We operate the website http://www.merchtech.net (the "Site"), the mobile application MerchTech (the "App"), as well as any other related products and services that refer or link to these legal terms (the "Legal Terms") (collectively, the "Services").
+            We operate the website https://app.merchtrader.org (the "Site"), the mobile application MerchTrader (the "App"), as well as any other related products and services that refer or link to these legal terms (the "Legal Terms") (collectively, the "Services").
           </ThemedText>
 
           <ThemedText style={styles.bodyText}>

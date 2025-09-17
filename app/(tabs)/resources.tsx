@@ -127,11 +127,11 @@ const ResourcesScreen = () => {
   };
 
   const handleContactSupport = () => {
-    Linking.openURL('mailto:help@merchtech.net?subject=Support Request');
+    Linking.openURL('mailto:help@merchtrader.org?subject=Support Request');
   };
 
   const handleOpenDocs = () => {
-    handleOpenResource('https://docs.merchtech.net');
+    handleOpenResource('https://docs.merchtrader.org');
   };
 
   const handleOpenTutorials = () => {
@@ -139,7 +139,7 @@ const ResourcesScreen = () => {
   };
 
   const handleOpenForum = () => {
-    handleOpenResource('https://community.merchtech.net');
+    handleOpenResource('https://community.merchtrader.org');
   };
 
   const filteredResources = getFilteredResources();

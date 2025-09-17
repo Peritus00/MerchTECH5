@@ -158,7 +158,7 @@ export default function Settings() {
   };
 
   const handleAbout = () => {
-    const message = 'VERSION 5.1';
+    const message = 'VERSION 5.1\n\nVisit us at: app.merchtrader.org';
     if (Platform.OS === 'web') {
       window.alert(message);
     } else {
