@@ -12,9 +12,9 @@
         "http://localhost:8081",
         "http://localhost:3000",
         "https://localhost:8081",
-        "https://app.merchtech.net",
-        "https://merchtech.net",
-        "https://*.merchtech.net"
+        "https://app.merchtrader.org",
+        "https://merchtrader.org",
+        "https://*.merchtrader.org"
       ],
       "ExposeHeaders": [
         "ETag",

@@ -123,15 +123,15 @@ const transporter = nodemailer.createTransport({
 // Note: Express limits already configured above with 1GB limit
 
 const allowedOrigins = [
-  'https://app.merchtech.net',
+  'https://app.merchtrader.org',
   'http://localhost:8081',
   'http://localhost:19006',
   'https://merchtech.app',
   'exp://192.168.1.70:8081',
   // Add production frontend URLs
   'https://merchtech5-production.up.railway.app',
-  'https://merchtech.net',
-  'https://www.merchtech.net',
+  'https://merchtrader.org',
+  'https://www.merchtrader.org',
   // Add Vercel deployment URLs (common patterns)
   'https://merchtechapp5.vercel.app',
   'https://merchtech-app.vercel.app',
@@ -364,7 +364,7 @@ app.post('/api/auth/register', async (req, res) => {
     // Automatically send verification email
     try {
       await transporter.sendMail({
-        from: '"MerchTech QR" <help@merchtech.net>',
+        from: '"MerchTrader QR" <help@merchtrader.org>',
         to: email,
         subject: 'Verify Your MerchTech Account',
         html: `Thank you for registering! Please verify your email by clicking this link: <a href="${process.env.FRONTEND_URL}/auth/verify-email?token=${token}">Verify Email</a>`,
@@ -400,7 +400,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
     const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
 
     await transporter.sendMail({
-      from: '"MerchTech QR" <help@merchtech.net>',
+      from: '"MerchTrader QR" <help@merchtrader.org>',
       to: email,
       subject: 'Verify Your MerchTech Account',
       html: `<p>Please click the link below to verify your email address:</p><a href="${verificationUrl}">Verify Email</a>`,
