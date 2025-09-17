@@ -52,7 +52,7 @@ export const MerchTechLogo: React.FC<MerchTechLogoProps> = ({
 
   const renderText = () => (
     <Text style={[styles.logoText, { fontSize }]}>
-      MERCHTECH
+      MERCHTRADER
     </Text>
   );
 

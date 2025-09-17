@@ -81,7 +81,7 @@ export default function LoginScreen() {
       if (error.message.includes('Account suspended')) {
         Alert.alert(
           'Account Suspended',
-          'Your account has been temporarily suspended due to unverified email. Please contact help@merchtech.net for assistance.',
+          'Your account has been temporarily suspended due to unverified email. Please contact help@merchtrader.net for assistance.',
           [
             { text: 'Contact Support', onPress: () => {} },
             { text: 'OK', style: 'cancel' }
@@ -116,7 +116,7 @@ export default function LoginScreen() {
           <View style={styles.header}>
             <MerchTechLogo size="large" variant="full" style={styles.logo} />
             <ThemedText type="title">Welcome Back</ThemedText>
-            <ThemedText type="subtitle">Sign in to your MerchTech account</ThemedText>
+            <ThemedText type="subtitle">Sign in to your MerchTrader account</ThemedText>
           </View>
 
           <View style={styles.form}>

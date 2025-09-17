@@ -132,23 +132,23 @@ export default function Settings() {
   const handleHelpSupport = () => {
     if (Platform.OS === 'web') {
       const shouldCopy = window.confirm(
-        'For assistance please contact help@merchtech.net\n\nClick OK to copy the email address to your clipboard.'
+        'For assistance please contact help@merchtrader.net\n\nClick OK to copy the email address to your clipboard.'
       );
       if (shouldCopy) {
-        navigator.clipboard.writeText('help@merchtech.net').then(() => {
-          window.alert('help@merchtech.net copied to clipboard');
+        navigator.clipboard.writeText('help@merchtrader.net').then(() => {
+          window.alert('help@merchtrader.net copied to clipboard');
         });
       }
     } else {
       Alert.alert(
         'Help & Support',
-        'For assistance please contact help@merchtech.net',
+        'For assistance please contact help@merchtrader.net',
         [
           {
             text: 'Copy Email',
             onPress: async () => {
-              await Clipboard.setStringAsync('help@merchtech.net');
-              Alert.alert('Copied', 'help@merchtech.net has been copied to your clipboard');
+              await Clipboard.setStringAsync('help@merchtrader.net');
+              Alert.alert('Copied', 'help@merchtrader.net has been copied to your clipboard');
             },
           },
           { text: 'Close', style: 'cancel' },

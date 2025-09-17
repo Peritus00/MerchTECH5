@@ -166,7 +166,7 @@ export default function StoreScreen() {
   };
 
   const getStoreUrl = () => {
-    const baseUrl = 'https://merchtech.net';
+    const baseUrl = 'https://merchtrader.net';
     if (isAdmin) {
       // Admin can share master store
       return `${baseUrl}/store/master`;
@@ -180,11 +180,11 @@ export default function StoreScreen() {
 
   const getStoreTitle = () => {
     if (isAdmin) {
-      return 'MerchTech Master Store';
+      return 'MerchTrader Master Store';
     } else if (user) {
       return `${user.firstName || user.username || 'My'}'s Store`;
     }
-    return 'MerchTech Store';
+    return 'MerchTrader Store';
   };
 
   const getStoreDescription = () => {
@@ -230,7 +230,7 @@ export default function StoreScreen() {
         </View>
         
         <TouchableOpacity style={styles.publicShopButton} onPress={() => router.push('/shop')}>
-          <ThemedText style={styles.publicShopButtonText}>MERCHTECH OFFICIAL STORE ↗️</ThemedText>
+          <ThemedText style={styles.publicShopButtonText}>MERCHTRADER OFFICIAL STORE ↗️</ThemedText>
         </TouchableOpacity>
       </ThemedView>
 

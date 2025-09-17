@@ -98,11 +98,11 @@ export default function ShopScreen() {
   };
 
   const getMasterStoreUrl = () => {
-    return 'https://merchtech.net/store/master';
+    return 'https://merchtrader.net/store/master';
   };
 
   const getMasterStoreTitle = () => {
-    return 'MerchTech Official Store';
+    return 'MerchTrader Official Store';
   };
 
   const getMasterStoreDescription = () => {
@@ -141,7 +141,7 @@ export default function ShopScreen() {
           </ThemedView>
         </ThemedView>
         
-        <ThemedText type="title" style={styles.title}>MERCHTECH OFFICIAL STORE</ThemedText>
+        <ThemedText type="title" style={styles.title}>MERCHTRADER OFFICIAL STORE</ThemedText>
         <ThemedText style={styles.subtitle}>Discover the most popular items from every creator.</ThemedText>
         
         {/* Share Button */}
