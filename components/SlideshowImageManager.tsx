@@ -202,8 +202,10 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
   };
 
   const handleAddAudio = () => {
-    console.log('🎵 SLIDESHOW handleAddAudio: Opening audio media picker');
+    console.log('🎵 SLIDESHOW handleAddAudio: Opening audio media picker - NEW VERSION');
+    console.log('🎵 SLIDESHOW handleAddAudio: showAudioPicker state:', showAudioPicker);
     setShowAudioPicker(true);
+    console.log('🎵 SLIDESHOW handleAddAudio: setShowAudioPicker(true) called');
   };
 
   const handleAudioSelected = async (audioFile: any) => {
