@@ -214,7 +214,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           // If the URL is a direct S3 URL, try to convert it to streaming URL
           if (imageUrl && imageUrl.includes('amazonaws.com') && image.id) {
             const baseUrl = process.env.NODE_ENV === 'production' 
-              ? 'https://merchtech5-production.up.railway.app'
+              ? 'https://merchtrader.org'
               : 'http://localhost:5001';
             const streamingUrl = `${baseUrl}/api/slideshow-images/${image.id}/stream`;
             

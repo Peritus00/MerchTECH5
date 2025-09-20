@@ -648,7 +648,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.playlist = 'Please select a playlist';
       } else {
         // Use web URL that works for both browser users and app users
-        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/playlist-access/${selectedPlaylist.id}`;
+        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtrader.org';
+        finalContent = `${baseUrl}/playlist-access/${selectedPlaylist.id}`;
         console.log('✅ Playlist web URL generated:', finalContent);
       }
     } else if (contentType === 'slideshow') {
@@ -657,7 +658,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.slideshow = 'Please select a slideshow';
       } else {
         // Use web URL that works for both browser users and app users
-        finalContent = `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/slideshow-access/${selectedSlideshow.id}`;
+        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtrader.org';
+        finalContent = `${baseUrl}/slideshow-access/${selectedSlideshow.id}`;
         console.log('✅ Slideshow web URL generated:', finalContent);
       }
     } else if (!finalContent) {
@@ -1573,10 +1575,11 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
               <View ref={qrRef} style={styles.qrWrapper}>
                 <AdvancedQRCodeGenerator
                   value={(() => {
+                    const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtrader.org';
                     if (contentType === 'playlist' && selectedPlaylist) {
-                      return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/playlist-access/${selectedPlaylist.id}`;
+                      return `${baseUrl}/playlist-access/${selectedPlaylist.id}`;
                     } else if (contentType === 'slideshow' && selectedSlideshow) {
-                                              return `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/slideshow-access/${selectedSlideshow.id}`;
+                      return `${baseUrl}/slideshow-access/${selectedSlideshow.id}`;
                     }
                     return content || 'https://example.com';
                   })()}

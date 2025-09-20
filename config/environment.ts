@@ -31,12 +31,21 @@ class Environment {
     const isProduction = nodeEnv === 'production';
     
     if (isProduction) {
-      apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
+      // Use the rebranded domain for production
+      apiBaseUrl = 'https://merchtrader.org/api';
       console.log('🔧 Using production API URL:', apiBaseUrl);
     } else {
-      // Default to local development server for development
-      apiBaseUrl = 'http://localhost:5001/api';
-      console.log('🔧 Using local development API URL:', apiBaseUrl);
+      // For development, check if EXPO_PUBLIC_API_URL is set (for mobile testing)
+      // Otherwise fall back to localhost (for web testing)
+      apiBaseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5001/api';
+      console.log('🔧 Using development API URL:', apiBaseUrl);
+      
+      // Warn if using localhost in mobile environment
+      if (apiBaseUrl.includes('localhost')) {
+        console.warn('⚠️  Using localhost API URL - this will not work on mobile devices!');
+        console.warn('⚠️  Set EXPO_PUBLIC_API_URL to your computer\'s IP address for mobile testing');
+        console.warn('⚠️  Example: EXPO_PUBLIC_API_URL=http://192.168.1.100:5001/api');
+      }
     }
     
     return {
@@ -44,7 +53,7 @@ class Environment {
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: isProduction,
       IS_DEVELOPMENT: !isProduction,
-      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtech5-production.up.railway.app',
+      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtrader.org',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }
