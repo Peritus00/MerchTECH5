@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { mediaAPI, slideshowsAPI } from '@/services/api';
+import AudioMediaPicker from './AudioMediaPicker';
 
 interface SlideshowImage {
   id: number;
@@ -55,6 +56,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [audioUploading, setAudioUploading] = useState(false);
+  const [showAudioPicker, setShowAudioPicker] = useState(false);
 
   useEffect(() => {
     if (slideshow) {
@@ -199,60 +201,26 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     }
   };
 
-  const handleAddAudio = async () => {
+  const handleAddAudio = () => {
+    console.log('🎵 SLIDESHOW handleAddAudio: Opening audio media picker');
+    setShowAudioPicker(true);
+  };
+
+  const handleAudioSelected = async (audioFile: any) => {
     try {
-      console.log('🎵 SLIDESHOW handleAddAudio: Starting audio selection');
-      const result = await DocumentPicker.getDocumentAsync({
-        copyToCacheDirectory: true,
-        type: 'audio/*',
-        multiple: false,
-      });
-
-      if (result.canceled || !slideshow) {
-        console.log('🎵 SLIDESHOW handleAddAudio: Selection canceled or no slideshow');
-        return;
-      }
-
-      const file = result.assets[0];
-      console.log('🎵 SLIDESHOW handleAddAudio: File selected', {
-        name: file.name,
-        uri: file.uri,
-        mimeType: file.mimeType,
-        size: file.size
-      });
-      
+      console.log('🎵 SLIDESHOW handleAudioSelected: Audio file selected from media', audioFile);
       setAudioUploading(true);
 
-      const filename = file.name || `audio_${Date.now()}.mp3`;
-      console.log('🎵 SLIDESHOW handleAddAudio: About to upload with filename', filename);
-      
-      // Create a File object for web compatibility
-      let fileToUpload: File;
-      if (Platform.OS === 'web') {
-        const response = await fetch(file.uri);
-        const blob = await response.blob();
-        fileToUpload = new File([blob], filename, { type: file.mimeType || 'audio/mpeg' });
-      } else {
-        // For React Native, create a File-like object
-        fileToUpload = {
-          uri: file.uri,
-          name: filename,
-          type: file.mimeType || 'audio/mpeg'
-        } as any;
-      }
-      
-      const audioUrlServer = await mediaAPI.uploadFile(fileToUpload);
-      
-      console.log('🎵 SLIDESHOW handleAddAudio: Upload successful, audioUrl', audioUrlServer);
+      // Use the existing audio file's URL directly
+      const audioUrl = audioFile.url || audioFile.s3_key;
+      console.log('🎵 SLIDESHOW handleAudioSelected: Using audio URL:', audioUrl);
 
-      const updatedSlideshow = await slideshowsAPI.updateAudio(slideshow.id, audioUrlServer);
-      console.log('🎵 SLIDESHOW handleAddAudio: Slideshow updated', updatedSlideshow);
-      console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow audioUrl:', updatedSlideshow?.audioUrl);
-      console.log('🎵 SLIDESHOW handleAddAudio: Updated slideshow keys:', Object.keys(updatedSlideshow || {}));
+      const updatedSlideshow = await slideshowsAPI.updateAudio(slideshow!.id, audioUrl);
+      console.log('🎵 SLIDESHOW handleAudioSelected: Slideshow updated', updatedSlideshow);
 
       // Validate that we got a proper slideshow object back
       if (!updatedSlideshow || !updatedSlideshow.id) {
-        console.error('🎵 SLIDESHOW handleAddAudio: Invalid slideshow response:', updatedSlideshow);
+        console.error('🎵 SLIDESHOW handleAudioSelected: Invalid slideshow response:', updatedSlideshow);
         Alert.alert('Error', 'Failed to update slideshow - invalid response from server');
         return;
       }
@@ -266,7 +234,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       onImagesUpdated(slideshowWithImages);
       Alert.alert('Success', 'Audio added to slideshow');
     } catch (error) {
-      console.error('🎵 SLIDESHOW handleAddAudio: Error:', error);
+      console.error('🎵 SLIDESHOW handleAudioSelected: Error:', error);
       Alert.alert('Error', 'Failed to add audio to slideshow');
     } finally {
       setAudioUploading(false);
@@ -384,6 +352,14 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
           )}
         </ScrollView>
       </View>
+
+      {/* Audio Media Picker Modal */}
+      <AudioMediaPicker
+        visible={showAudioPicker}
+        onClose={() => setShowAudioPicker(false)}
+        onSelect={handleAudioSelected}
+        currentAudioUrl={slideshow.audioUrl}
+      />
     </Modal>
   );
 };
