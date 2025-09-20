@@ -31,8 +31,8 @@ class Environment {
     const isProduction = nodeEnv === 'production';
     
     if (isProduction) {
-      // Use the rebranded domain for production
-      apiBaseUrl = 'https://merchtrader.org/api';
+      // Use the actual Railway backend URL for production
+      apiBaseUrl = 'https://merchtech5-production.up.railway.app/api';
       console.log('🔧 Using production API URL:', apiBaseUrl);
     } else {
       // For development, check if EXPO_PUBLIC_API_URL is set (for mobile testing)
