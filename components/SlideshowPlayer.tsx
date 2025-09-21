@@ -348,24 +348,26 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   }
 
   return (
-    <View style={styles.slideshowContainer} data-slideshow-player="true">
+    <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-slideshow-player="true">
       {/* Header */}
-      <View style={styles.slideshowHeader}>
-        <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
-      </View>
+      {!isFullscreen && (
+        <View style={styles.slideshowHeader}>
+          <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
+        </View>
+      )}
 
       {/* Scrollable Main Content */}
       <ScrollView 
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.scrollContent}
+        style={[styles.scrollContainer, isFullscreen && styles.fullscreenScrollContainer]}
+        showsVerticalScrollIndicator={!isFullscreen}
+        contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
         {/* Main Content - Horizontal Layout */}
-        <View style={styles.slideshowMainContent}>
+        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent]}>
         {/* Left Panel - Slideshow */}
-        <View style={styles.slideshowLeftPanel}>
+        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel]}>
           {/* Current Image Display */}
-          <View style={styles.slideshowImageContainer}>
+          <View style={[styles.slideshowImageContainer, isFullscreen && styles.fullscreenImageContainer]}>
             {images[currentIndex] && !imageLoadError && (
               <Image
                 source={{
@@ -375,7 +377,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
                     'X-Timestamp': Date.now().toString(),
                   },
                 }}
-                style={styles.slideshowImage}
+                style={[styles.slideshowImage, isFullscreen && styles.fullscreenImage]}
                 resizeMode="contain"
                 onError={(error) => {
                   console.error('Image load error:', error);
@@ -453,7 +455,8 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         </View>
 
         {/* Right Panel - Featured Products */}
-        <View style={styles.slideshowRightPanel}>
+        {!isFullscreen && (
+          <View style={styles.slideshowRightPanel}>
           <View style={styles.featuredProductsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />
             <Text style={styles.featuredProductsTitle}>Featured Products</Text>
@@ -588,15 +591,18 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
             )}
           </ScrollView>
         </View>
+        )}
       </View>
 
         {/* Bottom Panel - Live Chat */}
-        <View style={styles.slideshowChatSection}>
-          <SlideshowChat
-            slideshowId={slideshowData?.id?.toString() || ''}
-            slideshowName={slideshowData?.name || 'Slideshow'}
-          />
-        </View>
+        {!isFullscreen && (
+          <View style={styles.slideshowChatSection}>
+            <SlideshowChat
+              slideshowId={slideshowData?.id?.toString() || ''}
+              slideshowName={slideshowData?.name || 'Slideshow'}
+            />
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -982,6 +988,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     lineHeight: 20,
+  },
+  
+  // Fullscreen-specific styles
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    backgroundColor: 'black',
+  },
+  fullscreenScrollContainer: {
+    flex: 1,
+  },
+  fullscreenScrollContent: {
+    flexGrow: 1,
+  },
+  fullscreenMainContent: {
+    flex: 1,
+    flexDirection: 'row',
+    padding: 0,
+    gap: 0,
+    minHeight: '100%',
+  },
+  fullscreenLeftPanel: {
+    flex: 1,
+    backgroundColor: 'black',
+    borderRadius: 0,
+    minHeight: '100%',
+  },
+  fullscreenImageContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+    minHeight: '100%',
+  },
+  fullscreenImage: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    maxWidth: '100%',
+    maxHeight: '100%',
   },
 });
 

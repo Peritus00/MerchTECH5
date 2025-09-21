@@ -369,13 +369,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       } else {
         // For mobile platform, use expo-av Video component fullscreen (only works for video)
         if (isVideo && videoRef.current) {
-          if (!isFullscreen) {
-            // Enter fullscreen
-            await videoRef.current.presentFullscreenPlayer();
+        if (!isFullscreen) {
+          // Enter fullscreen
+          await videoRef.current.presentFullscreenPlayer();
             console.log('📱 FULLSCREEN: Entered fullscreen mode on mobile (video)');
-          } else {
-            // Exit fullscreen
-            await videoRef.current.dismissFullscreenPlayer();
+        } else {
+          // Exit fullscreen
+          await videoRef.current.dismissFullscreenPlayer();
             console.log('📱 FULLSCREEN: Exited fullscreen mode on mobile (video)');
           }
         } else {
@@ -445,11 +445,30 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
     // Calculate dynamic video style based on actual video dimensions and zoom level
     const getVideoStyle = () => {
+      const screenWidth = Dimensions.get('window').width;
+      const screenHeight = Dimensions.get('window').height;
+      
       if (videoDimensions) {
-        // Use 80% of available container height to ensure video fits
-        const baseHeight = 500; // Conservative height that should fit in most containers
+        let baseWidth, baseHeight;
+        
+        if (isFullscreen) {
+          // In fullscreen mode, use the entire screen dimensions
+          if (Platform.OS === 'web') {
+            // For web, use full viewport dimensions
+            baseWidth = screenWidth;
+            baseHeight = screenHeight;
+          } else {
+            // For mobile, account for status bar and navigation
+            baseWidth = screenWidth;
+            baseHeight = screenHeight * 0.95; // Leave 5% for system UI
+          }
+        } else {
+          // Normal mode: use container-appropriate dimensions
+          const baseHeightNormal = 500; // Conservative height that should fit in most containers
         const videoAspectRatio = videoDimensions.width / videoDimensions.height;
-        const baseWidth = (baseHeight * videoAspectRatio) * 1.25; // Widen by 25%
+          baseWidth = (baseHeightNormal * videoAspectRatio) * 1.25; // Widen by 25%
+          baseHeight = baseHeightNormal;
+        }
         
         // Apply zoom level
         const zoomedWidth = baseWidth * zoomLevel;
@@ -459,11 +478,21 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           width: zoomedWidth,
           height: zoomedHeight,
           alignSelf: 'center' as const,
-          borderRadius: 8,
+          borderRadius: isFullscreen ? 0 : 8, // No border radius in fullscreen
           transform: [{ scale: 1 }], // Keep scale at 1, we're changing dimensions instead
         };
       }
+      
       // Fallback style while dimensions are loading
+      if (isFullscreen) {
+        return {
+          width: screenWidth,
+          height: screenHeight * 0.9,
+          alignSelf: 'center' as const,
+          borderRadius: 0,
+          transform: [{ scale: 1 }],
+        };
+      } else {
       return {
         width: width * 0.9, // Use 90% of screen width instead of string percentage
         height: 500 * zoomLevel,
@@ -471,6 +500,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         borderRadius: 8,
         transform: [{ scale: 1 }],
       };
+      }
     };
 
     if (isVideo) {
@@ -666,33 +696,33 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           currentItem: currentItem.title
         });
         
-        return (
-          <View style={styles.audioPlayerContainer}>
-            <View style={styles.audioVisualization}>
-              <View style={styles.audioWaveform}>
-                {/* Audio waveform visualization */}
-                {Array.from({ length: 20 }, (_, i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.waveformBar,
-                      {
-                        height: Math.random() * 60 + 20,
-                        backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
-                        animationDelay: `${i * 0.1}s`,
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
-              
-              <View style={styles.audioInfo}>
-                <MaterialIcons name="music-note" size={48} color="#3b82f6" />
-                <Text style={styles.audioTitle}>{currentItem.title}</Text>
-                <Text style={styles.audioSubtitle}>Audio Track</Text>
-              </View>
+      return (
+        <View style={styles.audioPlayerContainer}>
+          <View style={styles.audioVisualization}>
+            <View style={styles.audioWaveform}>
+              {/* Audio waveform visualization */}
+              {Array.from({ length: 20 }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.waveformBar,
+                    {
+                      height: Math.random() * 60 + 20,
+                      backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
+                      animationDelay: `${i * 0.1}s`,
+                    },
+                  ]}
+                />
+              ))}
             </View>
             
+            <View style={styles.audioInfo}>
+              <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+              <Text style={styles.audioTitle}>{currentItem.title}</Text>
+              <Text style={styles.audioSubtitle}>Audio Track</Text>
+            </View>
+          </View>
+          
             {/* HTML5 audio element for web */}
             <audio
               crossOrigin="anonymous"
@@ -858,21 +888,21 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             </View>
             
             {/* Hidden expo-av Video element for mobile audio playback */}
-            <Video
-              ref={videoRef}
-              source={{ uri: itemUri }}
-              rate={1.0}
-              volume={1.0}
-              isMuted={isMuted}
-              shouldPlay={isPlaying}
-              isLooping={false}
-              style={{ width: 0, height: 0, opacity: 0 }}
-              useNativeControls={false}
-              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-              onError={handleVideoError}
-            />
-          </View>
-        );
+          <Video
+            ref={videoRef}
+            source={{ uri: itemUri }}
+            rate={1.0}
+            volume={1.0}
+            isMuted={isMuted}
+            shouldPlay={isPlaying}
+            isLooping={false}
+            style={{ width: 0, height: 0, opacity: 0 }}
+            useNativeControls={false}
+            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            onError={handleVideoError}
+          />
+        </View>
+      );
       }
     } else {
       // Image display
@@ -915,7 +945,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   }
 
   return (
-    <View style={styles.slideshowContainer} data-playlist-player="true">
+    <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-playlist-player="true">
+      {!isFullscreen && (
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
         <TouchableOpacity style={styles.cartButton} onPress={() => {
@@ -931,16 +962,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           )}
         </TouchableOpacity>
       </View>
+      )}
       
       {/* Scrollable Main Content */}
       <ScrollView 
-        style={styles.scrollContainer}
-        showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.scrollContent}
+        style={[styles.scrollContainer, isFullscreen && styles.fullscreenScrollContainer]}
+        showsVerticalScrollIndicator={!isFullscreen}
+        contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
-        <View style={styles.slideshowMainContent}>
-        <View style={styles.slideshowLeftPanel}>
-            <View style={styles.videoContainer}>
+        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent]}>
+        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel]}>
+            <View style={[styles.videoContainer, isFullscreen && styles.fullscreenVideoContainer]}>
                 {renderCurrentMedia()}
             </View>
             
@@ -1009,6 +1041,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             </View>
         </View>
 
+        {!isFullscreen && (
         <View style={styles.slideshowRightPanel}>
           <View style={styles.featuredProductsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />
@@ -1138,14 +1171,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             )}
           </ScrollView>
         </View>
+        )}
       </View>
 
+        {!isFullscreen && (
         <View style={styles.slideshowChatSection}>
           <PlaylistChat
             playlistId={playlistData?.id?.toString() || playlistId || ''}
             playlistName={playlistData?.name || playlistTitle || 'Playlist'}
           />
         </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -1619,6 +1655,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  
+  // Fullscreen-specific styles
+  fullscreenContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 9999,
+    backgroundColor: 'black',
+  },
+  fullscreenScrollContainer: {
+    flex: 1,
+  },
+  fullscreenScrollContent: {
+    flexGrow: 1,
+  },
+  fullscreenMainContent: {
+    flex: 1,
+    flexDirection: 'row',
+    padding: 0,
+    gap: 0,
+    minHeight: '100%',
+  },
+  fullscreenLeftPanel: {
+    flex: 1,
+    backgroundColor: 'black',
+    borderRadius: 0,
+    minHeight: '100%',
+  },
+  fullscreenVideoContainer: {
+    flex: 1,
+    backgroundColor: 'black',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 0,
+    minHeight: '100%',
   },
 });
 
