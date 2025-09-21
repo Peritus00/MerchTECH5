@@ -41,6 +41,7 @@ app.use(helmet({
         "https://*.amazonaws.com", // For S3
         "https://*.stripe.com", // For Stripe
         "https://api.brevo.com", // For email service
+        "https://app.termly.io", // For Termly privacy/cookie compliance
       ],
       scriptSrc: [
         "'self'",
@@ -1405,11 +1406,13 @@ app.get('/api/media/:id/stream', async (req, res) => {
   console.log(`📺 MEDIA_STREAM: Request URL: ${req.url}`);
   console.log(`📺 MEDIA_STREAM: Request path: ${req.path}`);
   
-  // Set explicit CORS headers for media streaming
+  // Set explicit CORS headers for media streaming (more permissive for media elements)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
+  res.setHeader('Access-Control-Allow-Credentials', 'false'); // Explicit false for public media
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // Allow cross-origin media loading
   
   try {
     const { id } = req.params;
