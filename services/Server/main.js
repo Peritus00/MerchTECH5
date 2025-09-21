@@ -1405,6 +1405,12 @@ app.get('/api/media/:id/stream', async (req, res) => {
   console.log(`📺 MEDIA_STREAM: Request URL: ${req.url}`);
   console.log(`📺 MEDIA_STREAM: Request path: ${req.path}`);
   
+  // Set explicit CORS headers for media streaming
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
+  
   try {
     const { id } = req.params;
     console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
