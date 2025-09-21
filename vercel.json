@@ -33,8 +33,8 @@
     "NODE_ENV": "production",
     "EXPO_PUBLIC_NODE_ENV": "production",
     "EXPO_PUBLIC_API_URL": "https://merchtech5-production.up.railway.app/api",
-    "EXPO_PUBLIC_FRONTEND_URL": "https://merchtrader.org",
-    "FRONTEND_URL": "https://merchtrader.org",
+    "EXPO_PUBLIC_FRONTEND_URL": "https://www.merchtrader.org",
+    "FRONTEND_URL": "https://www.merchtrader.org",
     "CACHE_BUST": "20250120-AUDIO-PICKER-DEBUG-FORCE"
   }
 } 

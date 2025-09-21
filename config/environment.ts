@@ -53,7 +53,7 @@ class Environment {
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: isProduction,
       IS_DEVELOPMENT: !isProduction,
-      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://merchtrader.org',
+      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://www.merchtrader.org',
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }
