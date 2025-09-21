@@ -56,6 +56,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
 
@@ -282,6 +283,43 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
     setIsMuted((prev) => !prev);
   };
 
+  const handleFullscreen = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        // For web platform, use native fullscreen API
+        if (!document.fullscreenElement) {
+          // Enter fullscreen - fullscreen the entire slideshow container
+          const slideshowContainer = document.querySelector('[data-slideshow-player]') || 
+                                   document.querySelector('.slideshowContainer') ||
+                                   document.body;
+          
+          if (slideshowContainer && slideshowContainer.requestFullscreen) {
+            await slideshowContainer.requestFullscreen();
+            setIsFullscreen(true);
+            console.log('🖥️ SLIDESHOW_FULLSCREEN: Entered fullscreen mode on web');
+          } else {
+            console.warn('🖥️ SLIDESHOW_FULLSCREEN: Fullscreen API not available');
+          }
+        } else {
+          // Exit fullscreen
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+            setIsFullscreen(false);
+            console.log('🖥️ SLIDESHOW_FULLSCREEN: Exited fullscreen mode on web');
+          }
+        }
+      } else {
+        // For mobile platform, toggle fullscreen state (no native fullscreen for images)
+        console.log('📱 SLIDESHOW_FULLSCREEN: Toggling fullscreen mode on mobile');
+        setIsFullscreen(!isFullscreen);
+      }
+    } catch (error) {
+      console.error('🖥️ SLIDESHOW_FULLSCREEN: Error:', error);
+      // Fallback: toggle state manually if API fails
+      setIsFullscreen(!isFullscreen);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -310,7 +348,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   }
 
   return (
-    <View style={styles.slideshowContainer}>
+    <View style={styles.slideshowContainer} data-slideshow-player="true">
       {/* Header */}
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
@@ -401,6 +439,13 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
               <FontAwesome5
                 name={isPlaying ? 'pause' : 'play'}
                 size={22}
+                color="white"
+              />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleFullscreen} style={styles.slideshowControlButton}>
+              <MaterialIcons
+                name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
+                size={24}
                 color="white"
               />
             </TouchableOpacity>

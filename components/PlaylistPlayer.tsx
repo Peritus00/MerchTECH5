@@ -337,17 +337,55 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   const handleFullscreen = async () => {
     try {
-      if (videoRef.current) {
-        if (!isFullscreen) {
-          // Enter fullscreen
-          await videoRef.current.presentFullscreenPlayer();
+      const currentItem = media[currentIndex];
+      const isVideo = currentItem?.media_type === 'video' || 
+                     currentItem?.fileType === 'video' || 
+                     currentItem?.type === 'video' ||
+                     currentItem?.contentType?.startsWith('video/');
+      
+      if (Platform.OS === 'web') {
+        // For web platform, use native fullscreen API
+        if (!document.fullscreenElement) {
+          // Enter fullscreen - fullscreen the entire player container
+          const playerContainer = document.querySelector('[data-playlist-player]') || 
+                                 document.querySelector('.slideshowContainer') ||
+                                 document.body;
+          
+          if (playerContainer && playerContainer.requestFullscreen) {
+            await playerContainer.requestFullscreen();
+            setIsFullscreen(true);
+            console.log('🖥️ FULLSCREEN: Entered fullscreen mode on web');
+          } else {
+            console.warn('🖥️ FULLSCREEN: Fullscreen API not available');
+          }
         } else {
           // Exit fullscreen
-          await videoRef.current.dismissFullscreenPlayer();
+          if (document.exitFullscreen) {
+            await document.exitFullscreen();
+            setIsFullscreen(false);
+            console.log('🖥️ FULLSCREEN: Exited fullscreen mode on web');
+          }
+        }
+      } else {
+        // For mobile platform, use expo-av Video component fullscreen (only works for video)
+        if (isVideo && videoRef.current) {
+          if (!isFullscreen) {
+            // Enter fullscreen
+            await videoRef.current.presentFullscreenPlayer();
+            console.log('📱 FULLSCREEN: Entered fullscreen mode on mobile (video)');
+          } else {
+            // Exit fullscreen
+            await videoRef.current.dismissFullscreenPlayer();
+            console.log('📱 FULLSCREEN: Exited fullscreen mode on mobile (video)');
+          }
+        } else {
+          console.log('📱 FULLSCREEN: Audio files don\'t support native fullscreen on mobile');
+          // For audio on mobile, we could expand the UI instead
+          setIsFullscreen(!isFullscreen);
         }
       }
     } catch (error) {
-      console.log('Fullscreen error:', error);
+      console.error('🖥️ FULLSCREEN: Error:', error);
       // Fallback: toggle state manually if API fails
       setIsFullscreen(!isFullscreen);
     }
@@ -877,7 +915,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   }
 
   return (
-    <View style={styles.slideshowContainer}>
+    <View style={styles.slideshowContainer} data-playlist-player="true">
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
         <TouchableOpacity style={styles.cartButton} onPress={() => {
