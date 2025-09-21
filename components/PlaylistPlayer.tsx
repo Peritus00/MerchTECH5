@@ -606,49 +606,223 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       }
     } else if (isAudio) {
       // Audio player interface
-      return (
-        <View style={styles.audioPlayerContainer}>
-          <View style={styles.audioVisualization}>
-            <View style={styles.audioWaveform}>
-              {/* Audio waveform visualization */}
-              {Array.from({ length: 20 }, (_, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.waveformBar,
-                    {
-                      height: Math.random() * 60 + 20,
-                      backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
-                      animationDelay: `${i * 0.1}s`,
-                    },
-                  ]}
-                />
-              ))}
+      console.log('🎵 AUDIO_COMPONENT: Rendering audio with URI:', itemUri);
+      
+      if (Platform.OS === 'web') {
+        console.log('🎵 HTML5_AUDIO: About to render audio element with:', {
+          src: itemUri,
+          isPlaying,
+          isMuted,
+          currentItem: currentItem.title
+        });
+        
+        return (
+          <View style={styles.audioPlayerContainer}>
+            <View style={styles.audioVisualization}>
+              <View style={styles.audioWaveform}>
+                {/* Audio waveform visualization */}
+                {Array.from({ length: 20 }, (_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.waveformBar,
+                      {
+                        height: Math.random() * 60 + 20,
+                        backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
+                        animationDelay: `${i * 0.1}s`,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              
+              <View style={styles.audioInfo}>
+                <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+                <Text style={styles.audioTitle}>{currentItem.title}</Text>
+                <Text style={styles.audioSubtitle}>Audio Track</Text>
+              </View>
             </View>
             
-            <View style={styles.audioInfo}>
-              <MaterialIcons name="music-note" size={48} color="#3b82f6" />
-              <Text style={styles.audioTitle}>{currentItem.title}</Text>
-              <Text style={styles.audioSubtitle}>Audio Track</Text>
-            </View>
+            {/* HTML5 audio element for web */}
+            <audio
+              ref={(ref) => {
+                console.log('🎵 HTML5_AUDIO: Audio ref callback called:', !!ref);
+                if (ref) {
+                  // Store reference for play/pause control
+                  (videoRef as any).current = {
+                    playAsync: () => {
+                      console.log('🎵 HTML5_AUDIO: playAsync called');
+                      return ref.play();
+                    },
+                    pauseAsync: () => {
+                      console.log('🎵 HTML5_AUDIO: pauseAsync called');
+                      ref.pause();
+                    },
+                    setPositionAsync: (position: number) => { 
+                      console.log('🎵 HTML5_AUDIO: setPositionAsync called:', position);
+                      ref.currentTime = position / 1000; 
+                    },
+                  };
+                  
+                  // Add comprehensive event listeners
+                  ref.addEventListener('loadstart', () => {
+                    console.log('🎵 HTML5_AUDIO: loadstart - browser started loading');
+                  });
+                  
+                  ref.addEventListener('durationchange', () => {
+                    console.log('🎵 HTML5_AUDIO: durationchange - duration:', ref.duration);
+                  });
+                  
+                  ref.addEventListener('loadedmetadata', () => {
+                    console.log('🎵 HTML5_AUDIO: loadedmetadata - metadata loaded');
+                  });
+                  
+                  ref.addEventListener('loadeddata', () => {
+                    console.log('🎵 HTML5_AUDIO: loadeddata - first frame loaded');
+                  });
+                  
+                  ref.addEventListener('progress', () => {
+                    console.log('🎵 HTML5_AUDIO: progress - downloading');
+                  });
+                  
+                  ref.addEventListener('canplay', () => {
+                    console.log('🎵 HTML5_AUDIO: canplay - can start playing');
+                  });
+                  
+                  ref.addEventListener('canplaythrough', () => {
+                    console.log('🎵 HTML5_AUDIO: canplaythrough - can play without stopping');
+                  });
+                  
+                  ref.addEventListener('error', (e) => {
+                    console.error('🎵 HTML5_AUDIO: Native error event:', {
+                      error: ref.error,
+                      networkState: ref.networkState,
+                      readyState: ref.readyState,
+                      src: ref.src,
+                      currentSrc: ref.currentSrc
+                    });
+                  });
+                  
+                  ref.addEventListener('ended', () => {
+                    console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
+                    goToNextVideo();
+                  });
+                }
+              }}
+              src={itemUri}
+              style={{ display: 'none' } as React.CSSProperties}
+              controls={false}
+              muted={isMuted}
+              autoPlay={isPlaying}
+              onError={(e) => {
+                const audio = e.target as HTMLAudioElement;
+                console.error('🎵 HTML5_AUDIO_ERROR:', {
+                  error: audio.error,
+                  networkState: audio.networkState,
+                  readyState: audio.readyState,
+                  src: audio.src,
+                  currentSrc: audio.currentSrc,
+                  errorCode: audio.error?.code,
+                  errorMessage: audio.error?.message,
+                  errorCodeMeaning: audio.error?.code === 1 ? 'MEDIA_ERR_ABORTED' :
+                                   audio.error?.code === 2 ? 'MEDIA_ERR_NETWORK' :
+                                   audio.error?.code === 3 ? 'MEDIA_ERR_DECODE' :
+                                   audio.error?.code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN'
+                });
+                
+                // Test if the URL is actually accessible
+                fetch(itemUri, { method: 'HEAD' })
+                  .then(response => {
+                    console.log('🎵 HTML5_AUDIO_URL_TEST:', {
+                      url: itemUri,
+                      status: response.status,
+                      statusText: response.statusText,
+                      headers: Object.fromEntries(response.headers.entries()),
+                      contentType: response.headers.get('content-type'),
+                      contentLength: response.headers.get('content-length'),
+                      acceptRanges: response.headers.get('accept-ranges')
+                    });
+                  })
+                  .catch(error => {
+                    console.error('🎵 HTML5_AUDIO_URL_TEST_ERROR:', error);
+                  });
+                
+                handleVideoError(e);
+              }}
+              onLoadStart={() => {
+                console.log('🎵 HTML5_AUDIO: onLoadStart - React event');
+              }}
+              onLoadedData={() => {
+                console.log('🎵 HTML5_AUDIO: onLoadedData - React event');
+              }}
+              onCanPlay={() => {
+                console.log('🎵 HTML5_AUDIO: onCanPlay - React event');
+              }}
+              onCanPlayThrough={() => {
+                console.log('🎵 HTML5_AUDIO: onCanPlayThrough - React event');
+              }}
+              onWaiting={() => {
+                console.log('🎵 HTML5_AUDIO: onWaiting - React event');
+              }}
+              onPlaying={() => {
+                console.log('🎵 HTML5_AUDIO: onPlaying - React event');
+              }}
+              onPause={() => {
+                console.log('🎵 HTML5_AUDIO: onPause - React event');
+              }}
+              onEnded={() => {
+                console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
+                goToNextVideo();
+              }}
+            />
           </View>
-          
-          {/* Hidden audio element for playback */}
-          <Video
-            ref={videoRef}
-            source={{ uri: itemUri }}
-            rate={1.0}
-            volume={1.0}
-            isMuted={isMuted}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            style={{ width: 0, height: 0, opacity: 0 }}
-            useNativeControls={false}
-            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
-            onError={handleVideoError}
-          />
-        </View>
-      );
+        );
+      } else {
+        // Use expo-av Video for mobile (audio files)
+        return (
+          <View style={styles.audioPlayerContainer}>
+            <View style={styles.audioVisualization}>
+              <View style={styles.audioWaveform}>
+                {/* Audio waveform visualization */}
+                {Array.from({ length: 20 }, (_, i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.waveformBar,
+                      {
+                        height: Math.random() * 60 + 20,
+                        backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
+                        animationDelay: `${i * 0.1}s`,
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+              
+              <View style={styles.audioInfo}>
+                <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+                <Text style={styles.audioTitle}>{currentItem.title}</Text>
+                <Text style={styles.audioSubtitle}>Audio Track</Text>
+              </View>
+            </View>
+            
+            {/* Hidden expo-av Video element for mobile audio playback */}
+            <Video
+              ref={videoRef}
+              source={{ uri: itemUri }}
+              rate={1.0}
+              volume={1.0}
+              isMuted={isMuted}
+              shouldPlay={isPlaying}
+              isLooping={false}
+              style={{ width: 0, height: 0, opacity: 0 }}
+              useNativeControls={false}
+              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+              onError={handleVideoError}
+            />
+          </View>
+        );
+      }
     } else {
       // Image display
       return (
