@@ -2735,7 +2735,12 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
     const codeWithDetails = await pool.query(
       `SELECT ac.*, 
               p.name as playlist_name,
-              s.name as slideshow_name
+              s.name as slideshow_name,
+              CASE 
+                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                ELSE 'unknown'
+              END as content_type
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
@@ -2760,7 +2765,12 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
     const result = await pool.query(
       `SELECT ac.*, 
               p.name as playlist_name,
-              s.name as slideshow_name
+              s.name as slideshow_name,
+              CASE 
+                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                ELSE 'unknown'
+              END as content_type
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
@@ -2787,7 +2797,11 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
-              'playlist' as content_type
+              CASE 
+                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                ELSE 'unknown'
+              END as content_type
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
