@@ -29,7 +29,43 @@ console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
 console.log(`   - Frontend URL: ${process.env.FRONTEND_URL}`);
 
 // --- MIDDLEWARE ---
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: [
+        "'self'",
+        "https://merchtech5-production.up.railway.app",
+        "https://www.merchtrader.org",
+        "https://merchtrader.org",
+        "https://*.amazonaws.com", // For S3
+        "https://*.stripe.com", // For Stripe
+        "https://api.brevo.com", // For email service
+      ],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'", // Needed for Expo/React
+        "https://js.stripe.com",
+        "https://app.termly.io",
+      ],
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'", // Needed for Expo/React styles
+      ],
+      imgSrc: [
+        "'self'",
+        "data:",
+        "https://*.amazonaws.com", // For S3 images
+        "https://www.merchtrader.org",
+        "https://merchtrader.org",
+      ],
+      fontSrc: [
+        "'self'",
+        "data:",
+      ],
+    },
+  },
+}));
 app.use(cors({
   origin: true,
   credentials: true,
