@@ -648,7 +648,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.playlist = 'Please select a playlist';
       } else {
         // Use web URL that works for both browser users and app users
-        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtech5-production.up.railway.app';
         finalContent = `${baseUrl}/playlist-access/${selectedPlaylist.id}`;
         console.log('✅ Playlist web URL generated:', finalContent);
       }
@@ -658,7 +658,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         errors.slideshow = 'Please select a slideshow';
       } else {
         // Use web URL that works for both browser users and app users
-        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtech5-production.up.railway.app';
         finalContent = `${baseUrl}/slideshow-access/${selectedSlideshow.id}`;
         console.log('✅ Slideshow web URL generated:', finalContent);
       }
@@ -1575,7 +1575,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
               <View ref={qrRef} style={styles.qrWrapper}>
                 <AdvancedQRCodeGenerator
                   value={(() => {
-                    const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+                    const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtech5-production.up.railway.app';
                     if (contentType === 'playlist' && selectedPlaylist) {
                       return `${baseUrl}/playlist-access/${selectedPlaylist.id}`;
                     } else if (contentType === 'slideshow' && selectedSlideshow) {
