@@ -44,7 +44,7 @@ QR Code URL: https://merchtrader.org/playlist-access/31
 2. **QR Code Generation:**
    ```typescript
    // Uses environment variable with fallback to new domain
-   const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://merchtrader.org';
+   const baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
    finalContent = `${baseUrl}/playlist-access/${selectedPlaylist.id}`;
    ```
 
