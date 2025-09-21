@@ -374,7 +374,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     // The server now provides working streaming endpoint URLs
     const itemUri = currentItem.url?.startsWith('http') 
       ? currentItem.url 
-      : `http://localhost:5001/api/media/${currentItem.id}/stream`;
+      : `${api.defaults.baseURL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${currentItem.id}/stream`;
 
     console.log('🎵 MEDIA_DETECTION:', {
       title: currentItem.title,

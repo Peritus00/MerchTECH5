@@ -59,6 +59,13 @@ app.use(helmet({
         "https://www.merchtrader.org",
         "https://merchtrader.org",
       ],
+      mediaSrc: [
+        "'self'",
+        "https://merchtech5-production.up.railway.app", // For audio/video streaming
+        "https://www.merchtrader.org",
+        "https://merchtrader.org",
+        "https://*.amazonaws.com", // For S3 media files
+      ],
       fontSrc: [
         "'self'",
         "data:",
