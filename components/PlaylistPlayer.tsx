@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Text,
   SafeAreaView,
@@ -71,6 +72,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [videoDimensions, setVideoDimensions] = useState<{width: number, height: number} | null>(null);
   const [zoomLevel, setZoomLevel] = useState(1); // 1 = normal, 0.5 = zoomed out, 2 = zoomed in
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showExitButton, setShowExitButton] = useState(false);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -333,6 +335,29 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   const handleZoomReset = () => {
     setZoomLevel(1);
+  };
+
+  // Handle touch to show/hide exit button in fullscreen
+  const handleScreenTouch = () => {
+    if (isFullscreen) {
+      setShowExitButton(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => {
+        setShowExitButton(false);
+      }, 3000);
+    }
+  };
+
+  // Handle exit fullscreen
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+    setShowExitButton(false);
+    
+    if (Platform.OS === 'web' && document.exitFullscreen) {
+      document.exitFullscreen().catch((error) => {
+        console.warn('Exit fullscreen failed:', error);
+      });
+    }
   };
 
   const handleFullscreen = async () => {
@@ -945,7 +970,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   }
 
   return (
-    <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-playlist-player="true">
+    <TouchableWithoutFeedback onPress={handleScreenTouch}>
+      <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-playlist-player="true">
       {!isFullscreen && (
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
@@ -1183,7 +1209,19 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         </View>
         )}
       </ScrollView>
+      
+      {/* Fullscreen Exit Button Overlay */}
+      {isFullscreen && showExitButton && (
+        <TouchableOpacity 
+          style={styles.exitButton}
+          onPress={handleExitFullscreen}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.exitButtonText}>Exit</Text>
+        </TouchableOpacity>
+      )}
     </View>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -1693,6 +1731,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 0,
     minHeight: '100%',
+  },
+  
+  // Exit button styles
+  exitButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    zIndex: 10000,
+  },
+  exitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 

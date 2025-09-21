@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   ActivityIndicator,
   Text,
   ScrollView,
@@ -57,6 +58,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showExitButton, setShowExitButton] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
 
@@ -283,6 +285,29 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
     setIsMuted((prev) => !prev);
   };
 
+  // Handle touch to show/hide exit button in fullscreen
+  const handleScreenTouch = () => {
+    if (isFullscreen) {
+      setShowExitButton(true);
+      // Auto-hide after 3 seconds
+      setTimeout(() => {
+        setShowExitButton(false);
+      }, 3000);
+    }
+  };
+
+  // Handle exit fullscreen
+  const handleExitFullscreen = () => {
+    setIsFullscreen(false);
+    setShowExitButton(false);
+    
+    if (Platform.OS === 'web' && document.exitFullscreen) {
+      document.exitFullscreen().catch((error) => {
+        console.warn('Exit fullscreen failed:', error);
+      });
+    }
+  };
+
   const handleFullscreen = async () => {
     try {
       if (Platform.OS === 'web') {
@@ -348,7 +373,8 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   }
 
   return (
-    <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-slideshow-player="true">
+    <TouchableWithoutFeedback onPress={handleScreenTouch}>
+      <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-slideshow-player="true">
       {/* Header */}
       {!isFullscreen && (
         <View style={styles.slideshowHeader}>
@@ -604,7 +630,19 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
           </View>
         )}
       </ScrollView>
+      
+      {/* Fullscreen Exit Button Overlay */}
+      {isFullscreen && showExitButton && (
+        <TouchableOpacity 
+          style={styles.exitButton}
+          onPress={handleExitFullscreen}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.exitButtonText}>Exit</Text>
+        </TouchableOpacity>
+      )}
     </View>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -1033,6 +1071,26 @@ const styles = StyleSheet.create({
     height: '100%',
     maxWidth: '100%',
     maxHeight: '100%',
+  },
+  
+  // Exit button styles
+  exitButton: {
+    position: 'absolute',
+    top: 20,
+    left: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    zIndex: 10000,
+  },
+  exitButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });
 
