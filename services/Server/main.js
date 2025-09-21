@@ -2731,8 +2731,20 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
       [code, playlistId || null, slideshowId || null, req.user.userId, maxUses || null, expiresAt || null]
     );
     
-    console.log('🔑 ACTIVATION_CODES: Code created successfully:', result.rows[0]);
-    res.status(201).json({ activationCode: result.rows[0] });
+    // Get the created activation code with associated content name
+    const codeWithDetails = await pool.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.id = $1`,
+      [result.rows[0].id]
+    );
+    
+    console.log('🔑 ACTIVATION_CODES: Code created successfully with details:', codeWithDetails.rows[0]);
+    res.status(201).json({ activationCode: codeWithDetails.rows[0] });
     
   } catch (error) {
     console.error('🔑 ACTIVATION_CODES: Error creating code:', error);
