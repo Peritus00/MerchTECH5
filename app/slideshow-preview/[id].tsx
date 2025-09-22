@@ -187,7 +187,7 @@ export default function SlideshowPreviewScreen() {
         mediaFiles={formattedMediaFiles}
         playlistName={slideshow.name}
         previewDuration={30}
-        autoplay={false}
+        autoplay={true}
         productLinks={slideshow.productLinks || []}
         onPreviewComplete={handlePreviewComplete}
         backgroundAudioUrl={slideshow.audioUrl ? 
