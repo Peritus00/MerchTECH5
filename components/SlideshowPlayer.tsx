@@ -423,6 +423,14 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
       <View style={styles.center}>
         <MaterialIcons name="image-not-supported" size={60} color="#aaa" />
         <Text style={styles.infoText}>No images found in slideshow.</Text>
+        <Text style={styles.infoSubtext}>
+          This slideshow exists but doesn't have any images uploaded yet.
+        </Text>
+        {slideshowData?.name && (
+          <Text style={styles.slideshowNameText}>
+            Slideshow: {slideshowData.name}
+          </Text>
+        )}
       </View>
     );
   }
@@ -722,6 +730,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
     marginTop: 20,
+  },
+  infoSubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 20,
+  },
+  slideshowNameText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    textAlign: 'center',
+    marginTop: 12,
+    fontWeight: '600',
   },
   slideshowContainer: {
     flex: 1,
