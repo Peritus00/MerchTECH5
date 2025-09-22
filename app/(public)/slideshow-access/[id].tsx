@@ -585,7 +585,7 @@ export default function SlideshowAccessScreen() {
           mediaFiles={formattedMediaFiles}
           playlistName={slideshow.name}
           playlistId={slideshow.id.toString()}
-          autoplay={true}
+          autoplay={false}
           previewDuration={30}
           onPreviewComplete={handlePreviewComplete}
           backgroundAudioUrl={slideshow.audioUrl}

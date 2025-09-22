@@ -655,7 +655,26 @@ function PreviewPlayer({
         setPreviewEnded(false);
       }
       
-      if (isVideo) {
+      if (isImage || isSlideshow) {
+        console.log('🔴 PREVIEW_PLAYER: Playing slideshow...');
+        
+        // Start image rotation
+        setSlideshowPlaying(true);
+        setIsPlaying(true);
+
+        // Also start background audio if available
+        if (backgroundAudioUrl && Platform.OS === 'web') {
+          console.log('🎵 PREVIEW_PLAYER: Starting background audio with slideshow...');
+          backgroundAudioManager.current.play()
+            .then((success) => {
+              if (success) {
+                console.log('🎵 PREVIEW_PLAYER: ✅ Background audio started with slideshow');
+              } else {
+                console.log('🎵 PREVIEW_PLAYER: ❌ Background audio failed to start with slideshow');
+              }
+            });
+        }
+      } else if (isVideo) {
         console.log('🔴 PREVIEW_PLAYER: Playing video...');
         
         if (Platform.OS === 'web') {
