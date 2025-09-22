@@ -596,6 +596,13 @@ function PreviewPlayer({
       if (slideshowTimer) {
         clearTimeout(slideshowTimer);
       }
+
+      // Stop slideshow background audio when unmounting
+      if (backgroundAudioUrl) {
+        console.log('🎵 PREVIEW_PLAYER: Cleaning up background audio on unmount');
+        backgroundAudioManager.current.cleanup();
+      }
+      
       if (Platform.OS === 'web' && webAudioRef.current) {
         try {
           webAudioRef.current.pause();
@@ -616,7 +623,7 @@ function PreviewPlayer({
       // Note: We don't cleanup the global audio manager here as it persists across re-renders
       console.log('🔴 PREVIEW_PLAYER: Component unmounting - background audio manager persists');
     };
-  }, [audioPlayer, slideshowTimer]);
+  }, [audioPlayer, slideshowTimer, backgroundAudioUrl]);
 
   // Load track function
   const loadTrack = (index: number, resetTimer: boolean = false) => {
