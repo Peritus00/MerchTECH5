@@ -55,7 +55,8 @@ function RootLayoutNav() {
       segments[0] === 'media-player' ||
       segments[0] === 'playlist-player' || // Public playlist players
       segments[0] === 'slideshow-player' || // Public slideshow players
-      segments[0] === 'preview-player'; // Public preview players
+      segments[0] === 'preview-player' || // Public preview players
+      segments[0] === 'slideshow-preview'; // Public slideshow preview
 
 
 
