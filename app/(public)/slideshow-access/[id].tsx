@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
 import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
+import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
 
 export default function SlideshowAccessScreen() {
@@ -434,8 +435,9 @@ export default function SlideshowAccessScreen() {
           // User is logged in - attach code and redirect to slideshow player
           await handleAttachCodeAndRedirect(activationCode);
         } else {
-          // User not logged in - start registration flow
-          setShowRegistrationFlow(true);
+          // User not logged in but has valid code - grant guest access
+          console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
+          setIsFullAccess(true);
         }
       } else {
         console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code, attempt:', failedAttempts + 1);
@@ -538,35 +540,41 @@ export default function SlideshowAccessScreen() {
 
 
 
-  // For now, simplified registration flow - just show message
-  if (showRegistrationFlow) {
+  // Full access mode with guest access and visible auth options
+  if (isFullAccess && slideshow) {
     return (
-      <ThemedView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => setShowRegistrationFlow(false)}>
-            <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Registration Required</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.content}>
-          <View style={styles.slideshowInfo}>
-            <MaterialIcons name="account-circle" size={48} color="#3b82f6" />
-            <Text style={styles.slideshowName}>Create Account</Text>
-            <Text style={styles.slideshowSubtitle}>
-              Registration flow would go here
-            </Text>
-            <TouchableOpacity
-              style={styles.storePromoButton}
-              onPress={() => {
-                setShowRegistrationFlow(false);
-                router.push('/auth/register');
-              }}
-            >
-              <Text style={styles.storePromoButtonText}>Go to Registration</Text>
-            </TouchableOpacity>
+      <ThemedView style={styles.fullAccessContainer}>
+        {/* Guest Access Header with Sign-up/Sign-in Options */}
+        {!isAuthenticated && (
+          <View style={styles.guestAccessHeader}>
+            <View style={styles.guestAccessContent}>
+              <Text style={styles.guestAccessText}>
+                You're viewing as a guest with your activation code
+              </Text>
+              <View style={styles.authButtonsContainer}>
+                <TouchableOpacity
+                  style={styles.signInButton}
+                  onPress={() => router.push('/auth/login')}
+                >
+                  <Text style={styles.signInButtonText}>Sign In</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.signUpButton}
+                  onPress={() => router.push('/auth/register')}
+                >
+                  <Text style={styles.signUpButtonText}>Sign Up</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
+        
+        {/* Full Slideshow Player */}
+        <SlideshowPlayer
+          slideshowId={id}
+          slideshow={slideshow}
+          autoPlay={false}
+        />
       </ThemedView>
     );
   }
@@ -1256,5 +1264,56 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
+  },
+  // New styles for guest access with full player
+  fullAccessContainer: {
+    flex: 1,
+  },
+  guestAccessHeader: {
+    backgroundColor: '#f0f9ff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e7ff',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  guestAccessContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  guestAccessText: {
+    fontSize: 14,
+    color: '#1e40af',
+    fontWeight: '500',
+    flex: 1,
+    minWidth: 200,
+  },
+  authButtonsContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  signInButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  signInButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  signUpButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  signUpButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
