@@ -3582,7 +3582,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
 
       const codeRes = await client.query(
-        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (uses_left IS NULL OR uses_left > 0) AND (expires_at IS NULL OR expires_at > NOW())',
+        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
         [activationCode, slideshowId]
       );
 
