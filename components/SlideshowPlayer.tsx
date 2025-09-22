@@ -318,19 +318,50 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
                                    document.querySelector('.slideshowContainer') ||
                                    document.body;
           
-          if (slideshowContainer && slideshowContainer.requestFullscreen) {
-            await slideshowContainer.requestFullscreen();
-            setIsFullscreen(true);
-            console.log('🖥️ SLIDESHOW_FULLSCREEN: Entered fullscreen mode on web');
+          if (slideshowContainer) {
+            // Try different fullscreen methods for better iOS Safari compatibility
+            const requestFullscreen = slideshowContainer.requestFullscreen ||
+                                     (slideshowContainer as any).webkitRequestFullscreen ||
+                                     (slideshowContainer as any).mozRequestFullScreen ||
+                                     (slideshowContainer as any).msRequestFullscreen;
+            
+            if (requestFullscreen) {
+              try {
+                await requestFullscreen.call(slideshowContainer);
+                setIsFullscreen(true);
+                console.log('🖥️ SLIDESHOW_FULLSCREEN: Entered fullscreen mode on web');
+              } catch (fsError) {
+                console.warn('🖥️ SLIDESHOW_FULLSCREEN: Native fullscreen failed, using fallback:', fsError);
+                // Fallback to state-only fullscreen for iOS Safari
+                setIsFullscreen(true);
+              }
+            } else {
+              console.warn('🖥️ SLIDESHOW_FULLSCREEN: Fullscreen API not available, using fallback');
+              // Fallback to state-only fullscreen
+              setIsFullscreen(true);
+            }
           } else {
-            console.warn('🖥️ SLIDESHOW_FULLSCREEN: Fullscreen API not available');
+            console.warn('🖥️ SLIDESHOW_FULLSCREEN: Container not found, using fallback');
+            setIsFullscreen(true);
           }
         } else {
           // Exit fullscreen
-          if (document.exitFullscreen) {
-            await document.exitFullscreen();
+          const exitFullscreen = document.exitFullscreen ||
+                                (document as any).webkitExitFullscreen ||
+                                (document as any).mozCancelFullScreen ||
+                                (document as any).msExitFullscreen;
+          
+          if (exitFullscreen) {
+            try {
+              await exitFullscreen.call(document);
+              setIsFullscreen(false);
+              console.log('🖥️ SLIDESHOW_FULLSCREEN: Exited fullscreen mode on web');
+            } catch (fsError) {
+              console.warn('🖥️ SLIDESHOW_FULLSCREEN: Native exit fullscreen failed:', fsError);
+              setIsFullscreen(false);
+            }
+          } else {
             setIsFullscreen(false);
-            console.log('🖥️ SLIDESHOW_FULLSCREEN: Exited fullscreen mode on web');
           }
         }
       } else {
@@ -443,15 +474,17 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
               <MaterialIcons name="chevron-right" size={32} color="#fff" />
             </TouchableOpacity>
 
-            {/* Image Info Overlay */}
-            <View style={styles.imageInfoOverlay}>
-              <Text style={styles.imageTitle}>
-                {images[currentIndex]?.title || `Image ${currentIndex + 1}`}
-              </Text>
-              <Text style={styles.imageCounter}>
-                {currentIndex + 1} of {images.length}
-              </Text>
-            </View>
+            {/* Image Info Overlay - Hidden in fullscreen */}
+            {!isFullscreen && (
+              <View style={styles.imageInfoOverlay}>
+                <Text style={styles.imageTitle}>
+                  {images[currentIndex]?.title || `Image ${currentIndex + 1}`}
+                </Text>
+                <Text style={styles.imageCounter}>
+                  {currentIndex + 1} of {images.length}
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Slideshow Controls */}

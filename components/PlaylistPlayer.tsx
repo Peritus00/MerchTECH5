@@ -376,19 +376,50 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                                  document.querySelector('.slideshowContainer') ||
                                  document.body;
           
-          if (playerContainer && playerContainer.requestFullscreen) {
-            await playerContainer.requestFullscreen();
-            setIsFullscreen(true);
-            console.log('🖥️ FULLSCREEN: Entered fullscreen mode on web');
+          if (playerContainer) {
+            // Try different fullscreen methods for better iOS Safari compatibility
+            const requestFullscreen = playerContainer.requestFullscreen ||
+                                     (playerContainer as any).webkitRequestFullscreen ||
+                                     (playerContainer as any).mozRequestFullScreen ||
+                                     (playerContainer as any).msRequestFullscreen;
+            
+            if (requestFullscreen) {
+              try {
+                await requestFullscreen.call(playerContainer);
+                setIsFullscreen(true);
+                console.log('🖥️ FULLSCREEN: Entered fullscreen mode on web');
+              } catch (fsError) {
+                console.warn('🖥️ FULLSCREEN: Native fullscreen failed, using fallback:', fsError);
+                // Fallback to state-only fullscreen for iOS Safari
+                setIsFullscreen(true);
+              }
+            } else {
+              console.warn('🖥️ FULLSCREEN: Fullscreen API not available, using fallback');
+              // Fallback to state-only fullscreen
+              setIsFullscreen(true);
+            }
           } else {
-            console.warn('🖥️ FULLSCREEN: Fullscreen API not available');
+            console.warn('🖥️ FULLSCREEN: Container not found, using fallback');
+            setIsFullscreen(true);
           }
         } else {
           // Exit fullscreen
-          if (document.exitFullscreen) {
-            await document.exitFullscreen();
+          const exitFullscreen = document.exitFullscreen ||
+                                (document as any).webkitExitFullscreen ||
+                                (document as any).mozCancelFullScreen ||
+                                (document as any).msExitFullscreen;
+          
+          if (exitFullscreen) {
+            try {
+              await exitFullscreen.call(document);
+              setIsFullscreen(false);
+              console.log('🖥️ FULLSCREEN: Exited fullscreen mode on web');
+            } catch (fsError) {
+              console.warn('🖥️ FULLSCREEN: Native exit fullscreen failed:', fsError);
+              setIsFullscreen(false);
+            }
+          } else {
             setIsFullscreen(false);
-            console.log('🖥️ FULLSCREEN: Exited fullscreen mode on web');
           }
         }
       } else {
@@ -741,11 +772,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               ))}
             </View>
             
+            {!isFullscreen && (
             <View style={styles.audioInfo}>
               <MaterialIcons name="music-note" size={48} color="#3b82f6" />
               <Text style={styles.audioTitle}>{currentItem.title}</Text>
               <Text style={styles.audioSubtitle}>Audio Track</Text>
             </View>
+            )}
           </View>
           
             {/* HTML5 audio element for web */}
@@ -905,11 +938,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 ))}
               </View>
               
-              <View style={styles.audioInfo}>
-                <MaterialIcons name="music-note" size={48} color="#3b82f6" />
-                <Text style={styles.audioTitle}>{currentItem.title}</Text>
-                <Text style={styles.audioSubtitle}>Audio Track</Text>
-              </View>
+              {!isFullscreen && (
+                <View style={styles.audioInfo}>
+                  <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+                  <Text style={styles.audioTitle}>{currentItem.title}</Text>
+                  <Text style={styles.audioSubtitle}>Audio Track</Text>
+                </View>
+              )}
             </View>
             
             {/* Hidden expo-av Video element for mobile audio playback */}
@@ -1002,7 +1037,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 {renderCurrentMedia()}
             </View>
             
-            {/* Current Track Display */}
+            {/* Current Track Display - Hidden in fullscreen */}
+            {!isFullscreen && (
             <View style={styles.currentTrackDisplay}>
               <Text style={styles.currentTrackTitle}>
                 {currentMediaItem?.title || `Track ${currentIndex + 1}`}
@@ -1011,6 +1047,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 {currentMediaItem?.fileType?.toUpperCase() || 'MEDIA'} • {currentIndex + 1} of {media.length}
               </Text>
             </View>
+            )}
             
             <View style={styles.controls}>
                 <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
