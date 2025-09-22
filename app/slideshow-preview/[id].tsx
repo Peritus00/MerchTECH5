@@ -186,10 +186,9 @@ export default function SlideshowPreviewScreen() {
             console.log('🎵 SLIDESHOW_PREVIEW: slideshow.id:', slideshow.id);
             console.log('🎵 SLIDESHOW_PREVIEW: env.apiBaseUrl:', env.apiBaseUrl);
             
-            // Use production Railway URL for slideshow audio
-            const audioUrl = `https://merchtech5-production.up.railway.app/api/slideshow-audio/${slideshow.id}/stream`;
-            console.log('🎵 SLIDESHOW_PREVIEW: Final constructed audio URL (production):', audioUrl);
-            return audioUrl;
+            // Use the actual audioUrl from the slideshow data instead of constructing our own
+            console.log('🎵 SLIDESHOW_PREVIEW: Using original audio URL from slideshow data:', slideshow.audioUrl);
+            return slideshow.audioUrl;
           })()
           : undefined}
         userId={slideshow.userId}
