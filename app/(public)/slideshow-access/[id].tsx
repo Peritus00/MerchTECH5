@@ -448,6 +448,11 @@ export default function SlideshowAccessScreen() {
         } else {
           // User not logged in but has valid code - grant guest access
           console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
+          
+          // Refetch slideshow data with the validated activation code
+          console.log('🎬 SLIDESHOW_ACCESS: Refetching slideshow with validated activation code');
+          await fetchSlideshow();
+          
           setIsFullAccess(true);
         }
       } else {
