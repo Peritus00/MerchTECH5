@@ -525,9 +525,25 @@ export default function SlideshowAccessScreen() {
     }
   };
 
-  const handlePreviewStart = () => {
+  const handlePreviewStart = async () => {
     console.log('🎬 SLIDESHOW_ACCESS: Starting slideshow preview');
-    setShowPreview(true);
+    try {
+      setIsLoading(true);
+      const { slideshowAccessAPI } = await import('@/services/api');
+      const previewData = await slideshowAccessAPI.getByIdForPreview(id);
+      
+      if (previewData && previewData.images && previewData.images.length > 0) {
+        setSlideshow(previewData);
+        setShowPreview(true);
+      } else {
+        Alert.alert('Preview Not Available', 'There are no images in this slideshow to preview.');
+      }
+    } catch (error) {
+      console.error('🎬 SLIDESHOW_ACCESS: Error fetching slideshow preview:', error);
+      Alert.alert('Error', 'Failed to load slideshow preview. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handlePreviewComplete = () => {
