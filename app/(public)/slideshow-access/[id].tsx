@@ -305,7 +305,7 @@ export default function SlideshowAccessScreen() {
       }
 
       // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to slideshow player
-      const requiresCode = slideshow.requiresActivationCode || slideshow.requires_activation_code;
+      const requiresCode = slideshow.requiresActivationCode;
       if (!requiresCode) {
         console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to slideshow player');
         router.replace(`/slideshow-player/${id}`);
@@ -527,30 +527,24 @@ export default function SlideshowAccessScreen() {
 
   const handlePreviewStart = () => {
     console.log('🎬 SLIDESHOW_ACCESS: Starting slideshow preview');
-    console.log('🎬 SLIDESHOW_ACCESS: Redirecting to preview player for slideshow:', id);
-    console.log('🎬 SLIDESHOW_ACCESS: Slideshow data:', slideshow);
-    console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshow?.images?.length || 0);
-    
-    // Add debugging for the route
-    const route = `/slideshow-preview/${id}`;
-    console.log('🎬 SLIDESHOW_ACCESS: Attempting to navigate to route:', route);
-    
-    try {
-      // Redirect to the new slideshow preview player
-      router.push(route);
-      console.log('🎬 SLIDESHOW_ACCESS: Navigation call completed');
-    } catch (error) {
-      console.error('🎬 SLIDESHOW_ACCESS: Navigation error:', error);
-      Alert.alert('Error', 'Failed to start preview. Please try again.');
-    }
+    setShowPreview(true);
   };
 
   const handlePreviewComplete = () => {
+    console.log('🎬 SLIDESHOW_ACCESS: Preview completed, returning to access screen');
+    setShowPreview(false);
+
     // Redirect to the slideshow creator's store after preview
     const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
-    setTimeout(() => {
-      router.push(storeUrl);
-    }, 2000);
+    
+    Alert.alert(
+      '⏰ Preview Complete',
+      'Your 30-second preview has ended. Enter an activation code for full access or visit the creator\'s store.',
+      [
+        { text: 'Enter Code', style: 'default' },
+        { text: 'Visit Store', onPress: () => router.push(storeUrl) }
+      ]
+    );
   };
 
   const handleGoToStore = () => {
@@ -564,6 +558,23 @@ export default function SlideshowAccessScreen() {
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <ThemedText style={styles.loadingText}>Loading slideshow...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (showPreview) {
+    return (
+      <ThemedView style={styles.previewContainer}>
+        <PreviewPlayer
+          mediaFiles={formattedMediaFiles}
+          playlistName={slideshow.name}
+          playlistId={slideshow.id.toString()}
+          autoplay={true}
+          previewDuration={30}
+          onPreviewComplete={handlePreviewComplete}
+          backgroundAudioUrl={slideshow.audioUrl}
+          userId={slideshow.userId}
+        />
       </ThemedView>
     );
   }
@@ -617,113 +628,6 @@ export default function SlideshowAccessScreen() {
   }
 
 
-
-  if (showPreview) {
-    return (
-      <ThemedView style={styles.previewContainer}>
-        {/* Preview Header */}
-        <View style={styles.previewHeader}>
-          <TouchableOpacity 
-            style={styles.previewBackButton}
-            onPress={() => {
-              setShowPreview(false);
-            }}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
-          </TouchableOpacity>
-          <View style={styles.previewHeaderContent}>
-            <Text style={styles.previewTitle}>30-Second Preview</Text>
-            <Text style={styles.previewSubtitle}>{slideshow.name}</Text>
-          </View>
-          <View style={styles.previewTimer}>
-            <MaterialIcons name="timer" size={16} color="#f59e0b" />
-            <Text style={styles.previewTimerText}>{previewTimeLeft}s</Text>
-          </View>
-        </View>
-
-        {/* Main Content Area */}
-        <View style={styles.previewMainContent}>
-          {/* Full Width Panel - Media Player and Chat */}
-          <View style={styles.fullPanel}>
-            {/* Media Player Section */}
-            <View style={styles.mediaSection}>
-              <PreviewPlayer
-                mediaFiles={formattedMediaFiles}
-                playlistName={slideshow.name}
-                playlistId={slideshow.id.toString()}
-                autoplay={false}
-                onPreviewComplete={handlePreviewComplete}
-                backgroundAudioUrl={slideshow.audioUrl ? 
-                  `http://localhost:5001/api/slideshow-audio/${slideshow.id}/stream`
-                  : undefined}
-                userId={slideshow.userId}
-              />
-            </View>
-
-            {/* Chat Section */}
-            <View style={styles.chatSection}>
-              <View style={styles.chatHeader}>
-                <MaterialIcons name="chat" size={20} color="#3b82f6" />
-                <Text style={styles.chatTitle}>Live Chat</Text>
-                <View style={styles.chatBadge}>
-                  <Text style={styles.chatBadgeText}>0</Text>
-                </View>
-              </View>
-
-              <View style={styles.chatMessages}>
-                <View style={styles.chatEmptyContainer}>
-                  <MaterialIcons name="chat" size={48} color="#ccc" />
-                  <Text style={styles.chatEmptyText}>
-                    {user ? 
-                      "No messages yet. Be the first to share your thoughts!" :
-                      "Join the conversation! Log in to see and post messages."
-                    }
-                  </Text>
-                </View>
-              </View>
-              
-              <View style={styles.chatInputWrapper}>
-                {user ? (
-                  <>
-                    <Text style={styles.chatInputLabel}>Write a message:</Text>
-                    <View style={styles.chatInputContainer}>
-                      <TextInput
-                        style={styles.messageInput}
-                        value=""
-                        placeholder="Type your message..."
-                        placeholderTextColor="#999"
-                        multiline
-                        maxLength={1000}
-                        editable={false}
-                      />
-                      <TouchableOpacity
-                        style={[styles.sendButton, styles.sendButtonDisabled]}
-                        disabled={true}
-                      >
-                        <MaterialIcons name="send" size={20} color="#fff" />
-                      </TouchableOpacity>
-                    </View>
-                    <View style={styles.chatInputFooter}>
-                      <Text style={styles.chatInputHint}>
-                        Chat available after full access
-                      </Text>
-                    </View>
-                  </>
-                ) : (
-                  <View style={styles.chatAuthPrompt}>
-                    <Text style={styles.chatAuthText}>Please log in to join the conversation.</Text>
-                    <TouchableOpacity style={styles.chatAuthButton} onPress={() => router.push('/auth/login')}>
-                      <Text style={styles.chatAuthButtonText}>Log In</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-            </View>
-          </View>
-        </View>
-      </ThemedView>
-    );
-  }
 
   return (
     <ThemedView style={styles.container}>
