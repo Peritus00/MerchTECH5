@@ -3222,49 +3222,6 @@ app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, 
   }
 });
 
-// Emergency fix endpoint - link activation code to DJKINGCAKE CHAIN
-app.post('/api/emergency-fix-djkingcake', async (req, res) => {
-  try {
-    console.log('🚨 EMERGENCY FIX: Linking EJ1EUFKRFG9H to DJKINGCAKE CHAIN');
-    
-    // Find DJKINGCAKE CHAIN slideshow
-    const djkingcakeResult = await pool.query(
-      `SELECT s.*, 
-              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
-       FROM slideshows s 
-       WHERE s.name ILIKE '%DJKINGCAKE CHAIN%'`
-    );
-    
-    if (djkingcakeResult.rows.length === 0) {
-      return res.status(404).json({ error: 'DJKINGCAKE CHAIN slideshow not found' });
-    }
-    
-    const djkingcake = djkingcakeResult.rows[0];
-    console.log('🎯 Found DJKINGCAKE CHAIN:', djkingcake.id, 'with', djkingcake.image_count, 'images');
-    
-    // Update the activation code
-    const updateResult = await pool.query(
-      `UPDATE activation_codes 
-       SET slideshow_id = $1, playlist_id = NULL
-       WHERE code = $2 
-       RETURNING *`,
-      [djkingcake.id, 'EJ1EUFKRFG9H']
-    );
-    
-    console.log('✅ EMERGENCY FIX COMPLETE');
-    
-    res.json({
-      success: true,
-      message: `EJ1EUFKRFG9H now linked to DJKINGCAKE CHAIN (ID: ${djkingcake.id})`,
-      slideshow: djkingcake,
-      activationCode: updateResult.rows[0]
-    });
-    
-  } catch (error) {
-    console.error('🚨 EMERGENCY FIX ERROR:', error);
-    res.status(500).json({ error: 'Emergency fix failed' });
-  }
-});
 
 // ---------- SLIDESHOW API ----------
 
@@ -6151,11 +6108,69 @@ app.get('*', (req, res) => {
 });
 
 
+// Database fix function - runs on startup
+async function fixActivationCodes() {
+  try {
+    console.log('🔧 STARTUP: Checking activation code linkages...');
+    
+    // Fix EJ1EUFKRFG9H to point to DJKINGCAKE CHAIN
+    const djkingcakeResult = await pool.query(
+      `SELECT s.*, 
+              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
+       FROM slideshows s 
+       WHERE s.name ILIKE '%DJKINGCAKE CHAIN%'`
+    );
+    
+    if (djkingcakeResult.rows.length > 0) {
+      const djkingcake = djkingcakeResult.rows[0];
+      console.log(`🎯 Found DJKINGCAKE CHAIN slideshow: ID ${djkingcake.id} with ${djkingcake.image_count} images`);
+      
+      // Update EJ1EUFKRFG9H to point to DJKINGCAKE CHAIN
+      const updateResult = await pool.query(
+        `UPDATE activation_codes 
+         SET slideshow_id = $1, playlist_id = NULL
+         WHERE code = $2 
+         RETURNING *`,
+        [djkingcake.id, 'EJ1EUFKRFG9H']
+      );
+      
+      if (updateResult.rows.length > 0) {
+        console.log('✅ FIXED: EJ1EUFKRFG9H now points to DJKINGCAKE CHAIN');
+      } else {
+        console.log('⚠️ WARNING: EJ1EUFKRFG9H activation code not found in database');
+      }
+      
+      // Fix KCCISPOYSQSB to point to DJKINGCAKE CHAIN as well
+      const updateResult2 = await pool.query(
+        `UPDATE activation_codes 
+         SET slideshow_id = $1, playlist_id = NULL
+         WHERE code = $2 
+         RETURNING *`,
+        [djkingcake.id, 'KCCISPOYSQSB']
+      );
+      
+      if (updateResult2.rows.length > 0) {
+        console.log('✅ FIXED: KCCISPOYSQSB now points to DJKINGCAKE CHAIN');
+      }
+    } else {
+      console.log('⚠️ WARNING: DJKINGCAKE CHAIN slideshow not found');
+    }
+    
+    console.log('🔧 STARTUP: Activation code fixes complete');
+    
+  } catch (error) {
+    console.error('❌ STARTUP: Error fixing activation codes:', error);
+  }
+}
+
 // --- SERVER START ---
-const server = app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', async () => {
   const address = server.address();
   console.log(`✅ Server listening on http://${address.address}:${address.port}`);
   console.log(`🚀 To test locally, open http://localhost:${PORT}`);
+  
+  // Run database fixes on startup
+  await fixActivationCodes();
 });
 
 // 🔧 INCREASE SERVER TIMEOUT FOR LARGE UPLOADS
