@@ -607,10 +607,15 @@ export const slideshowsAPI = {
 };
 
 export const slideshowAccessAPI = {
-  async getByIdForAccess(id: string) {
+  async getByIdForAccess(id: string, activationCode?: string) {
     try {
-      console.log('🎬 API: Fetching slideshow access for ID:', id);
-      const response = await api.get(`/slideshow-access/${id}`);
+      console.log('🎬 API: Fetching slideshow access for ID:', id, 'with code:', activationCode || 'none');
+      
+      const config = activationCode 
+        ? { params: { code: activationCode } }
+        : {};
+      
+      const response = await api.get(`/slideshow-access/${id}`, config);
       console.log('🎬 API: Slideshow access response:', response.data);
       
       // The server returns the slideshow data directly, not wrapped in { slideshow: ... }

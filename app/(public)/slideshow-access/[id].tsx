@@ -185,7 +185,12 @@ export default function SlideshowAccessScreen() {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
       const { slideshowAccessAPI } = await import('@/services/api');
-      const slideshowData = await slideshowAccessAPI.getByIdForAccess(id);
+      
+      // Check if we have a validated activation code to use
+      const activationCodeToUse = validatedCode?.code;
+      console.log('🎬 SLIDESHOW_ACCESS: Using activation code for access:', activationCodeToUse || 'none');
+      
+      const slideshowData = await slideshowAccessAPI.getByIdForAccess(id, activationCodeToUse);
 
       console.log('🎬 SLIDESHOW_ACCESS: Raw API response:', slideshowData);
       console.log('🎬 SLIDESHOW_ACCESS: Response type:', typeof slideshowData);
