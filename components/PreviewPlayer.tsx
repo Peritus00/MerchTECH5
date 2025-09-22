@@ -599,8 +599,8 @@ function PreviewPlayer({
 
       // Stop slideshow background audio when unmounting
       if (backgroundAudioUrl) {
-        console.log('🎵 PREVIEW_PLAYER: Cleaning up background audio on unmount');
-        backgroundAudioManager.current.cleanup();
+        console.log('🎵 PREVIEW_PLAYER: Pausing background audio on unmount');
+        backgroundAudioManager.current.pause();
       }
       
       if (Platform.OS === 'web' && webAudioRef.current) {
