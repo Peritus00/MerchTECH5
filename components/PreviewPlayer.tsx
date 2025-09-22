@@ -121,6 +121,7 @@ class BackgroundAudioManager {
     }
 
     try {
+      this.audioElement.currentTime = 0; // Reset audio to the beginning
       await this.audioElement.play();
       this.isPlaying = true;
       console.log('🎵 BACKGROUND_AUDIO_MANAGER: Audio playing');
