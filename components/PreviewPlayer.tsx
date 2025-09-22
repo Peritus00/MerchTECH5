@@ -458,7 +458,8 @@ function PreviewPlayer({
             if (isImage || isSlideshow) {
               setSlideshowPlaying(false);
               if (backgroundAudioUrl) {
-                backgroundAudioManager.current.pause();
+                console.log('🔴 PREVIEW_PLAYER: Cleaning up background audio on preview end');
+                backgroundAudioManager.current.cleanup(); // Use cleanup instead of just pause
               }
             } else if (isVideo) {
               if (Platform.OS === 'web') {
@@ -613,10 +614,14 @@ function PreviewPlayer({
           console.warn('🔴 PREVIEW_PLAYER: Error pausing audio player:', error);
         }
       }
-      // Note: We don't cleanup the global audio manager here as it persists across re-renders
-      console.log('🔴 PREVIEW_PLAYER: Component unmounting - background audio manager persists');
+      
+      // Clean up background audio when component unmounts (e.g., when navigating away)
+      if (backgroundAudioUrl && backgroundAudioManager.current) {
+        console.log('🔴 PREVIEW_PLAYER: Cleaning up background audio on component unmount');
+        backgroundAudioManager.current.cleanup();
+      }
     };
-  }, [audioPlayer, slideshowTimer]);
+  }, [audioPlayer, slideshowTimer, backgroundAudioUrl]);
 
   // Load track function
   const loadTrack = (index: number, resetTimer: boolean = false) => {
