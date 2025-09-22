@@ -527,16 +527,21 @@ export default function SlideshowAccessScreen() {
 
   const handlePreviewStart = () => {
     console.log('🎬 SLIDESHOW_ACCESS: Starting slideshow preview');
-    console.log('🎬 SLIDESHOW_ACCESS: Redirecting to preview player for slideshow:', id);
+    console.log('🎬 SLIDESHOW_ACCESS: URL parameter id:', id);
     console.log('🎬 SLIDESHOW_ACCESS: Slideshow data:', slideshow);
     console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshow?.images?.length || 0);
     
+    // Use the actual slideshow ID from the fetched data, not the URL parameter
+    // This is crucial when activation codes redirect to different slideshows
+    const actualSlideshowId = slideshow?.id || id;
+    console.log('🎬 SLIDESHOW_ACCESS: Using slideshow ID for preview:', actualSlideshowId);
+    
     // Add debugging for the route
-    const route = `/slideshow-preview/${id}`;
+    const route = `/slideshow-preview/${actualSlideshowId}`;
     console.log('🎬 SLIDESHOW_ACCESS: Attempting to navigate to route:', route);
     
     try {
-      // Redirect to the new slideshow preview player
+      // Redirect to the new slideshow preview player with correct ID
       router.push(route);
       console.log('🎬 SLIDESHOW_ACCESS: Navigation call completed');
     } catch (error) {
