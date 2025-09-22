@@ -121,7 +121,6 @@ class BackgroundAudioManager {
     }
 
     try {
-      this.audioElement.currentTime = 0; // Reset audio to the beginning
       await this.audioElement.play();
       this.isPlaying = true;
       console.log('🎵 BACKGROUND_AUDIO_MANAGER: Audio playing');
@@ -597,13 +596,6 @@ function PreviewPlayer({
       if (slideshowTimer) {
         clearTimeout(slideshowTimer);
       }
-
-      // Stop slideshow background audio when unmounting
-      if (backgroundAudioUrl) {
-        console.log('🎵 PREVIEW_PLAYER: Pausing background audio on unmount');
-        backgroundAudioManager.current.pause();
-      }
-      
       if (Platform.OS === 'web' && webAudioRef.current) {
         try {
           webAudioRef.current.pause();
@@ -624,7 +616,7 @@ function PreviewPlayer({
       // Note: We don't cleanup the global audio manager here as it persists across re-renders
       console.log('🔴 PREVIEW_PLAYER: Component unmounting - background audio manager persists');
     };
-  }, [audioPlayer, slideshowTimer, backgroundAudioUrl]);
+  }, [audioPlayer, slideshowTimer]);
 
   // Load track function
   const loadTrack = (index: number, resetTimer: boolean = false) => {
