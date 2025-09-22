@@ -190,6 +190,13 @@ export default function SlideshowAccessScreen() {
       console.log('🎬 SLIDESHOW_ACCESS: Raw API response:', slideshowData);
       console.log('🎬 SLIDESHOW_ACCESS: Response type:', typeof slideshowData);
       console.log('🎬 SLIDESHOW_ACCESS: Response keys:', slideshowData ? Object.keys(slideshowData) : 'null/undefined');
+      console.log('🎬 SLIDESHOW_ACCESS: Slideshow name from API:', slideshowData?.name);
+      console.log('🎬 SLIDESHOW_ACCESS: Images array from API:', slideshowData?.images);
+      console.log('🎬 SLIDESHOW_ACCESS: Images count from API:', slideshowData?.images?.length || 0);
+      
+      if (slideshowData?.images && slideshowData.images.length > 0) {
+        console.log('🎬 SLIDESHOW_ACCESS: First image sample:', slideshowData.images[0]);
+      }
       
       if (!slideshowData) {
         console.error('🎬 SLIDESHOW_ACCESS: No slideshow data received');
@@ -570,6 +577,13 @@ export default function SlideshowAccessScreen() {
         )}
         
         {/* Full Slideshow Player */}
+        {(() => {
+          console.log('🎬 SLIDESHOW_ACCESS: Passing slideshow to SlideshowPlayer:', slideshow);
+          console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshow?.name);
+          console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshow?.images);
+          console.log('🎬 SLIDESHOW_ACCESS: Images count:', slideshow?.images?.length || 0);
+          return null;
+        })()}
         <SlideshowPlayer
           slideshowId={id}
           slideshow={slideshow}

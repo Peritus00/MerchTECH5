@@ -192,16 +192,35 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
 
   useEffect(() => {
     if (slideshow) {
+      console.log('🎬 SLIDESHOW_PLAYER: Processing slideshow data:', slideshow);
+      console.log('🎬 SLIDESHOW_PLAYER: Slideshow name:', slideshow.name);
+      console.log('🎬 SLIDESHOW_PLAYER: Slideshow images array:', slideshow.images);
+      console.log('🎬 SLIDESHOW_PLAYER: Images array length:', slideshow.images?.length || 0);
+      
       setSlideshowData(slideshow);
       
       // Process slideshow images
-      const slideshowImages = slideshow.images?.map((image: any) => ({
-        id: image.id,
-        title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
-        caption: image.caption,
-        url: image.image_url,
-        displayOrder: image.displayOrder
-      })) || [];
+      const slideshowImages = slideshow.images?.map((image: any, index: number) => {
+        console.log(`🎬 SLIDESHOW_PLAYER: Processing image ${index + 1}:`, {
+          id: image.id,
+          image_url: image.image_url,
+          imageUrl: image.imageUrl,
+          url: image.url,
+          caption: image.caption,
+          displayOrder: image.displayOrder
+        });
+        
+        return {
+          id: image.id,
+          title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
+          caption: image.caption,
+          url: image.image_url || image.imageUrl || image.url, // Try multiple field names
+          displayOrder: image.displayOrder
+        };
+      }) || [];
+      
+      console.log('🎬 SLIDESHOW_PLAYER: Final processed images:', slideshowImages);
+      console.log('🎬 SLIDESHOW_PLAYER: Final images count:', slideshowImages.length);
       
       setImages(slideshowImages);
       setLoading(false);
