@@ -616,12 +616,12 @@ function PreviewPlayer({
       
       // Only pause background audio when component unmounts, don't cleanup completely
       // This allows audio to resume if user comes back to preview
-      if (backgroundAudioUrl && backgroundAudioManager.current) {
+      if (backgroundAudioManager.current) {
         console.log('🔴 PREVIEW_PLAYER: Pausing background audio on component unmount');
         backgroundAudioManager.current.pause();
       }
     };
-  }, [audioPlayer, slideshowTimer, backgroundAudioUrl]);
+  }, [audioPlayer, slideshowTimer]);
 
   // Load track function
   const loadTrack = (index: number, resetTimer: boolean = false) => {
