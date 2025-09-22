@@ -251,6 +251,11 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
     }
   }, [isPlaying]);
 
+  // Mute/unmute synchronization
+  useEffect(() => {
+    audioPlayerRef.current?.setMuted(isMuted);
+  }, [isMuted]);
+
   // Slideshow auto-play
   useEffect(() => {
     if (isPlaying && images.length > 1) {

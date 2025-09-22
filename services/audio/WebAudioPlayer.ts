@@ -124,6 +124,18 @@ class WebAudioPlayer {
     }
   }
 
+  setVolume(volume: number) {
+    if (this.audio) {
+      this.audio.volume = Math.max(0, Math.min(1, volume)); // Clamp between 0 and 1
+    }
+  }
+
+  setMuted(muted: boolean) {
+    if (this.audio) {
+      this.audio.muted = muted;
+    }
+  }
+
   unload() {
     if (this.audio) {
       this.stop();

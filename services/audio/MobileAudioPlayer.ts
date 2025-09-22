@@ -82,6 +82,27 @@ class MobileAudioPlayer {
     this.sound?.stopAsync();
   }
 
+  async setVolume(volume: number) {
+    try {
+      if (this.sound) {
+        const clampedVolume = Math.max(0, Math.min(1, volume)); // Clamp between 0 and 1
+        await this.sound.setVolumeAsync(clampedVolume);
+      }
+    } catch (error) {
+      console.error('Error setting volume:', error);
+    }
+  }
+
+  async setMuted(muted: boolean) {
+    try {
+      if (this.sound) {
+        await this.sound.setIsMutedAsync(muted);
+      }
+    } catch (error) {
+      console.error('Error setting muted state:', error);
+    }
+  }
+
   async unload() {
     if (this.sound) {
       await this.sound.unloadAsync();

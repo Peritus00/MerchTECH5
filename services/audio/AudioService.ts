@@ -12,6 +12,8 @@ export interface IAudioPlayer {
   pause: () => void;
   stop: () => void;
   unload: () => void;
+  setVolume: (volume: number) => void; // 0.0 to 1.0
+  setMuted: (muted: boolean) => void;
 }
 
 // The factory function that decides which audio player to instantiate.
