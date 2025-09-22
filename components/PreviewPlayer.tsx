@@ -621,7 +621,7 @@ function PreviewPlayer({
         backgroundAudioManager.current.pause();
       }
     };
-  }, [audioPlayer, slideshowTimer]);
+  }, []); // Empty dependency array - only run on actual mount/unmount
 
   // Load track function
   const loadTrack = (index: number, resetTimer: boolean = false) => {
