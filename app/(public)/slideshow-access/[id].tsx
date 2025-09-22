@@ -180,14 +180,14 @@ export default function SlideshowAccessScreen() {
     // This effect can be used for other cleanup if needed
   }, []);
 
-  const fetchSlideshow = async () => {
+  const fetchSlideshow = async (activationCode?: string) => {
     try {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
       const { slideshowAccessAPI } = await import('@/services/api');
       
-      // Check if we have a validated activation code to use
-      const activationCodeToUse = validatedCode?.code;
+      // Use provided activation code or check state
+      const activationCodeToUse = activationCode || validatedCode?.code;
       console.log('🎬 SLIDESHOW_ACCESS: Using activation code for access:', activationCodeToUse || 'none');
       
       const slideshowData = await slideshowAccessAPI.getByIdForAccess(id, activationCodeToUse);
@@ -451,7 +451,7 @@ export default function SlideshowAccessScreen() {
           
           // Refetch slideshow data with the validated activation code
           console.log('🎬 SLIDESHOW_ACCESS: Refetching slideshow with validated activation code');
-          await fetchSlideshow();
+          await fetchSlideshow(activationCode);
           
           setIsFullAccess(true);
         }
