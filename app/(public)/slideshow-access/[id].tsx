@@ -218,12 +218,25 @@ export default function SlideshowAccessScreen() {
       // Check if access is restricted
       if (slideshowData.accessRestricted) {
         console.log('🎬 SLIDESHOW_ACCESS: Access is restricted, showing access options');
-        // Set slideshow data but don't set full access
-        setSlideshow(slideshowData);
+        // Map snake_case fields to camelCase for frontend compatibility
+        const mappedSlideshow = {
+          ...slideshowData,
+          audioUrl: slideshowData.audio_url || slideshowData.audioUrl,
+          requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
+          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval
+        };
+        setSlideshow(mappedSlideshow);
         // Don't set isFullAccess to true - user needs to enter activation code
       } else {
         console.log('🎬 SLIDESHOW_ACCESS: Full access granted');
-        setSlideshow(slideshowData);
+        // Map snake_case fields to camelCase for frontend compatibility
+        const mappedSlideshow = {
+          ...slideshowData,
+          audioUrl: slideshowData.audio_url || slideshowData.audioUrl,
+          requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
+          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval
+        };
+        setSlideshow(mappedSlideshow);
         // Access is granted, user can view slideshow
       }
 
