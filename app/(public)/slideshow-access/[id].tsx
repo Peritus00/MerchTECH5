@@ -432,26 +432,16 @@ export default function SlideshowAccessScreen() {
       
       if (validationResult.valid) {
         console.log('🎬 SLIDESHOW_ACCESS: Valid activation code:', validationResult);
-        
-        // NEW LOGIC: Check if the code is for a DIFFERENT slideshow
-        const linkedContentId = validationResult.content_id;
-        if (linkedContentId && linkedContentId.toString() !== id) {
-          console.log(`🎬 SLIDESHOW_ACCESS: Code is for a different content (ID: ${linkedContentId}). Redirecting...`);
-          Alert.alert(
-            'Correct Slideshow Found',
-            'This activation code is for a different slideshow. You will now be redirected.',
-            [{ text: 'OK', onPress: () => router.replace(`/slideshow-access/${linkedContentId}`) }]
-          );
-          return; // Stop further execution
-        }
-
-        // --- Original logic for when the code IS for the current slideshow ---
         setValidatedCode(validationResult);
+        // Store the activation code in AsyncStorage as a fallback
         await AsyncStorage.setItem('pending_activation_code', activationCode);
         
+        // Check if user is authenticated
         if (isAuthenticated) {
+          // User is logged in - attach code and redirect to slideshow player
           await handleAttachCodeAndRedirect(activationCode);
         } else {
+          // User not logged in but has valid code - grant guest access
           console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
           setIsFullAccess(true);
         }

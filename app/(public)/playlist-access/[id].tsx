@@ -269,26 +269,16 @@ export default function PlaylistAccessScreen() {
 
       if (validationResult.valid) {
         console.log('🎵 PLAYLIST_ACCESS: Valid activation code:', validationResult);
-
-        // NEW LOGIC: Check if the code is for a DIFFERENT playlist
-        const linkedContentId = validationResult.content_id;
-        if (linkedContentId && linkedContentId.toString() !== id) {
-          console.log(`🎵 PLAYLIST_ACCESS: Code is for different content (ID: ${linkedContentId}). Redirecting...`);
-          Alert.alert(
-            'Correct Playlist Found',
-            'This activation code is for a different playlist. You will now be redirected.',
-            [{ text: 'OK', onPress: () => router.replace(`/playlist-access/${linkedContentId}`) }]
-          );
-          return; // Stop further execution
-        }
-
-        // --- Original logic for when the code IS for the current playlist ---
         setValidatedCode(validationResult);
+        // Store the activation code in AsyncStorage as a fallback
         await AsyncStorage.setItem('pending_activation_code', activationCode);
         
+        // Check if user is authenticated
         if (isAuthenticated) {
+          // User is logged in - attach code and redirect to media player
           await handleAttachCodeAndRedirect(activationCode);
         } else {
+          // User not logged in but has valid code - grant guest access
           console.log('🎵 PLAYLIST_ACCESS: Granting guest access with valid activation code');
           setIsFullAccess(true);
         }

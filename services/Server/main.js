@@ -2940,45 +2940,28 @@ app.post('/api/activation-codes/validate', async (req, res) => {
   try {
     const { code, playlistId, slideshowId } = req.body;
     
-    if (!code) {
-      return res.status(400).json({ error: 'Activation code is required' });
+    if (!code || (!playlistId && !slideshowId)) {
+      return res.status(400).json({ error: 'Code and content ID required' });
     }
     
-    console.log('🔑 ACTIVATION_CODES: Validating code:', { code, contextPlaylistId: playlistId, contextSlideshowId: slideshowId });
+    console.log('🔑 ACTIVATION_CODES: Validating code:', { code, playlistId, slideshowId });
     
-    // Find the code and check its validity without checking for a specific content ID match yet
     const result = await pool.query(
       `SELECT * FROM activation_codes 
        WHERE code = $1 AND is_active = true 
        AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)`,
-      [code]
+       AND (max_uses IS NULL OR uses_count < max_uses)
+       AND (playlist_id = $2 OR slideshow_id = $3)`,
+      [code, playlistId || null, slideshowId || null]
     );
     
     if (result.rows.length === 0) {
-      console.log('🔑 ACTIVATION_CODES: Invalid, expired, or used up code');
-      return res.status(400).json({ valid: false, error: 'Activation code is not valid or has expired' });
+      console.log('🔑 ACTIVATION_CODES: Invalid code for content');
+      return res.status(400).json({ error: 'Invalid activation code for this content' });
     }
     
-    const activationData = result.rows[0];
-    
-    // Now determine the content it's linked to
-    const linkedPlaylistId = activationData.playlist_id;
-    const linkedSlideshowId = activationData.slideshow_id;
-
-    if (!linkedPlaylistId && !linkedSlideshowId) {
-        console.log('🔑 ACTIVATION_CODES: Code is valid but not linked to any content');
-        return res.status(400).json({ valid: false, error: 'This code is not linked to any content.' });
-    }
-
-    console.log('🔑 ACTIVATION_CODES: Code validated successfully, returning linked content info');
-    res.json({ 
-      valid: true, 
-      message: 'Activation code is valid',
-      content_type: linkedPlaylistId ? 'playlist' : 'slideshow',
-      content_id: linkedPlaylistId || linkedSlideshowId,
-      code_details: activationData
-    });
+    console.log('🔑 ACTIVATION_CODES: Code validated successfully');
+    res.json({ valid: true, message: 'Activation code is valid' });
     
   } catch (error) {
     console.error('🔑 ACTIVATION_CODES: Error validating code:', error);
@@ -3236,6 +3219,50 @@ app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, 
   } catch (error) {
     console.error('🔧 ERROR: Failed to fix activation code linkage:', error);
     res.status(500).json({ error: 'Failed to fix activation code linkage' });
+  }
+});
+
+// Emergency fix endpoint - link activation code to DJKINGCAKE CHAIN
+app.post('/api/emergency-fix-djkingcake', async (req, res) => {
+  try {
+    console.log('🚨 EMERGENCY FIX: Linking EJ1EUFKRFG9H to DJKINGCAKE CHAIN');
+    
+    // Find DJKINGCAKE CHAIN slideshow
+    const djkingcakeResult = await pool.query(
+      `SELECT s.*, 
+              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
+       FROM slideshows s 
+       WHERE s.name ILIKE '%DJKINGCAKE CHAIN%'`
+    );
+    
+    if (djkingcakeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'DJKINGCAKE CHAIN slideshow not found' });
+    }
+    
+    const djkingcake = djkingcakeResult.rows[0];
+    console.log('🎯 Found DJKINGCAKE CHAIN:', djkingcake.id, 'with', djkingcake.image_count, 'images');
+    
+    // Update the activation code
+    const updateResult = await pool.query(
+      `UPDATE activation_codes 
+       SET slideshow_id = $1, playlist_id = NULL
+       WHERE code = $2 
+       RETURNING *`,
+      [djkingcake.id, 'EJ1EUFKRFG9H']
+    );
+    
+    console.log('✅ EMERGENCY FIX COMPLETE');
+    
+    res.json({
+      success: true,
+      message: `EJ1EUFKRFG9H now linked to DJKINGCAKE CHAIN (ID: ${djkingcake.id})`,
+      slideshow: djkingcake,
+      activationCode: updateResult.rows[0]
+    });
+    
+  } catch (error) {
+    console.error('🚨 EMERGENCY FIX ERROR:', error);
+    res.status(500).json({ error: 'Emergency fix failed' });
   }
 });
 
