@@ -292,7 +292,8 @@ export default function SlideshowAccessScreen() {
       }
 
       // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to slideshow player
-      if (!slideshow.requiresActivationCode) {
+      const requiresCode = slideshow.requiresActivationCode || slideshow.requires_activation_code;
+      if (!requiresCode) {
         console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to slideshow player');
         router.replace(`/slideshow-player/${id}`);
         return;
