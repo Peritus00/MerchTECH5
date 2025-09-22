@@ -90,7 +90,7 @@ const ActivationCodesScreen = () => {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<number | null>(null);
   const [selectedSlideshowId, setSelectedSlideshowId] = useState<number | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [maxUses, setMaxUses] = useState('1');
+  const [maxUses, setMaxUses] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   
@@ -557,6 +557,11 @@ const ActivationCodesScreen = () => {
         onPress={() => {
           console.log('🟢 Opening create modal. Current slideshows:', slideshows);
           setIsCreating(false);
+          // Reset form fields to ensure clean state
+          setMaxUses('');
+          setExpiresInDays('');
+          setSelectedPlaylistId(null);
+          setSelectedSlideshowId(null);
           setShowCreateModal(true);
         }}
       >
@@ -567,7 +572,15 @@ const ActivationCodesScreen = () => {
       {/* Batch Code Creation */}
       <TouchableOpacity
         style={[styles.createButton, styles.batchButton]}
-        onPress={() => setShowBatchModal(true)}
+        onPress={() => {
+          // Reset form fields to ensure clean state
+          setMaxUses('');
+          setExpiresInDays('');
+          setBatchQuantity('1');
+          setSelectedPlaylistId(null);
+          setSelectedSlideshowId(null);
+          setShowBatchModal(true);
+        }}
       >
         <MaterialIconWithFallback name="add-circle-outline" size={20} color="#fff" />
         <Text style={styles.createButtonText}>Create Multiple Codes</Text>
@@ -672,7 +685,7 @@ const ActivationCodesScreen = () => {
               style={styles.input}
               value={maxUses}
               onChangeText={setMaxUses}
-              placeholder="1 (leave empty for unlimited)"
+              placeholder="Leave empty for unlimited"
               keyboardType="numeric"
             />
 
@@ -747,7 +760,7 @@ const ActivationCodesScreen = () => {
                   style={styles.input}
                   value={maxUses}
                   onChangeText={setMaxUses}
-                  placeholder="1 (leave empty for unlimited)"
+                  placeholder="Leave empty for unlimited"
                   keyboardType="numeric"
                 />
               </>
@@ -760,7 +773,7 @@ const ActivationCodesScreen = () => {
                   style={styles.input}
                   value={maxUses}
                   onChangeText={setMaxUses}
-                  placeholder="1 (leave empty for unlimited)"
+                  placeholder="Leave empty for unlimited"
                   keyboardType="numeric"
                 />
               </>
@@ -999,7 +1012,7 @@ const ActivationCodesScreen = () => {
                 style={styles.input}
                 value={editMaxUses}
                 onChangeText={setEditMaxUses}
-                placeholder="1 (leave empty for unlimited)"
+                placeholder="Leave empty for unlimited"
                 keyboardType="numeric"
               />
 
