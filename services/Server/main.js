@@ -3094,6 +3094,134 @@ app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) 
   }
 });
 
+// Debug endpoint to check activation code linkage (admin only)
+app.get('/api/debug/activation-code/:code', authenticateToken, async (req, res) => {
+  try {
+    const { code } = req.params;
+    
+    console.log('🔍 DEBUG: Checking activation code:', code);
+    
+    // Get activation code details
+    const codeResult = await pool.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name,
+              s.id as slideshow_id_check,
+              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.code = $1`,
+      [code]
+    );
+    
+    if (codeResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Activation code not found' });
+    }
+    
+    const codeData = codeResult.rows[0];
+    
+    // If it's linked to a slideshow, get more details
+    let slideshowDetails = null;
+    if (codeData.slideshow_id) {
+      const slideshowResult = await pool.query(
+        `SELECT s.*, 
+                (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count,
+                (SELECT array_agg(si.image_url) FROM slideshow_images si WHERE si.slideshow_id = s.id LIMIT 3) as sample_images
+         FROM slideshows s 
+         WHERE s.id = $1`,
+        [codeData.slideshow_id]
+      );
+      
+      if (slideshowResult.rows.length > 0) {
+        slideshowDetails = slideshowResult.rows[0];
+      }
+    }
+    
+    // Also search for DJKINGCAKE CHAIN slideshow
+    const djkingcakeResult = await pool.query(
+      `SELECT s.*, 
+              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
+       FROM slideshows s 
+       WHERE s.name ILIKE '%DJKINGCAKE CHAIN%'`
+    );
+    
+    const debugInfo = {
+      activationCode: codeData,
+      currentSlideshow: slideshowDetails,
+      djkingcakeSlideshow: djkingcakeResult.rows[0] || null,
+      issue: codeData.slideshow_name && codeData.image_count === 0 ? 'Linked slideshow has no images' : null,
+      recommendation: djkingcakeResult.rows[0] && codeData.slideshow_id !== djkingcakeResult.rows[0].id ? 
+        `Consider linking to slideshow ID ${djkingcakeResult.rows[0].id} (${djkingcakeResult.rows[0].name})` : null
+    };
+    
+    console.log('🔍 DEBUG: Activation code analysis:', debugInfo);
+    res.json(debugInfo);
+    
+  } catch (error) {
+    console.error('🔍 DEBUG: Error checking activation code:', error);
+    res.status(500).json({ error: 'Failed to debug activation code' });
+  }
+});
+
+// Fix activation code linkage endpoint (admin only)
+app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, res) => {
+  try {
+    const { code } = req.params;
+    const { targetSlideshowId } = req.body;
+    
+    console.log('🔧 FIXING: Activation code linkage for:', code, 'to slideshow:', targetSlideshowId);
+    
+    // Verify the target slideshow exists and has images
+    const slideshowCheck = await pool.query(
+      `SELECT s.*, 
+              (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
+       FROM slideshows s 
+       WHERE s.id = $1`,
+      [targetSlideshowId]
+    );
+    
+    if (slideshowCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Target slideshow not found' });
+    }
+    
+    const targetSlideshow = slideshowCheck.rows[0];
+    
+    if (targetSlideshow.image_count === 0) {
+      return res.status(400).json({ 
+        error: 'Target slideshow has no images',
+        slideshow: targetSlideshow
+      });
+    }
+    
+    // Update the activation code linkage
+    const updateResult = await pool.query(
+      `UPDATE activation_codes 
+       SET slideshow_id = $1, playlist_id = NULL
+       WHERE code = $2 
+       RETURNING *`,
+      [targetSlideshowId, code]
+    );
+    
+    if (updateResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Activation code not found' });
+    }
+    
+    console.log('✅ FIXED: Activation code linkage updated successfully');
+    
+    res.json({
+      success: true,
+      message: `Activation code ${code} now linked to slideshow: ${targetSlideshow.name}`,
+      activationCode: updateResult.rows[0],
+      targetSlideshow: targetSlideshow
+    });
+    
+  } catch (error) {
+    console.error('🔧 ERROR: Failed to fix activation code linkage:', error);
+    res.status(500).json({ error: 'Failed to fix activation code linkage' });
+  }
+});
+
 // ---------- SLIDESHOW API ----------
 
 // Get all slideshows for the current user

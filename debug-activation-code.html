@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Activation Code</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .error { color: red; }
+        .success { color: green; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Activation Code Debugger</h1>
+    
+    <div class="section">
+        <h3>Step 1: Debug Activation Code</h3>
+        <input type="text" id="debugCode" placeholder="Enter activation code" value="KCCISPOYSQSB">
+        <button onclick="debugCode()">Debug Code</button>
+        <div id="debugResult"></div>
+    </div>
+    
+    <div class="section">
+        <h3>Step 2: Fix Code Linkage</h3>
+        <input type="text" id="fixCode" placeholder="Activation code" value="KCCISPOYSQSB">
+        <input type="number" id="targetSlideshow" placeholder="Target slideshow ID">
+        <button onclick="fixCode()">Fix Linkage</button>
+        <div id="fixResult"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://merchtech5-production.up.railway.app/api';
+        
+        async function debugCode() {
+            const code = document.getElementById('debugCode').value;
+            const resultDiv = document.getElementById('debugResult');
+            
+            try {
+                resultDiv.innerHTML = 'Debugging...';
+                
+                // Note: This will fail due to CORS and auth, but shows the concept
+                const response = await fetch(`${API_BASE}/debug/activation-code/${code}`, {
+                    headers: {
+                        'Authorization': 'Bearer YOUR_TOKEN_HERE' // You'd need to add your auth token
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <div class="success">✅ Debug successful</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+                // Auto-populate fix form if we found the DJKINGCAKE slideshow
+                if (data.djkingcakeSlideshow) {
+                    document.getElementById('targetSlideshow').value = data.djkingcakeSlideshow.id;
+                }
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ Error: ${error.message}</div>
+                    <p><strong>Manual Debug Instructions:</strong></p>
+                    <ol>
+                        <li>Open browser dev tools (F12)</li>
+                        <li>Go to Console tab</li>
+                        <li>Run this command:</li>
+                    </ol>
+                    <pre>
+// Debug activation code
+fetch('${API_BASE}/debug/activation-code/${code}', {
+    headers: { 'Authorization': 'Bearer YOUR_AUTH_TOKEN' }
+}).then(r => r.json()).then(console.log);
+                    </pre>
+                `;
+            }
+        }
+        
+        async function fixCode() {
+            const code = document.getElementById('fixCode').value;
+            const targetId = document.getElementById('targetSlideshow').value;
+            const resultDiv = document.getElementById('fixResult');
+            
+            if (!code || !targetId) {
+                resultDiv.innerHTML = '<div class="error">❌ Please enter both code and target slideshow ID</div>';
+                return;
+            }
+            
+            try {
+                resultDiv.innerHTML = 'Fixing...';
+                
+                const response = await fetch(`${API_BASE}/debug/fix-activation-code/${code}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer YOUR_TOKEN_HERE' // You'd need to add your auth token
+                    },
+                    body: JSON.stringify({ targetSlideshowId: parseInt(targetId) })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <div class="success">✅ ${data.message}</div>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                `;
+                
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ Error: ${error.message}</div>
+                    <p><strong>Manual Fix Instructions:</strong></p>
+                    <ol>
+                        <li>Open browser dev tools (F12)</li>
+                        <li>Go to Console tab</li>
+                        <li>Run this command:</li>
+                    </ol>
+                    <pre>
+// Fix activation code linkage
+fetch('${API_BASE}/debug/fix-activation-code/${code}', {
+    method: 'POST',
+    headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer YOUR_AUTH_TOKEN' 
+    },
+    body: JSON.stringify({ targetSlideshowId: ${targetId} })
+}).then(r => r.json()).then(console.log);
+                    </pre>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
