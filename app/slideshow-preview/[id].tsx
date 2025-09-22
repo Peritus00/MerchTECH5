@@ -80,10 +80,20 @@ export default function SlideshowPreviewScreen() {
   };
 
   const handlePreviewComplete = () => {
-    console.log('🎬 SLIDESHOW_PREVIEW: Preview completed, redirecting to creator\'s store');
+    console.log('🎬 SLIDESHOW_PREVIEW: Preview completed, showing options to user');
+    
     // Redirect to the slideshow creator's store
     const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
-    router.push(storeUrl);
+    
+    // Show a brief message that preview is complete with options (matching playlist behavior)
+    Alert.alert(
+      '⏰ Preview Complete',
+      'Your 30-second preview has ended. Enter an activation code for full access or visit the creator\'s store.',
+      [
+        { text: 'Enter Code', style: 'default', onPress: () => router.back() },
+        { text: 'Visit Store', onPress: () => router.push(storeUrl) }
+      ]
+    );
   };
 
   // Memoize the formatted media files to prevent re-renders
