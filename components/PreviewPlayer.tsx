@@ -458,8 +458,7 @@ function PreviewPlayer({
             if (isImage || isSlideshow) {
               setSlideshowPlaying(false);
               if (backgroundAudioUrl) {
-                console.log('🔴 PREVIEW_PLAYER: Cleaning up background audio on preview end');
-                backgroundAudioManager.current.cleanup(); // Use cleanup instead of just pause
+                backgroundAudioManager.current.pause();
               }
             } else if (isVideo) {
               if (Platform.OS === 'web') {
@@ -615,10 +614,11 @@ function PreviewPlayer({
         }
       }
       
-      // Clean up background audio when component unmounts (e.g., when navigating away)
+      // Only pause background audio when component unmounts, don't cleanup completely
+      // This allows audio to resume if user comes back to preview
       if (backgroundAudioUrl && backgroundAudioManager.current) {
-        console.log('🔴 PREVIEW_PLAYER: Cleaning up background audio on component unmount');
-        backgroundAudioManager.current.cleanup();
+        console.log('🔴 PREVIEW_PLAYER: Pausing background audio on component unmount');
+        backgroundAudioManager.current.pause();
       }
     };
   }, [audioPlayer, slideshowTimer, backgroundAudioUrl]);

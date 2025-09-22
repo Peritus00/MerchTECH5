@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   StyleSheet,
@@ -121,7 +121,31 @@ export default function PreviewPlayerScreen() {
   }, [slideshow]);
 
   const handleBackPress = () => {
+    // Clean up any background audio before going back
+    if (typeof window !== 'undefined') {
+      const audioElements = document.querySelectorAll('audio');
+      audioElements.forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+    }
     router.back();
+  };
+
+  // Function to cleanup audio before navigation
+  const cleanupAudioAndNavigate = (destination: string) => {
+    // Clean up any background audio that might still be playing
+    if (typeof window !== 'undefined') {
+      // Find any audio elements and stop them
+      const audioElements = document.querySelectorAll('audio');
+      audioElements.forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      });
+    }
+    
+    // Navigate to destination
+    router.push(destination);
   };
 
   const handlePreviewComplete = () => {
@@ -132,8 +156,8 @@ export default function PreviewPlayerScreen() {
       '⏰ Preview Complete',
       'Your slideshow preview has ended. Enter an activation code for full access or visit the creator\'s store.',
       [
-        { text: 'Enter Code', onPress: () => router.push(`/slideshow-access/${id}`) },
-        { text: 'Visit Store', onPress: () => router.push(storeUrl) }
+        { text: 'Enter Code', onPress: () => cleanupAudioAndNavigate(`/slideshow-access/${id}`) },
+        { text: 'Visit Store', onPress: () => cleanupAudioAndNavigate(storeUrl) }
       ]
     );
   };
@@ -223,7 +247,7 @@ export default function PreviewPlayerScreen() {
       <View style={styles.actionButtons}>
         <TouchableOpacity 
           style={styles.accessButton}
-          onPress={() => router.push(`/slideshow-access/${id}`)}
+          onPress={() => cleanupAudioAndNavigate(`/slideshow-access/${id}`)}
         >
           <Ionicons name="lock-open" size={20} color="#fff" />
           <ThemedText style={styles.accessButtonText}>Get Full Access</ThemedText>
@@ -231,7 +255,7 @@ export default function PreviewPlayerScreen() {
         
         <TouchableOpacity 
           style={styles.storeButton}
-          onPress={() => router.push('/store')}
+          onPress={() => cleanupAudioAndNavigate('/store')}
         >
           <Ionicons name="storefront" size={20} color="#3b82f6" />
           <ThemedText style={styles.storeButtonText}>Visit Store</ThemedText>
