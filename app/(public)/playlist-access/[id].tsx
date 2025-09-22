@@ -67,14 +67,15 @@ export default function PlaylistAccessScreen() {
     try {
       console.log('🔴 PLAYLIST_ACCESS: Fetching playlist with ID:', id);
 
-      const { playlistsAPI } = await import('@/services/api');
-      const response = await playlistsAPI.getById(id);
+      const { playlistAccessAPI } = await import('@/services/api');
+      
+      // Check if we have a validated activation code to use
+      const activationCodeToUse = validatedCode?.code;
+      console.log('🔴 PLAYLIST_ACCESS: Using activation code for access:', activationCodeToUse || 'none');
+      
+      const playlistData = await playlistAccessAPI.getByIdForAccess(id, activationCodeToUse);
 
-      console.log('🔴 PLAYLIST_ACCESS: API response:', response);
-
-      // Extract playlist from response - the API returns { playlist: {...} }
-      const playlistData = response.playlist || response;
-      console.log('🔴 PLAYLIST_ACCESS: Extracted playlist data:', playlistData);
+      console.log('🔴 PLAYLIST_ACCESS: API response:', playlistData);
 
       // Log media files from server (URLs are now correct from server)
       if (playlistData.mediaFiles) {

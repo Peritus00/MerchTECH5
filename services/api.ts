@@ -648,6 +648,30 @@ export const slideshowAccessAPI = {
   },
 };
 
+export const playlistAccessAPI = {
+  async getByIdForAccess(id: string, activationCode?: string) {
+    try {
+      console.log('🎵 API: Fetching playlist access for ID:', id, 'with code:', activationCode || 'none');
+      
+      const config = activationCode 
+        ? { params: { code: activationCode } }
+        : {};
+      
+      const response = await api.get(`/playlist-access/${id}`, config);
+      console.log('🎵 API: Playlist access response:', response.data);
+      
+      return response.data;
+    } catch (error: any) {
+      console.error('🎵 API: Error fetching playlist for access:', error);
+      if (error.response && error.response.status === 404) {
+        console.warn(`Playlist with ID ${id} not found.`);
+        return null;
+      }
+      throw error;
+    }
+  },
+};
+
 // This is for managing products associated with playlists or slideshows.
 export const contentProductsAPI = {
   // Playlist-specific product management
