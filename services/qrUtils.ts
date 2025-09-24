@@ -150,13 +150,32 @@ const downloadForWeb = async (
               const logoRect = logoElement.getBoundingClientRect();
               const qrRect = qrElement.getBoundingClientRect();
               
-              // Calculate relative position within the QR code
-              const relativeX = logoRect.left - qrRect.left;
-              const relativeY = logoRect.top - qrRect.top;
+              // Get SVG dimensions for accurate centering
+              const svgWidth = parseFloat(svgClone.getAttribute('width') || '150');
+              const svgHeight = parseFloat(svgClone.getAttribute('height') || '150');
+              
+              // Calculate centered position within the SVG coordinate system
+              let logoWidth = logoRect.width;
+              let logoHeight = logoRect.height;
+              
+              // Ensure logo doesn't exceed 20% of QR code size for optimal scanning
+              const maxLogoSize = Math.min(svgWidth, svgHeight) * 0.2;
+              if (logoWidth > maxLogoSize || logoHeight > maxLogoSize) {
+                const scale = maxLogoSize / Math.max(logoWidth, logoHeight);
+                logoWidth *= scale;
+                logoHeight *= scale;
+                console.log('📏 Logo resized for optimal scanning:', { originalSize: logoRect.width, newSize: logoWidth, scale });
+              }
+              
+              // Center the logo perfectly in the QR code
+              const centeredX = (svgWidth - logoWidth) / 2;
+              const centeredY = (svgHeight - logoHeight) / 2;
               
               console.log('📐 Logo positioning:', {
-                logoRect: { width: logoRect.width, height: logoRect.height, x: relativeX, y: relativeY },
-                qrRect: { width: qrRect.width, height: qrRect.height }
+                logoRect: { width: logoWidth, height: logoHeight },
+                qrRect: { width: qrRect.width, height: qrRect.height },
+                svgDimensions: { width: svgWidth, height: svgHeight },
+                centeredPosition: { x: centeredX, y: centeredY }
               });
               
               // Create SVG image element
@@ -165,10 +184,10 @@ const downloadForWeb = async (
               // Use both href and xlink:href for maximum compatibility
               svgImage.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', logoData.dataUri);
               svgImage.setAttribute('href', logoData.dataUri); // Modern browsers
-              svgImage.setAttribute('x', relativeX.toString());
-              svgImage.setAttribute('y', relativeY.toString());
-              svgImage.setAttribute('width', logoRect.width.toString());
-              svgImage.setAttribute('height', logoRect.height.toString());
+              svgImage.setAttribute('x', centeredX.toString());
+              svgImage.setAttribute('y', centeredY.toString());
+              svgImage.setAttribute('width', logoWidth.toString());
+              svgImage.setAttribute('height', logoHeight.toString());
               
               // Add the image to the SVG
               svgClone.appendChild(svgImage);
