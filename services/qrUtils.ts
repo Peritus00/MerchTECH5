@@ -135,59 +135,38 @@ const downloadForWeb = async (
             dataUriLength: logo?.dataUri?.length
           })));
           
-          // Find all image elements in both the SVG clone and the original QR element
-          const svgImages = svgClone.querySelectorAll('image');
-          const imgElements = svgClone.querySelectorAll('img');
-          
-          // Also check for images in foreign objects (React Native web rendering)
-          const foreignObjects = svgClone.querySelectorAll('foreignObject');
-          const foreignImages: HTMLImageElement[] = [];
-          foreignObjects.forEach(fo => {
-            const imgs = fo.querySelectorAll('img');
-            foreignImages.push(...Array.from(imgs));
-          });
-          
-          // Handle both <image> and <img> elements
-          const allImageElements = [
-            ...Array.from(svgImages), 
-            ...Array.from(imgElements),
-            ...foreignImages
-          ];
-          
-          console.log('🔍 Found image elements in SVG:', {
-            svgImages: svgImages.length,
-            imgElements: imgElements.length,
-            foreignImages: foreignImages.length,
-            total: allImageElements.length
-          });
-          
+          // Since React Native web renders logos outside the SVG, we need to manually add them
           validLogos.forEach((logoData, index) => {
-            if (logoData && logoData.element) {
-              // Find the corresponding element in the SVG clone
-              const originalSrc = logoData.element.src;
+            if (logoData && logoData.element && logoData.dataUri) {
+              console.log('🔧 Creating SVG image element for logo', index + 1);
               
-              // Look for elements with matching src
-              const matchingElements = allImageElements.filter(el => {
-                if (el.tagName.toLowerCase() === 'image') {
-                  return el.getAttribute('href') === originalSrc || 
-                         el.getAttribute('xlink:href') === originalSrc;
-                } else {
-                  return el.getAttribute('src') === originalSrc;
-                }
+              // Get logo dimensions and position from the original element
+              const logoElement = logoData.element;
+              const logoRect = logoElement.getBoundingClientRect();
+              const qrRect = qrElement.getBoundingClientRect();
+              
+              // Calculate relative position within the QR code
+              const relativeX = logoRect.left - qrRect.left;
+              const relativeY = logoRect.top - qrRect.top;
+              
+              console.log('📐 Logo positioning:', {
+                logoRect: { width: logoRect.width, height: logoRect.height, x: relativeX, y: relativeY },
+                qrRect: { width: qrRect.width, height: qrRect.height }
               });
               
-              matchingElements.forEach(imageElement => {
-                // For SVG <image> elements, use href or xlink:href
-                if (imageElement.tagName.toLowerCase() === 'image') {
-                  imageElement.setAttribute('href', logoData.dataUri);
-                  imageElement.setAttribute('xlink:href', logoData.dataUri); // Fallback for older browsers
-                } else {
-                  // For <img> elements, use src
-                  imageElement.setAttribute('src', logoData.dataUri);
-                }
-                
-                console.log('✅ Embedded logo into', imageElement.tagName, 'element');
-              });
+              // Create SVG image element
+              const svgImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+              svgImage.setAttribute('href', logoData.dataUri);
+              svgImage.setAttribute('xlink:href', logoData.dataUri); // Fallback for older browsers
+              svgImage.setAttribute('x', relativeX.toString());
+              svgImage.setAttribute('y', relativeY.toString());
+              svgImage.setAttribute('width', logoRect.width.toString());
+              svgImage.setAttribute('height', logoRect.height.toString());
+              
+              // Add the image to the SVG
+              svgClone.appendChild(svgImage);
+              
+              console.log('✅ Added SVG image element for logo', index + 1);
             }
           });
           
