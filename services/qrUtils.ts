@@ -49,6 +49,14 @@ const downloadForWeb = async (
       const logoImages = qrElement.querySelectorAll('img');
       console.log('🖼️ Found logo images:', logoImages.length);
       
+      // Debug: Log the entire QR element structure
+      console.log('🔍 QR Element HTML structure:', qrElement.outerHTML);
+      console.log('🔍 QR Element children:', Array.from(qrElement.children).map(child => ({
+        tagName: child.tagName,
+        className: child.className,
+        id: child.id
+      })));
+      
       // Process logo images and embed them as data URIs
       const logoPromises = Array.from(logoImages).map(async (img: HTMLImageElement) => {
         try {
@@ -121,6 +129,11 @@ const downloadForWeb = async (
         // Embed logos into SVG if any were processed
         if (validLogos.length > 0) {
           console.log('🖼️ Embedding', validLogos.length, 'logos into SVG');
+          console.log('🔍 Valid logos data:', validLogos.map(logo => ({
+            hasElement: !!logo?.element,
+            elementSrc: logo?.element?.src,
+            dataUriLength: logo?.dataUri?.length
+          })));
           
           // Find all image elements in both the SVG clone and the original QR element
           const svgImages = svgClone.querySelectorAll('image');
@@ -181,6 +194,10 @@ const downloadForWeb = async (
           // Re-serialize the SVG with embedded logos
           svgData = new XMLSerializer().serializeToString(svgClone);
           console.log('📄 Updated SVG data length with logos:', svgData.length);
+        } else {
+          console.log('⚠️ No valid logos found to embed in SVG');
+          console.log('🔍 Original logo images found:', logoImages.length);
+          console.log('🔍 Logo processing results:', logoResults.map(result => !!result));
         }
         
         // For SVG, download the styled SVG data with embedded logos
