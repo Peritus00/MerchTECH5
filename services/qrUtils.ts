@@ -45,6 +45,11 @@ const downloadForWeb = async (
       // Clone the SVG to avoid modifying the original
       const svgClone = svgElement.cloneNode(true) as SVGElement;
       
+      // Add xlink namespace if not already present (needed for xlink:href)
+      if (!svgClone.hasAttribute('xmlns:xlink')) {
+        svgClone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+      }
+      
       // Find any logo images in the QR element
       const logoImages = qrElement.querySelectorAll('img');
       console.log('🖼️ Found logo images:', logoImages.length);
@@ -156,8 +161,10 @@ const downloadForWeb = async (
               
               // Create SVG image element
               const svgImage = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-              svgImage.setAttribute('href', logoData.dataUri);
-              svgImage.setAttribute('xlink:href', logoData.dataUri); // Fallback for older browsers
+              
+              // Use both href and xlink:href for maximum compatibility
+              svgImage.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', logoData.dataUri);
+              svgImage.setAttribute('href', logoData.dataUri); // Modern browsers
               svgImage.setAttribute('x', relativeX.toString());
               svgImage.setAttribute('y', relativeY.toString());
               svgImage.setAttribute('width', logoRect.width.toString());
