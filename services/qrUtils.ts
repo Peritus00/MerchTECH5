@@ -117,7 +117,73 @@ const downloadForWeb = async (
       
       if (format === QRCodeFormat.SVG) {
         console.log('🎨 Processing SVG download...');
-        // For SVG, download the styled SVG data
+        
+        // Embed logos into SVG if any were processed
+        if (validLogos.length > 0) {
+          console.log('🖼️ Embedding', validLogos.length, 'logos into SVG');
+          
+          // Find all image elements in both the SVG clone and the original QR element
+          const svgImages = svgClone.querySelectorAll('image');
+          const imgElements = svgClone.querySelectorAll('img');
+          
+          // Also check for images in foreign objects (React Native web rendering)
+          const foreignObjects = svgClone.querySelectorAll('foreignObject');
+          const foreignImages: HTMLImageElement[] = [];
+          foreignObjects.forEach(fo => {
+            const imgs = fo.querySelectorAll('img');
+            foreignImages.push(...Array.from(imgs));
+          });
+          
+          // Handle both <image> and <img> elements
+          const allImageElements = [
+            ...Array.from(svgImages), 
+            ...Array.from(imgElements),
+            ...foreignImages
+          ];
+          
+          console.log('🔍 Found image elements in SVG:', {
+            svgImages: svgImages.length,
+            imgElements: imgElements.length,
+            foreignImages: foreignImages.length,
+            total: allImageElements.length
+          });
+          
+          validLogos.forEach((logoData, index) => {
+            if (logoData && logoData.element) {
+              // Find the corresponding element in the SVG clone
+              const originalSrc = logoData.element.src;
+              
+              // Look for elements with matching src
+              const matchingElements = allImageElements.filter(el => {
+                if (el.tagName.toLowerCase() === 'image') {
+                  return el.getAttribute('href') === originalSrc || 
+                         el.getAttribute('xlink:href') === originalSrc;
+                } else {
+                  return el.getAttribute('src') === originalSrc;
+                }
+              });
+              
+              matchingElements.forEach(imageElement => {
+                // For SVG <image> elements, use href or xlink:href
+                if (imageElement.tagName.toLowerCase() === 'image') {
+                  imageElement.setAttribute('href', logoData.dataUri);
+                  imageElement.setAttribute('xlink:href', logoData.dataUri); // Fallback for older browsers
+                } else {
+                  // For <img> elements, use src
+                  imageElement.setAttribute('src', logoData.dataUri);
+                }
+                
+                console.log('✅ Embedded logo into', imageElement.tagName, 'element');
+              });
+            }
+          });
+          
+          // Re-serialize the SVG with embedded logos
+          svgData = new XMLSerializer().serializeToString(svgClone);
+          console.log('📄 Updated SVG data length with logos:', svgData.length);
+        }
+        
+        // For SVG, download the styled SVG data with embedded logos
         const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
         const url = URL.createObjectURL(svgBlob);
         const a = document.createElement('a');
@@ -130,7 +196,7 @@ const downloadForWeb = async (
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        console.log('✅ SVG download completed');
+        console.log('✅ SVG download completed with embedded logos');
         Alert.alert('Success', `QR code downloaded as ${a.download}`);
         return;
       }
