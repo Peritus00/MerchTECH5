@@ -604,7 +604,11 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { ...p, prices: pricesArr };
+      return { 
+        ...p, 
+        prices: pricesArr,
+        inStock: p.in_stock // Map database field to frontend field
+      };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
@@ -623,7 +627,11 @@ app.get('/api/products/all', async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { ...p, prices: pricesArr };
+      return { 
+        ...p, 
+        prices: pricesArr,
+        inStock: p.in_stock // Map database field to frontend field
+      };
     });
     res.json({ products: productsWithPrices });
   } catch (err) {

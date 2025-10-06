@@ -14,6 +14,9 @@
                 "https://app.merchtrader.org",
                 "https://merchtrader.org",
                 "https://*.merchtrader.org",
+                "https://app.merchtech.net",
+                "https://www.merchtech.net", 
+                "https://merchtech.net",
                 "https://merchtech5-production.up.railway.app",
                 "http://localhost:8081",
                 "http://localhost:3000"

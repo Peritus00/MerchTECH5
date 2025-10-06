@@ -57,13 +57,42 @@ export default function CartScreen() {
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = `${base}/store/cart`;
 
-      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      console.log('🔗 CHECKOUT: Creating session with items:', items);
+      console.log('🔗 CHECKOUT: Success URL:', successUrl);
+      console.log('🔗 CHECKOUT: Cancel URL:', cancelUrl);
 
-      // Always use WebBrowser to keep app running in background
-      await WebBrowser.openBrowserAsync(url);
-      console.log('🔗 PAYMENT: Opened Stripe checkout in external browser (Cart)');
+      const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      console.log('🔗 CHECKOUT: API response:', response);
+
+      const checkoutUrl = response.url;
+      if (!checkoutUrl) {
+        throw new Error('No checkout URL received from server');
+      }
+
+      console.log('🔗 CHECKOUT: Opening URL:', checkoutUrl);
+
+      if (Platform.OS === 'web') {
+        // For web, use window.open to avoid popup blockers
+        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // Fallback if popup blocked
+          console.warn('🔗 CHECKOUT: Popup blocked, redirecting in same window');
+          window.location.href = checkoutUrl;
+        } else {
+          console.log('🔗 CHECKOUT: Opened Stripe checkout in new window (Cart)');
+        }
+      } else {
+        // For mobile, use WebBrowser
+        await WebBrowser.openBrowserAsync(checkoutUrl);
+        console.log('🔗 CHECKOUT: Opened Stripe checkout in WebBrowser (Cart)');
+      }
     } catch (err: any) {
-      console.error('Checkout error', err);
+      console.error('🔴 CHECKOUT ERROR:', err);
+      console.error('🔴 CHECKOUT ERROR Details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       Alert.alert('Error', err.message || 'Failed to start checkout');
     }
   };

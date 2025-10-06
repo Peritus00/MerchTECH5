@@ -159,12 +159,40 @@ export default function ProductDetailsScreen() {
       const cancelUrl = `${base}/store/product/${id}`;
       
       const items = Array(quantity).fill({ productId: product.id, quantity: 1 });
-      const { url } = await checkoutAPI.createSession(items, successUrl, cancelUrl);
       
-      await WebBrowser.openBrowserAsync(url);
-      console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now');
-    } catch (err) {
-      console.error('BuyNow error', err);
+      console.log('🔗 BUY_NOW: Creating session with items:', items);
+      const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      console.log('🔗 BUY_NOW: API response:', response);
+
+      const checkoutUrl = response.url;
+      if (!checkoutUrl) {
+        throw new Error('No checkout URL received from server');
+      }
+
+      console.log('🔗 BUY_NOW: Opening URL:', checkoutUrl);
+
+      if (Platform.OS === 'web') {
+        // For web, use window.open to avoid popup blockers
+        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // Fallback if popup blocked
+          console.warn('🔗 BUY_NOW: Popup blocked, redirecting in same window');
+          window.location.href = checkoutUrl;
+        } else {
+          console.log('🔗 BUY_NOW: Opened Stripe checkout in new window');
+        }
+      } else {
+        // For mobile, use WebBrowser
+        await WebBrowser.openBrowserAsync(checkoutUrl);
+        console.log('🔗 BUY_NOW: Opened Stripe checkout in WebBrowser');
+      }
+    } catch (err: any) {
+      console.error('🔴 BUY_NOW ERROR:', err);
+      console.error('🔴 BUY_NOW ERROR Details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     } finally {
       setBuyingNow(false);

@@ -42,7 +42,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   const getProductPrice = (product: Product): number => {
     // First try the deprecated price field
     if (product.price !== undefined && product.price !== null) {
-      return product.price;
+      // Price is stored in cents, convert to dollars
+      return product.price / 100;
     }
     
     // Then try the new prices array
@@ -106,17 +107,41 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       const items = [{ productId: product.id, quantity: 1 }];
       const successUrl = `${base}/store/checkout-success`;
       const cancelUrl = `${base}/store/product/${product.id}`;
-      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
-      if (url) {
-        if (Platform.OS === 'web') {
-          window.location.href = url;
-        } else {
-          await WebBrowser.openBrowserAsync(url);
-        }
+      
+      console.log('🔗 PRODUCT_CARD: Creating session with items:', items);
+      const response = await paymentAPI.createSession(items, successUrl, cancelUrl);
+      console.log('🔗 PRODUCT_CARD: API response:', response);
+
+      const checkoutUrl = response.url;
+      if (!checkoutUrl) {
+        throw new Error('No checkout URL received from server');
       }
-    } catch (error) {
-      console.error('Checkout session creation failed:', error);
-      Alert.alert('Error', 'Could not initiate checkout.');
+
+      console.log('🔗 PRODUCT_CARD: Opening URL:', checkoutUrl);
+
+      if (Platform.OS === 'web') {
+        // For web, use window.open to avoid popup blockers
+        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          // Fallback if popup blocked
+          console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
+          window.location.href = checkoutUrl;
+        } else {
+          console.log('🔗 PRODUCT_CARD: Opened Stripe checkout in new window');
+        }
+      } else {
+        // For mobile, use WebBrowser
+        await WebBrowser.openBrowserAsync(checkoutUrl);
+        console.log('🔗 PRODUCT_CARD: Opened Stripe checkout in WebBrowser');
+      }
+    } catch (error: any) {
+      console.error('🔴 PRODUCT_CARD BUY_NOW ERROR:', error);
+      console.error('🔴 PRODUCT_CARD BUY_NOW ERROR Details:', {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+      });
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
   };
 
