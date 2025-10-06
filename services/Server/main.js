@@ -2800,6 +2800,54 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// Lightweight public redirect that records a scan, then 302s to target URL
+// Supports numeric id, qr_code_data, or short_url as the path param
+app.get(['/r/:code', '/qr/:code'], async (req, res) => {
+  const { code } = req.params;
+  try {
+    // Try to resolve QR code by id (numeric), then by qr_code_data, then by short_url
+    let qr;
+    if (/^\d+$/.test(code)) {
+      const r = await pool.query('SELECT id, url FROM qr_codes WHERE id = $1 AND is_active = true', [Number(code)]);
+      qr = r.rows[0];
+    }
+    if (!qr) {
+      const r2 = await pool.query('SELECT id, url FROM qr_codes WHERE qr_code_data = $1 AND is_active = true', [code]);
+      qr = r2.rows[0];
+    }
+    if (!qr) {
+      const r3 = await pool.query('SELECT id, url FROM qr_codes WHERE short_url = $1 AND is_active = true', [code]);
+      qr = r3.rows[0];
+    }
+    if (!qr) {
+      return res.status(404).send('QR not found');
+    }
+
+    // Record scan (best-effort)
+    try {
+      const ip = getClientIp(req);
+      const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+      const ua = req.headers['user-agent'] || '';
+      const parsed = parseUserAgent(ua);
+      await pool.query(
+        `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
+         VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [qr.id, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+      );
+    } catch (trackErr) {
+      console.warn('📊 REDIRECT TRACK FAILED:', trackErr?.message || trackErr);
+    }
+
+    // Redirect to target
+    const target = qr.url;
+    if (!target) return res.status(500).send('Target URL missing');
+    return res.redirect(302, target);
+  } catch (error) {
+    console.error('🔴 QR REDIRECT ERROR:', error);
+    return res.status(500).send('Redirect failed');
+  }
+});
+
 // Create a new QR code (alias for backward compatibility)
 app.post('/api/qrcodes', authenticateToken, async (req, res) => {
   try {
