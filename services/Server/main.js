@@ -410,48 +410,54 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
     // Total scans for this user's QR codes
-    const totalRes = await pool.query(
+    let totalRes;
+    try { totalRes = await pool.query(
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
 
-    const todayRes = await pool.query(
+    let todayRes;
+    try { todayRes = await pool.query(
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, todayStart]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY todayRes failed:', e.message); todayRes = { rows: [{ c: 0 }] }; }
 
-    const weekRes = await pool.query(
+    let weekRes;
+    try { weekRes = await pool.query(
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, weekStart]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY weekRes failed:', e.message); weekRes = { rows: [{ c: 0 }] }; }
 
-    const monthRes = await pool.query(
+    let monthRes;
+    try { monthRes = await pool.query(
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, monthStart]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
-    const uniqueVisitorsRes = await pool.query(
+    let uniqueVisitorsRes;
+    try { uniqueVisitorsRes = await pool.query(
       `SELECT COUNT(DISTINCT ip_address) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY uniqueVisitorsRes failed:', e.message); uniqueVisitorsRes = { rows: [{ c: 0 }] }; }
 
     // Hourly distribution (last 24h)
-    const hourlyRes = await pool.query(
+    let hourlyRes;
+    try { hourlyRes = await pool.query(
       `SELECT EXTRACT(HOUR FROM s.scanned_at) AS hr, COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -460,12 +466,13 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         GROUP BY hr
         ORDER BY hr`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY hourlyRes failed:', e.message); hourlyRes = { rows: [] }; }
     const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
     const hourlyData = Array.from({ length: 24 }, (_, i) => hourlyMap.get(i) || 0);
 
     // Top countries
-    const countriesRes = await pool.query(
+    let countriesRes;
+    try { countriesRes = await pool.query(
       `SELECT COALESCE(s.country_name, s.country_code, 'Unknown') AS country, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -474,10 +481,11 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ORDER BY count DESC
         LIMIT 10`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
     // Top devices
-    const devicesRes = await pool.query(
+    let devicesRes;
+    try { devicesRes = await pool.query(
       `SELECT COALESCE(s.device_type, s.device, 'Unknown') AS device, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -486,10 +494,11 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ORDER BY count DESC
         LIMIT 10`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY devicesRes failed:', e.message); devicesRes = { rows: [] }; }
 
     // Recent scans
-    const recentRes = await pool.query(
+    let recentRes;
+    try { recentRes = await pool.query(
       `SELECT q.name AS qr_name, COALESCE(s.country_name, s.country_code, '') AS location,
               COALESCE(s.device_type, s.device, '') AS device, s.scanned_at AS timestamp
          FROM qr_scans s
@@ -498,7 +507,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ORDER BY s.scanned_at DESC
         LIMIT 10`,
       [userId]
-    );
+    ); } catch (e) { console.warn('📊 SUMMARY recentRes failed:', e.message); recentRes = { rows: [] }; }
 
     const summary = {
       totalScans: parseInt(totalRes.rows[0]?.c || 0),
@@ -526,7 +535,45 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     res.json(summary);
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching summary:', error);
-    res.status(500).json({ error: 'Failed to fetch analytics summary' });
+    // Fail-soft: return an empty but valid summary shape so the UI doesn't block
+    res.json({
+      totalScans: 0,
+      todayScans: 0,
+      weekScans: 0,
+      monthScans: 0,
+      uniqueVisitors: 0,
+      avgScansPerDay: 0,
+      conversionRate: 0,
+      scanGrowth: 0,
+      visitorGrowth: 0,
+      dailyGrowth: 0,
+      conversionGrowth: 0,
+      topCountries: [],
+      topDevices: [],
+      hourlyData: Array(24).fill(0),
+      recentScans: [],
+    });
+  }
+});
+
+// User analytics (used by frontend to get total QR codes)
+app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (String(req.user.userId) !== String(id)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    let totalQRCodes = 0;
+    try {
+      const qrRes = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]);
+      totalQRCodes = parseInt(qrRes.rows[0]?.count || 0);
+    } catch (e) {
+      console.warn('📊 USER ANALYTICS: count failed:', e.message);
+    }
+    res.json({ totalQRCodes });
+  } catch (error) {
+    console.error('📊 USER ANALYTICS: error', error);
+    res.status(500).json({ error: 'Failed to fetch user analytics' });
   }
 });
 
