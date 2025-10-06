@@ -414,7 +414,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)`,
+        WHERE q.user_id = $1`,
       [userId]
     );
 
@@ -422,7 +422,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1) AND s.scanned_at >= $2`,
+        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, todayStart]
     );
 
@@ -430,7 +430,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1) AND s.scanned_at >= $2`,
+        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, weekStart]
     );
 
@@ -438,7 +438,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1) AND s.scanned_at >= $2`,
+        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
       [userId, monthStart]
     );
 
@@ -446,7 +446,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COUNT(DISTINCT ip_address) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)`,
+        WHERE q.user_id = $1`,
       [userId]
     );
 
@@ -455,7 +455,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT EXTRACT(HOUR FROM s.scanned_at) AS hr, COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)
+        WHERE q.user_id = $1
           AND s.scanned_at >= NOW() - INTERVAL '24 HOURS'
         GROUP BY hr
         ORDER BY hr`,
@@ -469,7 +469,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COALESCE(s.country_name, s.country_code, 'Unknown') AS country, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)
+        WHERE q.user_id = $1
         GROUP BY country
         ORDER BY count DESC
         LIMIT 10`,
@@ -481,7 +481,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `SELECT COALESCE(s.device_type, s.device, 'Unknown') AS device, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)
+        WHERE q.user_id = $1
         GROUP BY device
         ORDER BY count DESC
         LIMIT 10`,
@@ -494,7 +494,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
               COALESCE(s.device_type, s.device, '') AS device, s.scanned_at AS timestamp
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE (q.user_id = $1 OR q.owner_id = $1)
+        WHERE q.user_id = $1
         ORDER BY s.scanned_at DESC
         LIMIT 10`,
       [userId]
