@@ -3876,6 +3876,29 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       accessRestricted: playlist.requiresActivationCode && !playlist.isPublic
     };
     
+    // Attempt to link a QR code to this playlist and record a scan (public tracking)
+    try {
+      const qrRes = await pool.query(
+        'SELECT id FROM qr_codes WHERE playlist_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [id]
+      );
+      if (qrRes.rows.length > 0) {
+        const qrId = qrRes.rows[0].id;
+        accessData.qr_code_id = qrId;
+        const ip = getClientIp(req);
+        const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+        const ua = req.headers['user-agent'] || '';
+        const parsed = parseUserAgent(ua);
+        await pool.query(
+          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+        );
+      }
+    } catch (trackErr) {
+      console.warn('📊 ANALYTICS: Failed to link/track playlist scan:', trackErr?.message || trackErr);
+    }
+    
     console.log('🎵 PLAYLIST_ACCESS: Playlist found:', accessData.name);
     console.log('🎵 PLAYLIST_ACCESS: Access restricted:', accessData.accessRestricted);
     res.json(accessData);
@@ -4004,6 +4027,29 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         productName: link.product_name
       };
     });
+    
+    // Try to locate a QR code pointing at this slideshow and record a scan
+    try {
+      const qrRes = await client.query(
+        'SELECT id FROM qr_codes WHERE slideshow_id = $1 ORDER BY created_at DESC LIMIT 1',
+        [slideshowId]
+      );
+      if (qrRes.rows.length > 0) {
+        const qrId = qrRes.rows[0].id;
+        fullSlideshow.qr_code_id = qrId;
+        const ip = getClientIp(req);
+        const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+        const ua = req.headers['user-agent'] || '';
+        const parsed = parseUserAgent(ua);
+        await client.query(
+          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+        );
+      }
+    } catch (trackErr) {
+      console.warn('📊 ANALYTICS: Failed to link/track slideshow scan:', trackErr?.message || trackErr);
+    }
     
     // Step 4: Generate signed URL for audio if it exists
     if (fullSlideshow.audio_url) {
