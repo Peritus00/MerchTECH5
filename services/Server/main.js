@@ -308,40 +308,245 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
   }
 });
 
-// Analytics summary endpoint
+// --- Analytics helpers ---
+function getClientIp(req) {
+  const xfwd = req.headers['x-forwarded-for'];
+  if (typeof xfwd === 'string') return xfwd.split(',')[0].trim();
+  if (Array.isArray(xfwd) && xfwd.length > 0) return xfwd[0];
+  return req.socket?.remoteAddress || null;
+}
+
+function parseUserAgent(ua) {
+  if (!ua) return { deviceType: 'Unknown', browserName: 'Unknown', operatingSystem: 'Unknown' };
+  const lower = ua.toLowerCase();
+  const deviceType = /mobile|android|iphone|ipad/.test(lower) ? 'mobile' : /tablet/.test(lower) ? 'tablet' : 'desktop';
+  const operatingSystem = /windows/.test(lower)
+    ? 'Windows'
+    : /mac os x|macintosh/.test(lower)
+    ? 'macOS'
+    : /android/.test(lower)
+    ? 'Android'
+    : /ios|iphone|ipad/.test(lower)
+    ? 'iOS'
+    : /linux/.test(lower)
+    ? 'Linux'
+    : 'Unknown';
+  const browserName = /chrome\//.test(lower)
+    ? 'Chrome'
+    : /safari\//.test(lower) && !/chrome\//.test(lower)
+    ? 'Safari'
+    : /firefox\//.test(lower)
+    ? 'Firefox'
+    : /edg\//.test(lower)
+    ? 'Edge'
+    : 'Unknown';
+  return { deviceType, browserName, operatingSystem };
+}
+
+// Track a QR scan (public; no auth required)
+app.post('/api/analytics/track-scan', async (req, res) => {
+  try {
+    const {
+      qrCodeId,
+      location,
+      device,
+      countryName,
+      countryCode,
+      deviceType,
+      browserName,
+      operatingSystem,
+      ipAddress,
+    } = req.body || {};
+
+    if (!qrCodeId) {
+      return res.status(400).json({ error: 'qrCodeId required' });
+    }
+
+    // Basic existence check to avoid orphans
+    const exists = await pool.query('SELECT id FROM qr_codes WHERE id = $1 AND is_active = true', [qrCodeId]);
+    if (exists.rowCount === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    const ip = ipAddress || getClientIp(req);
+    const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || countryCode || null;
+    const ua = req.headers['user-agent'] || '';
+    const parsed = parseUserAgent(ua);
+
+    await pool.query(
+      `INSERT INTO qr_scans (
+        qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address
+      ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [
+        qrCodeId,
+        location || null,
+        device || null,
+        countryName || null,
+        inferredCountry || null,
+        deviceType || parsed.deviceType,
+        browserName || parsed.browserName,
+        operatingSystem || parsed.operatingSystem,
+        ip || null,
+      ]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('📊 ANALYTICS: track-scan failed:', error);
+    res.status(500).json({ error: 'Failed to track scan' });
+  }
+});
+
+// Analytics summary endpoint (scans derived from qr_scans)
 app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
   try {
-    console.log('📊 ANALYTICS: Fetching summary for user:', req.user.userId);
-    
-    // Get counts of user's content
-    const [
-      playlistsResult,
-      slideshowsResult,
-      qrCodesResult,
-      activationCodesResult,
-      productsResult
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [req.user.userId]),
-      pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [req.user.userId]),
-      pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1', [req.user.userId]),
-      pool.query('SELECT COUNT(*) FROM activation_codes WHERE created_by = $1', [req.user.userId]),
-      pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [req.user.userId])
-    ]);
-    
+    const userId = req.user.userId;
+    console.log('📊 ANALYTICS: Computing summary for user:', userId);
+
+    // Date boundaries
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6); // last 7 days
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // Total scans for this user's QR codes
+    const totalRes = await pool.query(
+      `SELECT COUNT(*) AS c
+       FROM qr_scans s
+       JOIN qr_codes q ON s.qr_code_id = q.id
+       WHERE q.user_id = $1`,
+      [userId]
+    );
+
+    const todayRes = await pool.query(
+      `SELECT COUNT(*) AS c
+       FROM qr_scans s
+       JOIN qr_codes q ON s.qr_code_id = q.id
+       WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+      [userId, todayStart]
+    );
+
+    const weekRes = await pool.query(
+      `SELECT COUNT(*) AS c
+       FROM qr_scans s
+       JOIN qr_codes q ON s.qr_code_id = q.id
+       WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+      [userId, weekStart]
+    );
+
+    const monthRes = await pool.query(
+      `SELECT COUNT(*) AS c
+       FROM qr_scans s
+       JOIN qr_codes q ON s.qr_code_id = q.id
+       WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+      [userId, monthStart]
+    );
+
+    const uniqueVisitorsRes = await pool.query(
+      `SELECT COUNT(DISTINCT ip_address) AS c
+       FROM qr_scans s
+       JOIN qr_codes q ON s.qr_code_id = q.id
+       WHERE q.user_id = $1`,
+      [userId]
+    );
+
+    // Hourly distribution (last 24h)
+    const hourlyRes = await pool.query(
+      `SELECT EXTRACT(HOUR FROM s.scanned_at) AS hr, COUNT(*) AS c
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+          AND s.scanned_at >= NOW() - INTERVAL '24 HOURS'
+        GROUP BY hr
+        ORDER BY hr`,
+      [userId]
+    );
+    const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
+    const hourlyData = Array.from({ length: 24 }, (_, i) => hourlyMap.get(i) || 0);
+
+    // Top countries
+    const countriesRes = await pool.query(
+      `SELECT COALESCE(s.country_name, s.country_code, 'Unknown') AS country, COUNT(*) AS count
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        GROUP BY country
+        ORDER BY count DESC
+        LIMIT 10`,
+      [userId]
+    );
+
+    // Top devices
+    const devicesRes = await pool.query(
+      `SELECT COALESCE(s.device_type, s.device, 'Unknown') AS device, COUNT(*) AS count
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        GROUP BY device
+        ORDER BY count DESC
+        LIMIT 10`,
+      [userId]
+    );
+
+    // Recent scans
+    const recentRes = await pool.query(
+      `SELECT q.name AS qr_name, COALESCE(s.country_name, s.country_code, '') AS location,
+              COALESCE(s.device_type, s.device, '') AS device, s.scanned_at AS timestamp
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        ORDER BY s.scanned_at DESC
+        LIMIT 10`,
+      [userId]
+    );
+
     const summary = {
-      playlists: parseInt(playlistsResult.rows[0].count),
-      slideshows: parseInt(slideshowsResult.rows[0].count),
-      qrCodes: parseInt(qrCodesResult.rows[0].count),
-      activationCodes: parseInt(activationCodesResult.rows[0].count),
-      products: parseInt(productsResult.rows[0].count)
+      totalScans: parseInt(totalRes.rows[0]?.c || 0),
+      todayScans: parseInt(todayRes.rows[0]?.c || 0),
+      weekScans: parseInt(weekRes.rows[0]?.c || 0),
+      monthScans: parseInt(monthRes.rows[0]?.c || 0),
+      uniqueVisitors: parseInt(uniqueVisitorsRes.rows[0]?.c || 0),
+      avgScansPerDay: Math.round((parseInt(weekRes.rows[0]?.c || 0)) / 7),
+      conversionRate: 0,
+      scanGrowth: 0,
+      visitorGrowth: 0,
+      dailyGrowth: 0,
+      conversionGrowth: 0,
+      topCountries: countriesRes.rows.map(r => ({ country: r.country, count: parseInt(r.count) })),
+      topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
+      hourlyData,
+      recentScans: recentRes.rows.map(r => ({
+        qrName: r.qr_name,
+        location: r.location,
+        device: r.device,
+        timestamp: r.timestamp,
+      })),
     };
-    
-    console.log('📊 ANALYTICS: Summary data:', summary);
+
     res.json(summary);
-    
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching summary:', error);
     res.status(500).json({ error: 'Failed to fetch analytics summary' });
+  }
+});
+
+// Detailed scans for a specific QR code (authenticated user must own the QR)
+app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) => {
+  try {
+    const { qrCodeId } = req.params;
+    const owner = await pool.query('SELECT user_id FROM qr_codes WHERE id = $1', [qrCodeId]);
+    if (owner.rowCount === 0 || owner.rows[0].user_id !== req.user.userId) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    const scans = await pool.query(
+      `SELECT id, qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
+         FROM qr_scans WHERE qr_code_id = $1 ORDER BY scanned_at DESC LIMIT 500`,
+      [qrCodeId]
+    );
+    res.json(scans.rows);
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching scans:', error);
+    res.status(500).json({ error: 'Failed to fetch scans' });
   }
 });
 

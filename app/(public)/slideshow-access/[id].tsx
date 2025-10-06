@@ -26,6 +26,7 @@ import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -210,6 +211,15 @@ export default function SlideshowAccessScreen() {
       }
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
+      // Best-effort analytics: if a qrCodeId is provided by backend linkage, record a scan
+      try {
+        const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
+        if (qrId) {
+          await analyticsService.trackQRScan(qrId, {});
+        }
+      } catch (e) {
+        console.warn('Analytics track scan failed (slideshow-access):', e);
+      }
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshowData?.name);
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshowData?.images);
       console.log('🎬 SLIDESHOW_ACCESS: Images length:', slideshowData?.images?.length);
