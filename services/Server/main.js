@@ -586,6 +586,48 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
     }
 });
 
+// --- Helper Functions ---
+const sanitizeImageUrls = (urls) => {
+  if (!Array.isArray(urls)) return [];
+  const publicBaseUrl = process.env.NODE_ENV === 'production'
+    ? 'https://merchtech5-production.up.railway.app'
+    : `http://localhost:${PORT}`;
+
+  return urls.map(url => {
+    if (typeof url !== 'string') return null;
+    
+    // If it's already a full URL, return as-is
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    
+    // If it's an S3 key, convert to image proxy URL
+    if (url.includes('/') || url.includes('.')) {
+      return `${publicBaseUrl}/api/images/s3/${url}`;
+    }
+    
+    return url;
+  }).filter(Boolean);
+};
+
+const mapProductFields = (product) => {
+  return {
+    id: product.id,
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    prices: product.prices,
+    images: product.images,
+    metadata: product.metadata,
+    inStock: product.in_stock,
+    category: product.category,
+    userId: product.user_id,
+    createdAt: product.created_at,
+    updatedAt: product.updated_at,
+    artistName: product.artist_name
+  };
+};
+
 // ---------- PRODUCT ROUTES ----------
 
 // Get products – supports ?mine=true to return only caller's items
@@ -594,9 +636,22 @@ app.get('/api/products', authenticateToken, async (req, res) => {
     const mine = req.query.mine === 'true';
     let result;
     if (mine) {
-      result = await pool.query('SELECT * FROM products WHERE user_id = $1 AND is_deleted = false', [req.user.userId]);
+      result = await pool.query(
+        `SELECT p.*, u.username as artist_name 
+         FROM products p
+         JOIN users u ON p.user_id = u.id
+         WHERE p.user_id = $1 AND p.is_deleted = false 
+         ORDER BY p.created_at DESC`, 
+        [req.user.userId]
+      );
     } else {
-      result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+      result = await pool.query(
+        `SELECT p.*, u.username as artist_name 
+         FROM products p
+         JOIN users u ON p.user_id = u.id
+         WHERE p.is_deleted = false 
+         ORDER BY p.created_at DESC`
+      );
     }
     const productsWithPrices = result.rows.map(p => {
       let pricesArr = p.prices;
@@ -604,11 +659,15 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { 
+      
+      // Process images through sanitizeImageUrls
+      if (p.images) p.images = sanitizeImageUrls(p.images);
+      
+      return mapProductFields({ 
         ...p, 
         prices: pricesArr,
         inStock: p.in_stock // Map database field to frontend field
-      };
+      });
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
@@ -620,22 +679,32 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 // Public all-products route (no auth)
 app.get('/api/products/all', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM products WHERE is_deleted = false');
+    const result = await pool.query(
+      `SELECT p.*, u.username as artist_name 
+       FROM products p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.is_deleted = false 
+       ORDER BY p.created_at DESC`
+    );
     const productsWithPrices = result.rows.map(p => {
       let pricesArr = p.prices;
       if (!pricesArr || !pricesArr.length) {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
         pricesArr = [{ id: 'default', unit_amount: amount, currency: 'usd' }];
       }
-      return { 
+      
+      // Process images through sanitizeImageUrls
+      if (p.images) p.images = sanitizeImageUrls(p.images);
+      
+      return mapProductFields({ 
         ...p, 
         prices: pricesArr,
         inStock: p.in_stock // Map database field to frontend field
-      };
+      });
     });
     res.json({ products: productsWithPrices });
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching all products:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -647,7 +716,10 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
     console.log('🔍 GET_PRODUCT: Fetching product with ID:', id);
 
     const result = await pool.query(
-      'SELECT * FROM products WHERE id = $1 AND is_deleted = false',
+      `SELECT p.*, u.username as artist_name 
+       FROM products p
+       JOIN users u ON p.user_id = u.id
+       WHERE p.id = $1 AND p.is_deleted = false`,
       [id]
     );
 
@@ -677,12 +749,15 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
       formattedPrice = priceInCents / 100;
     }
 
-    const productWithPrices = { 
+    // Process images through sanitizeImageUrls
+    if (product.images) product.images = sanitizeImageUrls(product.images);
+
+    const productWithPrices = mapProductFields({ 
       ...product, 
       price: formattedPrice, // Convert cents to dollars
       prices: pricesArr,
       in_stock: product.in_stock !== false // Ensure boolean
-    };
+    });
     
     res.json({ product: productWithPrices });
   } catch (error) {
