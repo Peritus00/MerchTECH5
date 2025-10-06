@@ -3973,12 +3973,22 @@ app.get('/api/playlist-access/:id', async (req, res) => {
     
     // Attempt to link a QR code to this playlist and record a scan (public tracking)
     try {
+      let qrId = null;
+      // Primary: link by playlist_id
       const qrRes = await pool.query(
         'SELECT id FROM qr_codes WHERE playlist_id = $1 ORDER BY created_at DESC LIMIT 1',
         [id]
       );
       if (qrRes.rows.length > 0) {
-        const qrId = qrRes.rows[0].id;
+        qrId = qrRes.rows[0].id;
+      } else {
+        // Fallback: link by exact URL
+        const frontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const targetUrl = `${frontend.replace(/\/$/, '')}/playlist-access/${id}`;
+        const qrByUrl = await pool.query('SELECT id FROM qr_codes WHERE url = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1', [targetUrl]);
+        if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
+      }
+      if (qrId) {
         accessData.qr_code_id = qrId;
         const ip = getClientIp(req);
         const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
@@ -4125,12 +4135,20 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     
     // Try to locate a QR code pointing at this slideshow and record a scan
     try {
+      let qrId = null;
       const qrRes = await client.query(
         'SELECT id FROM qr_codes WHERE slideshow_id = $1 ORDER BY created_at DESC LIMIT 1',
         [slideshowId]
       );
       if (qrRes.rows.length > 0) {
-        const qrId = qrRes.rows[0].id;
+        qrId = qrRes.rows[0].id;
+      } else {
+        const frontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const targetUrl = `${frontend.replace(/\/$/, '')}/slideshow-access/${slideshowId}`;
+        const qrByUrl = await client.query('SELECT id FROM qr_codes WHERE url = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1', [targetUrl]);
+        if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
+      }
+      if (qrId) {
         fullSlideshow.qr_code_id = qrId;
         const ip = getClientIp(req);
         const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
