@@ -30,6 +30,7 @@ import createAudioPlayer, {
 import { ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import SlideshowChat from './SlideshowChat';
 
@@ -67,7 +68,8 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Cart functionality
-  const { addToCart } = useCart();
+  const { addToCart, getTotalItems } = useCart();
+  const router = useRouter();
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
@@ -441,7 +443,27 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
       {/* Header */}
       {!isFullscreen && (
         <View style={styles.slideshowHeader}>
-          <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
+          <View style={styles.slideshowHeaderRow}>
+            <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
+            <TouchableOpacity
+              style={styles.slideshowCartButton}
+              onPress={() => {
+                console.log('Navigate to cart');
+                if (Platform.OS === 'web') {
+                  window.location.href = '/store/cart';
+                } else {
+                  router.push('/store/cart');
+                }
+              }}
+            >
+              <MaterialIcons name="shopping-cart" size={24} color="#374151" />
+              {getTotalItems() > 0 && (
+                <View style={styles.slideshowCartBadge}>
+                  <Text style={styles.slideshowCartBadgeText}>{getTotalItems()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -762,11 +784,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  slideshowHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   slideshowTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1f2937',
     textAlign: 'center',
+  },
+  slideshowCartButton: {
+    position: 'relative',
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  slideshowCartBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  slideshowCartBadgeText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   slideshowMainContent: {
     flexDirection: 'row',
