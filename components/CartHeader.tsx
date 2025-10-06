@@ -26,11 +26,17 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
   }, []);
   
   const handlePress = async () => {
+    console.log('🔗 CART_HEADER_DEBUG: Cart clicked! Cart length:', cart.length);
+    console.log('🔗 CART_HEADER_DEBUG: Cart contents:', cart);
+    
     // If cart is empty, navigate to cart page to show empty state
     if (cart.length === 0) {
+      console.log('🔗 CART_HEADER_DEBUG: Cart is empty, navigating to cart page');
       router.push('/store/cart');
       return;
     }
+
+    console.log('🔗 CART_HEADER_DEBUG: Cart has items, proceeding with checkout');
 
     // If cart has items, directly open Stripe checkout
     try {
