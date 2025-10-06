@@ -596,7 +596,22 @@ const sanitizeImageUrls = (urls) => {
   return urls.map(url => {
     if (typeof url !== 'string') return null;
     
-    // If it's already a full URL, return as-is
+    // If it's already using our image proxy, return as-is
+    if (url.includes('/api/images/s3/')) {
+      return url;
+    }
+    
+    // If it's a direct S3 URL, extract the key and convert to proxy URL
+    if (url.includes('amazonaws.com') || url.includes('merchtechbucket.s3')) {
+      // Extract S3 key from URL like: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/26/media/file.png
+      const s3KeyMatch = url.match(/amazonaws\.com\/(.+)$/);
+      if (s3KeyMatch) {
+        const s3Key = s3KeyMatch[1];
+        return `${publicBaseUrl}/api/images/s3/${s3Key}`;
+      }
+    }
+    
+    // If it's already a full URL (but not S3), return as-is
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
