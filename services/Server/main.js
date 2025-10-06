@@ -1110,11 +1110,27 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
 });
 
 // --- Image Proxy Endpoint ---
+
+// Handle OPTIONS preflight requests for image proxy
+app.options('/api/images/s3/*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '3600');
+  res.status(200).end();
+});
+
 app.get('/api/images/s3/*', async (req, res) => {
     const key = req.params[0];
     if (!key) {
         return res.status(400).send('Invalid image key');
     }
+    
+    // Set CORS headers for image access
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
     
     console.log(`🔗 IMAGE_PROXY: Requested key: "${key}"`);
     
