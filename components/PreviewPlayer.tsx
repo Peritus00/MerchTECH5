@@ -10,6 +10,7 @@ import {
   Linking,
   Platform,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -167,6 +168,7 @@ function PreviewPlayer({
   userId,
 }: PreviewPlayerProps) {
   
+  const router = useRouter();
   // SIMPLE TEST LOG - This should always appear if component is rendered
   console.log('🚨 SIMPLE TEST: PreviewPlayer is being called!');
   console.log('🚨 SIMPLE TEST: mediaFiles length:', mediaFiles.length);
@@ -1108,7 +1110,14 @@ function PreviewPlayer({
         `${product.name} has been added to your cart!`,
         [
           { text: 'Continue', style: 'cancel' },
-          { text: 'View Cart', onPress: () => console.log('Navigate to cart') }
+          { text: 'View Cart', onPress: () => {
+            console.log('Navigate to cart');
+            if (Platform.OS === 'web') {
+              window.location.href = '/store/cart';
+            } else {
+              router.push('/store/cart');
+            }
+          } }
         ]
       );
     } catch (error) {
@@ -1191,14 +1200,12 @@ function PreviewPlayer({
   };
 
   const handleCartPress = () => {
-    // Navigate to cart - you can implement this based on your navigation setup
     console.log('Navigate to cart');
-    // For web, you might want to use window.location or router
     if (Platform.OS === 'web') {
       window.location.href = '/store/cart';
+    } else {
+      router.push('/store/cart');
     }
-    // For mobile, you would use navigation
-    // navigation.navigate('Cart');
   };
 
   const handleStoreRedirect = () => {

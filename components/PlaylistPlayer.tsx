@@ -18,6 +18,7 @@ import {
   ScrollView,
   Image,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import {
   MaterialCommunityIcons,
   MaterialIcons,
@@ -78,6 +79,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
 
   const { addToCart, cart, getTotalItems } = useCart();
+  const router = useRouter();
 
   const handleAddToCart = (productLink: ProductLink) => {
     try {
@@ -1011,8 +1013,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       <View style={styles.slideshowHeader}>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
         <TouchableOpacity style={styles.cartButton} onPress={() => {
-          // Navigate to cart - you can implement navigation here
           console.log('Navigate to cart');
+          if (Platform.OS === 'web') {
+            window.location.href = '/store/cart';
+          } else {
+            router.push('/store/cart');
+          }
         }}>
           <MaterialIcons name="shopping-cart" size={24} color="#374151" />
           {/* Cart item count badge */}

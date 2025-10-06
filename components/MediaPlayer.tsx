@@ -34,6 +34,7 @@ import { MediaFile, ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
+import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
 
@@ -79,6 +80,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
 
   // Cart functionality
   const { addToCart, getTotalItems } = useCart();
+  const router = useRouter();
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
@@ -114,7 +116,14 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         `${product.name} has been added to your cart!`,
         [
           { text: 'Continue', style: 'cancel' },
-          { text: 'View Cart', onPress: () => console.log('Navigate to cart') }
+          { text: 'View Cart', onPress: () => {
+            console.log('Navigate to cart');
+            if (Platform.OS === 'web') {
+              window.location.href = '/store/cart';
+            } else {
+              router.push('/store/cart');
+            }
+          } }
         ]
       );
     } catch (error) {
