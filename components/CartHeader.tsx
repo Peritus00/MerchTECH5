@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
+import { checkoutAPI } from '@/services/api';
+import * as WebBrowser from 'expo-web-browser';
 
 interface CartHeaderProps {
   color?: string;
@@ -12,11 +14,71 @@ interface CartHeaderProps {
 export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
   const router = useRouter();
   const { cart, getTotalItems } = useCart();
+  const [base, setBase] = useState('');
   
   const totalItems = getTotalItems();
+
+  useEffect(() => {
+    // Safely set the base URL only on the client side
+    if (Platform.OS === 'web') {
+      setBase(window.location.origin);
+    }
+  }, []);
   
-  const handlePress = () => {
-    router.push('/store/cart');
+  const handlePress = async () => {
+    // If cart is empty, navigate to cart page to show empty state
+    if (cart.length === 0) {
+      router.push('/store/cart');
+      return;
+    }
+
+    // If cart has items, directly open Stripe checkout
+    try {
+      // Ensure base URL is set before creating session
+      if (Platform.OS === 'web' && !base) {
+        Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
+        return;
+      }
+
+      const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = `${base}/store/cart`;
+
+      console.log('🔗 CART_HEADER_CHECKOUT: Creating session with items:', items);
+      console.log('🔗 CART_HEADER_CHECKOUT: Success URL:', successUrl);
+      console.log('🔗 CART_HEADER_CHECKOUT: Cancel URL:', cancelUrl);
+
+      const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      console.log('🔗 CART_HEADER_CHECKOUT: API response:', response);
+
+      const checkoutUrl = response.url;
+      if (!checkoutUrl) {
+        throw new Error('No checkout URL received from server');
+      }
+
+      console.log('🔗 CART_HEADER_CHECKOUT: Opening URL:', checkoutUrl);
+
+      if (Platform.OS === 'web') {
+        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+        if (!newWindow) {
+          console.warn('🔗 CART_HEADER_CHECKOUT: Popup blocked, redirecting in same window');
+          window.location.href = checkoutUrl;
+        } else {
+          console.log('🔗 CART_HEADER_CHECKOUT: Opened Stripe checkout in new window');
+        }
+      } else {
+        await WebBrowser.openBrowserAsync(checkoutUrl);
+        console.log('🔗 CART_HEADER_CHECKOUT: Opened Stripe checkout in WebBrowser');
+      }
+    } catch (err: any) {
+      console.error('🔴 CART_HEADER_CHECKOUT ERROR:', err);
+      console.error('🔴 CART_HEADER_CHECKOUT ERROR Details:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status,
+      });
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+    }
   };
 
   return (
