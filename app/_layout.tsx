@@ -8,7 +8,6 @@ import { Platform } from 'react-native';
 import 'react-native-reanimated';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Head } from 'expo-router/head';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -162,30 +161,18 @@ export default function RootLayout() {
   console.log('Web platform - using standard payment processing');
 
   return (
-    <>
-      {Platform.OS === 'web' && (
-        <Head>
-          <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-          <link rel="icon" type="image/png" sizes="32x32" href="/assets/images/favicon-32x32.png" />
-          <link rel="icon" type="image/png" sizes="16x16" href="/assets/images/favicon-16x16.png" />
-          <link rel="shortcut icon" href="/favicon.ico" />
-          <link rel="apple-touch-icon" href="/assets/images/favicon.png" />
-          <title>MerchTrader</title>
-        </Head>
-      )}
-      <QueryClientProvider client={queryClient}>
-        <ActionSheetProvider>
-          <AuthProvider>
-            <CartProvider>
-              <NotificationProvider>
-                <UploadProvider>
-                  <RootLayoutNav />
-                </UploadProvider>
-              </NotificationProvider>
-            </CartProvider>
-          </AuthProvider>
-        </ActionSheetProvider>
-      </QueryClientProvider>
-    </>
+    <QueryClientProvider client={queryClient}>
+      <ActionSheetProvider>
+        <AuthProvider>
+          <CartProvider>
+            <NotificationProvider>
+              <UploadProvider>
+                <RootLayoutNav />
+              </UploadProvider>
+            </NotificationProvider>
+          </CartProvider>
+        </AuthProvider>
+      </ActionSheetProvider>
+    </QueryClientProvider>
   );
 }
