@@ -1131,6 +1131,7 @@ app.get('/api/images/s3/*', async (req, res) => {
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     
     console.log(`🔗 IMAGE_PROXY: Requested key: "${key}"`);
     
