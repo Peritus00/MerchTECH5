@@ -596,8 +596,16 @@ const sanitizeImageUrls = (urls) => {
   return urls.map(url => {
     if (typeof url !== 'string') return null;
     
-    // If it's already using our image proxy, return as-is
+    // If it's already using our image proxy, ensure it uses the correct domain
     if (url.includes('/api/images/s3/')) {
+      // Fix localhost URLs in production
+      if (url.includes('localhost') && process.env.NODE_ENV === 'production') {
+        return url.replace(/https?:\/\/localhost:\d+/, publicBaseUrl);
+      }
+      // Fix old domain URLs
+      if (url.includes('merchtechapp5-production.up.railway.app')) {
+        return url.replace('merchtechapp5-production.up.railway.app', 'merchtech5-production.up.railway.app');
+      }
       return url;
     }
     
