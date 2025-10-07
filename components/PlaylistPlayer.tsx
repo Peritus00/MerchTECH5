@@ -1139,7 +1139,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                             <MobileCompatibleImage
                               uri={currentImage}
                               style={styles.enhancedProductImage}
-                              resizeMode="cover"
+                              resizeMode="contain"
                             />
                             {images.length > 1 && (
                               <>
@@ -1392,13 +1392,15 @@ const styles = StyleSheet.create({
       },
       productImageContainer: {
         position: 'relative',
-        width: '25%', // Reduced from 100% by 75% (100% - 75% = 25%)
-        height: 200,
+        width: '60%',
+        aspectRatio: 1,
         backgroundColor: '#f0f0f0',
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center', // Center the smaller image container
+        alignSelf: 'center',
         marginBottom: 8,
+        overflow: 'hidden',
+        borderRadius: 12,
       },
       enhancedProductImage: {
         width: '100%',
