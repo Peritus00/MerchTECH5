@@ -58,6 +58,12 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
       console.log('🔗 CART_HEADER_CHECKOUT: Success URL:', successUrl);
       console.log('🔗 CART_HEADER_CHECKOUT: Cancel URL:', cancelUrl);
 
+      // Pre-open a blank window on web to avoid Safari popup blocking
+      let preOpened: Window | null = null;
+      if (Platform.OS === 'web') {
+        preOpened = window.open('', '_blank');
+      }
+
       const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 CART_HEADER_CHECKOUT: API response:', response);
 
@@ -69,12 +75,14 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
       console.log('🔗 CART_HEADER_CHECKOUT: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-        if (!newWindow) {
-          console.warn('🔗 CART_HEADER_CHECKOUT: Popup blocked, redirecting in same window');
-          window.location.href = checkoutUrl;
+        if (preOpened) {
+          preOpened.location.href = checkoutUrl;
         } else {
-          console.log('🔗 CART_HEADER_CHECKOUT: Opened Stripe checkout in new window');
+          const newWindow = window.open(checkoutUrl, '_blank');
+          if (!newWindow) {
+            console.warn('🔗 CART_HEADER_CHECKOUT: Popup blocked, redirecting in same window');
+            window.location.href = checkoutUrl;
+          }
         }
       } else {
         await WebBrowser.openBrowserAsync(checkoutUrl);

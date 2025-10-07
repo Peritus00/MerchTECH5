@@ -65,6 +65,12 @@ export default function CartScreen() {
       console.log('🔗 CHECKOUT: Success URL:', successUrl);
       console.log('🔗 CHECKOUT: Cancel URL:', cancelUrl);
 
+      // Pre-open a blank window on web to avoid Safari popup blocking
+      let preOpened: Window | null = null;
+      if (Platform.OS === 'web') {
+        preOpened = window.open('', '_blank');
+      }
+
       const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 CHECKOUT: API response:', response);
 
@@ -76,14 +82,14 @@ export default function CartScreen() {
       console.log('🔗 CHECKOUT: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        // For web, use window.open to avoid popup blockers
-        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-        if (!newWindow) {
-          // Fallback if popup blocked
-          console.warn('🔗 CHECKOUT: Popup blocked, redirecting in same window');
-          window.location.href = checkoutUrl;
+        if (preOpened) {
+          preOpened.location.href = checkoutUrl;
         } else {
-          console.log('🔗 CHECKOUT: Opened Stripe checkout in new window (Cart)');
+          const newWindow = window.open(checkoutUrl, '_blank');
+          if (!newWindow) {
+            console.warn('🔗 CHECKOUT: Popup blocked, redirecting in same window');
+            window.location.href = checkoutUrl;
+          }
         }
       } else {
         // For mobile, use WebBrowser
