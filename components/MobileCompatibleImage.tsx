@@ -47,6 +47,19 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       }
     }
 
+    // Web-specific: prefer same-origin proxy to satisfy CSP
+    if (Platform.OS === 'web') {
+      try {
+        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+        if (currentOrigin) {
+          // Rewrite known proxy paths from Railway domain to current origin
+          imageUrl = imageUrl
+            .replace('https://merchtech5-production.up.railway.app/api/images/s3/', `${currentOrigin}/api/images/s3/`)
+            .replace('https://merchtech5-production.up.railway.app/api/slideshow-images/', `${currentOrigin}/api/slideshow-images/`);
+        }
+      } catch {}
+    }
+
     // For mobile devices, ensure proper image loading
     if (Platform.OS !== 'web') {
       // Ensure HTTPS for mobile compatibility
