@@ -13,6 +13,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useCart } from '@/contexts/CartContext';
 import { checkoutAPI } from '@/services/api';
+import { env } from '@/config/environment';
 import * as WebBrowser from 'expo-web-browser';
 
 export default function CartScreen() {
@@ -21,9 +22,11 @@ export default function CartScreen() {
   const [base, setBase] = useState('');
 
   useEffect(() => {
-    // Safely set the base URL only on the client side
+    // Determine absolute base URL for web and native
     if (Platform.OS === 'web') {
       setBase(window.location.origin);
+    } else {
+      setBase(env.frontendUrl.replace(/\/$/, ''));
     }
   }, []);
 
@@ -47,15 +50,16 @@ export default function CartScreen() {
     }
     
     // Ensure base URL is set before creating session
-    if (Platform.OS === 'web' && !base) {
+    const absBase = base || (Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, ''));
+    if (!absBase) {
       Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
       return;
     }
 
     try {
       const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
-      const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/cart`;
+      const successUrl = `${absBase}/store/checkout-success`;
+      const cancelUrl = `${absBase}/store/cart`;
 
       console.log('🔗 CHECKOUT: Creating session with items:', items);
       console.log('🔗 CHECKOUT: Success URL:', successUrl);

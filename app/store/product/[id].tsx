@@ -7,6 +7,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product, ProductRating } from '@/shared/product-schema';
 import { productsAPI, checkoutAPI } from '@/services/api';
+import { env } from '@/config/environment';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
@@ -36,9 +37,11 @@ export default function ProductDetailsScreen() {
 
   useEffect(() => {
     loadProduct();
-    // Safely set the base URL only on the client side
+    // Determine absolute base URL for web and native
     if (Platform.OS === 'web') {
       setBase(window.location.origin);
+    } else {
+      setBase(env.frontendUrl.replace(/\/$/, ''));
     }
   }, [id, productParam]);
 
@@ -166,8 +169,9 @@ export default function ProductDetailsScreen() {
         return;
       }
 
-      const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/product/${id}`;
+      const absBase = base || (Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, ''));
+      const successUrl = `${absBase}/store/checkout-success`;
+      const cancelUrl = `${absBase}/store/product/${id}`;
       
       const items = Array(quantity).fill({ productId: product.id, quantity: 1 });
       

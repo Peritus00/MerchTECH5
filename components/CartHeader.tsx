@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
 import { checkoutAPI } from '@/services/api';
+import { env } from '@/config/environment';
 import * as WebBrowser from 'expo-web-browser';
 
 interface CartHeaderProps {
@@ -19,9 +20,11 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
   const totalItems = getTotalItems();
 
   useEffect(() => {
-    // Safely set the base URL only on the client side
+    // Determine absolute base URL for web and native
     if (Platform.OS === 'web') {
       setBase(window.location.origin);
+    } else {
+      setBase(env.frontendUrl.replace(/\/$/, ''));
     }
   }, []);
   
@@ -47,8 +50,9 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
       }
 
       const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
-      const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/cart`;
+      const absBase = base || (Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, ''));
+      const successUrl = `${absBase}/store/checkout-success`;
+      const cancelUrl = `${absBase}/store/cart`;
 
       console.log('🔗 CART_HEADER_CHECKOUT: Creating session with items:', items);
       console.log('🔗 CART_HEADER_CHECKOUT: Success URL:', successUrl);
