@@ -841,18 +841,24 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
 // --- Helper Functions ---
 const sanitizeImageUrls = (urls) => {
   if (!Array.isArray(urls)) return [];
-  const publicBaseUrl = process.env.NODE_ENV === 'production'
-    ? 'https://merchtech5-production.up.railway.app'
-    : `http://localhost:${PORT}`;
+  const computedBase =
+    (process.env.PUBLIC_BASE_URL && process.env.PUBLIC_BASE_URL.replace(/\/+$/, '')) ||
+    (process.env.NODE_ENV === 'production'
+      ? 'https://merchtech5-production.up.railway.app'
+      : `http://localhost:${PORT}`);
 
   return urls.map(url => {
     if (typeof url !== 'string') return null;
     
     // If it's already using our image proxy, ensure it uses the correct domain
     if (url.includes('/api/images/s3/')) {
+      // Convert relative proxy paths to absolute for React Native clients
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return `${computedBase}${url.startsWith('/') ? '' : '/'}${url}`;
+      }
       // Fix localhost URLs in production
       if (url.includes('localhost') && process.env.NODE_ENV === 'production') {
-        return url.replace(/https?:\/\/localhost:\d+/, publicBaseUrl);
+        return url.replace(/https?:\/\/localhost:\d+/, computedBase);
       }
       // Fix old domain URLs
       if (url.includes('merchtechapp5-production.up.railway.app')) {
@@ -867,7 +873,7 @@ const sanitizeImageUrls = (urls) => {
       const s3KeyMatch = url.match(/amazonaws\.com\/(.+)$/);
       if (s3KeyMatch) {
         const s3Key = s3KeyMatch[1];
-        return `${publicBaseUrl}/api/images/s3/${s3Key}`;
+        return `${computedBase}/api/images/s3/${s3Key}`;
       }
     }
     
@@ -878,7 +884,7 @@ const sanitizeImageUrls = (urls) => {
     
     // If it's an S3 key, convert to image proxy URL
     if (url.includes('/') || url.includes('.')) {
-      return `${publicBaseUrl}/api/images/s3/${url}`;
+      return `${computedBase}/api/images/s3/${url}`;
     }
     
     return url;
