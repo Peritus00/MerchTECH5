@@ -34,6 +34,7 @@ import { MediaFile, ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
+import { env } from '@/config/environment';
 import { useRouter } from 'expo-router';
 
 const { width } = Dimensions.get('window');
@@ -134,16 +135,37 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
 
   const handleBuyNow = async (productLink: ProductLink) => {
     try {
-      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const base = Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, '');
+      if (!base) {
+        Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
+        return;
+      }
       const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = base;
+      const cancelUrl = `${base}/store/cart`;
 
       const items = [{ productId: productLink.id, quantity: 1 }];
+      // Pre-open a blank window on web to avoid Safari popup blocking
+      let preOpened: Window | null = null;
+      if (Platform.OS === 'web') {
+        preOpened = window.open('', '_blank');
+      }
+
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      // Always use WebBrowser to keep app running in background
-      await WebBrowser.openBrowserAsync(url);
-      console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now from MediaPlayer');
+      if (Platform.OS === 'web') {
+        if (preOpened) {
+          preOpened.location.href = url;
+        } else {
+          const newWindow = window.open(url, '_blank');
+          if (!newWindow) {
+            window.location.href = url;
+          }
+        }
+      } else {
+        // Always use WebBrowser to keep app running in background
+        await WebBrowser.openBrowserAsync(url);
+        console.log('🔗 PAYMENT: Opened Stripe checkout for Buy Now from MediaPlayer');
+      }
     } catch (error) {
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');

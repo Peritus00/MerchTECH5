@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
 import { paymentAPI } from '@/services/api';
 import * as WebBrowser from 'expo-web-browser';
+import { env } from '@/config/environment';
 import ShareButton from '@/components/ShareButton'; // Assuming you have this
 import { Product } from '@/shared/product-schema';
 import { ThemedText } from './ThemedText';
@@ -35,6 +36,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
     // This safely avoids the hydration mismatch.
     if (Platform.OS === 'web') {
       setBase(window.location.origin);
+    } else {
+      setBase(env.frontendUrl.replace(/\/$/, ''));
     }
   }, []);
 
@@ -98,17 +101,24 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   const buyNow = async () => {
     if (!product) return;
 
-    if (Platform.OS === 'web' && !base) {
+    const absBase = base || (Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, ''));
+    if (!absBase) {
       Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
       return;
     }
 
     try {
       const items = [{ productId: product.id, quantity: 1 }];
-      const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = `${base}/store/product/${product.id}`;
+      const successUrl = `${absBase}/store/checkout-success`;
+      const cancelUrl = `${absBase}/store/product/${product.id}`;
       
       console.log('🔗 PRODUCT_CARD: Creating session with items:', items);
+      // Pre-open a blank window on web to avoid Safari popup blocking
+      let preOpened: Window | null = null;
+      if (Platform.OS === 'web') {
+        preOpened = window.open('', '_blank');
+      }
+
       const response = await paymentAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 PRODUCT_CARD: API response:', response);
 
@@ -120,14 +130,14 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       console.log('🔗 PRODUCT_CARD: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        // For web, use window.open to avoid popup blockers
-        const newWindow = window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
-        if (!newWindow) {
-          // Fallback if popup blocked
-          console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
-          window.location.href = checkoutUrl;
+        if (preOpened) {
+          preOpened.location.href = checkoutUrl;
         } else {
-          console.log('🔗 PRODUCT_CARD: Opened Stripe checkout in new window');
+          const newWindow = window.open(checkoutUrl, '_blank');
+          if (!newWindow) {
+            console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
+            window.location.href = checkoutUrl;
+          }
         }
       } else {
         // For mobile, use WebBrowser
