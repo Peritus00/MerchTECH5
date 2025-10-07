@@ -59,11 +59,21 @@ export default function ProductDetailsScreen() {
       // Fetch product from API
       const response = await productsAPI.getProductById(id);
       if (response.product) {
-        setProduct(response.product);
+        const normalized = {
+          ...response.product,
+          in_stock: response.product.in_stock ?? (response.product as any).inStock ?? true,
+        } as Product;
+        setProduct(normalized);
       } else {
         // Fallback: fetch all products and find by id
         const all = await productsAPI.getAllProducts();
-        const found = all.find((p: Product) => p.id === id);
+        const foundRaw = all.find((p: Product) => p.id === id);
+        const found = foundRaw
+          ? ({
+              ...foundRaw,
+              in_stock: (foundRaw as any).in_stock ?? (foundRaw as any).inStock ?? true,
+            } as Product)
+          : null;
         if (found) {
           setProduct(found);
         } else {

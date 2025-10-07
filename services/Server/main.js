@@ -221,6 +221,23 @@ const authenticateToken = (req, res, next) => {
   });
 };
 
+// Optional auth: attaches req.user if token is valid; otherwise continues without auth
+const authenticateTokenOptional = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) {
+    return next();
+  }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) {
+      // If invalid token, proceed as guest
+      return next();
+    }
+    req.user = user;
+    next();
+  });
+};
+
 const isAdmin = async (req, res, next) => {
   try {
     const result = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
@@ -2569,7 +2586,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
 });
 
 // ---------- CHECKOUT ROUTE ----------
-app.post('/api/checkout/session', authenticateToken, async (req, res) => {
+app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) => {
   try {
     const { items, successUrl, cancelUrl } = req.body;
 
@@ -2643,7 +2660,7 @@ app.post('/api/checkout/session', authenticateToken, async (req, res) => {
       success_url: successUrl || `${process.env.FRONTEND_URL}/store/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/store/checkout-cancel`,
       metadata: {
-        userId: req.user.userId,
+        userId: req.user?.userId ? String(req.user.userId) : 'guest',
       }
     });
 
