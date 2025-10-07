@@ -283,7 +283,22 @@ export const productsAPI = {
   async getAllProducts() {
     try {
       console.log('📦 API: getAllProducts - Starting request');
-      const res = await api.get(`/products?_t=${Date.now()}`);
+      
+      // Try the public endpoint first (no auth required)
+      let res;
+      try {
+        console.log('📦 API: getAllProducts - Trying public endpoint /products/all');
+        res = await api.get(`/products/all?_t=${Date.now()}`);
+        console.log('📦 API: getAllProducts - Public endpoint successful');
+      } catch (publicError: any) {
+        console.log('📦 API: getAllProducts - Public endpoint failed, trying authenticated endpoint');
+        console.log('📦 API: getAllProducts - Public error:', publicError.response?.status, publicError.message);
+        
+        // Fallback to authenticated endpoint
+        res = await api.get(`/products?_t=${Date.now()}`);
+        console.log('📦 API: getAllProducts - Authenticated endpoint successful');
+      }
+      
       console.log('📦 API: getAllProducts - Response received:', {
         status: res.status,
         statusText: res.statusText,
