@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, FlatList, Image, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { PanGestureHandler, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,6 +11,7 @@ import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ShareButton from '@/components/ShareButton';
+import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 
 const { width } = Dimensions.get('window');
 
@@ -225,7 +226,6 @@ export default function ProductDetailsScreen() {
     const scale = useSharedValue(1);
     const translateX = useSharedValue(0);
     const translateY = useSharedValue(0);
-    const [imageLoadError, setImageLoadError] = useState(false);
 
     const pinchHandler = useAnimatedGestureHandler({
       onStart: (_, context) => {
@@ -280,40 +280,12 @@ export default function ProductDetailsScreen() {
     };
 
     // Enhanced image source handling for mobile
-    const getImageSource = () => {
-      if (imageLoadError) {
-        return { uri: 'https://placehold.co/600x600?text=Image+Not+Available' };
-      }
-      
-      if (!uri) {
-        return { uri: 'https://placehold.co/600x600?text=No+Image' };
-      }
-      
-      // For mobile devices, ensure proper image loading
-      if (Platform.OS !== 'web') {
-        const processedUrl = uri.startsWith('http://') 
-          ? uri.replace('http://', 'https://') 
-          : uri;
-        
-        return {
-          uri: processedUrl,
-          cache: 'force-cache',
-          headers: {
-            'Accept': 'image/*',
-          }
-        };
-      }
-      
-      return { uri };
-    };
-
     const handleImageError = (error: any) => {
       console.log('🖼️ Product image load error:', {
         uri,
         error: error.nativeEvent?.error || error,
         platform: Platform.OS
       });
-      setImageLoadError(true);
     };
 
     return (
@@ -323,12 +295,12 @@ export default function ProductDetailsScreen() {
             <PinchGestureHandler onGestureEvent={pinchHandler}>
               <Animated.View style={animatedStyle}>
                 <TouchableOpacity onPress={resetZoom} activeOpacity={1}>
-                  <Image 
-                    source={getImageSource()} 
-                    style={styles.image} 
+                  <MobileCompatibleImage
+                    uri={uri}
+                    style={styles.image}
                     resizeMode="contain"
                     onError={handleImageError}
-                    defaultSource={{ uri: 'https://placehold.co/600x600?text=Loading' }}
+                    fallbackUri="https://placehold.co/600x600?text=No+Image"
                   />
                 </TouchableOpacity>
               </Animated.View>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Image, ImageProps, Platform, View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { env } from '@/config/environment';
 
 interface MobileCompatibleImageProps extends Omit<ImageProps, 'source'> {
   uri: string;
@@ -34,6 +35,18 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       imageUrl = fallbackUri;
     }
     
+    // Normalize relative or scheme-less URLs using API origin (strip trailing /api)
+    if (imageUrl && !imageUrl.startsWith('http')) {
+      const apiBase = env.apiBaseUrl?.replace(/\/$/, '') || '';
+      const apiOrigin = apiBase.replace(/\/api$/, '');
+      if (imageUrl.startsWith('/')) {
+        imageUrl = `${apiOrigin}${imageUrl}`;
+      } else {
+        // Assume S3 key or bare path: route via proxy endpoint
+        imageUrl = `${apiOrigin}/api/images/s3/${imageUrl}`;
+      }
+    }
+
     // For mobile devices, ensure proper image loading
     if (Platform.OS !== 'web') {
       // Ensure HTTPS for mobile compatibility
