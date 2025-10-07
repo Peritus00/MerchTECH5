@@ -56,7 +56,18 @@ function RootLayoutNav() {
       segments[0] === 'playlist-player' || // Public playlist players
       segments[0] === 'slideshow-player' || // Public slideshow players
       segments[0] === 'preview-player' || // Public preview players
-      segments[0] === 'slideshow-preview'; // Public slideshow preview
+      segments[0] === 'slideshow-preview' || // Public slideshow preview
+      segments[0] === 'shop' || // Public master shop page
+      (
+        segments[0] === 'store' && // Allow public access to specific store pages
+        (
+          segments[1] === 'cart' ||
+          segments[1] === 'checkout-success' ||
+          segments[1] === 'checkout-cancel' ||
+          segments[1] === 'product' ||
+          segments[1] === 'user'
+        )
+      );
 
 
 
