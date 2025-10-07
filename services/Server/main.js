@@ -856,8 +856,8 @@ const sanitizeImageUrls = (urls) => {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         return `${computedBase}${url.startsWith('/') ? '' : '/'}${url}`;
       }
-      // Fix localhost URLs in production
-      if (url.includes('localhost') && process.env.NODE_ENV === 'production') {
+      // Always normalize absolute localhost URLs to computed base (works in all envs)
+      if (/https?:\/\/localhost:\d+/.test(url)) {
         return url.replace(/https?:\/\/localhost:\d+/, computedBase);
       }
       // Fix old domain URLs
