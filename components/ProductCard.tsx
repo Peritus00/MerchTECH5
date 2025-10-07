@@ -29,6 +29,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   const { addToCart } = useCart();
   const router = useRouter();
   const [base, setBase] = useState('');
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     // This code runs only on the client, after the initial render.
@@ -36,7 +38,13 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
     if (Platform.OS === 'web') {
       setBase(window.location.origin);
     }
-  }, []);
+    
+    // Debug image URL for mobile
+    if (product.images?.[0]) {
+      console.log('🖼️ PRODUCT_CARD: Image URL for product', product.name, ':', product.images[0]);
+      console.log('🖼️ PRODUCT_CARD: Platform:', Platform.OS);
+    }
+  }, [product.images, product.name]);
 
   // Helper function to get price from product
   const getProductPrice = (product: Product): number => {
@@ -145,10 +153,57 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
     }
   };
 
+  // Get the image URL with fallback
+  const getImageUrl = () => {
+    const imageUrl = product.images?.[0];
+    if (!imageUrl) return 'https://placehold.co/300x300?text=No+Image';
+    
+    // For React Native, ensure we have absolute URLs
+    if (Platform.OS !== 'web' && imageUrl.startsWith('/api/')) {
+      // Convert relative API URLs to absolute URLs for React Native
+      return `https://merchtech5-production.up.railway.app${imageUrl}`;
+    }
+    
+    return imageUrl;
+  };
+
+  const handleImageError = (error: any) => {
+    console.error('🔴 PRODUCT_CARD: Image failed to load:', error);
+    console.error('🔴 PRODUCT_CARD: Image URL was:', getImageUrl());
+    console.error('🔴 PRODUCT_CARD: Product name:', product.name);
+    setImageError(true);
+    setImageLoading(false);
+  };
+
+  const handleImageLoad = () => {
+    console.log('✅ PRODUCT_CARD: Image loaded successfully for:', product.name);
+    setImageLoading(false);
+    setImageError(false);
+  };
+
   return (
     <ThemedView style={styles.card}>
       <TouchableOpacity onPress={handlePress}>
-        <Image source={{ uri: product.images?.[0] || 'https://placehold.co/300x300' }} style={styles.image} />
+        <View style={styles.imageContainer}>
+          <Image 
+            source={{ uri: getImageUrl() }} 
+            style={styles.image}
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+            onLoadStart={() => setImageLoading(true)}
+          />
+          {imageError && (
+            <View style={styles.imageErrorOverlay}>
+              <MaterialIcons name="broken-image" size={40} color="#9ca3af" />
+              <ThemedText style={styles.imageErrorText}>Image not available</ThemedText>
+            </View>
+          )}
+          {imageLoading && !imageError && (
+            <View style={styles.imageLoadingOverlay}>
+              <MaterialIcons name="image" size={40} color="#9ca3af" />
+            </View>
+          )}
+        </View>
         <View style={styles.infoContainer}>
           <ThemedText style={styles.name} numberOfLines={2}>
             {product.name}
@@ -186,9 +241,40 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 2 },
   },
+  imageContainer: {
+    position: 'relative',
+    width: '100%',
+    height: 160,
+  },
   image: {
     width: '100%',
     height: 160,
+  },
+  imageErrorOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#f3f4f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageLoadingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#f9fafb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imageErrorText: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+    textAlign: 'center',
   },
   infoContainer: {
     padding: 8,
