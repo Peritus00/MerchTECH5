@@ -36,6 +36,7 @@ import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
 import { Alert } from 'react-native';
+import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 
 const { width } = Dimensions.get('window');
 
@@ -1135,8 +1136,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                       <View style={styles.productImageContainer}>
                         {currentImage ? (
                           <>
-                            <Image
-                              source={{ uri: currentImage }}
+                            <MobileCompatibleImage
+                              uri={currentImage}
                               style={styles.enhancedProductImage}
                               resizeMode="cover"
                             />
