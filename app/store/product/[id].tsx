@@ -225,6 +225,7 @@ export default function ProductDetailsScreen() {
     const scale = useSharedValue(1);
     const translateX = useSharedValue(0);
     const translateY = useSharedValue(0);
+    const [imageLoadError, setImageLoadError] = useState(false);
 
     const pinchHandler = useAnimatedGestureHandler({
       onStart: (_, context) => {
@@ -278,6 +279,43 @@ export default function ProductDetailsScreen() {
       translateY.value = withSpring(0);
     };
 
+    // Enhanced image source handling for mobile
+    const getImageSource = () => {
+      if (imageLoadError) {
+        return { uri: 'https://placehold.co/600x600?text=Image+Not+Available' };
+      }
+      
+      if (!uri) {
+        return { uri: 'https://placehold.co/600x600?text=No+Image' };
+      }
+      
+      // For mobile devices, ensure proper image loading
+      if (Platform.OS !== 'web') {
+        const processedUrl = uri.startsWith('http://') 
+          ? uri.replace('http://', 'https://') 
+          : uri;
+        
+        return {
+          uri: processedUrl,
+          cache: 'force-cache',
+          headers: {
+            'Accept': 'image/*',
+          }
+        };
+      }
+      
+      return { uri };
+    };
+
+    const handleImageError = (error: any) => {
+      console.log('🖼️ Product image load error:', {
+        uri,
+        error: error.nativeEvent?.error || error,
+        platform: Platform.OS
+      });
+      setImageLoadError(true);
+    };
+
     return (
       <View style={styles.imageContainer}>
         <PanGestureHandler onGestureEvent={panHandler}>
@@ -286,10 +324,11 @@ export default function ProductDetailsScreen() {
               <Animated.View style={animatedStyle}>
                 <TouchableOpacity onPress={resetZoom} activeOpacity={1}>
                   <Image 
-                    source={{ uri }} 
+                    source={getImageSource()} 
                     style={styles.image} 
                     resizeMode="contain"
-                    onError={() => console.log('Failed to load image:', uri)}
+                    onError={handleImageError}
+                    defaultSource={{ uri: 'https://placehold.co/600x600?text=Loading' }}
                   />
                 </TouchableOpacity>
               </Animated.View>
@@ -596,6 +635,7 @@ const styles = StyleSheet.create({
   image: {
     width: width,
     height: 400,
+    backgroundColor: '#f8f9fa', // Light background while loading
   },
   navArrow: {
     position: 'absolute',

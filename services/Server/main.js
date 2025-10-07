@@ -867,14 +867,11 @@ const sanitizeImageUrls = (urls) => {
       return url;
     }
     
-    // If it's a direct S3 URL, extract the key and convert to proxy URL
+    // If it's a direct S3 URL, keep it for better mobile compatibility
     if (url.includes('amazonaws.com') || url.includes('merchtechbucket.s3')) {
-      // Extract S3 key from URL like: https://merchtechbucket.s3.us-east-2.amazonaws.com/users/26/media/file.png
-      const s3KeyMatch = url.match(/amazonaws\.com\/(.+)$/);
-      if (s3KeyMatch) {
-        const s3Key = s3KeyMatch[1];
-        return `${computedBase}/api/images/s3/${s3Key}`;
-      }
+      console.log('🖼️ SANITIZE: Keeping direct S3 URL for mobile compatibility:', url);
+      // Ensure HTTPS for mobile
+      return url.replace('http://', 'https://');
     }
     
     // If it's already a full URL (but not S3), return as-is
@@ -1384,12 +1381,21 @@ app.get('/api/images/s3/*', async (req, res) => {
         return res.status(400).send('Invalid image key');
     }
     
-    // Set CORS headers for image access
+    // Set CORS headers for image access - enhanced for mobile compatibility
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, User-Agent');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    
+    // Mobile-specific headers for better compatibility
+    res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
+    res.setHeader('Vary', 'Accept-Encoding, User-Agent');
+    
+    // Log user agent for mobile debugging
+    const userAgent = req.get('User-Agent') || 'unknown';
+    const isMobile = /Mobile|Android|iPhone|iPad/i.test(userAgent);
+    console.log(`🖼️ IMAGE_PROXY: Request from ${isMobile ? 'mobile' : 'desktop'} device:`, userAgent.substring(0, 100));
     
     console.log(`🔗 IMAGE_PROXY: Requested key: "${key}"`);
     

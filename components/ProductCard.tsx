@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   StyleSheet,
   Platform,
@@ -18,6 +17,7 @@ import { Product } from '@/shared/product-schema';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { MaterialIcons } from '@expo/vector-icons';
+import { MobileCompatibleImage } from './MobileCompatibleImage';
 
 interface ProductCardProps {
   product: Product;
@@ -148,7 +148,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   return (
     <ThemedView style={styles.card}>
       <TouchableOpacity onPress={handlePress}>
-        <Image source={{ uri: product.images?.[0] || 'https://placehold.co/300x300' }} style={styles.image} />
+        <MobileCompatibleImage 
+          uri={product.images?.[0] || ''}
+          style={styles.image}
+          fallbackUri="https://placehold.co/300x300?text=No+Image"
+          errorText="Product image unavailable"
+        />
         <View style={styles.infoContainer}>
           <ThemedText style={styles.name} numberOfLines={2}>
             {product.name}
@@ -189,6 +194,7 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: 160,
+    backgroundColor: '#f3f4f6', // Light gray background while loading
   },
   infoContainer: {
     padding: 8,
