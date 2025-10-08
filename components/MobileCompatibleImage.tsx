@@ -132,65 +132,49 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
-  // For web platform, use native img tag for better mobile browser compatibility
-  if (Platform.OS === 'web') {
-    const imageSource = getImageSource();
-    const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
-    
-    return (
-      <View style={[styles.imageWrapper, style]}>
-        {!imageLoaded && (
-          <View style={styles.loadingContainer}>
-            <MaterialIcons name="image" size={48} color="#d1d5db" />
-          </View>
-        )}
-        <img
-          key={imageUrl} // Force reload when URL changes
-          src={imageUrl}
-          alt="" // Empty alt text to prevent "Image not available" text from showing while loading
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: props.resizeMode || 'cover',
-            backgroundColor: '#f3f4f6',
-            display: imageLoaded ? 'block' : 'none', // Hide until loaded
-          }}
-          onError={(e) => {
-            console.error('🖼️ MobileCompatibleImage [web]: Image failed to load:', imageUrl);
-            setImageLoaded(false);
-            handleImageError(e as any);
-          }}
-          onLoad={() => {
-            console.log('✅ MobileCompatibleImage [web]: Image loaded successfully:', imageUrl);
-            setImageLoaded(true);
-          }}
-        />
-      </View>
-    );
-  }
-
-  // For native mobile apps, use React Native Image component
+  // Use React Native Image for all platforms with proper loading state
   return (
-    <Image
-      {...props}
-      source={getImageSource()}
-      style={[styles.image, style]}
-      onError={handleImageError}
-      defaultSource={{ uri: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="18">Loading…</text></svg>' }}
-      resizeMode={props.resizeMode || 'cover'}
-    />
+    <View style={[styles.imageWrapper, style]}>
+      {!imageLoaded && !imageLoadError && (
+        <View style={styles.loadingContainer}>
+          <MaterialIcons name="image" size={48} color="#d1d5db" />
+        </View>
+      )}
+      <Image
+        {...props}
+        key={uri} // Force re-render when URI changes
+        source={getImageSource()}
+        style={[
+          styles.image,
+          style,
+          { opacity: imageLoaded ? 1 : 0 } // Fade in when loaded
+        ]}
+        onError={(e) => {
+          console.error('🖼️ MobileCompatibleImage error:', uri);
+          handleImageError(e);
+        }}
+        onLoad={() => {
+          console.log('✅ MobileCompatibleImage loaded:', uri);
+          setImageLoaded(true);
+        }}
+        resizeMode={props.resizeMode || 'cover'}
+      />
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   image: {
-    backgroundColor: '#f3f4f6', // Light gray background while loading
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f3f4f6',
   },
   imageWrapper: {
     position: 'relative',
     width: '100%',
     height: '100%',
     backgroundColor: '#f3f4f6',
+    overflow: 'hidden',
   },
   loadingContainer: {
     position: 'absolute',
