@@ -4,8 +4,7 @@ nixPkgs = ["nodejs_18"]
 [phases.install]
 cmds = ["npm install --omit=dev"]
 
-[phases.build]
-cmds = ["npm run build"]
+# No build phase needed - server serves API routes and doesn't need static web export
 
 [start]
 cmd = "npm run server:prod" 
