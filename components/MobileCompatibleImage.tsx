@@ -24,6 +24,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   ...props
 }) => {
   const [imageLoadError, setImageLoadError] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
 
@@ -130,25 +131,33 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
     
     return (
-      <img
-        src={imageUrl}
-        alt="" // Empty alt text to prevent "Image not available" text from showing while loading
-        style={{
-          width: '100%',
-          height: '100%',
-          objectFit: props.resizeMode || 'cover',
-          backgroundColor: '#f3f4f6',
-          display: 'block',
-          ...(typeof style === 'object' ? style : {})
-        }}
-        onError={(e) => {
-          console.error('🖼️ MobileCompatibleImage [web]: Image failed to load:', imageUrl);
-          handleImageError(e as any);
-        }}
-        onLoad={() => {
-          console.log('✅ MobileCompatibleImage [web]: Image loaded successfully:', imageUrl);
-        }}
-      />
+      <View style={[styles.imageWrapper, style]}>
+        {!imageLoaded && (
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="image" size={48} color="#d1d5db" />
+          </View>
+        )}
+        <img
+          src={imageUrl}
+          alt="" // Empty alt text to prevent "Image not available" text from showing while loading
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: props.resizeMode || 'cover',
+            backgroundColor: '#f3f4f6',
+            display: imageLoaded ? 'block' : 'none', // Hide until loaded
+          }}
+          onError={(e) => {
+            console.error('🖼️ MobileCompatibleImage [web]: Image failed to load:', imageUrl);
+            setImageLoaded(false);
+            handleImageError(e as any);
+          }}
+          onLoad={() => {
+            console.log('✅ MobileCompatibleImage [web]: Image loaded successfully:', imageUrl);
+            setImageLoaded(true);
+          }}
+        />
+      </View>
     );
   }
 
@@ -168,6 +177,23 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
 const styles = StyleSheet.create({
   image: {
     backgroundColor: '#f3f4f6', // Light gray background while loading
+  },
+  imageWrapper: {
+    position: 'relative',
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#f3f4f6',
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f3f4f6',
+    zIndex: 1,
   },
   errorContainer: {
     backgroundColor: '#f9fafb',
