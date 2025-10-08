@@ -35,8 +35,11 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       imageUrl = fallbackUri;
     }
     
+    // If the image is a data/blob/file URL, use it as-is (don't proxy)
+    const isDataLikeUrl = /^data:|^blob:|^file:/i.test(imageUrl);
+
     // Normalize relative or scheme-less URLs using API origin (strip trailing /api)
-    if (imageUrl && !imageUrl.startsWith('http')) {
+    if (imageUrl && !imageUrl.startsWith('http') && !isDataLikeUrl) {
       const apiBase = env.apiBaseUrl?.replace(/\/$/, '') || '';
       const apiOrigin = apiBase.replace(/\/api$/, '');
       if (imageUrl.startsWith('/')) {
@@ -51,7 +54,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     if (Platform.OS === 'web') {
       try {
         const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-        if (currentOrigin) {
+        if (currentOrigin && !isDataLikeUrl) {
           // Rewrite known proxy paths from Railway domain to current origin
           imageUrl = imageUrl
             .replace('https://merchtech5-production.up.railway.app/api/images/s3/', `${currentOrigin}/api/images/s3/`)
