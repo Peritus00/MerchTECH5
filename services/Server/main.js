@@ -884,10 +884,18 @@ const sanitizeImageUrls = (urls) => {
       return url;
     }
     
-    // If it's a direct S3 URL, keep it for better mobile compatibility
+    // If it's a direct S3 URL, convert to proxy URL for guaranteed mobile compatibility
+    // Direct S3 URLs may not work if bucket isn't public; proxy always works with AWS credentials
     if (url.includes('amazonaws.com') || url.includes('merchtechbucket.s3')) {
-      console.log('🖼️ SANITIZE: Keeping direct S3 URL for mobile compatibility:', url);
-      // Ensure HTTPS for mobile
+      // Extract the S3 key from the URL
+      const s3KeyMatch = url.match(/merchtechbucket\.s3[^\/]*\.amazonaws\.com\/(.+)/) || 
+                         url.match(/s3[^\/]*\.amazonaws\.com\/merchtechbucket\/(.+)/);
+      if (s3KeyMatch && s3KeyMatch[1]) {
+        const s3Key = s3KeyMatch[1];
+        console.log(`🖼️ SANITIZE: Converting S3 URL to proxy for mobile: ${s3Key}`);
+        return `${computedBase}/api/images/s3/${s3Key}`;
+      }
+      console.log('🖼️ SANITIZE: Keeping S3 URL (could not extract key):', url);
       return url.replace('http://', 'https://');
     }
     

@@ -31,7 +31,10 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   const getImageSource = () => {
     let imageUrl = uri;
     
+    console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Original URI:`, uri);
+    
     if (imageLoadError || !imageUrl) {
+      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Using fallback (error: ${imageLoadError})`);
       imageUrl = fallbackUri;
     }
     
@@ -42,6 +45,8 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     if (imageUrl && !imageUrl.startsWith('http') && !isDataLikeUrl) {
       const apiBase = env.apiBaseUrl?.replace(/\/$/, '') || '';
       const apiOrigin = apiBase.replace(/\/api$/, '');
+      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: API origin:`, apiOrigin);
+      
       if (imageUrl.startsWith('/')) {
         imageUrl = `${apiOrigin}${imageUrl}`;
       } else {
@@ -52,8 +57,11 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
 
     // Ensure HTTPS for all platforms (mobile requires HTTPS)
     if (imageUrl.startsWith('http://')) {
+      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Converting HTTP to HTTPS`);
       imageUrl = imageUrl.replace('http://', 'https://');
     }
+
+    console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Final URL:`, imageUrl);
 
     // For mobile devices, use simple URI without custom headers
     // Custom headers can cause CORS issues on mobile
