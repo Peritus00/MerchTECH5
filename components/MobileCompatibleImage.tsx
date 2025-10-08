@@ -111,6 +111,35 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
+  // For web platform, use native img tag for better mobile browser compatibility
+  if (Platform.OS === 'web') {
+    const imageSource = getImageSource();
+    const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
+    
+    return (
+      <img
+        src={imageUrl}
+        alt={errorText}
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: props.resizeMode || 'cover',
+          backgroundColor: '#f3f4f6',
+          display: 'block',
+          ...(typeof style === 'object' ? style : {})
+        }}
+        onError={(e) => {
+          console.error('🖼️ MobileCompatibleImage [web]: Image failed to load:', imageUrl);
+          handleImageError(e as any);
+        }}
+        onLoad={() => {
+          console.log('✅ MobileCompatibleImage [web]: Image loaded successfully:', imageUrl);
+        }}
+      />
+    );
+  }
+
+  // For native mobile apps, use React Native Image component
   return (
     <Image
       {...props}
