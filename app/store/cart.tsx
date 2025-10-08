@@ -16,6 +16,9 @@ import { checkoutAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import * as WebBrowser from 'expo-web-browser';
 
+// CSP-safe inline SVG placeholder for cart item images
+const CART_FALLBACK_DATA_URI = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="12">No Image</text></svg>';
+
 export default function CartScreen() {
   const router = useRouter();
   const { cart, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
@@ -166,7 +169,7 @@ export default function CartScreen() {
         {cart.map((item, index) => (
           <ThemedView key={`${item.product.id}-${item.size || 'default'}`} style={styles.cartItem}>
             <Image
-              source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || 'data:image/svg+xml;utf8,<svg xmlns='"'"'http://www.w3.org/2000/svg'"'"' width='"'"'100'"'"' height='"'"'100'"'"' viewBox='"'"'0 0 100 100'"'"'><rect width='"'"'100%'"'"' height='"'"'100%'"'"' fill='"'"'%23f3f4f6'"'"'/><text x='"'"'50%'"'"' y='"'"'50%'"'"' dominant-baseline='"'"'middle'"'"' text-anchor='"'"'middle'"'"' fill='"'"'%239ca3af'"'"' font-family='"'"'Arial, Helvetica, sans-serif'"'"' font-size='"'"'12'"'"'>No Image</text></svg>' }}
+              source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || CART_FALLBACK_DATA_URI }}
               style={styles.itemImage}
             />
             
