@@ -132,39 +132,31 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
-  // For web platform, render native HTML img element
+  // For web platform, render native HTML img element - SIMPLIFIED
   if (Platform.OS === 'web') {
     const imageSource = getImageSource();
     const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
     
-    return (
-      <View style={[styles.imageWrapper, style]}>
-        {!imageLoaded && !imageLoadError && (
-          <View style={styles.loadingContainer}>
-            <MaterialIcons name="image" size={48} color="#d1d5db" />
-          </View>
-        )}
-        {React.createElement('img', {
-          key: imageUrl,
-          src: imageUrl,
-          alt: '',
-          style: {
-            width: '100%',
-            height: '100%',
-            objectFit: props.resizeMode === 'contain' ? 'contain' : 'cover',
-            display: imageLoaded ? 'block' : 'none',
-          },
-          onLoad: () => {
-            console.log('✅ MobileCompatibleImage [web] loaded:', imageUrl);
-            setImageLoaded(true);
-          },
-          onError: () => {
-            console.error('🖼️ MobileCompatibleImage [web] error:', imageUrl);
-            setImageLoadError(true);
-          },
-        })}
-      </View>
-    );
+    console.log('🖼️ MobileCompatibleImage [web] rendering with URL:', imageUrl);
+    
+    return React.createElement('img', {
+      key: imageUrl,
+      src: imageUrl,
+      alt: '',
+      style: {
+        width: '100%',
+        height: '100%',
+        objectFit: props.resizeMode === 'contain' ? 'contain' : 'cover',
+        backgroundColor: '#f3f4f6',
+        display: 'block',
+      },
+      onLoad: () => {
+        console.log('✅ MobileCompatibleImage [web] loaded successfully:', imageUrl);
+      },
+      onError: (e: any) => {
+        console.error('🖼️ MobileCompatibleImage [web] failed to load:', imageUrl, e);
+      },
+    });
   }
 
   // For native mobile apps
