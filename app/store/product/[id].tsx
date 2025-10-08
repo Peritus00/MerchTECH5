@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { PanGestureHandler, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -212,9 +212,37 @@ export default function ProductDetailsScreen() {
           }
         }
       } else {
-        // For mobile, use WebBrowser
-        await WebBrowser.openBrowserAsync(checkoutUrl);
-        console.log('🔗 BUY_NOW: Opened Stripe checkout in WebBrowser');
+        // For mobile native apps (iOS/Android)
+        if (Platform.OS === 'ios') {
+          // iOS: Try WebBrowser first, fallback to Linking if it fails
+          try {
+            const result = await WebBrowser.openBrowserAsync(checkoutUrl, {
+              dismissButtonStyle: 'done',
+              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+              controlsColor: '#3b82f6',
+            });
+            console.log('🔗 BUY_NOW (iOS): WebBrowser result:', result);
+            
+            // If user dismissed the browser, handle it gracefully
+            if (result.type === 'cancel') {
+              console.log('🔗 BUY_NOW (iOS): User cancelled checkout');
+            }
+          } catch (webBrowserError) {
+            // Fallback to Linking API for iOS
+            console.warn('🔗 BUY_NOW (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
+            const canOpen = await Linking.canOpenURL(checkoutUrl);
+            if (canOpen) {
+              await Linking.openURL(checkoutUrl);
+              console.log('🔗 BUY_NOW (iOS): Opened with Linking API');
+            } else {
+              throw new Error('Cannot open checkout URL on this device');
+            }
+          }
+        } else {
+          // Android: Use WebBrowser
+          const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+          console.log('🔗 BUY_NOW (Android): WebBrowser result:', result);
+        }
       }
     } catch (err: any) {
       console.error('🔴 BUY_NOW ERROR:', err);

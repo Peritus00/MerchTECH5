@@ -17,6 +17,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -124,7 +125,35 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      await WebBrowser.openBrowserAsync(url);
+      // For mobile native apps (iOS/Android)
+      if (Platform.OS === 'ios') {
+        // iOS: Try WebBrowser first, fallback to Linking if it fails
+        try {
+          const result = await WebBrowser.openBrowserAsync(url, {
+            dismissButtonStyle: 'done',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+            controlsColor: '#3b82f6',
+          });
+          console.log('🔗 PAYMENT (iOS): Opened Stripe checkout from PlaylistPlayer, result:', result);
+          
+          if (result.type === 'cancel') {
+            console.log('🔗 PAYMENT (iOS): User cancelled checkout');
+          }
+        } catch (webBrowserError) {
+          console.warn('🔗 PAYMENT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
+          const canOpen = await Linking.canOpenURL(url);
+          if (canOpen) {
+            await Linking.openURL(url);
+            console.log('🔗 PAYMENT (iOS): Opened with Linking API');
+          } else {
+            throw new Error('Cannot open checkout URL on this device');
+          }
+        }
+      } else {
+        // Android or web: Use WebBrowser
+        const result = await WebBrowser.openBrowserAsync(url);
+        console.log('🔗 PAYMENT: Opened Stripe checkout from PlaylistPlayer, result:', result);
+      }
     } catch (error) {
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');

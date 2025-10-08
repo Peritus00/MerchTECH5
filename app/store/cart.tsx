@@ -7,6 +7,7 @@ import {
   Image,
   Alert,
   Platform,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -95,9 +96,37 @@ export default function CartScreen() {
           }
         }
       } else {
-        // For mobile, use WebBrowser
-        await WebBrowser.openBrowserAsync(checkoutUrl);
-        console.log('🔗 CHECKOUT: Opened Stripe checkout in WebBrowser (Cart)');
+        // For mobile native apps (iOS/Android)
+        if (Platform.OS === 'ios') {
+          // iOS: Try WebBrowser first, fallback to Linking if it fails
+          try {
+            const result = await WebBrowser.openBrowserAsync(checkoutUrl, {
+              dismissButtonStyle: 'done',
+              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+              controlsColor: '#3b82f6',
+            });
+            console.log('🔗 CHECKOUT (iOS): WebBrowser result:', result);
+            
+            // If user dismissed the browser, handle it gracefully
+            if (result.type === 'cancel') {
+              console.log('🔗 CHECKOUT (iOS): User cancelled checkout');
+            }
+          } catch (webBrowserError) {
+            // Fallback to Linking API for iOS
+            console.warn('🔗 CHECKOUT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
+            const canOpen = await Linking.canOpenURL(checkoutUrl);
+            if (canOpen) {
+              await Linking.openURL(checkoutUrl);
+              console.log('🔗 CHECKOUT (iOS): Opened with Linking API');
+            } else {
+              throw new Error('Cannot open checkout URL on this device');
+            }
+          }
+        } else {
+          // Android: Use WebBrowser
+          const result = await WebBrowser.openBrowserAsync(checkoutUrl);
+          console.log('🔗 CHECKOUT (Android): WebBrowser result:', result);
+        }
       }
     } catch (err: any) {
       console.error('🔴 CHECKOUT ERROR:', err);

@@ -50,16 +50,22 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       }
     }
 
-    // Web-specific: prefer same-origin proxy to satisfy CSP
+    // Web-specific: Only use same-origin proxy if we're on the same domain as the API
+    // Don't rewrite Railway API URLs to frontend URLs - they need to load directly from the API
     if (Platform.OS === 'web') {
       try {
         const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-        if (currentOrigin && !isDataLikeUrl) {
+        const apiOrigin = env.apiBaseUrl?.replace(/\/$/, '').replace(/\/api$/, '') || '';
+        
+        // Only rewrite if current origin matches API origin (e.g., both on same domain)
+        // This prevents trying to load API images from the frontend domain
+        if (currentOrigin && currentOrigin === apiOrigin && !isDataLikeUrl) {
           // Rewrite known proxy paths from Railway domain to current origin
           imageUrl = imageUrl
             .replace('https://merchtech5-production.up.railway.app/api/images/s3/', `${currentOrigin}/api/images/s3/`)
             .replace('https://merchtech5-production.up.railway.app/api/slideshow-images/', `${currentOrigin}/api/slideshow-images/`);
         }
+        // Otherwise, leave the Railway API URLs as-is so images load directly from the API server
       } catch {}
     }
 
