@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Image, ImageProps, Platform, View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { env } from '@/config/environment';
@@ -27,6 +27,13 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
+
+  // Reset state when URI changes
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageLoadError(false);
+    setRetryCount(0);
+  }, [uri]);
 
   // Enhanced image source handling for mobile devices
   const getImageSource = () => {
@@ -138,6 +145,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
           </View>
         )}
         <img
+          key={imageUrl} // Force reload when URL changes
           src={imageUrl}
           alt="" // Empty alt text to prevent "Image not available" text from showing while loading
           style={{
