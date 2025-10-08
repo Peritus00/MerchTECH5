@@ -132,7 +132,56 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
-  // Use React Native Image for all platforms with proper loading state
+  // For web platform, use background-image for better mobile browser support
+  if (Platform.OS === 'web') {
+    const imageSource = getImageSource();
+    const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
+    
+    // Create a hidden img to track loading
+    React.useEffect(() => {
+      if (!imageUrl) return;
+      
+      const img = new window.Image();
+      img.onload = () => {
+        console.log('✅ MobileCompatibleImage [web] loaded:', imageUrl);
+        setImageLoaded(true);
+      };
+      img.onerror = (e) => {
+        console.error('🖼️ MobileCompatibleImage [web] error:', imageUrl);
+        setImageLoadError(true);
+      };
+      img.src = imageUrl;
+      
+      return () => {
+        img.onload = null;
+        img.onerror = null;
+      };
+    }, [imageUrl]);
+    
+    return (
+      <View style={[styles.imageWrapper, style]}>
+        {!imageLoaded && !imageLoadError && (
+          <View style={styles.loadingContainer}>
+            <MaterialIcons name="image" size={48} color="#d1d5db" />
+          </View>
+        )}
+        <View
+          style={[
+            styles.image,
+            {
+              backgroundImage: imageLoaded ? `url(${imageUrl})` : 'none',
+              backgroundSize: props.resizeMode === 'contain' ? 'contain' : 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat',
+              opacity: imageLoaded ? 1 : 0,
+            } as any
+          ]}
+        />
+      </View>
+    );
+  }
+
+  // For native mobile apps
   return (
     <View style={[styles.imageWrapper, style]}>
       {!imageLoaded && !imageLoadError && (
@@ -142,19 +191,18 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       )}
       <Image
         {...props}
-        key={uri} // Force re-render when URI changes
+        key={uri}
         source={getImageSource()}
         style={[
           styles.image,
-          style,
-          { opacity: imageLoaded ? 1 : 0 } // Fade in when loaded
+          { opacity: imageLoaded ? 1 : 0 }
         ]}
         onError={(e) => {
-          console.error('🖼️ MobileCompatibleImage error:', uri);
+          console.error('🖼️ MobileCompatibleImage [native] error:', uri);
           handleImageError(e);
         }}
         onLoad={() => {
-          console.log('✅ MobileCompatibleImage loaded:', uri);
+          console.log('✅ MobileCompatibleImage [native] loaded:', uri);
           setImageLoaded(true);
         }}
         resizeMode={props.resizeMode || 'cover'}
