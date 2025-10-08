@@ -132,31 +132,10 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
-  // For web platform, use background-image for better mobile browser support
+  // For web platform, render native HTML img element
   if (Platform.OS === 'web') {
     const imageSource = getImageSource();
     const imageUrl = typeof imageSource === 'object' && 'uri' in imageSource ? imageSource.uri : '';
-    
-    // Create a hidden img to track loading
-    React.useEffect(() => {
-      if (!imageUrl) return;
-      
-      const img = new window.Image();
-      img.onload = () => {
-        console.log('✅ MobileCompatibleImage [web] loaded:', imageUrl);
-        setImageLoaded(true);
-      };
-      img.onerror = (e) => {
-        console.error('🖼️ MobileCompatibleImage [web] error:', imageUrl);
-        setImageLoadError(true);
-      };
-      img.src = imageUrl;
-      
-      return () => {
-        img.onload = null;
-        img.onerror = null;
-      };
-    }, [imageUrl]);
     
     return (
       <View style={[styles.imageWrapper, style]}>
@@ -165,18 +144,25 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
             <MaterialIcons name="image" size={48} color="#d1d5db" />
           </View>
         )}
-        <View
-          style={[
-            styles.image,
-            {
-              backgroundImage: imageLoaded ? `url(${imageUrl})` : 'none',
-              backgroundSize: props.resizeMode === 'contain' ? 'contain' : 'cover',
-              backgroundPosition: 'center',
-              backgroundRepeat: 'no-repeat',
-              opacity: imageLoaded ? 1 : 0,
-            } as any
-          ]}
-        />
+        {React.createElement('img', {
+          key: imageUrl,
+          src: imageUrl,
+          alt: '',
+          style: {
+            width: '100%',
+            height: '100%',
+            objectFit: props.resizeMode === 'contain' ? 'contain' : 'cover',
+            display: imageLoaded ? 'block' : 'none',
+          },
+          onLoad: () => {
+            console.log('✅ MobileCompatibleImage [web] loaded:', imageUrl);
+            setImageLoaded(true);
+          },
+          onError: () => {
+            console.error('🖼️ MobileCompatibleImage [web] error:', imageUrl);
+            setImageLoadError(true);
+          },
+        })}
       </View>
     );
   }
