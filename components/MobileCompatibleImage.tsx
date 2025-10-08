@@ -88,16 +88,29 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       onError(error);
     }
     
-    // Retry logic for mobile devices
-    if (retryCount < maxRetries && Platform.OS !== 'web') {
-      console.log(`🔄 MobileCompatibleImage: Retrying image load (${retryCount + 1}/${maxRetries})`);
-      setRetryCount(prev => prev + 1);
-      // Force re-render with a small delay
-      setTimeout(() => {
-        setImageLoadError(false);
-      }, 1000);
+    // For web, be more lenient - only show error after retries
+    if (Platform.OS === 'web') {
+      if (retryCount < maxRetries) {
+        console.log(`🔄 MobileCompatibleImage [web]: Retrying image load (${retryCount + 1}/${maxRetries})`);
+        setRetryCount(prev => prev + 1);
+        // Small delay before retry
+        setTimeout(() => {
+          setImageLoadError(false);
+        }, 500);
+      } else {
+        setImageLoadError(true);
+      }
     } else {
-      setImageLoadError(true);
+      // Retry logic for native mobile devices
+      if (retryCount < maxRetries) {
+        console.log(`🔄 MobileCompatibleImage: Retrying image load (${retryCount + 1}/${maxRetries})`);
+        setRetryCount(prev => prev + 1);
+        setTimeout(() => {
+          setImageLoadError(false);
+        }, 1000);
+      } else {
+        setImageLoadError(true);
+      }
     }
   };
 
@@ -119,7 +132,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     return (
       <img
         src={imageUrl}
-        alt={errorText}
+        alt="" // Empty alt text to prevent "Image not available" text from showing while loading
         style={{
           width: '100%',
           height: '100%',
