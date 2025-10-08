@@ -57,6 +57,7 @@ app.use(helmet({
         "'self'",
         "data:",
         "https://*.amazonaws.com", // For S3 images
+        "https://merchtech5-production.up.railway.app", // For image proxy
         "https://www.merchtrader.org",
         "https://merchtrader.org",
       ],
