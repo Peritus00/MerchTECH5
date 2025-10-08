@@ -18,7 +18,7 @@
     "server:start": "node ./services/Server/main.js",
     "server:dev": "NODE_ENV=development node ./services/Server/main.js",
     "server:prod": "NODE_ENV=production node ./services/Server/main.js",
-    "build": "expo export -p web",
+  "build": "echo 'Skipping web build on Railway'",
     "fix-db": "node fix-slideshows-db.js",
     "build:web": "expo export -p web"
   },
