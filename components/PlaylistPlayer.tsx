@@ -1171,7 +1171,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                             <MobileCompatibleImage
                               uri={currentImage}
                               style={styles.enhancedProductImage}
-                              resizeMode="contain"
+                              resizeMode="cover"
                             />
                             {images.length > 1 && (
                               <>
@@ -1424,12 +1424,11 @@ const styles = StyleSheet.create({
       },
       productImageContainer: {
         position: 'relative',
-        width: '60%',
-        aspectRatio: 1,
+        width: '100%',
+        height: 200,
         backgroundColor: '#f0f0f0',
         justifyContent: 'center',
         alignItems: 'center',
-        alignSelf: 'center',
         marginBottom: 8,
         overflow: 'hidden',
         borderRadius: 12,
