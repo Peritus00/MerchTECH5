@@ -50,27 +50,20 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       }
     }
 
-    // Web-specific: Keep Railway API URLs as-is for direct loading with CORS
-    // Images will load directly from the API server which has proper CORS headers
-    // No rewriting needed - the API server handles all platforms correctly
+    // Ensure HTTPS for all platforms (mobile requires HTTPS)
+    if (imageUrl.startsWith('http://')) {
+      imageUrl = imageUrl.replace('http://', 'https://');
+    }
 
-    // For mobile devices, ensure proper image loading
+    // For mobile devices, use simple URI without custom headers
+    // Custom headers can cause CORS issues on mobile
     if (Platform.OS !== 'web') {
-      // Ensure HTTPS for mobile compatibility
-      const processedUrl = imageUrl.startsWith('http://') 
-        ? imageUrl.replace('http://', 'https://') 
-        : imageUrl;
-      
       return {
-        uri: processedUrl,
-        cache: 'force-cache', // Enable caching for better performance
-        headers: {
-          'Accept': 'image/*',
-          'User-Agent': `MerchTech-Mobile/${Platform.OS}`,
-        }
+        uri: imageUrl
       };
     }
     
+    // Web can use the URL directly
     return { uri: imageUrl };
   };
 
