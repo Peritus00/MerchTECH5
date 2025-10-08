@@ -69,12 +69,6 @@ export default function CartScreen() {
       console.log('🔗 CHECKOUT: Success URL:', successUrl);
       console.log('🔗 CHECKOUT: Cancel URL:', cancelUrl);
 
-      // Pre-open a blank window on web to avoid Safari popup blocking
-      let preOpened: Window | null = null;
-      if (Platform.OS === 'web') {
-        preOpened = window.open('', '_blank');
-      }
-
       const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 CHECKOUT: API response:', response);
 
@@ -86,15 +80,9 @@ export default function CartScreen() {
       console.log('🔗 CHECKOUT: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        if (preOpened) {
-          preOpened.location.href = checkoutUrl;
-        } else {
-          const newWindow = window.open(checkoutUrl, '_blank');
-          if (!newWindow) {
-            console.warn('🔗 CHECKOUT: Popup blocked, redirecting in same window');
-            window.location.href = checkoutUrl;
-          }
-        }
+        // Direct redirect - no popups, works reliably on all devices
+        console.log('🔗 CHECKOUT: Redirecting to checkout:', checkoutUrl);
+        window.location.href = checkoutUrl;
       } else {
         // For mobile native apps (iOS/Android)
         if (Platform.OS === 'ios') {

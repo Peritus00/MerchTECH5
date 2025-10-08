@@ -145,23 +145,12 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
       const cancelUrl = `${base}/store/cart`;
 
       const items = [{ productId: productLink.id, quantity: 1 }];
-      // Pre-open a blank window on web to avoid Safari popup blocking
-      let preOpened: Window | null = null;
-      if (Platform.OS === 'web') {
-        preOpened = window.open('', '_blank');
-      }
-
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
       if (Platform.OS === 'web') {
-        if (preOpened) {
-          preOpened.location.href = url;
-        } else {
-          const newWindow = window.open(url, '_blank');
-          if (!newWindow) {
-            window.location.href = url;
-          }
-        }
+        // Direct redirect - no popups, works reliably on all devices
+        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
+        window.location.href = url;
       } else {
         // For mobile native apps (iOS/Android)
         if (Platform.OS === 'ios') {

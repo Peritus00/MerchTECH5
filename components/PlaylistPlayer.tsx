@@ -125,9 +125,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      // For mobile native apps (iOS/Android)
-      if (Platform.OS === 'ios') {
-        // iOS: Try WebBrowser first, fallback to Linking if it fails
+      if (Platform.OS === 'web') {
+        // Direct redirect - no popups, works reliably on all devices
+        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
+        window.location.href = url;
+      } else if (Platform.OS === 'ios') {
+        // iOS native: Try WebBrowser first, fallback to Linking if it fails
         try {
           const result = await WebBrowser.openBrowserAsync(url, {
             dismissButtonStyle: 'done',
@@ -150,7 +153,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           }
         }
       } else {
-        // Android or web: Use WebBrowser
+        // Android: Use WebBrowser
         const result = await WebBrowser.openBrowserAsync(url);
         console.log('🔗 PAYMENT: Opened Stripe checkout from PlaylistPlayer, result:', result);
       }

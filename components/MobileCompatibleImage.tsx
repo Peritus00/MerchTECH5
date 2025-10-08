@@ -50,24 +50,9 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       }
     }
 
-    // Web-specific: Only use same-origin proxy if we're on the same domain as the API
-    // Don't rewrite Railway API URLs to frontend URLs - they need to load directly from the API
-    if (Platform.OS === 'web') {
-      try {
-        const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
-        const apiOrigin = env.apiBaseUrl?.replace(/\/$/, '').replace(/\/api$/, '') || '';
-        
-        // Only rewrite if current origin matches API origin (e.g., both on same domain)
-        // This prevents trying to load API images from the frontend domain
-        if (currentOrigin && currentOrigin === apiOrigin && !isDataLikeUrl) {
-          // Rewrite known proxy paths from Railway domain to current origin
-          imageUrl = imageUrl
-            .replace('https://merchtech5-production.up.railway.app/api/images/s3/', `${currentOrigin}/api/images/s3/`)
-            .replace('https://merchtech5-production.up.railway.app/api/slideshow-images/', `${currentOrigin}/api/slideshow-images/`);
-        }
-        // Otherwise, leave the Railway API URLs as-is so images load directly from the API server
-      } catch {}
-    }
+    // Web-specific: Keep Railway API URLs as-is for direct loading with CORS
+    // Images will load directly from the API server which has proper CORS headers
+    // No rewriting needed - the API server handles all platforms correctly
 
     // For mobile devices, ensure proper image loading
     if (Platform.OS !== 'web') {

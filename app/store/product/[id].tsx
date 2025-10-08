@@ -176,11 +176,6 @@ export default function ProductDetailsScreen() {
       const items = Array(quantity).fill({ productId: product.id, quantity: 1 });
       
       console.log('🔗 BUY_NOW: Creating session with items:', items);
-      // Pre-open a blank window on web to avoid Safari popup blocking
-      let preOpened: Window | null = null;
-      if (Platform.OS === 'web') {
-        preOpened = window.open('', '_blank');
-      }
 
       const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 BUY_NOW: API response:', response);
@@ -193,24 +188,9 @@ export default function ProductDetailsScreen() {
       console.log('🔗 BUY_NOW: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        // iOS Safari tends to block popups; prefer same-tab redirect
-        const ua = navigator.userAgent || '';
-        const isIOS = /iPhone|iPad|iPod/i.test(ua);
-        const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
-        if (isIOS && isSafari) {
-          window.location.assign(checkoutUrl);
-        } else {
-          // If we pre-opened, navigate it; otherwise fallback
-          if (preOpened) {
-            preOpened.location.href = checkoutUrl;
-          } else {
-            const newWindow = window.open(checkoutUrl, '_blank');
-            if (!newWindow) {
-              console.warn('🔗 BUY_NOW: Popup blocked, redirecting in same window');
-              window.location.href = checkoutUrl;
-            }
-          }
-        }
+        // Direct redirect - no popups, works reliably on all devices
+        console.log('🔗 BUY_NOW: Redirecting to checkout:', checkoutUrl);
+        window.location.href = checkoutUrl;
       } else {
         // For mobile native apps (iOS/Android)
         if (Platform.OS === 'ios') {
