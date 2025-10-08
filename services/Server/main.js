@@ -1487,9 +1487,12 @@ app.get('/api/images/s3/*', async (req, res) => {
             }
         }
         
-        // Return a placeholder image for missing files
-        console.log(`🔴 IMAGE_PROXY: Image not found, returning placeholder`);
-        res.redirect(302, 'https://placehold.co/600x600/e5e7eb/6b7280?text=Image+Not+Found');
+        // Return a placeholder image for missing files (inline SVG, same-origin)
+        console.log(`🔴 IMAGE_PROXY: Image not found, returning inline SVG placeholder`);
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial, Helvetica, sans-serif" font-size="24">Image Not Found</text></svg>';
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        res.status(200).send(svg);
     }
 });
 

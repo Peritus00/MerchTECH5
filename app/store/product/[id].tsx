@@ -117,7 +117,7 @@ export default function ProductDetailsScreen() {
   // Handle multiple images properly
   const images = product.images && product.images.length > 0 
     ? product.images.filter(img => img && img.trim() !== '') 
-    : ['https://placehold.co/600x600?text=No+Image'];
+    : ['data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="24">No Image</text></svg>'];
 
   const formatPrice = (priceInCents: number) => `$${(priceInCents / 100).toFixed(2)}`;
   const lowestPrice = product.prices?.length ? Math.min(...product.prices.map(p => p.unit_amount)) : (product.price || 0);
@@ -193,14 +193,22 @@ export default function ProductDetailsScreen() {
       console.log('🔗 BUY_NOW: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        // If we pre-opened, navigate it; otherwise fallback
-        if (preOpened) {
-          preOpened.location.href = checkoutUrl;
+        // iOS Safari tends to block popups; prefer same-tab redirect
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+        if (isIOS && isSafari) {
+          window.location.assign(checkoutUrl);
         } else {
-          const newWindow = window.open(checkoutUrl, '_blank');
-          if (!newWindow) {
-            console.warn('🔗 BUY_NOW: Popup blocked, redirecting in same window');
-            window.location.href = checkoutUrl;
+          // If we pre-opened, navigate it; otherwise fallback
+          if (preOpened) {
+            preOpened.location.href = checkoutUrl;
+          } else {
+            const newWindow = window.open(checkoutUrl, '_blank');
+            if (!newWindow) {
+              console.warn('🔗 BUY_NOW: Popup blocked, redirecting in same window');
+              window.location.href = checkoutUrl;
+            }
           }
         }
       } else {

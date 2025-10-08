@@ -166,7 +166,7 @@ export default function CartScreen() {
         {cart.map((item, index) => (
           <ThemedView key={`${item.product.id}-${item.size || 'default'}`} style={styles.cartItem}>
             <Image
-              source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || 'https://placehold.co/100x100' }}
+              source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || 'data:image/svg+xml;utf8,<svg xmlns='"'"'http://www.w3.org/2000/svg'"'"' width='"'"'100'"'"' height='"'"'100'"'"' viewBox='"'"'0 0 100 100'"'"'><rect width='"'"'100%'"'"' height='"'"'100%'"'"' fill='"'"'%23f3f4f6'"'"'/><text x='"'"'50%'"'"' y='"'"'50%'"'"' dominant-baseline='"'"'middle'"'"' text-anchor='"'"'middle'"'"' fill='"'"'%239ca3af'"'"' font-family='"'"'Arial, Helvetica, sans-serif'"'"' font-size='"'"'12'"'"'>No Image</text></svg>' }}
               style={styles.itemImage}
             />
             

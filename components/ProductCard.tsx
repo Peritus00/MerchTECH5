@@ -130,13 +130,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       console.log('🔗 PRODUCT_CARD: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        if (preOpened) {
-          preOpened.location.href = checkoutUrl;
+        // Prefer same-tab redirect on iOS Safari to avoid popup blocking
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+        if (isIOS && isSafari) {
+          window.location.assign(checkoutUrl);
         } else {
-          const newWindow = window.open(checkoutUrl, '_blank');
-          if (!newWindow) {
-            console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
-            window.location.href = checkoutUrl;
+          if (preOpened) {
+            preOpened.location.href = checkoutUrl;
+          } else {
+            const newWindow = window.open(checkoutUrl, '_blank');
+            if (!newWindow) {
+              console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
+              window.location.href = checkoutUrl;
+            }
           }
         }
       } else {
@@ -161,7 +169,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
         <MobileCompatibleImage 
           uri={product.images?.[0] || ''}
           style={styles.image}
-          fallbackUri="https://placehold.co/300x300?text=No+Image"
+          fallbackUri="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'><rect width='100%' height='100%' fill='%23f3f4f6'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%239ca3af' font-family='Arial, Helvetica, sans-serif' font-size='18'>No Image</text></svg>"
           errorText="Product image unavailable"
         />
         <View style={styles.infoContainer}>

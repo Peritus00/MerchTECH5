@@ -75,13 +75,21 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
       console.log('🔗 CART_HEADER_CHECKOUT: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        if (preOpened) {
-          preOpened.location.href = checkoutUrl;
+        // Prefer same-tab redirect on iOS Safari to avoid popup blocking
+        const ua = navigator.userAgent || '';
+        const isIOS = /iPhone|iPad|iPod/i.test(ua);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+        if (isIOS && isSafari) {
+          window.location.assign(checkoutUrl);
         } else {
-          const newWindow = window.open(checkoutUrl, '_blank');
-          if (!newWindow) {
-            console.warn('🔗 CART_HEADER_CHECKOUT: Popup blocked, redirecting in same window');
-            window.location.href = checkoutUrl;
+          if (preOpened) {
+            preOpened.location.href = checkoutUrl;
+          } else {
+            const newWindow = window.open(checkoutUrl, '_blank');
+            if (!newWindow) {
+              console.warn('🔗 CART_HEADER_CHECKOUT: Popup blocked, redirecting in same window');
+              window.location.href = checkoutUrl;
+            }
           }
         }
       } else {

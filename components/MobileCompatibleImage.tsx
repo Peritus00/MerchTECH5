@@ -16,7 +16,7 @@ interface MobileCompatibleImageProps extends Omit<ImageProps, 'source'> {
  */
 export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   uri,
-  fallbackUri = 'https://placehold.co/300x300?text=No+Image',
+  fallbackUri = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="18">No Image</text></svg>',
   showErrorIcon = true,
   errorText = 'Image not available',
   style,
@@ -122,7 +122,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
       source={getImageSource()}
       style={[styles.image, style]}
       onError={handleImageError}
-      defaultSource={{ uri: 'https://placehold.co/300x300?text=Loading' }}
+      defaultSource={{ uri: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="18">Loading…</text></svg>' }}
       resizeMode={props.resizeMode || 'cover'}
     />
   );
