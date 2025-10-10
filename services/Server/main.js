@@ -763,7 +763,6 @@ app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) 
         res.status(500).json({ error: 'Internal server error' });
     }
 });
-
 app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
     const { id } = req.params;
     const {
@@ -859,58 +858,68 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
 // --- Helper Functions ---
 const sanitizeImageUrls = (urls) => {
   if (!Array.isArray(urls)) return [];
+  
+  // Define the production base URL for sanitization
+  const productionBase = 'https://merchtech5-production.up.railway.app';
+  
   const computedBase =
     (process.env.PUBLIC_BASE_URL && process.env.PUBLIC_BASE_URL.replace(/\/+$/, '')) ||
     (process.env.NODE_ENV === 'production'
-      ? 'https://merchtech5-production.up.railway.app'
+      ? productionBase
       : `http://localhost:${PORT}`);
 
   return urls.map(url => {
     if (typeof url !== 'string') return null;
     
+    let finalUrl = url;
+
+    // CRITICAL FIX: Always replace localhost URLs with the production domain.
+    // This sanitizes incorrect data that may have been saved in the database from a dev environment.
+    if (/https?:\/\/localhost:\d+/.test(finalUrl)) {
+      finalUrl = finalUrl.replace(/https?:\/\/localhost:\d+/, productionBase);
+    }
+    
     // If it's already using our image proxy, ensure it uses the correct domain
-    if (url.includes('/api/images/s3/')) {
+    if (finalUrl.includes('/api/images/s3/')) {
       // Convert relative proxy paths to absolute for React Native clients
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        return `${computedBase}${url.startsWith('/') ? '' : '/'}${url}`;
+      if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+        return `${computedBase}${finalUrl.startsWith('/') ? '' : '/'}${finalUrl}`;
       }
-      // Always normalize absolute localhost URLs to computed base (works in all envs)
-      if (/https?:\/\/localhost:\d+/.test(url)) {
-        return url.replace(/https?:\/\/localhost:\d+/, computedBase);
+      
+      // Fix old domain URLs - corrected typo from 'merchtechapp5' to 'merchtech5'
+      if (finalUrl.includes('merchtechapp5-production.up.railway.app')) {
+        return finalUrl.replace('merchtechapp5-production.up.railway.app', 'merchtech5-production.up.railway.app');
       }
-      // Fix old domain URLs
-      if (url.includes('merchtechapp5-production.up.railway.app')) {
-        return url.replace('merchtechapp5-production.up.railway.app', 'merchtech5-production.up.railway.app');
-      }
-      return url;
+      
+      return finalUrl; // Already absolute
     }
     
     // If it's a direct S3 URL, convert to proxy URL for guaranteed mobile compatibility
     // Direct S3 URLs may not work if bucket isn't public; proxy always works with AWS credentials
-    if (url.includes('amazonaws.com') || url.includes('merchtechbucket.s3')) {
+    if (finalUrl.includes('amazonaws.com') || finalUrl.includes('merchtechbucket.s3')) {
       // Extract the S3 key from the URL
-      const s3KeyMatch = url.match(/merchtechbucket\.s3[^\/]*\.amazonaws\.com\/(.+)/) || 
-                         url.match(/s3[^\/]*\.amazonaws\.com\/merchtechbucket\/(.+)/);
+      const s3KeyMatch = finalUrl.match(/merchtechbucket\.s3[^\/]*\.amazonaws\.com\/(.+)/) || 
+                         finalUrl.match(/s3[^\/]*\.amazonaws\.com\/merchtechbucket\/(.+)/);
       if (s3KeyMatch && s3KeyMatch[1]) {
         const s3Key = s3KeyMatch[1];
         console.log(`🖼️ SANITIZE: Converting S3 URL to proxy for mobile: ${s3Key}`);
         return `${computedBase}/api/images/s3/${s3Key}`;
       }
-      console.log('🖼️ SANITIZE: Keeping S3 URL (could not extract key):', url);
-      return url.replace('http://', 'https://');
+      console.log('🖼️ SANITIZE: Keeping S3 URL (could not extract key):', finalUrl);
+      return finalUrl.replace('http://', 'https://');
     }
     
     // If it's already a full URL (but not S3), return as-is
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
+    if (finalUrl.startsWith('http://') || finalUrl.startsWith('https://')) {
+      return finalUrl;
     }
     
     // If it's an S3 key, convert to image proxy URL
-    if (url.includes('/') || url.includes('.')) {
-      return `${computedBase}/api/images/s3/${url}`;
+    if (finalUrl.includes('/') || finalUrl.includes('.')) {
+      return `${computedBase}/api/images/s3/${finalUrl}`;
     }
     
-    return url;
+    return finalUrl;
   }).filter(Boolean);
 };
 
@@ -1559,7 +1568,6 @@ app.get('/api/images/local/:filename', async (req, res) => {
         res.status(500).send('Failed to stream image');
     }
 });
-
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media', authenticateToken, async (req, res) => {
   try {
@@ -2348,7 +2356,6 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete playlist' });
   }
 });
-
 // Helper function to get playlist with media files
 async function getPlaylistWithMedia(playlistId) {
   console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
@@ -3122,7 +3129,6 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to update QR code' });
   }
 });
-
 // Delete a QR code (soft delete)
 app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
   try {
@@ -3744,7 +3750,6 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch slideshows' });
   }
 });
-
 // Get a specific slideshow by ID
 app.get('/api/slideshows/:id', async (req, res) => {
   try {
@@ -4501,7 +4506,6 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete slideshow' });
   }
 });
-
 // Upload image for slideshow
 app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image'), async (req, res) => {
   try {
@@ -5249,7 +5253,6 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     res.status(500).json({ error: 'Failed to remove media from playlist' });
   }
 });
-
 // Update playlist media order
 app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
   try {
@@ -6047,7 +6050,6 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
 app.get('/test-route', (req, res) => {
   res.send('Test route working! Deployment timestamp: ' + new Date().toISOString());
 });
-
 // Media player route - serve the specific HTML file for this route
 app.get('/media-player/:id', (req, res) => {
   const { id } = req.params;
@@ -6558,77 +6560,6 @@ app.get('*', (req, res) => {
       </html>
     `);
       } else {
-        res.status(500).send('Error serving the application.');
-      }
-    }
-  });
-});
-
-app.get('/api/slideshow-access/check-code', async (req, res) => {
-  try {
-    const { code, slideshowId } = req.query;
-    if (!code || !slideshowId) {
-      return res.status(400).json({ error: 'Code and slideshowId are required' });
-    }
-
-    const result = await pool.query(
-      `SELECT * FROM activation_codes 
-       WHERE code = $1 
-         AND slideshow_id = $2 
-         AND is_active = true 
-         AND (expires_at IS NULL OR expires_at > NOW())
-         AND (max_uses IS NULL OR uses_count < max_uses)`,
-      [code, slideshowId]
-    );
-
-    if (result.rows.length > 0) {
-      res.json({ valid: true });
-    } else {
-      res.json({ valid: false });
-    }
-  } catch (error) {
-    console.error('Error checking activation code:', error);
-    res.status(500).json({ error: 'Failed to check activation code' });
-  }
-});
-
-// -----------------------------------------------------------------------------
-// --- WEB APP SERVING (Client-Side Routing) ---
-// This must be after all API routes. It serves the main web application.
-// Any route not caught by the API will be handled by the client-side router.
-// -----------------------------------------------------------------------------
-
-// This must be the last non-error-handling route
-app.get('*', (req, res) => {
-  // If the request path looks like an API call, it means no API route was matched,
-  // so we should send a 404 instead of the web app.
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API route not found' });
-  }
-
-  // For any other route, serve the main index.html file.
-  // This allows the React Native web app's router to handle the path.
-  console.log(`🌐 WEB: Serving index.html for non-API route: ${req.path}`);
-  res.sendFile(path.join(distDir, 'index.html'), (err) => {
-    if (err) {
-      console.error(`❌ WEB_SERVE_ERROR: Could not send index.html for path ${req.path}:`, err);
-      // Check if the file doesn't exist, which likely means the web app wasn't built.
-      if (err.code === 'ENOENT') {
-        res.status(500).send(`
-          <!DOCTYPE html>
-          <html>
-          <head>
-            <title>500 - Server Configuration Error</title>
-            <style>body { font-family: sans-serif; text-align: center; padding-top: 50px; }</style>
-          </head>
-          <body>
-            <h1>Error 500: Server Misconfiguration</h1>
-            <p>The application's web files (dist/index.html) could not be found.</p>
-            <p>This usually means the <code>npm run build</code> or <code>expo export -p web</code> command was not run during deployment.</p>
-          </body>
-          </html>
-        `);
-    } else {
         res.status(500).send('Error serving the application.');
       }
     }
