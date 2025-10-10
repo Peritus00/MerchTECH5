@@ -42,12 +42,14 @@ app.use(helmet({
         "https://*.stripe.com", // For Stripe
         "https://api.brevo.com", // For email service
         "https://app.termly.io", // For Termly privacy/cookie compliance
+        "https://us.consent.api.termly.io", // Added for Termly consent API
       ],
       scriptSrc: [
         "'self'",
         "'unsafe-inline'", // Needed for Expo/React
         "https://js.stripe.com",
         "https://app.termly.io",
+        "https://*.termly.io", // Added for broader Termly compatibility
       ],
       styleSrc: [
         "'self'",
@@ -1513,7 +1515,6 @@ app.get('/api/images/s3/*', async (req, res) => {
         res.status(200).send(svg);
     }
 });
-
 // --- Local Image Endpoint ---
 app.get('/api/images/local/:filename', async (req, res) => {
     const filename = req.params.filename;
@@ -2277,7 +2278,6 @@ app.get('/api/playlists/:id', async (req, res) => {
     `);
   }
 });
-
 app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -3035,7 +3035,6 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to create QR code' });
   }
 });
-
 // Update a QR code (alias for backward compatibility)
 app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
   try {
