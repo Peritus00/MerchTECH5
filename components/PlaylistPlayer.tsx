@@ -41,6 +41,19 @@ import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 
 const { width } = Dimensions.get('window');
 
+// Disable right-click on web
+if (Platform.OS === 'web') {
+  document.addEventListener('contextmenu', (e) => {
+    // Allow context menu on inputs and text areas
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return;
+    }
+    // Prevent default context menu for other elements
+    e.preventDefault();
+  });
+}
+
 interface MediaItem {
   id: string | number;
   title?: string;

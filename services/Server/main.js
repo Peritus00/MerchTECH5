@@ -1412,30 +1412,16 @@ app.options('/api/images/s3/*', (req, res) => {
   res.status(200).end();
 });
 
-app.get('/api/images/s3/*', async (req, res) => {
+app.get('/api/images/s3/*', authenticateToken, async (req, res) => {
     const key = req.params[0];
     if (!key) {
         return res.status(400).send('Invalid image key');
     }
     
-    // Set CORS headers for image access - enhanced for mobile compatibility
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, User-Agent');
-    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
-    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    
-    // Mobile-specific headers for better compatibility
-    res.setHeader('Cache-Control', 'public, max-age=3600, immutable');
-    res.setHeader('Vary', 'Accept-Encoding, User-Agent');
-    
-    // Log user agent for mobile debugging
-    const userAgent = req.get('User-Agent') || 'unknown';
-    const isMobile = /Mobile|Android|iPhone|iPad/i.test(userAgent);
-    console.log(`🖼️ IMAGE_PROXY: Request from ${isMobile ? 'mobile' : 'desktop'} device:`, userAgent.substring(0, 100));
-    
-    console.log(`🔗 IMAGE_PROXY: Requested key: "${key}"`);
-    
+    // Set Content-Disposition to "inline" to prevent direct downloads
+    // This instructs the browser to display the file, not download it
+    res.setHeader('Content-Disposition', 'inline');
+
     try {
         let s3Key = key;
         
@@ -1826,22 +1812,18 @@ app.options('/api/media/:id/stream', (req, res) => {
 });
 
 // Stream media file (supports both base64 data and S3 files) - PUBLIC endpoint for browser media compatibility
-app.get('/api/media/:id/stream', async (req, res) => {
+app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
   console.log(`📺 MEDIA_STREAM: Route handler called for media ${req.params.id}`);
-  console.log(`📺 MEDIA_STREAM: Request URL: ${req.url}`);
-  console.log(`📺 MEDIA_STREAM: Request path: ${req.path}`);
   
-  // Set explicit CORS headers for media streaming (more permissive for media elements)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Type');
-  res.setHeader('Access-Control-Allow-Credentials', 'false'); // Explicit false for public media
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'); // Allow cross-origin media loading
-  
+  // Set Content-Disposition to "inline" to prevent direct downloads
+  // This instructs the browser to display the file, not download it
+  res.setHeader('Content-Disposition', 'inline');
+
   try {
     const { id } = req.params;
-    console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
+    const requestingUser = req.user; // User from authenticateToken middleware
+
+    console.log(`📺 MEDIA_STREAM: Authenticated streaming request for media ${id} by user ${requestingUser.userId}`);
     
     const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
     
@@ -1852,53 +1834,16 @@ app.get('/api/media/:id/stream', async (req, res) => {
     
     const media = result.rows[0];
     
-    // Get admin user ID for access control
-    const adminResult = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', ['djjetfuel@gmail.com']);
-    const adminUserId = adminResult.rows.length > 0 ? adminResult.rows[0].id : null;
-    
-    // Optional authentication - check for token if present
-    let requestingUser = null;
-    let isAdmin = false;
-    
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    
-    if (token) {
-      try {
-        const user = jwt.verify(token, JWT_SECRET);
-        requestingUser = user;
-        
-        // Check if authenticated user is admin
-        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [user.userId]);
-        isAdmin = userResult.rows[0]?.is_admin || false;
-        
-        console.log(`📺 MEDIA_STREAM: Authenticated user ${user.userId} (admin: ${isAdmin})`);
-      } catch (error) {
-        console.log(`📺 MEDIA_STREAM: Invalid token provided, continuing as public access`);
-      }
+    // Security check: Only allow the owner or an admin to stream the file
+    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [requestingUser.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
+
+    if (media.user_id !== requestingUser.userId && !isAdmin) {
+      console.log(`🚫 MEDIA_STREAM: Access denied for user ${requestingUser.userId} to media ${id}`);
+      return res.status(403).json({ error: 'You do not have permission to access this file.' });
     }
     
-    // Security model for public streaming:
-    // 1. All media files are publicly accessible for streaming (browsers need this)
-    // 2. Optional authentication for enhanced features or logging
-    // 3. Admin users get full access and logging
-    
-    const isAdminFile = media.user_id === adminUserId;
-    const isOwnFile = requestingUser && media.user_id === requestingUser.userId;
-    
-    console.log(`📺 MEDIA_STREAM: Access control check:`, {
-      mediaId: id,
-      mediaUserId: media.user_id,
-      adminUserId,
-      isAdminFile,
-      hasAuth: !!requestingUser,
-      isOwnFile,
-      isAdmin
-    });
-    
-    // Allow public access to all media files for streaming compatibility
-    // Deployment timestamp: 2025-07-16T03:52:00Z
-    console.log(`📺 MEDIA_STREAM: Public access granted for media ${id}`);
+    console.log(`✅ MEDIA_STREAM: Access granted for user ${requestingUser.userId} to media ${id}`);
     
     // Handle S3 files
     let s3Key = media.s3_key;
@@ -1974,12 +1919,6 @@ app.get('/api/media/:id/stream', async (req, res) => {
           title: media.title,
           filename: media.filename
         });
-        
-        // Set CORS headers for audio/video access
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
         
         res.setHeader('Content-Type', contentType);
         res.setHeader('Accept-Ranges', 'bytes');
