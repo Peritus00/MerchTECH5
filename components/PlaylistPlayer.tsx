@@ -83,6 +83,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const { addToCart, cart, getTotalItems } = useCart();
   const router = useRouter();
 
+  const isMobile = width < 768;
+
   const handleAddToCart = (productLink: ProductLink) => {
     try {
       const product = {
@@ -1070,8 +1072,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         showsVerticalScrollIndicator={!isFullscreen}
         contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
-        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent]}>
-        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel]}>
+        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isMobile && styles.mobileMainContent]}>
+        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel, isMobile && styles.mobileLeftPanel]}>
             <View style={[styles.videoContainer, isFullscreen && styles.fullscreenVideoContainer]}>
                 {renderCurrentMedia()}
             </View>
@@ -1144,7 +1146,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         </View>
 
         {!isFullscreen && (
-        <View style={styles.slideshowRightPanel}>
+        <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
           <View style={styles.featuredProductsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />
             <Text style={styles.featuredProductsTitle}>Featured Products</Text>
@@ -1359,16 +1361,23 @@ const styles = StyleSheet.create({
         gap: 20,
         minHeight: 500, // Set minimum height for the main content
     },
+    mobileMainContent: {
+        flexDirection: 'column',
+    },
     slideshowLeftPanel: {
-        flex: 1, // Gave more space to products
+        flex: 1.344, // Increased to give more space to video (44.8% of total)
         backgroundColor: '#000000',
         borderRadius: 12,
         overflow: 'hidden',
-        minHeight: 500, // Reduced to match products panel
+        minHeight: 700, // Increased to accommodate larger video
+    },
+    mobileLeftPanel: {
+        width: '100%',
+        minHeight: 300,
     },
     slideshowRightPanel: {
-        flex: 2, // Increased flex to make products panel larger
-        backgroundColor: 'red', // DEBUG: Changed to red to confirm style update
+        flex: 1.656, // Decreased by 20% from 2.07 to 1.656 (55.2% - 20% decrease for products)
+        backgroundColor: '#ffffff',
         borderRadius: 12,
         padding: 16,
         shadowColor: '#000',
@@ -1377,6 +1386,9 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         elevation: 3,
         minHeight: 500, // Set minimum height for the products panel
+    },
+    mobileRightPanel: {
+        width: '100%',
     },
     featuredProductsHeader: {
         flexDirection: 'row',

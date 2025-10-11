@@ -71,6 +71,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   // Cart functionality
   const { addToCart, getTotalItems } = useCart();
   const router = useRouter();
+  const isMobile = width < 768;
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
@@ -506,9 +507,9 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
         {/* Main Content - Horizontal Layout */}
-        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent]}>
+        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isMobile && styles.mobileMainContent]}>
         {/* Left Panel - Slideshow */}
-        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel]}>
+        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel, isMobile && styles.mobileLeftPanel]}>
           {/* Current Image Display */}
           <View style={[styles.slideshowImageContainer, isFullscreen && styles.fullscreenImageContainer]}>
             {images[currentIndex] && !imageLoadError && (
@@ -601,7 +602,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
 
         {/* Right Panel - Featured Products */}
         {!isFullscreen && (
-          <View style={styles.slideshowRightPanel}>
+          <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
           <View style={styles.featuredProductsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />
             <Text style={styles.featuredProductsTitle}>Featured Products</Text>
@@ -857,12 +858,19 @@ const styles = StyleSheet.create({
     gap: 20,
     minHeight: 500, // Set minimum height for the main content
   },
+  mobileMainContent: {
+    flexDirection: 'column',
+  },
   slideshowLeftPanel: {
-    flex: 1, // Gave more space to products
+    flex: 1.2, // Reduced from 2 to 1.2 (give more space to products)
     backgroundColor: '#000000',
     borderRadius: 12,
     overflow: 'hidden',
     minHeight: 500, // Set minimum height for the slideshow panel
+  },
+  mobileLeftPanel: {
+    width: '100%',
+    minHeight: 300,
   },
   slideshowImageContainer: {
     flex: 1,
@@ -937,7 +945,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   slideshowRightPanel: {
-    flex: 2, // Increased flex to make products panel larger
+    flex: 1.8, // Increased from 1 to 1.8 (more space for products)
     backgroundColor: '#ffffff',
     borderRadius: 12,
     padding: 16,
@@ -947,6 +955,9 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
     minHeight: 500, // Set minimum height for the products panel
+  },
+  mobileRightPanel: {
+    width: '100%',
   },
   featuredProductsHeader: {
     flexDirection: 'row',
