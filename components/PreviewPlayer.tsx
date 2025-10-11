@@ -1828,7 +1828,7 @@ const styles = StyleSheet.create({
     }),
   } as any,
   leftPanel: {
-    flex: 1, // Gave more space to products
+    flex: 0.6, // Reverted to original value
     backgroundColor: '#ffffff',
     padding: 20,
     borderRightWidth: 1,
@@ -1836,7 +1836,7 @@ const styles = StyleSheet.create({
     minHeight: '100%',
   },
   rightPanel: {
-    flex: 2, // Increased flex to make products panel larger
+    flex: 1.4, // Reverted to original value
     backgroundColor: '#ffffff',
     padding: 20,
     minHeight: '100%',

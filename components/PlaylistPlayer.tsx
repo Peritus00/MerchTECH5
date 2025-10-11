@@ -1368,7 +1368,7 @@ const styles = StyleSheet.create({
     },
     slideshowRightPanel: {
         flex: 2, // Increased flex to make products panel larger
-        backgroundColor: '#ffffff',
+        backgroundColor: 'red', // DEBUG: Changed to red to confirm style update
         borderRadius: 12,
         padding: 16,
         shadowColor: '#000',
