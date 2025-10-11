@@ -1360,14 +1360,14 @@ const styles = StyleSheet.create({
         minHeight: 500, // Set minimum height for the main content
     },
     slideshowLeftPanel: {
-        flex: 1.344, // Increased to give more space to video (44.8% of total)
+        flex: 1, // Gave more space to products
         backgroundColor: '#000000',
         borderRadius: 12,
         overflow: 'hidden',
-        minHeight: 700, // Increased to accommodate larger video
+        minHeight: 500, // Reduced to match products panel
     },
     slideshowRightPanel: {
-        flex: 1.656, // Decreased by 20% from 2.07 to 1.656 (55.2% - 20% decrease for products)
+        flex: 2, // Increased flex to make products panel larger
         backgroundColor: '#ffffff',
         borderRadius: 12,
         padding: 16,
