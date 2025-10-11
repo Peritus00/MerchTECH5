@@ -9,6 +9,7 @@ import {
   Image,
   Linking,
   Platform,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
@@ -169,6 +170,7 @@ function PreviewPlayer({
 }: PreviewPlayerProps) {
   
   const router = useRouter();
+  const isMobile = Dimensions.get('window').width < 768;
   // SIMPLE TEST LOG - This should always appear if component is rendered
   console.log('🚨 SIMPLE TEST: PreviewPlayer is being called!');
   console.log('🚨 SIMPLE TEST: mediaFiles length:', mediaFiles.length);
@@ -1332,9 +1334,9 @@ function PreviewPlayer({
       )}
 
       {/* Main Content - Horizontal Split Layout */}
-      <View style={styles.mainContainer}>
+      <View style={[styles.mainContainer, isMobile && styles.mobileMainContent]}>
         {/* Left Panel - Preview Player */}
-        <View style={styles.leftPanel}>
+        <View style={[styles.leftPanel, isMobile && styles.mobileLeftPanel]}>
           {/* Playlist Header */}
           <View style={styles.playlistHeader}>
             <View style={styles.playlistIcon}>
@@ -1659,7 +1661,7 @@ function PreviewPlayer({
         </View>
 
         {/* Right Panel - Featured Products */}
-        <View style={styles.rightPanel}>
+        <View style={[styles.rightPanel, isMobile && styles.mobileRightPanel]}>
           <View style={styles.productsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />
             <Text style={styles.productsTitle}>Featured Products</Text>
@@ -1827,20 +1829,30 @@ const styles = StyleSheet.create({
       height: '100%' as any,
     }),
   } as any,
+  mobileMainContent: {
+      flexDirection: 'column',
+  },
   leftPanel: {
-    flex: 0.6, // Reverted to original value
+    flex: 0.6, // Reduced from 1 to 0.6 (40% width)
     backgroundColor: '#ffffff',
     padding: 20,
     borderRightWidth: 1,
     borderRightColor: '#e5e7eb',
     minHeight: '100%',
   },
+  mobileLeftPanel: {
+      width: '100%',
+      minHeight: 300,
+  },
   rightPanel: {
-    flex: 1.4, // Reverted to original value
+    flex: 1.4, // Increased from 1 to 1.4 (60% width)
     backgroundColor: '#ffffff',
     padding: 20,
     minHeight: '100%',
     maxHeight: '100%' as any, // Constrain to viewport height
+  },
+  mobileRightPanel: {
+      width: '100%',
   },
   // Playlist Header Styles
   playlistHeader: {
