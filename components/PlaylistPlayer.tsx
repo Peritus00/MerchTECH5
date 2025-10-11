@@ -1089,7 +1089,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               </Text>
             </View>
             )}
-            
+
+            {/* CONTROLS MOVED HERE */}
             <View style={styles.controls}>
                 <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
                 <MaterialIcons
