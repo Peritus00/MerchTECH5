@@ -1812,7 +1812,7 @@ app.options('/api/media/:id/stream', (req, res) => {
 });
 
 // Stream media file (supports both base64 data and S3 files) - PUBLIC endpoint for browser media compatibility
-app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
+app.get('/api/media/:id/stream', async (req, res) => {
   console.log(`📺 MEDIA_STREAM: Route handler called for media ${req.params.id}`);
   
   // Set Content-Disposition to "inline" to prevent direct downloads
@@ -1821,9 +1821,7 @@ app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
 
   try {
     const { id } = req.params;
-    const requestingUser = req.user; // User from authenticateToken middleware
-
-    console.log(`📺 MEDIA_STREAM: Authenticated streaming request for media ${id} by user ${requestingUser.userId}`);
+    console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
     
     const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
     
@@ -1834,16 +1832,8 @@ app.get('/api/media/:id/stream', authenticateToken, async (req, res) => {
     
     const media = result.rows[0];
     
-    // Security check: Only allow the owner or an admin to stream the file
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [requestingUser.userId]);
-    const isAdmin = userResult.rows[0]?.is_admin || false;
-
-    if (media.user_id !== requestingUser.userId && !isAdmin) {
-      console.log(`🚫 MEDIA_STREAM: Access denied for user ${requestingUser.userId} to media ${id}`);
-      return res.status(403).json({ error: 'You do not have permission to access this file.' });
-    }
-    
-    console.log(`✅ MEDIA_STREAM: Access granted for user ${requestingUser.userId} to media ${id}`);
+    // Public access is allowed for streaming, so no further auth checks are needed here.
+    // The original file was more permissive, and we need to restore that for QR code scans.
     
     // Handle S3 files
     let s3Key = media.s3_key;
