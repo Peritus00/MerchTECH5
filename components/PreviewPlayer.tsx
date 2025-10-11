@@ -186,6 +186,28 @@ function PreviewPlayer({
   
   const router = useRouter();
   const isMobile = Dimensions.get('window').width < 768;
+
+  useEffect(() => {
+    // Disable right-click on web
+    if (Platform.OS === 'web') {
+      const handleContextMenu = (e: MouseEvent) => {
+        // Allow context menu on inputs and text areas
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+        // Prevent default context menu for other elements
+        e.preventDefault();
+      };
+
+      document.addEventListener('contextmenu', handleContextMenu);
+      
+      return () => {
+        document.removeEventListener('contextmenu', handleContextMenu);
+      };
+    }
+  }, []);
+
   // SIMPLE TEST LOG - This should always appear if component is rendered
   console.log('🚨 SIMPLE TEST: PreviewPlayer is being called!');
   console.log('🚨 SIMPLE TEST: mediaFiles length:', mediaFiles.length);

@@ -37,19 +37,6 @@ import SlideshowChat from './SlideshowChat';
 
 const { width } = Dimensions.get('window');
 
-// Disable right-click on web
-if (Platform.OS === 'web') {
-  document.addEventListener('contextmenu', (e) => {
-    // Allow context menu on inputs and text areas
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-      return;
-    }
-    // Prevent default context menu for other elements
-    e.preventDefault();
-  });
-}
-
 interface SlideshowImage {
   id: string | number;
   title?: string;
@@ -347,6 +334,27 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         clearInterval(slideshowIntervalRef.current);
       }
     };
+  }, []);
+
+  // Disable right-click on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const handleContextMenu = (e: MouseEvent) => {
+        // Allow context menu on inputs and text areas
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+          return;
+        }
+        // Prevent default context menu for other elements
+        e.preventDefault();
+      };
+
+      document.addEventListener('contextmenu', handleContextMenu);
+      
+      return () => {
+        document.removeEventListener('contextmenu', handleContextMenu);
+      };
+    }
   }, []);
 
   const handlePlayPause = () => {
