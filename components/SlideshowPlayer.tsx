@@ -582,17 +582,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
               <MaterialIcons name="chevron-right" size={32} color="#fff" />
             </TouchableOpacity>
 
-            {/* Image Info Overlay - Hidden in fullscreen */}
-            {!isFullscreen && (
-              <View style={styles.imageInfoOverlay}>
-                <Text style={styles.imageTitle}>
-                  {images[currentIndex]?.title || `Image ${currentIndex + 1}`}
-                </Text>
-                <Text style={styles.imageCounter}>
-                  {currentIndex + 1} of {images.length}
-                </Text>
-              </View>
-            )}
+            {/* Removed image title/counter overlay to eliminate black bar */}
           </View>
 
           {/* Slideshow Controls */}
@@ -935,25 +925,7 @@ const styles = StyleSheet.create({
   nextButton: {
     right: 10,
   },
-  imageInfoOverlay: {
-    position: 'absolute',
-    bottom: 20,
-    left: 20,
-    right: 20,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 8,
-    padding: 12,
-  },
-  imageTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  imageCounter: {
-    color: '#ccc',
-    fontSize: 14,
-  },
+  // image info overlay removed per design request
   slideshowControls: {
     flexDirection: 'row',
     justifyContent: 'center',

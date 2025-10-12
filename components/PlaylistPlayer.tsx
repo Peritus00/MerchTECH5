@@ -1341,7 +1341,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         <TouchableOpacity
           style={styles.storeLinkCard}
           onPress={() => {
-            const storeUrl = playlistData?.userId ? `/store/user/${playlistData.userId}` : '/store';
+            const storeUrl = playlistData?.userId ? `/store/user/${playlistData.userId}` : '/store/master';
             if (Platform.OS === 'web') {
               window.location.href = storeUrl;
             } else {

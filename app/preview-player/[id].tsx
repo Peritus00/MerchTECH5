@@ -150,7 +150,7 @@ export default function PreviewPlayerScreen() {
 
   const handlePreviewComplete = () => {
     // Redirect to the slideshow creator's store
-    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store/master';
     
     Alert.alert(
       '⏰ Preview Complete',
@@ -255,7 +255,7 @@ export default function PreviewPlayerScreen() {
         
         <TouchableOpacity 
           style={styles.storeButton}
-          onPress={() => cleanupAudioAndNavigate('/store')}
+          onPress={() => cleanupAudioAndNavigate('/store/master')}
         >
           <Ionicons name="storefront" size={20} color="#3b82f6" />
           <ThemedText style={styles.storeButtonText}>Visit Store</ThemedText>

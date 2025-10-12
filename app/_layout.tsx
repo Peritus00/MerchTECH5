@@ -61,11 +61,14 @@ function RootLayoutNav() {
       (
         segments[0] === 'store' && // Allow public access to specific store pages
         (
+          // Make the base store route public (we'll redirect to master)
+          segments.length === 1 ||
           segments[1] === 'cart' ||
           segments[1] === 'checkout-success' ||
           segments[1] === 'checkout-cancel' ||
           segments[1] === 'product' ||
-          segments[1] === 'user'
+          segments[1] === 'user' ||
+          segments[1] === 'master'
         )
       );
 

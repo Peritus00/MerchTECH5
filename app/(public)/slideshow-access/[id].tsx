@@ -573,7 +573,7 @@ export default function SlideshowAccessScreen() {
     setShowPreview(false);
 
     // Redirect to the slideshow creator's store after preview
-    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store/master';
     
     Alert.alert(
       '⏰ Preview Complete',
@@ -587,7 +587,7 @@ export default function SlideshowAccessScreen() {
 
   const handleGoToStore = () => {
     // Redirect to the slideshow creator's store
-    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store';
+    const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store/master';
     router.push(storeUrl);
   };
 

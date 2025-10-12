@@ -466,7 +466,7 @@ export default function PlaylistAccessScreen() {
     setShowPreview(false);
     
     // Redirect to the playlist creator's store
-    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store';
+    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store/master';
     
     // Show a brief message that preview is complete
     Alert.alert(
@@ -481,7 +481,7 @@ export default function PlaylistAccessScreen() {
 
   const handleGoToStore = () => {
     // Redirect to the playlist creator's store
-    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store';
+    const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store/master';
     router.push(storeUrl);
   };
 

@@ -1264,8 +1264,8 @@ function PreviewPlayer({
   };
 
   const handleStoreRedirect = () => {
-    // Redirect to the creator's store if userId is available, otherwise general store
-    const storeUrl = userId ? `/store/user/${userId}` : '/store';
+    // Redirect to the creator's store if userId is available, otherwise public master store
+    const storeUrl = userId ? `/store/user/${userId}` : '/store/master';
     console.log('Redirecting to store:', storeUrl);
     
     if (Platform.OS === 'web') {
