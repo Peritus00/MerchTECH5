@@ -1336,6 +1336,27 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         )}
       </View>
 
+        {/* Visit Store link between Featured Products and Discussion */}
+        {!isFullscreen && (
+        <TouchableOpacity
+          style={styles.storeLinkCard}
+          onPress={() => {
+            const storeUrl = playlistData?.userId ? `/store/user/${playlistData.userId}` : '/store';
+            if (Platform.OS === 'web') {
+              window.location.href = storeUrl;
+            } else {
+              router.push(storeUrl);
+            }
+          }}
+          accessibilityRole="link"
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="storefront" size={20} color="#3b82f6" />
+          <Text style={styles.storeLinkText}>Visit Our Store</Text>
+          <MaterialIcons name="arrow-forward" size={18} color="#3b82f6" />
+        </TouchableOpacity>
+        )}
+
         {!isFullscreen && (
         <View style={styles.slideshowChatSection}>
           <PlaylistChat
@@ -1691,6 +1712,25 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         marginTop: 8,
         lineHeight: 20,
+      },
+      // Store link styles
+      storeLinkCard: {
+        marginHorizontal: 20,
+        marginBottom: 12,
+        backgroundColor: '#f0f9ff',
+        borderWidth: 1,
+        borderColor: '#bfdbfe',
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      },
+      storeLinkText: {
+        color: '#1d4ed8',
+        fontSize: 16,
+        fontWeight: '600',
       },
   container: {
     flex: 1,

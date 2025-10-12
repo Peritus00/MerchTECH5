@@ -233,7 +233,9 @@ export default function SlideshowAccessScreen() {
           ...slideshowData,
           audioUrl: slideshowData.audio_url || slideshowData.audioUrl,
           requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
-          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval
+          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval,
+          // Ensure creator userId is available for store routing
+          userId: slideshowData.user_id || slideshowData.userId
         };
         setSlideshow(mappedSlideshow);
         // Don't set isFullAccess to true - user needs to enter activation code
@@ -244,7 +246,9 @@ export default function SlideshowAccessScreen() {
           ...slideshowData,
           audioUrl: slideshowData.audio_url || slideshowData.audioUrl,
           requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
-          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval
+          autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval,
+          // Ensure creator userId is available for store routing
+          userId: slideshowData.user_id || slideshowData.userId
         };
         setSlideshow(mappedSlideshow);
         // Access is granted, user can view slideshow
@@ -543,7 +547,15 @@ export default function SlideshowAccessScreen() {
       const previewData = await slideshowAccessAPI.getByIdForPreview(id);
       
       if (previewData && previewData.images && previewData.images.length > 0) {
-        setSlideshow(previewData);
+        // Normalize fields for preview as well (userId required for creator store link)
+        const mappedPreview = {
+          ...previewData,
+          audioUrl: previewData.audio_url || previewData.audioUrl,
+          requiresActivationCode: previewData.requires_activation_code || previewData.requiresActivationCode,
+          autoplayInterval: previewData.autoplay_interval || previewData.autoplayInterval,
+          userId: previewData.user_id || previewData.userId,
+        } as any;
+        setSlideshow(mappedPreview);
         setShowPreview(true);
       } else {
         Alert.alert('Preview Not Available', 'There are no images in this slideshow to preview.');
