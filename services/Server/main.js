@@ -41,6 +41,7 @@ console.log(`   - Frontend URL: ${process.env.FRONTEND_URL}`);
 
 // --- MIDDLEWARE ---
 app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -1817,6 +1818,8 @@ app.get('/api/media/:id/stream', async (req, res) => {
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range');
+  // Ensure embeddability across origins for ranged responses
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
   // Set Content-Disposition to "inline" to prevent direct downloads
   // This instructs the browser to display the file, not download it
@@ -4675,6 +4678,7 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     
     // Get image details from database
     const result = await pool.query(
@@ -4932,6 +4936,7 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
     console.log('🎵 SLIDESHOW_AUDIO_STREAM: Streaming audio for slideshow:', id);
     
     // Set CORS headers for audio streaming
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
