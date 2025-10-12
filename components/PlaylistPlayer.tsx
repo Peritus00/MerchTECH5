@@ -73,7 +73,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [isMuted, setIsMuted] = useState(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
   const [videoDimensions, setVideoDimensions] = useState<{width: number, height: number} | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1); // 1 = normal, 0.5 = zoomed out, 2 = zoomed in
+  const [zoomLevel, setZoomLevel] = useState(0.5); // 1 = normal, 0.5 = zoomed out, 2 = zoomed in
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExitButton, setShowExitButton] = useState(false);
   
@@ -699,6 +699,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               objectFit: 'contain'
             } as React.CSSProperties}
             controls={true}
+            playsInline
             muted={isMuted}
             autoPlay={isPlaying}
             onError={(e) => {
@@ -792,6 +793,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             resizeMode={ResizeMode.CONTAIN}
             style={getVideoStyle()}
             useNativeControls={true}
+            // On iOS ensure controls show and video plays inline when available
+            // Note: expo-av handles inline playback on iOS Safari when not fullscreen
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
             onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate === 1)}
             onError={handleVideoError}
@@ -907,8 +910,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 }
               }}
               src={itemUri}
-              style={{ display: 'none' } as React.CSSProperties}
-              controls={false}
+              style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
+              controls={true}
               muted={isMuted}
               autoPlay={isPlaying}
               onError={(e) => {
