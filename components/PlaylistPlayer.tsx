@@ -698,7 +698,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               borderRadius: 8,
               objectFit: 'contain'
             } as React.CSSProperties}
-            controls={false}
+            controls={true}
             muted={isMuted}
             autoPlay={isPlaying}
             onError={(e) => {
@@ -791,7 +791,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             isLooping={false}
             resizeMode={ResizeMode.CONTAIN}
             style={getVideoStyle()}
-            useNativeControls={false}
+            useNativeControls={true}
             onPlaybackStatusUpdate={onPlaybackStatusUpdate}
             onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate === 1)}
             onError={handleVideoError}
