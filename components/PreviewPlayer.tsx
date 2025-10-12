@@ -25,7 +25,7 @@ import PlaylistChat from './PlaylistChat';
 const { width } = Dimensions.get('window');
 
 // Disable right-click on web
-if (Platform.OS === 'web') {
+ {
   document.addEventListener('contextmenu', (e) => {
     // Allow context menu on inputs and text areas
     const target = e.target as HTMLElement;
