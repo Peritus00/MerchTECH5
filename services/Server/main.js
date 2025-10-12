@@ -15,6 +15,7 @@ const { Readable } = require('stream');
 const s3Service = require('./s3Service');
 const axios = require('axios');
 const helmet = require('helmet');
+const { v4: uuidv4 } = require('uuid');
 
 console.log('DEBUG: Server script starting...');
 console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
@@ -22,6 +23,16 @@ console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+
+// --- CORS Configuration ---
+const corsOptions = {
+  origin: '*', // Allow all origins
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+};
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 
 // Log environment-specific variables for debugging
 console.log('🔧 Initializing server...');
@@ -76,10 +87,6 @@ app.use(helmet({
       ],
     },
   },
-}));
-app.use(cors({
-  origin: true,
-  credentials: true,
 }));
 
 // 🔧 INCREASED LIMITS FOR LARGE VIDEO FILES
@@ -166,9 +173,6 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// --- MIDDLEWARE ---
-// Note: Express limits already configured above with 1GB limit
-
 const allowedOrigins = [
   'https://app.merchtrader.org',
   'http://localhost:8081',
@@ -186,13 +190,6 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
   process.env.EXPO_PUBLIC_FRONTEND_URL
 ].filter(Boolean); // Remove any undefined values
-
-app.use(cors({
-  origin: true, // Allow all origins
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
 
 // Add a separate, more detailed CORS error logger to help debug future issues
 app.use((req, res, next) => {
