@@ -1812,6 +1812,16 @@ app.options('/api/media/:id/stream', (req, res) => {
 app.get('/api/media/:id/stream', async (req, res) => {
   console.log(`📺 MEDIA_STREAM: Route handler called for media ${req.params.id}`);
   
+  // 🚀 Set CORS headers directly for this route to ensure video/audio streaming works
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+
+  // Handle preflight requests for this specific route
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
   // Set Content-Disposition to "inline" to prevent direct downloads
   // This instructs the browser to display the file, not download it
   res.setHeader('Content-Disposition', 'inline');
