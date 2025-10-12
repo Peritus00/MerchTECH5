@@ -255,7 +255,10 @@ export default function PreviewPlayerScreen() {
         
         <TouchableOpacity 
           style={styles.storeButton}
-          onPress={() => cleanupAudioAndNavigate('/store/master')}
+          onPress={() => {
+            const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store/master';
+            cleanupAudioAndNavigate(storeUrl);
+          }}
         >
           <Ionicons name="storefront" size={20} color="#3b82f6" />
           <ThemedText style={styles.storeButtonText}>Visit Store</ThemedText>

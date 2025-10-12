@@ -77,6 +77,11 @@ export default function PlaylistAccessScreen() {
 
       console.log('🔴 PLAYLIST_ACCESS: API response:', playlistData);
 
+      // Normalize server response to ensure creator userId is present
+      const mappedPlaylist = playlistData
+        ? { ...playlistData, userId: playlistData.user_id || playlistData.userId }
+        : null;
+
       // Log media files from server (URLs are now correct from server)
       if (playlistData.mediaFiles) {
         console.log('🔴 PLAYLIST_ACCESS: Media files from server:', playlistData.mediaFiles);
@@ -99,7 +104,7 @@ export default function PlaylistAccessScreen() {
         }
       }
 
-      setPlaylist(playlistData);
+      setPlaylist(mappedPlaylist);
     } catch (error: any) {
       console.error('🔴 PLAYLIST_ACCESS: Error fetching playlist:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load playlist';
@@ -300,7 +305,8 @@ export default function PlaylistAccessScreen() {
               {
                 text: 'Go to Store',
                 onPress: () => {
-                  router.replace('/store');
+                  const storeUrl = playlist?.userId ? `/store/user/${playlist.userId}` : '/store/master';
+                  router.replace(storeUrl);
                 }
               }
             ]
