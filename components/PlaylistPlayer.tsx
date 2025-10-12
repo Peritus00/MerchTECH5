@@ -705,6 +705,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             } as React.CSSProperties}
             controls={true}
             playsInline
+            controlsList="nodownload noplaybackrate noremoteplayback"
+            disablePictureInPicture
+            onContextMenu={(e) => e.preventDefault()}
             muted={isMuted}
             autoPlay={isPlaying}
             onError={(e) => {
@@ -928,6 +931,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               src={itemUri}
               style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
               controls={true}
+              controlsList="nodownload noplaybackrate noremoteplayback"
+              onContextMenu={(e) => e.preventDefault()}
               muted={isMuted}
               autoPlay={isPlaying}
               onError={(e) => {
