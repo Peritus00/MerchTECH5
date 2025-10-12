@@ -24,19 +24,6 @@ import PlaylistChat from './PlaylistChat';
 
 const { width } = Dimensions.get('window');
 
-// Disable right-click on web
- {
-  document.addEventListener('contextmenu', (e) => {
-    // Allow context menu on inputs and text areas
-    const target = e.target as HTMLElement;
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-      return;
-    }
-    // Prevent default context menu for other elements
-    e.preventDefault();
-  });
-}
-
 interface MediaFile {
   id: number;
   title: string;
