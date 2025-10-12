@@ -85,6 +85,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   const isMobile = width < 768;
 
+  // Used to size containers to content height to avoid large empty space
+  const estimatedVideoHeight = useMemo(() => {
+    return Math.max(200, Math.round(500 * zoomLevel));
+  }, [zoomLevel]);
+
   useEffect(() => {
     // Disable right-click on web
     if (Platform.OS === 'web') {
@@ -1097,8 +1102,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
         <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isMobile && styles.mobileMainContent]}>
-        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel, isMobile && styles.mobileLeftPanel]}>
-            <View style={[styles.videoContainer, isFullscreen && styles.fullscreenVideoContainer]}>
+        <View style={[
+            styles.slideshowLeftPanel,
+            isFullscreen && styles.fullscreenLeftPanel,
+            isMobile && styles.mobileLeftPanel,
+            !isFullscreen && { minHeight: estimatedVideoHeight + 180 }
+          ]}>
+            <View style={[
+              styles.videoContainer,
+              isFullscreen && styles.fullscreenVideoContainer,
+              !isFullscreen && { minHeight: estimatedVideoHeight }
+            ]}>
                 {renderCurrentMedia()}
             </View>
             
