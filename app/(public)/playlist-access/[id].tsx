@@ -814,6 +814,13 @@ export default function PlaylistAccessScreen() {
         <View style={{ width: 24 }} />
       </View>
 
+      {/* Scrollable content to ensure store link is reachable */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
       <View style={styles.content}>
         {/* Playlist Info */}
         <View style={styles.playlistInfo}>
@@ -923,6 +930,7 @@ export default function PlaylistAccessScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -981,6 +989,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 48,
   },
   playlistInfo: {
     alignItems: 'center',

@@ -678,6 +678,13 @@ export default function SlideshowAccessScreen() {
         <View style={{ width: 24 }} />
       </View>
 
+      {/* Make the content scrollable so small screens can reach the store link */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator
+      >
       <View style={styles.content}>
         {/* Slideshow Info */}
         <View style={styles.slideshowInfo}>
@@ -781,6 +788,7 @@ export default function SlideshowAccessScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      </ScrollView>
     </ThemedView>
   );
 }
@@ -1105,6 +1113,12 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 16,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingBottom: 48, // ensure last button isn’t obscured by browser toolbars
   },
   slideshowInfo: {
     alignItems: 'center',
