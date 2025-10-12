@@ -1410,12 +1410,18 @@ app.options('/api/images/s3/*', (req, res) => {
   res.status(200).end();
 });
 
-app.get('/api/images/s3/*', authenticateToken, async (req, res) => {
+app.get('/api/images/s3/*', async (req, res) => {
     const key = req.params[0];
     if (!key) {
         return res.status(400).send('Invalid image key');
     }
     
+    // Public image streaming with permissive headers for mobile clients
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
     // Set Content-Disposition to "inline" to prevent direct downloads
     // This instructs the browser to display the file, not download it
     res.setHeader('Content-Disposition', 'inline');
