@@ -742,8 +742,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               
               handleVideoError(e);
             }}
-            onEnded={() => {
+              onEnded={() => {
               console.log('🎵 HTML5_VIDEO: Video ended, going to next');
+              setIsPlaying(false);
               goToNextVideo();
             }}
             onLoadStart={() => {
@@ -763,9 +764,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             }}
             onPlaying={() => {
               console.log('🎵 HTML5_VIDEO: onPlaying - React event');
+              setIsPlaying(true);
             }}
             onPause={() => {
               console.log('🎵 HTML5_VIDEO: onPause - React event');
+              setIsPlaying(false);
             }}
             onLoadedMetadata={(e) => {
               const video = e.target as HTMLVideoElement;
@@ -800,7 +803,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             useNativeControls={true}
             // On iOS ensure controls show and video plays inline when available
             // Note: expo-av handles inline playback on iOS Safari when not fullscreen
-            onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+            onPlaybackStatusUpdate={(status) => {
+              onPlaybackStatusUpdate(status);
+              if ((status as any).isLoaded) {
+                const s = status as any;
+                if (typeof s.isPlaying === 'boolean') {
+                  setIsPlaying(s.isPlaying);
+                }
+              }
+            }}
             onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate === 1)}
             onError={handleVideoError}
           />
@@ -971,12 +982,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               }}
               onPlaying={() => {
                 console.log('🎵 HTML5_AUDIO: onPlaying - React event');
+                setIsPlaying(true);
               }}
               onPause={() => {
                 console.log('🎵 HTML5_AUDIO: onPause - React event');
+                setIsPlaying(false);
               }}
               onEnded={() => {
                 console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
+                setIsPlaying(false);
                 goToNextVideo();
               }}
             />
