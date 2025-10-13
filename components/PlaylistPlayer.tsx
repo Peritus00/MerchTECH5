@@ -79,6 +79,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
+  // When advancing (next/prev or track end), remember whether we should resume playback on the next item
+  const resumeOnAdvanceRef = useRef<boolean>(false);
 
   const { addToCart, cart, getTotalItems } = useCart();
   const router = useRouter();
@@ -255,11 +257,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     setError(null);
     try {
       const response = await api.get(`/playlist-access/${playlistId}`);
-      
-      if (response.data) {
-        setPlaylistData(response.data);
-        setMedia(response.data.mediaFiles || []);
-        setPlaylistTitle(response.data.name || 'Playlist');
+
+      // Normalize server casing to ensure creator userId is available for store routing
+      const data = response.data;
+      const mappedData = data ? { ...data, userId: data.user_id || data.userId } : null;
+
+      if (mappedData) {
+        setPlaylistData(mappedData);
+        setMedia(mappedData.mediaFiles || []);
+        setPlaylistTitle(mappedData.name || 'Playlist');
       } else {
         setError('No media found for this playlist. Please check the link and try again.');
       }
@@ -351,7 +357,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       }
       
       if (status.didJustFinish) {
-        // Video finished, go to next video
+        // Track finished - remember to resume on next item and advance
+        resumeOnAdvanceRef.current = true;
         goToNextVideo();
       }
     }
@@ -367,6 +374,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
   }, [currentIndex]);
 
+  // If we advanced while playing, auto-resume playback on the new item
+  useEffect(() => {
+    if (resumeOnAdvanceRef.current) {
+      setIsPlaying(true);
+      resumeOnAdvanceRef.current = false;
+    }
+  }, [currentIndex]);
+
   const handlePlayPause = () => {
     setIsPlaying((prev) => !prev);
   };
@@ -376,6 +391,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   };
 
   const handlePrevious = () => {
+    // Preserve play state across manual navigation
+    resumeOnAdvanceRef.current = isPlaying;
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     } else {
@@ -385,6 +402,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   };
 
   const handleNext = () => {
+    // Preserve play state across manual navigation
+    resumeOnAdvanceRef.current = isPlaying;
     goToNextVideo();
   };
 
@@ -745,9 +764,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               
               handleVideoError(e);
             }}
-              onEnded={() => {
+            onEnded={() => {
               console.log('🎵 HTML5_VIDEO: Video ended, going to next');
-              setIsPlaying(false);
+              // Preserve play state across auto-advance
+              resumeOnAdvanceRef.current = true;
               goToNextVideo();
             }}
             onLoadStart={() => {
@@ -924,6 +944,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                   
                   ref.addEventListener('ended', () => {
                     console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
+                    // Preserve play state across auto-advance
+                    resumeOnAdvanceRef.current = true;
                     goToNextVideo();
                   });
                 }
@@ -995,7 +1017,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               }}
               onEnded={() => {
                 console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
-                setIsPlaying(false);
+                // Preserve play state across auto-advance
+                resumeOnAdvanceRef.current = true;
                 goToNextVideo();
               }}
             />
