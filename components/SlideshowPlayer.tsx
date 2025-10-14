@@ -200,12 +200,16 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
     setError(null);
     try {
       const response = await api.get(`/slideshow-access/${slideshowId}`);
-      
-      if (response.data) {
-        setSlideshowData(response.data);
+
+      // Normalize casing so creator id is always available for store routing
+      const data = response.data;
+      const mapped = data ? { ...data, userId: data.user_id || data.userId } : null;
+
+      if (mapped) {
+        setSlideshowData(mapped);
         
         // Convert slideshow images to expected format
-        const slideshowImages = response.data.images?.map((image: any) => ({
+        const slideshowImages = mapped.images?.map((image: any) => ({
           id: image.id,
           title: image.caption || image.title || `Image ${image.displayOrder + 1}`,
           caption: image.caption,

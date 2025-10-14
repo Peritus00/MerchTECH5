@@ -361,6 +361,116 @@ function parseUserAgent(ua) {
   return { deviceType, browserName, operatingSystem };
 }
 
+// Helper: parse basic UTM params from query string
+function extractUtm(query) {
+  return {
+    utm_source: query.utm_source || null,
+    utm_medium: query.utm_medium || null,
+    utm_campaign: query.utm_campaign || null,
+    utm_term: query.utm_term || null,
+    utm_content: query.utm_content || null,
+  };
+}
+
+// Set or get anonymous visitor id
+function getOrSetVisitorId(req, res) {
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.match(/(?:^|;\s*)qr_vid=([^;]+)/);
+  let visitorId = match ? match[1] : null;
+  if (!visitorId) {
+    visitorId = uuidv4();
+    // Set cookie for 180 days, lax; do not mark secure to allow http local dev; HttpOnly true
+    res.setHeader('Set-Cookie', `qr_vid=${visitorId}; Max-Age=${60 * 60 * 24 * 180}; Path=/; SameSite=Lax; HttpOnly`);
+  }
+  return visitorId;
+}
+
+// Lightweight geo using cloud/edge headers without storing IP
+function inferGeo(req) {
+  const cc = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+  const region = req.headers['x-vercel-ip-country-region'] || null;
+  const city = req.headers['x-vercel-ip-city'] || null;
+  return { countryCode: cc, region, city };
+}
+
+// --- QR Redirector ---
+// Logs scan with privacy-friendly metadata, then redirects to destination
+app.get('/r/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const qrId = parseInt(id, 10);
+    if (!qrId || Number.isNaN(qrId)) {
+      return res.status(400).send('Invalid QR id');
+    }
+
+    // Load QR
+    const qrRes = await pool.query('SELECT id, url, is_active FROM qr_codes WHERE id = $1', [qrId]);
+    if (qrRes.rowCount === 0 || qrRes.rows[0].is_active === false) {
+      return res.status(404).send('QR not found');
+    }
+    const destinationUrl = qrRes.rows[0].url;
+
+    // Collect metadata
+    const ua = req.headers['user-agent'] || '';
+    const { deviceType, browserName, operatingSystem } = parseUserAgent(ua);
+    const referrer = req.headers['referer'] || req.headers['referrer'] || null;
+    const utm = extractUtm(req.query || {});
+    const geo = inferGeo(req);
+    const visitorId = getOrSetVisitorId(req, res);
+
+    // Dedupe: skip insert if same visitor scanned same code within last 5 minutes
+    try {
+      const dedupe = await pool.query(
+        `SELECT 1 FROM qr_scans
+         WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes'
+         LIMIT 1`,
+        [qrId, visitorId]
+      );
+      if (dedupe.rowCount === 0) {
+        await pool.query(
+          `INSERT INTO qr_scans (
+            qr_code_id, scanned_at, device_type, browser_name, operating_system,
+            country_code, country_name, region, city, referrer,
+            utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+            visitor_id
+          ) VALUES (
+            $1, NOW(), $2, $3, $4,
+            $5, NULL, $6, $7, $8,
+            $9, $10, $11, $12, $13,
+            $14
+          )`,
+          [
+            qrId,
+            deviceType,
+            browserName,
+            operatingSystem,
+            geo.countryCode || null,
+            geo.region || null,
+            geo.city || null,
+            referrer,
+            utm.utm_source,
+            utm.utm_medium,
+            utm.utm_campaign,
+            utm.utm_term,
+            utm.utm_content,
+            visitorId,
+          ]
+        );
+      }
+    } catch (e) {
+      console.warn('QR redirect logging failed (non-fatal):', e.message);
+    }
+
+    // Build redirect URL (preserve original query including UTMs)
+    const originalQs = req.url.split('?')[1];
+    const redirectUrl = originalQs ? `${destinationUrl}${destinationUrl.includes('?') ? '&' : '?'}${originalQs}` : destinationUrl;
+    return res.redirect(302, redirectUrl);
+  } catch (error) {
+    console.error('QR redirect error:', error);
+    return res.status(500).send('Internal Server Error');
+  }
+});
+
 // Track a QR scan (public; no auth required)
 app.post('/api/analytics/track-scan', async (req, res) => {
   try {
@@ -373,7 +483,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       deviceType,
       browserName,
       operatingSystem,
-      ipAddress,
+      // ipAddress ignored for privacy
     } = req.body || {};
 
     if (!qrCodeId) {
@@ -386,15 +496,15 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       return res.status(404).json({ error: 'QR code not found' });
     }
 
-    const ip = ipAddress || getClientIp(req);
+    // Do not store IP; infer approximate country from headers and discard IP
     const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || countryCode || null;
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
     await pool.query(
       `INSERT INTO qr_scans (
-        qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address
-      ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+        qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
+      ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
       [
         qrCodeId,
         location || null,
@@ -404,7 +514,6 @@ app.post('/api/analytics/track-scan', async (req, res) => {
         deviceType || parsed.deviceType,
         browserName || parsed.browserName,
         operatingSystem || parsed.operatingSystem,
-        ip || null,
       ]
     );
 
@@ -464,14 +573,25 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId, monthStart]
     ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
+    // Prefer privacy-preserving visitor_id when available; fallback to UA heuristic
     let uniqueVisitorsRes;
-    try { uniqueVisitorsRes = await pool.query(
-      `SELECT COUNT(DISTINCT ip_address) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1`,
-      [userId]
-    ); } catch (e) { console.warn('📊 SUMMARY uniqueVisitorsRes failed:', e.message); uniqueVisitorsRes = { rows: [{ c: 0 }] }; }
+    try {
+      uniqueVisitorsRes = await pool.query(
+        `SELECT COUNT(*) AS c FROM (
+           SELECT DISTINCT
+             CASE WHEN visitor_id IS NOT NULL THEN visitor_id::text
+                  ELSE CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))
+             END AS vkey
+           FROM qr_scans s
+           JOIN qr_codes q ON s.qr_code_id = q.id
+           WHERE q.user_id = $1
+         ) t`,
+        [userId]
+      );
+    } catch (e) {
+      console.warn('📊 SUMMARY uniqueVisitorsRes failed:', e.message);
+      uniqueVisitorsRes = { rows: [{ c: 0 }] };
+    }
 
     // Hourly distribution (last 24h)
     let hourlyRes;
@@ -2887,13 +3007,21 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const result = await pool.query(
-      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
+      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description, short_url) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description, null]
     );
     
+    // Build redirect short URL
+    const publicOrigin = process.env.PUBLIC_WEB_ORIGIN || process.env.FRONTEND_URL || 'https://www.merchtrader.org';
+    const shortUrl = `${publicOrigin.replace(/\/$/, '')}/r/${result.rows[0].id}`;
+
+    // Persist short_url for convenience
+    await pool.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
+
     const qrCode = {
       ...result.rows[0],
+      short_url: shortUrl,
       options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
       scanCount: 0
     };
@@ -3009,8 +3137,14 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
       [name, url, description, options ? JSON.stringify(options) : null, id]
     );
 
+    // Rebuild short_url when URL changes (id and origin stable)
+    const publicOrigin = process.env.PUBLIC_WEB_ORIGIN || process.env.FRONTEND_URL || 'https://www.merchtrader.org';
+    const shortUrl = `${publicOrigin.replace(/\/$/, '')}/r/${result.rows[0].id}`;
+    await pool.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
+
     const qrCode = {
       ...result.rows[0],
+      short_url: shortUrl,
       options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options
     };
     

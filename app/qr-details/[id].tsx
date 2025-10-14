@@ -201,7 +201,7 @@ export default function QRCodeDetailsScreen() {
         <View style={styles.qrSection}>
           <View ref={qrRef} style={styles.qrContainer}>
             <AdvancedQRCodeGenerator
-              value={currentQRCode?.url || ''}
+              value={(currentQRCode?.shortUrl || currentQRCode?.short_url || currentQRCode?.url) || ''}
               size={280}
               fgColor={currentQRCode?.options?.foregroundColor || '#000000'}
               bgColor={currentQRCode?.options?.backgroundColor || '#FFFFFF'}

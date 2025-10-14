@@ -499,7 +499,8 @@ export default function SlideshowAccessScreen() {
               {
                 text: 'Go to Store',
                 onPress: () => {
-                  router.replace('/store');
+                  const storeUrl = slideshow?.userId ? `/store/user/${slideshow.userId}` : '/store/master';
+                  router.replace(storeUrl);
                 }
               }
             ]

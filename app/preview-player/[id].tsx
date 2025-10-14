@@ -60,7 +60,9 @@ export default function PreviewPlayerScreen() {
       // Use the public slideshow access endpoint for preview
       const data = await slideshowAccessAPI.getByIdForAccess(slideshowId);
       console.log('✅ Successfully fetched slideshow data:', data);
-      setSlideshow(data);
+      // Normalize casing so creator id is always available for store routing
+      const mapped = data ? { ...data, userId: (data as any).user_id || (data as any).userId } : null;
+      setSlideshow(mapped);
     } catch (error) {
       console.error('❌ Error loading slideshow preview:', error);
       Alert.alert('Error', 'Failed to load slideshow preview.');
