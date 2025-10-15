@@ -183,10 +183,24 @@ export default function AnalyticsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'geography' | 'behavior'>('overview');
+  
+  // New analytics state
+  const [playStats, setPlayStats] = useState<any>(null);
+  const [cartConversion, setCartConversion] = useState<any>(null);
 
   useEffect(() => {
     fetchAllAnalytics();
   }, [selectedTimeRange]);
+
+  // Auto-refresh analytics every 30 seconds for near real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log('📊 ANALYTICS: Auto-refreshing data...');
+      fetchAllAnalytics();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchAllAnalytics = async () => {
     try {
@@ -243,6 +257,16 @@ export default function AnalyticsScreen() {
             ...prev,
             totalCodes: userAnalytics.totalQRCodes || 0,
           } : null);
+
+          // Fetch play stats and cart conversion
+          const [plays, conversion] = await Promise.all([
+            analyticsService.getPlayStats(user.id),
+            analyticsService.getCartConversionStats(user.id),
+          ]);
+          
+          setPlayStats(plays);
+          setCartConversion(conversion);
+          console.log('📊 ANALYTICS: Play stats and cart conversion loaded');
         } catch (error) {
           console.error('Error fetching user analytics:', error);
         }
@@ -334,6 +358,87 @@ export default function AnalyticsScreen() {
           color="#8b5cf6"
         />
       </View>
+
+      {/* Media Engagement Section */}
+      {playStats && (
+        <>
+          <Text style={styles.sectionTitle}>Media Engagement</Text>
+          <View style={styles.summaryGrid}>
+            <AnalyticsCard
+              title="Total Media Plays"
+              value={playStats.media?.totalPlays || 0}
+              icon="play-circle-filled"
+              color="#3b82f6"
+            />
+            <AnalyticsCard
+              title="Unique Plays"
+              value={playStats.media?.uniquePlays || 0}
+              icon="people"
+              color="#10b981"
+            />
+            <AnalyticsCard
+              title="Playlists Created"
+              value={playStats.playlists?.timesCreated || 0}
+              icon="queue-music"
+              color="#f59e0b"
+            />
+            <AnalyticsCard
+              title="Slideshows Created"
+              value={playStats.slideshows?.timesCreated || 0}
+              icon="slideshow"
+              color="#8b5cf6"
+            />
+          </View>
+
+          {/* Most Played Media */}
+          {playStats.mostPlayedMedia && playStats.mostPlayedMedia.length > 0 && (
+            <ChartContainer title="Most Played Media">
+              {playStats.mostPlayedMedia.slice(0, 5).map((item: any, index: number) => (
+                <View key={item.id} style={styles.listItem}>
+                  <View style={styles.listItemLeft}>
+                    <Text style={styles.listItemRank}>{index + 1}</Text>
+                    <Text style={styles.listItemName}>{item.title}</Text>
+                  </View>
+                  <Text style={styles.listItemValue}>{item.total_plays} plays</Text>
+                </View>
+              ))}
+            </ChartContainer>
+          )}
+        </>
+      )}
+
+      {/* Commerce Analytics Section */}
+      {cartConversion && (
+        <>
+          <Text style={styles.sectionTitle}>Commerce Analytics</Text>
+          <View style={styles.summaryGrid}>
+            <AnalyticsCard
+              title="Items Added to Cart"
+              value={cartConversion.totalItemsAddedToCart || 0}
+              icon="shopping-cart"
+              color="#3b82f6"
+            />
+            <AnalyticsCard
+              title="Items Purchased"
+              value={cartConversion.totalItemsPurchased || 0}
+              icon="shopping-bag"
+              color="#10b981"
+            />
+            <AnalyticsCard
+              title="Conversion Rate"
+              value={Math.round(cartConversion.conversionRate || 0)}
+              icon="percent"
+              color="#f59e0b"
+            />
+            <AnalyticsCard
+              title="Total Revenue"
+              value={Math.round((cartConversion.totalRevenue || 0) / 100)}
+              icon="attach-money"
+              color="#8b5cf6"
+            />
+          </View>
+        </>
+      )}
 
       {/* Most Popular QR Code */}
       {summaryData?.mostPopular && (
@@ -898,6 +1003,50 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 8,
     fontSize: 16,
+    color: '#6b7280',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+  },
+  listItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  listItemRank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#3b82f6',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  listItemName: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1f2937',
+  },
+  listItemValue: {
+    fontSize: 14,
+    fontWeight: '600',
     color: '#6b7280',
   },
 });

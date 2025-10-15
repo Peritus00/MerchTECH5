@@ -34,9 +34,12 @@ import createAudioPlayer, {
 import { MediaFile, ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 import * as WebBrowser from 'expo-web-browser';
 import { env } from '@/config/environment';
 import { useRouter } from 'expo-router';
+import { analyticsService } from '../services/analyticsService';
+import { getSessionId } from '../utils/sessionTracking';
 
 const { width } = Dimensions.get('window');
 
@@ -80,9 +83,99 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
 
+  // Analytics tracking state
+  const playDurationRef = useRef<number>(0); // Duration in seconds
+  const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasTrackedPlayRef = useRef<boolean>(false);
+  const currentMediaIdRef = useRef<number | null>(null);
+
   // Cart functionality
   const { addToCart, getTotalItems } = useCart();
+  const { user } = useAuth();
   const router = useRouter();
+
+  // Analytics: Track play duration and report when >= 30 seconds
+  const startPlayTracking = useCallback(async (mediaItem: MediaItem) => {
+    // Reset tracking for new media
+    if (currentMediaIdRef.current !== mediaItem.id) {
+      playDurationRef.current = 0;
+      hasTrackedPlayRef.current = false;
+      currentMediaIdRef.current = mediaItem.id;
+    }
+
+    // Clear any existing timer
+    if (playTimerRef.current) {
+      clearInterval(playTimerRef.current);
+    }
+
+    // Start timer to track playback duration
+    playTimerRef.current = setInterval(async () => {
+      playDurationRef.current += 1;
+
+      // Track when we hit 30 seconds
+      if (playDurationRef.current >= 30 && !hasTrackedPlayRef.current) {
+        hasTrackedPlayRef.current = true;
+        
+        try {
+          const sessionId = await getSessionId();
+          
+          // Track individual media play
+          if (mediaItem.id) {
+            await analyticsService.trackMediaPlay(
+              mediaItem.id,
+              playDurationRef.current,
+              sessionId,
+              user?.id
+            );
+          }
+
+          // Track playlist/slideshow play if applicable
+          if (playlist?.id) {
+            await analyticsService.trackPlaylistPlay(
+              playlist.id,
+              playDurationRef.current,
+              sessionId,
+              user?.id
+            );
+          } else if (slideshow?.id) {
+            await analyticsService.trackSlideshowPlay(
+              slideshow.id,
+              playDurationRef.current,
+              sessionId,
+              user?.id
+            );
+          }
+
+          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s`);
+        } catch (error) {
+          console.error('Error tracking play:', error);
+        }
+      }
+    }, 1000); // Update every second
+  }, [playlist, slideshow, user]);
+
+  const stopPlayTracking = useCallback(() => {
+    if (playTimerRef.current) {
+      clearInterval(playTimerRef.current);
+      playTimerRef.current = null;
+    }
+  }, []);
+
+  // Effect to manage play tracking based on isPlaying state
+  useEffect(() => {
+    const currentMedia = media[currentIndex];
+    
+    if (isPlaying && currentMedia) {
+      startPlayTracking(currentMedia);
+    } else {
+      stopPlayTracking();
+    }
+
+    // Cleanup on unmount
+    return () => {
+      stopPlayTracking();
+    };
+  }, [isPlaying, currentIndex, media, startPlayTracking, stopPlayTracking]);
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {

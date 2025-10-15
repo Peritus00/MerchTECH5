@@ -530,11 +530,18 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     console.log('📊 ANALYTICS: Computing summary for user:', userId);
 
-    // Date boundaries
+    // Date boundaries (use UTC to match database timezone)
     const now = new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6); // last 7 days
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)); // last 7 days
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    
+    console.log('📊 ANALYTICS: Date boundaries (UTC):', {
+      now: now.toISOString(),
+      todayStart: todayStart.toISOString(),
+      weekStart: weekStart.toISOString(),
+      monthStart: monthStart.toISOString()
+    });
 
     // Total scans for this user's QR codes
     let totalRes;
@@ -732,6 +739,392 @@ app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) =>
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching scans:', error);
     res.status(500).json({ error: 'Failed to fetch scans' });
+  }
+});
+
+// ---------- PLAY TRACKING ANALYTICS ENDPOINTS ----------
+
+// Track media play (>= 30 seconds)
+app.post('/api/analytics/track-media-play', async (req, res) => {
+  try {
+    const { mediaId, playDuration, sessionId, userId } = req.body;
+
+    if (!mediaId || !playDuration || !sessionId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (playDuration < 30) {
+      return res.status(400).json({ error: 'Play duration must be at least 30 seconds' });
+    }
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    console.log(`📊 ANALYTICS: Tracking media play - Media: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId}`);
+
+    // Check if this is a unique play (first play from this session)
+    const existingPlay = await pool.query(
+      'SELECT id FROM media_plays WHERE media_id = $1 AND session_id = $2',
+      [mediaId, sessionId]
+    );
+    const isUnique = existingPlay.rows.length === 0;
+
+    // Insert play record
+    await pool.query(
+      `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [mediaId, userId || null, sessionId, playDuration, ipAddress]
+    );
+
+    // Update aggregate counters
+    if (isUnique) {
+      await pool.query(
+        'UPDATE media SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
+        [mediaId]
+      );
+    } else {
+      await pool.query(
+        'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
+        [mediaId]
+      );
+    }
+
+    console.log(`📊 ANALYTICS: Media play tracked - Unique: ${isUnique}`);
+    res.json({ success: true, isUnique });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error tracking media play:', error);
+    res.status(500).json({ error: 'Failed to track media play' });
+  }
+});
+
+// Track playlist play (>= 30 seconds)
+app.post('/api/analytics/track-playlist-play', async (req, res) => {
+  try {
+    const { playlistId, playDuration, sessionId, userId } = req.body;
+
+    if (!playlistId || !playDuration || !sessionId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (playDuration < 30) {
+      return res.status(400).json({ error: 'Play duration must be at least 30 seconds' });
+    }
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    console.log(`📊 ANALYTICS: Tracking playlist play - Playlist: ${playlistId}, Duration: ${playDuration}s`);
+
+    // Check if this is a unique play
+    const existingPlay = await pool.query(
+      'SELECT id FROM playlist_plays WHERE playlist_id = $1 AND session_id = $2',
+      [playlistId, sessionId]
+    );
+    const isUnique = existingPlay.rows.length === 0;
+
+    // Insert play record
+    await pool.query(
+      `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [playlistId, userId || null, sessionId, playDuration, ipAddress]
+    );
+
+    // Update aggregate counters
+    if (isUnique) {
+      await pool.query(
+        'UPDATE playlists SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
+        [playlistId]
+      );
+    } else {
+      await pool.query(
+        'UPDATE playlists SET total_plays = total_plays + 1 WHERE id = $1',
+        [playlistId]
+      );
+    }
+
+    console.log(`📊 ANALYTICS: Playlist play tracked - Unique: ${isUnique}`);
+    res.json({ success: true, isUnique });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error tracking playlist play:', error);
+    res.status(500).json({ error: 'Failed to track playlist play' });
+  }
+});
+
+// Track slideshow play (>= 30 seconds)
+app.post('/api/analytics/track-slideshow-play', async (req, res) => {
+  try {
+    const { slideshowId, playDuration, sessionId, userId } = req.body;
+
+    if (!slideshowId || !playDuration || !sessionId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    if (playDuration < 30) {
+      return res.status(400).json({ error: 'Play duration must be at least 30 seconds' });
+    }
+
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+    console.log(`📊 ANALYTICS: Tracking slideshow play - Slideshow: ${slideshowId}, Duration: ${playDuration}s`);
+
+    // Check if this is a unique play
+    const existingPlay = await pool.query(
+      'SELECT id FROM slideshow_plays WHERE slideshow_id = $1 AND session_id = $2',
+      [slideshowId, sessionId]
+    );
+    const isUnique = existingPlay.rows.length === 0;
+
+    // Insert play record
+    await pool.query(
+      `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address) 
+       VALUES ($1, $2, $3, $4, $5)`,
+      [slideshowId, userId || null, sessionId, playDuration, ipAddress]
+    );
+
+    // Update aggregate counters
+    if (isUnique) {
+      await pool.query(
+        'UPDATE slideshows SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
+        [slideshowId]
+      );
+    } else {
+      await pool.query(
+        'UPDATE slideshows SET total_plays = total_plays + 1 WHERE id = $1',
+        [slideshowId]
+      );
+    }
+
+    console.log(`📊 ANALYTICS: Slideshow play tracked - Unique: ${isUnique}`);
+    res.json({ success: true, isUnique });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error tracking slideshow play:', error);
+    res.status(500).json({ error: 'Failed to track slideshow play' });
+  }
+});
+
+// ---------- CART & PURCHASE TRACKING ENDPOINTS ----------
+
+// Track cart addition
+app.post('/api/analytics/track-cart-add', async (req, res) => {
+  try {
+    const { productId, quantity, sessionId, userId } = req.body;
+
+    if (!productId || !quantity || !sessionId) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`📊 ANALYTICS: Tracking cart add - Product: ${productId}, Qty: ${quantity}`);
+
+    await pool.query(
+      `INSERT INTO cart_events (product_id, user_id, session_id, quantity) 
+       VALUES ($1, $2, $3, $4)`,
+      [productId, userId || null, sessionId, quantity]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error tracking cart add:', error);
+    res.status(500).json({ error: 'Failed to track cart addition' });
+  }
+});
+
+// Track purchase completion
+app.post('/api/analytics/track-purchase', async (req, res) => {
+  try {
+    const { stripeSessionId, items, totalAmount, userId } = req.body;
+
+    if (!stripeSessionId || !items || !totalAmount) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    console.log(`📊 ANALYTICS: Tracking purchase - Session: ${stripeSessionId}, Amount: ${totalAmount}`);
+
+    // Check if this purchase was already tracked
+    const existing = await pool.query(
+      'SELECT id FROM purchase_events WHERE stripe_session_id = $1',
+      [stripeSessionId]
+    );
+
+    if (existing.rows.length > 0) {
+      console.log('📊 ANALYTICS: Purchase already tracked');
+      return res.json({ success: true, alreadyTracked: true });
+    }
+
+    await pool.query(
+      `INSERT INTO purchase_events (stripe_session_id, user_id, total_amount, items) 
+       VALUES ($1, $2, $3, $4)`,
+      [stripeSessionId, userId || null, totalAmount, JSON.stringify(items)]
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error tracking purchase:', error);
+    res.status(500).json({ error: 'Failed to track purchase' });
+  }
+});
+
+// ---------- ANALYTICS RETRIEVAL ENDPOINTS ----------
+
+// Get play statistics
+app.get('/api/analytics/play-stats', async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    console.log(`📊 ANALYTICS: Fetching play stats${userId ? ` for user ${userId}` : ''}`);
+
+    let mediaWhere = '';
+    let playlistWhere = '';
+    let slideshowWhere = '';
+    const params = [];
+
+    if (userId) {
+      mediaWhere = 'WHERE m.user_id = $1';
+      playlistWhere = 'WHERE p.user_id = $1';
+      slideshowWhere = 'WHERE s.user_id = $1';
+      params.push(userId);
+    }
+
+    // Get media stats
+    const mediaStats = await pool.query(
+      `SELECT 
+        COALESCE(SUM(m.total_plays), 0) as total_plays,
+        COALESCE(SUM(m.unique_plays), 0) as unique_plays,
+        COALESCE(AVG(mp.play_duration), 0) as avg_duration
+       FROM media m
+       LEFT JOIN media_plays mp ON m.id = mp.media_id
+       ${mediaWhere}`,
+      params
+    );
+
+    // Get playlist stats
+    const playlistStats = await pool.query(
+      `SELECT 
+        COALESCE(SUM(p.total_plays), 0) as total_plays,
+        COALESCE(SUM(p.unique_plays), 0) as unique_plays,
+        COALESCE(SUM(p.times_created), 0) as times_created
+       FROM playlists p
+       ${playlistWhere}`,
+      params
+    );
+
+    // Get slideshow stats
+    const slideshowStats = await pool.query(
+      `SELECT 
+        COALESCE(SUM(s.total_plays), 0) as total_plays,
+        COALESCE(SUM(s.unique_plays), 0) as unique_plays,
+        COALESCE(SUM(s.times_created), 0) as times_created
+       FROM slideshows s
+       ${slideshowWhere}`,
+      params
+    );
+
+    // Get most played media
+    const mostPlayed = await pool.query(
+      `SELECT m.id, m.title, m.total_plays, m.unique_plays
+       FROM media m
+       ${mediaWhere}
+       ORDER BY m.total_plays DESC
+       LIMIT 10`,
+      params
+    );
+
+    const result = {
+      media: {
+        totalPlays: parseInt(mediaStats.rows[0]?.total_plays || 0),
+        uniquePlays: parseInt(mediaStats.rows[0]?.unique_plays || 0),
+        averageDuration: Math.round(parseFloat(mediaStats.rows[0]?.avg_duration || 0)),
+      },
+      playlists: {
+        totalPlays: parseInt(playlistStats.rows[0]?.total_plays || 0),
+        uniquePlays: parseInt(playlistStats.rows[0]?.unique_plays || 0),
+        timesCreated: parseInt(playlistStats.rows[0]?.times_created || 0),
+      },
+      slideshows: {
+        totalPlays: parseInt(slideshowStats.rows[0]?.total_plays || 0),
+        uniquePlays: parseInt(slideshowStats.rows[0]?.unique_plays || 0),
+        timesCreated: parseInt(slideshowStats.rows[0]?.times_created || 0),
+      },
+      mostPlayedMedia: mostPlayed.rows,
+    };
+
+    console.log('📊 ANALYTICS: Play stats retrieved');
+    res.json(result);
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching play stats:', error);
+    res.status(500).json({ error: 'Failed to fetch play statistics' });
+  }
+});
+
+// Get cart conversion statistics
+app.get('/api/analytics/cart-conversion', async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    console.log(`📊 ANALYTICS: Fetching cart conversion stats${userId ? ` for user ${userId}` : ''}`);
+
+    let cartWhere = '';
+    let purchaseJoin = '';
+    const params = [];
+
+    if (userId) {
+      cartWhere = 'WHERE ce.user_id = $1';
+      purchaseJoin = 'AND pe.user_id = $1';
+      params.push(userId);
+    }
+
+    // Get cart additions
+    const cartStats = await pool.query(
+      `SELECT 
+        COUNT(*) as total_additions,
+        COALESCE(SUM(quantity), 0) as total_items_added
+       FROM cart_events ce
+       ${cartWhere}`,
+      params
+    );
+
+    // Get purchases
+    const purchaseStats = await pool.query(
+      `SELECT 
+        COUNT(*) as total_purchases,
+        COALESCE(SUM(total_amount), 0) as total_revenue
+       FROM purchase_events pe
+       ${userId ? 'WHERE pe.user_id = $1' : ''}`,
+      params
+    );
+
+    // Calculate items purchased from items JSONB
+    const itemsPurchased = await pool.query(
+      `SELECT 
+        COALESCE(SUM((item->>'quantity')::integer), 0) as total_items_purchased
+       FROM purchase_events pe, jsonb_array_elements(pe.items) as item
+       ${userId ? 'WHERE pe.user_id = $1' : ''}`,
+      params
+    );
+
+    const totalItemsAdded = parseInt(cartStats.rows[0]?.total_items_added || 0);
+    const totalItemsPurchased = parseInt(itemsPurchased.rows[0]?.total_items_purchased || 0);
+    const conversionRate = totalItemsAdded > 0 
+      ? ((totalItemsPurchased / totalItemsAdded) * 100).toFixed(2)
+      : 0;
+
+    const totalPurchases = parseInt(purchaseStats.rows[0]?.total_purchases || 0);
+    const totalRevenue = parseInt(purchaseStats.rows[0]?.total_revenue || 0);
+    const averageOrderValue = totalPurchases > 0 
+      ? Math.round(totalRevenue / totalPurchases)
+      : 0;
+
+    const result = {
+      totalItemsAddedToCart: totalItemsAdded,
+      totalItemsPurchased: totalItemsPurchased,
+      conversionRate: parseFloat(conversionRate),
+      totalPurchases: totalPurchases,
+      totalRevenue: totalRevenue,
+      averageOrderValue: averageOrderValue,
+    };
+
+    console.log('📊 ANALYTICS: Cart conversion stats retrieved');
+    res.json(result);
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching cart conversion stats:', error);
+    res.status(500).json({ error: 'Failed to fetch cart conversion statistics' });
   }
 });
 
@@ -2255,12 +2648,13 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     // END SUBSCRIPTION CHECK
 
     const result = await pool.query(
-      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, times_created) 
+       VALUES ($1, $2, $3, $4, $5, 1) RETURNING *`,
       [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false]
     );
 
     const playlist = result.rows[0];
+    console.log('📊 ANALYTICS: Playlist created, times_created incremented');
 
     // Add media files to playlist if provided
     if (mediaFileIds && mediaFileIds.length > 0) {
@@ -2750,6 +3144,94 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
   } catch (error) {
     console.error('🔴 CHECKOUT ERROR:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ---------- STRIPE WEBHOOK HANDLER ----------
+// Note: This endpoint needs raw body, so it should be placed before JSON middleware
+// or use express.raw() specifically for this route
+app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  if (!webhookSecret) {
+    console.error('⚠️ STRIPE_WEBHOOK: STRIPE_WEBHOOK_SECRET not configured');
+    return res.status(500).json({ error: 'Webhook secret not configured' });
+  }
+
+  let event;
+
+  try {
+    // Verify webhook signature
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log('✅ STRIPE_WEBHOOK: Signature verified for event:', event.type);
+  } catch (err) {
+    console.error('⚠️ STRIPE_WEBHOOK: Signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Handle the event
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        console.log('💳 STRIPE_WEBHOOK: Checkout completed for session:', session.id);
+
+        // Extract user ID from metadata
+        const userId = session.metadata?.userId !== 'guest' ? parseInt(session.metadata?.userId) : null;
+        
+        // Get line items from the session
+        const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
+        
+        // Format items for storage
+        const items = lineItems.data.map(item => ({
+          productName: item.description,
+          quantity: item.quantity,
+          amount: item.amount_total,
+        }));
+
+        // Track the purchase
+        const existing = await pool.query(
+          'SELECT id FROM purchase_events WHERE stripe_session_id = $1',
+          [session.id]
+        );
+
+        if (existing.rows.length === 0) {
+          await pool.query(
+            `INSERT INTO purchase_events (stripe_session_id, user_id, total_amount, items) 
+             VALUES ($1, $2, $3, $4)`,
+            [session.id, userId, session.amount_total, JSON.stringify(items)]
+          );
+          console.log('💳 STRIPE_WEBHOOK: Purchase tracked successfully');
+        } else {
+          console.log('💳 STRIPE_WEBHOOK: Purchase already tracked');
+        }
+
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object;
+        console.log('💳 STRIPE_WEBHOOK: Payment succeeded:', paymentIntent.id);
+        // Additional handling if needed
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const paymentIntent = event.data.object;
+        console.log('❌ STRIPE_WEBHOOK: Payment failed:', paymentIntent.id);
+        // Additional handling if needed
+        break;
+      }
+
+      default:
+        console.log(`🔔 STRIPE_WEBHOOK: Unhandled event type: ${event.type}`);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('❌ STRIPE_WEBHOOK: Error processing event:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
   }
 });
 
@@ -4425,8 +4907,8 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
     }
 
     const result = await pool.query(
-      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, times_created) 
+       VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *`,
       [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false]
     );
     
@@ -4436,6 +4918,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
     };
     
     console.log('🎬 SLIDESHOWS: Slideshow created successfully:', slideshow.name);
+    console.log('📊 ANALYTICS: Slideshow created, times_created incremented');
     res.status(201).json({ slideshow });
     
   } catch (error) {

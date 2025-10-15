@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { analyticsService } from '@/services/analyticsService';
+import { getSessionId } from '@/utils/sessionTracking';
 import { Product, CartItem } from '../shared/product-schema';
 
 interface CartContextType {
@@ -46,11 +48,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addToCart = (product: Product, size?: string) => {
+  const addToCart = async (product: Product, size?: string) => {
     // Check if product is in stock
     if (!product.in_stock) {
       console.log('🚫 Cannot add out of stock product to cart:', product.name);
       return;
+    }
+
+    // Track cart addition for analytics
+    try {
+      const sessionId = await getSessionId();
+      await analyticsService.trackCartAdd(product.id, 1, sessionId);
+    } catch (error) {
+      console.error('Error tracking cart addition:', error);
+      // Don't block cart addition if analytics fails
     }
 
     setCart(prevCart => {

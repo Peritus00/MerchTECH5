@@ -125,4 +125,158 @@ export const analyticsService = {
       console.error('Error tracking slideshow access:', error);
     }
   },
+
+  // Track media play (only counts plays >= 30 seconds)
+  async trackMediaPlay(
+    mediaId: number,
+    playDuration: number,
+    sessionId: string,
+    userId?: number
+  ): Promise<void> {
+    try {
+      if (playDuration < 30) {
+        console.log('📊 ANALYTICS: Media play duration < 30s, not tracking');
+        return;
+      }
+
+      await api.post('/analytics/track-media-play', {
+        mediaId,
+        playDuration,
+        sessionId,
+        userId,
+      });
+      console.log(`📊 ANALYTICS: Tracked media play - ID: ${mediaId}, Duration: ${playDuration}s`);
+    } catch (error) {
+      console.error('Error tracking media play:', error);
+    }
+  },
+
+  // Track playlist play (only counts plays >= 30 seconds)
+  async trackPlaylistPlay(
+    playlistId: number,
+    playDuration: number,
+    sessionId: string,
+    userId?: number
+  ): Promise<void> {
+    try {
+      if (playDuration < 30) {
+        console.log('📊 ANALYTICS: Playlist play duration < 30s, not tracking');
+        return;
+      }
+
+      await api.post('/analytics/track-playlist-play', {
+        playlistId,
+        playDuration,
+        sessionId,
+        userId,
+      });
+      console.log(`📊 ANALYTICS: Tracked playlist play - ID: ${playlistId}, Duration: ${playDuration}s`);
+    } catch (error) {
+      console.error('Error tracking playlist play:', error);
+    }
+  },
+
+  // Track slideshow play (only counts plays >= 30 seconds)
+  async trackSlideshowPlay(
+    slideshowId: number,
+    playDuration: number,
+    sessionId: string,
+    userId?: number
+  ): Promise<void> {
+    try {
+      if (playDuration < 30) {
+        console.log('📊 ANALYTICS: Slideshow play duration < 30s, not tracking');
+        return;
+      }
+
+      await api.post('/analytics/track-slideshow-play', {
+        slideshowId,
+        playDuration,
+        sessionId,
+        userId,
+      });
+      console.log(`📊 ANALYTICS: Tracked slideshow play - ID: ${slideshowId}, Duration: ${playDuration}s`);
+    } catch (error) {
+      console.error('Error tracking slideshow play:', error);
+    }
+  },
+
+  // Track cart addition
+  async trackCartAdd(
+    productId: string | number,
+    quantity: number,
+    sessionId: string,
+    userId?: number
+  ): Promise<void> {
+    try {
+      await api.post('/analytics/track-cart-add', {
+        productId,
+        quantity,
+        sessionId,
+        userId,
+      });
+      console.log(`📊 ANALYTICS: Tracked cart add - Product: ${productId}, Qty: ${quantity}`);
+    } catch (error) {
+      console.error('Error tracking cart add:', error);
+    }
+  },
+
+  // Track purchase completion
+  async trackPurchase(
+    stripeSessionId: string,
+    items: any[],
+    totalAmount: number,
+    userId?: number
+  ): Promise<void> {
+    try {
+      await api.post('/analytics/track-purchase', {
+        stripeSessionId,
+        items,
+        totalAmount,
+        userId,
+      });
+      console.log(`📊 ANALYTICS: Tracked purchase - Session: ${stripeSessionId}, Amount: ${totalAmount}`);
+    } catch (error) {
+      console.error('Error tracking purchase:', error);
+    }
+  },
+
+  // Get play statistics
+  async getPlayStats(userId?: number): Promise<any> {
+    try {
+      const params = userId ? `?userId=${userId}` : '';
+      const response = await api.get(`/analytics/play-stats${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching play stats:', error);
+      return {
+        totalMediaPlays: 0,
+        uniqueMediaPlays: 0,
+        totalPlaylistPlays: 0,
+        uniquePlaylistPlays: 0,
+        totalSlideshowPlays: 0,
+        uniqueSlideshowPlays: 0,
+        mostPlayedMedia: [],
+        averagePlayDuration: 0,
+      };
+    }
+  },
+
+  // Get cart conversion statistics
+  async getCartConversionStats(userId?: number): Promise<any> {
+    try {
+      const params = userId ? `?userId=${userId}` : '';
+      const response = await api.get(`/analytics/cart-conversion${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching cart conversion stats:', error);
+      return {
+        totalItemsAddedToCart: 0,
+        totalItemsPurchased: 0,
+        conversionRate: 0,
+        totalRevenue: 0,
+        averageOrderValue: 0,
+      };
+    }
+  },
 };

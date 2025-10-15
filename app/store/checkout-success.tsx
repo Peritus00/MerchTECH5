@@ -2,16 +2,57 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
+import { analyticsService } from '@/services/analyticsService';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function CheckoutSuccess() {
   const router = useRouter();
-  const { clearCart } = useCart();
+  const { session_id } = useLocalSearchParams();
+  const { cart, clearCart, getTotalPrice } = useCart();
+  const { user } = useAuth();
+  const [purchaseTracked, setPurchaseTracked] = React.useState(false);
 
   React.useEffect(() => {
-    clearCart();
-  }, []);
+    // Track purchase before clearing cart
+    const trackPurchase = async () => {
+      if (purchaseTracked || !session_id || cart.length === 0) {
+        return;
+      }
+
+      try {
+        const stripeSessionId = Array.isArray(session_id) ? session_id[0] : session_id;
+        const totalAmount = getTotalPrice();
+        
+        // Format cart items for tracking
+        const items = cart.map(item => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          quantity: item.quantity,
+          price: item.product.price,
+        }));
+
+        console.log('📊 ANALYTICS: Tracking purchase from checkout-success');
+        await analyticsService.trackPurchase(
+          stripeSessionId,
+          items,
+          totalAmount,
+          user?.id
+        );
+        
+        setPurchaseTracked(true);
+        console.log('📊 ANALYTICS: Purchase tracked successfully');
+      } catch (error) {
+        console.error('Error tracking purchase:', error);
+      }
+    };
+
+    trackPurchase().then(() => {
+      // Clear cart after tracking
+      clearCart();
+    });
+  }, [session_id, cart, purchaseTracked]);
 
   return (
     <ThemedView style={styles.container}>
