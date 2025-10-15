@@ -506,7 +506,7 @@ export default function DashboardScreen() {
               trend="+12%"
             />
             <DashboardStatsCard
-              title="Today's Scans"
+              title="Last 24 Hours"
               value={dashboardData.summary.scansToday}
               icon="today"
               color="#10b981"

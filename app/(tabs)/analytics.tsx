@@ -346,7 +346,7 @@ export default function AnalyticsScreen() {
           color="#10b981"
         />
         <AnalyticsCard
-          title="Scans Today"
+          title="Last 24 Hours"
           value={summaryData?.scansToday || 0}
           icon="today"
           color="#f59e0b"
