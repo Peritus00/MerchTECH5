@@ -630,7 +630,7 @@ export const slideshowAccessAPI = {
         ? { params: { code: activationCode } }
         : {};
       
-      const response = await api.get(`/api/slideshow-access/${id}`, config);
+      const response = await api.get(`/slideshow-access/${id}`, config);
       console.log('🎬 API: Slideshow access response:', response.data);
       
       // The server returns the slideshow data directly, not wrapped in { slideshow: ... }
@@ -672,7 +672,7 @@ export const playlistAccessAPI = {
         ? { params: { code: activationCode } }
         : {};
       
-      const response = await api.get(`/api/playlist-access/${id}`, config);
+      const response = await api.get(`/playlist-access/${id}`, config);
       console.log('🎵 API: Playlist access response:', response.data);
       
       return response.data;
