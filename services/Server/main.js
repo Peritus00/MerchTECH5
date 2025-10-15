@@ -4094,30 +4094,47 @@ app.get('/api/playlist-access/:id', async (req, res) => {
     // Attempt to link a QR code to this playlist and record a scan (public tracking)
     try {
       let qrId = null;
-      // Primary: link by playlist_id
-      const qrRes = await pool.query(
-        'SELECT id FROM qr_codes WHERE playlist_id = $1 ORDER BY created_at DESC LIMIT 1',
-        [id]
-      );
-      if (qrRes.rows.length > 0) {
-        qrId = qrRes.rows[0].id;
-      } else {
-        // Fallback: link by exact URL
-        const frontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
-        const targetUrl = `${frontend.replace(/\/$/, '')}/playlist-access/${id}`;
-        const qrByUrl = await pool.query('SELECT id FROM qr_codes WHERE url = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1', [targetUrl]);
+      // Primary: link by playlist_id when available
+      try {
+        const qrRes = await pool.query(
+          'SELECT id FROM qr_codes WHERE playlist_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [id]
+        );
+        if (qrRes.rows.length > 0) {
+          qrId = qrRes.rows[0].id;
+        }
+      } catch (_) {}
+
+      // Fallback: robust URL matching for legacy codes (normalize host, slashes, strip query)
+      if (!qrId) {
+        const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const frontend = rawFrontend.replace(/\/$/, '');
+        const candidates = [
+          `${frontend}/playlist-access/${id}`,
+          `${frontend.replace('https://www.', 'https://')}/playlist-access/${id}`,
+          `${frontend.replace('https://', 'https://www.')}/playlist-access/${id}`,
+        ];
+        // Search by normalized URL ignoring trailing slash and querystrings
+        const qrByUrl = await pool.query(
+          `SELECT id FROM qr_codes 
+           WHERE is_active = true AND (
+             regexp_replace(url, '\\?.*$', '') IN ($1, $2, $3)
+             OR regexp_replace(url, '/+$', '') IN ($1, $2, $3)
+           )
+           ORDER BY created_at DESC LIMIT 1`,
+          candidates
+        );
         if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
-        const ip = getClientIp(req);
         const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
         await pool.query(
-          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
         );
       }
     } catch (trackErr) {
@@ -4256,28 +4273,42 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     // Try to locate a QR code pointing at this slideshow and record a scan
     try {
       let qrId = null;
-      const qrRes = await client.query(
-        'SELECT id FROM qr_codes WHERE slideshow_id = $1 ORDER BY created_at DESC LIMIT 1',
-        [slideshowId]
-      );
-      if (qrRes.rows.length > 0) {
-        qrId = qrRes.rows[0].id;
-      } else {
-        const frontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
-        const targetUrl = `${frontend.replace(/\/$/, '')}/slideshow-access/${slideshowId}`;
-        const qrByUrl = await client.query('SELECT id FROM qr_codes WHERE url = $1 AND is_active = true ORDER BY created_at DESC LIMIT 1', [targetUrl]);
+      try {
+        const qrRes = await client.query(
+          'SELECT id FROM qr_codes WHERE slideshow_id = $1 ORDER BY created_at DESC LIMIT 1',
+          [slideshowId]
+        );
+        if (qrRes.rows.length > 0) qrId = qrRes.rows[0].id;
+      } catch (_) {}
+
+      if (!qrId) {
+        const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const frontend = rawFrontend.replace(/\/$/, '');
+        const candidates = [
+          `${frontend}/slideshow-access/${slideshowId}`,
+          `${frontend.replace('https://www.', 'https://')}/slideshow-access/${slideshowId}`,
+          `${frontend.replace('https://', 'https://www.')}/slideshow-access/${slideshowId}`,
+        ];
+        const qrByUrl = await client.query(
+          `SELECT id FROM qr_codes 
+           WHERE is_active = true AND (
+             regexp_replace(url, '\\?.*$', '') IN ($1, $2, $3)
+             OR regexp_replace(url, '/+$', '') IN ($1, $2, $3)
+           )
+           ORDER BY created_at DESC LIMIT 1`,
+          candidates
+        );
         if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
       }
       if (qrId) {
         fullSlideshow.qr_code_id = qrId;
-        const ip = getClientIp(req);
         const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
         await client.query(
-          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
         );
       }
     } catch (trackErr) {
