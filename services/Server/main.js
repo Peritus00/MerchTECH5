@@ -530,15 +530,16 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     console.log('📊 ANALYTICS: Computing summary for user:', userId);
 
-    // Date boundaries (use UTC to match database timezone)
+    // Date boundaries
     const now = new Date();
-    const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const weekStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 6)); // last 7 days
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+    // Use "last 24 hours" instead of "today in UTC" for better user experience
+    const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // last 7 days
+    const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // last 30 days
     
-    console.log('📊 ANALYTICS: Date boundaries (UTC):', {
+    console.log('📊 ANALYTICS: Date boundaries:', {
       now: now.toISOString(),
-      todayStart: todayStart.toISOString(),
+      last24Hours: last24Hours.toISOString(),
       weekStart: weekStart.toISOString(),
       monthStart: monthStart.toISOString()
     });
@@ -553,14 +554,38 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
 
-    let todayRes;
-    try { todayRes = await pool.query(
-      `SELECT COUNT(*) AS c
+    let last24HoursRes;
+    try { 
+      // Debug: Check actual scan timestamps
+      const debugScans = await pool.query(
+        `SELECT s.scanned_at, 
+                s.scanned_at >= $2 as is_in_last_24h,
+                EXTRACT(EPOCH FROM (NOW() - s.scanned_at))/3600 as hours_ago
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+         WHERE q.user_id = $1
+         ORDER BY s.scanned_at DESC LIMIT 5`,
+        [userId, last24Hours]
+      );
+      console.log('📊 ANALYTICS: Recent scans debug:', {
+        last24Hours: last24Hours.toISOString(),
+        currentTime: now.toISOString(),
+        recentScans: debugScans.rows.map(r => ({
+          scanned_at: r.scanned_at,
+          hours_ago: Math.round(r.hours_ago * 10) / 10,
+          is_in_last_24h: r.is_in_last_24h
+        }))
+      });
+      
+      last24HoursRes = await pool.query(
+        `SELECT COUNT(*) AS c
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1 AND s.scanned_at >= $2`,
-      [userId, todayStart]
-    ); } catch (e) { console.warn('📊 SUMMARY todayRes failed:', e.message); todayRes = { rows: [{ c: 0 }] }; }
+        [userId, last24Hours]
+      );
+      console.log('📊 ANALYTICS: Last 24h count result:', last24HoursRes.rows[0]);
+    } catch (e) { console.warn('📊 SUMMARY last24HoursRes failed:', e.message); last24HoursRes = { rows: [{ c: 0 }] }; }
 
     let weekRes;
     try { weekRes = await pool.query(
@@ -654,9 +679,15 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY recentRes failed:', e.message); recentRes = { rows: [] }; }
 
+    console.log('📊 ANALYTICS: Final counts:', {
+      total: totalRes.rows[0]?.c,
+      last24h: last24HoursRes.rows[0]?.c,
+      week: weekRes.rows[0]?.c
+    });
+    
     const summary = {
       totalScans: parseInt(totalRes.rows[0]?.c || 0),
-      todayScans: parseInt(todayRes.rows[0]?.c || 0),
+      todayScans: parseInt(last24HoursRes.rows[0]?.c || 0), // Changed to last 24 hours
       weekScans: parseInt(weekRes.rows[0]?.c || 0),
       monthScans: parseInt(monthRes.rows[0]?.c || 0),
       uniqueVisitors: parseInt(uniqueVisitorsRes.rows[0]?.c || 0),
