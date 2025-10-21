@@ -4924,15 +4924,30 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         );
         if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
       }
+      // Fallback 2: match by path only regardless of domain
+      if (!qrId) {
+        try {
+          const pathPattern = `/slideshow-access/${slideshowId}`;
+          const qrByPath = await client.query(
+            `SELECT id FROM qr_codes
+             WHERE is_active = true AND (
+               POSITION($1 in url) > 0 OR POSITION($2 in url) > 0
+             )
+             ORDER BY created_at DESC LIMIT 1`,
+            [pathPattern, `${pathPattern}?`]
+          );
+          if (qrByPath.rows.length > 0) qrId = qrByPath.rows[0].id;
+        } catch (_) {}
+      }
       if (qrId) {
         fullSlideshow.qr_code_id = qrId;
-        const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+        const geo = resolveGeo(req);
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
         await client.query(
           `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
            VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+          [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
         );
       }
     } catch (trackErr) {
