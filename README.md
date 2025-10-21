@@ -72,6 +72,16 @@ In the output, you'll find options to open the app in a
 
 You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
 
+## Analytics Geo Resolution
+
+City/region data in analytics defaults to cloud-provided headers when available. For environments that don't inject geo headers (e.g., local or Railway without edge headers), the server will optionally use `geoip-lite` to derive approximate country/region/city from the client IP.
+
+- To enable: install the package in the server environment.
+```bash
+npm install geoip-lite
+```
+- If the package is not present, the server continues to run and simply records `Unknown` for missing geo fields.
+
 ## Get a fresh project
 
 When you're ready, run:

@@ -394,6 +394,27 @@ function inferGeo(req) {
   return { countryCode: cc, region, city };
 }
 
+// Resolve geo with graceful IP fallback (uses geoip-lite if available)
+function resolveGeo(req) {
+  const fromHeaders = inferGeo(req);
+  if (fromHeaders.countryCode || fromHeaders.city || fromHeaders.region) {
+    return fromHeaders;
+  }
+  try {
+    const ip = getClientIp(req);
+    if (!ip) return { countryCode: null, region: null, city: null };
+    // Lazy-require so the server runs even if geoip-lite is not installed
+    const geoip = require('geoip-lite');
+    if (!geoip || !geoip.lookup) return { countryCode: null, region: null, city: null };
+    const r = geoip.lookup(ip);
+    if (!r) return { countryCode: null, region: null, city: null };
+    // geoip-lite returns {country, region, city}
+    return { countryCode: r.country || null, region: r.region || null, city: r.city || null };
+  } catch (_e) {
+    return { countryCode: null, region: null, city: null };
+  }
+}
+
 // --- QR Redirector ---
 // Logs scan with privacy-friendly metadata, then redirects to destination
 app.get('/r/:id', async (req, res) => {
@@ -416,7 +437,7 @@ app.get('/r/:id', async (req, res) => {
     const { deviceType, browserName, operatingSystem } = parseUserAgent(ua);
     const referrer = req.headers['referer'] || req.headers['referrer'] || null;
     const utm = extractUtm(req.query || {});
-    const geo = inferGeo(req);
+    const geo = resolveGeo(req);
     const visitorId = getOrSetVisitorId(req, res);
 
     // Dedupe: skip insert if same visitor scanned same code within last 5 minutes
@@ -497,8 +518,8 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       return res.status(404).json({ error: 'QR code not found' });
     }
 
-    // Do not store IP; infer approximate country from headers and discard IP
-    const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || countryCode || null;
+    // Do not store IP; derive approximate geo
+    const geo = resolveGeo(req);
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
@@ -508,10 +529,10 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
       [
         qrCodeId,
-        location || null,
+        location || geo.city || null,
         device || null,
         countryName || null,
-        inferredCountry || null,
+        geo.countryCode || countryCode || null,
         deviceType || parsed.deviceType,
         browserName || parsed.browserName,
         operatingSystem || parsed.operatingSystem,
@@ -3449,13 +3470,13 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
     // Record scan (best-effort)
     try {
       const ip = getClientIp(req);
-      const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+      const geo = resolveGeo(req);
       const ua = req.headers['user-agent'] || '';
       const parsed = parseUserAgent(ua);
       await pool.query(
         `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
          VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [qr.id, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+        [qr.id, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
       );
     } catch (trackErr) {
       console.warn('📊 REDIRECT TRACK FAILED:', trackErr?.message || trackErr);
@@ -4668,13 +4689,13 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
-        const inferredCountry = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
+        const geo = resolveGeo(req);
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
         await pool.query(
           `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
            VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-          [qrId, null, null, null, inferredCountry, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+          [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
         );
       }
     } catch (trackErr) {
