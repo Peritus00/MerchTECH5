@@ -74,6 +74,16 @@ async function testBackendConnection() {
     });
     console.log('✅ Slideshows endpoint working:', slideshowsResponse.data.length, 'slideshows found');
     
+    console.log('\n🔟 Testing Analytics Summary Endpoint...');
+    try {
+      const analyticsSummary = await axios.get(`${RAILWAY_BACKEND_URL}/analytics/summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('✅ Analytics summary working. Keys:', Object.keys(analyticsSummary.data));
+    } catch (e) {
+      console.log('⚠️ Analytics summary not available:', e.response?.status || e.message);
+    }
+    
     console.log('\n9️⃣ Testing Activation Codes Endpoint...');
     const activationCodesResponse = await axios.get(`${RAILWAY_BACKEND_URL}/activation-codes/generated`, {
       headers: { Authorization: `Bearer ${token}` }

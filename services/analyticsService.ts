@@ -6,6 +6,7 @@ export const analyticsService = {
   async getAnalyticsSummary(): Promise<AnalyticsSummary> {
     try {
       // Fetch real analytics data from server
+      // Server route is namespaced under /api
       const response = await api.get('/analytics/summary');
       return response.data;
     } catch (error) {

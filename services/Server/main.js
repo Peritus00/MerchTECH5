@@ -70,6 +70,7 @@ app.use(helmet({
       imgSrc: [
         "'self'",
         "data:",
+        "blob:",
         "https://*.amazonaws.com", // For S3 images
         "https://merchtech5-production.up.railway.app", // For image proxy
         "https://www.merchtrader.org",
@@ -3477,7 +3478,7 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Request body:', JSON.stringify(req.body, null, 2));
     console.log('📱 QR_CODES: Authenticated user:', req.user);
     
-    const { name, url, description, contentType, options } = req.body;
+    const { name, url, description, contentType, options, playlist_id, slideshow_id } = req.body;
     
     if (!name || !url) {
       console.log('📱 QR_CODES: Validation failed - missing name or url:', { name, url });
@@ -3520,9 +3521,19 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     const result = await pool.query(
-      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description, short_url) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description, null]
+      `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description, short_url, playlist_id, slideshow_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      [
+        req.user.userId,
+        name,
+        url,
+        qrCodeData,
+        JSON.stringify(options || {}),
+        description,
+        null,
+        playlist_id || null,
+        slideshow_id || null,
+      ]
     );
     
     // Build redirect short URL
@@ -4618,7 +4629,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
         }
       } catch (_) {}
 
-      // Fallback: robust URL matching for legacy codes (normalize host, slashes, strip query)
+      // Fallback 1: robust URL matching for legacy codes (normalize host, slashes, strip query)
       if (!qrId) {
         const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
         const frontend = rawFrontend.replace(/\/$/, '');
@@ -4638,6 +4649,22 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           candidates
         );
         if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
+      }
+
+      // Fallback 2: match by path only regardless of domain (handles QR pointing to backend host)
+      if (!qrId) {
+        try {
+          const pathPattern = `/playlist-access/${id}`;
+          const qrByPath = await pool.query(
+            `SELECT id FROM qr_codes
+             WHERE is_active = true AND (
+               POSITION($1 in url) > 0 OR POSITION($2 in url) > 0
+             )
+             ORDER BY created_at DESC LIMIT 1`,
+            [pathPattern, `${pathPattern}?`]
+          );
+          if (qrByPath.rows.length > 0) qrId = qrByPath.rows[0].id;
+        } catch (_) {}
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
