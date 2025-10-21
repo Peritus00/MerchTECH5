@@ -529,22 +529,40 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       [qrCodeId, visitorId]
     );
     if (dedupe.rowCount === 0) {
-      await pool.query(
-        `INSERT INTO qr_scans (
-          qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id
-        ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          qrCodeId,
-          location || geo.city || null,
-          device || null,
-          countryName || null,
-          geo.countryCode || countryCode || null,
-          deviceType || parsed.deviceType,
-          browserName || parsed.browserName,
-          operatingSystem || parsed.operatingSystem,
-          visitorId,
-        ]
-      );
+      try {
+        await pool.query(
+          `INSERT INTO qr_scans (
+            qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id
+          ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            qrCodeId,
+            location || geo.city || null,
+            device || null,
+            countryName || null,
+            geo.countryCode || countryCode || null,
+            deviceType || parsed.deviceType,
+            browserName || parsed.browserName,
+            operatingSystem || parsed.operatingSystem,
+            visitorId,
+          ]
+        );
+      } catch (e) {
+        await pool.query(
+          `INSERT INTO qr_scans (
+            qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
+          ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+          [
+            qrCodeId,
+            location || geo.city || null,
+            device || null,
+            countryName || null,
+            geo.countryCode || countryCode || null,
+            deviceType || parsed.deviceType,
+            browserName || parsed.browserName,
+            operatingSystem || parsed.operatingSystem,
+          ]
+        );
+      }
     }
 
     res.json({ success: true });
@@ -4771,11 +4789,20 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           [qrId, visitorId]
         );
         if (dedupe.rowCount === 0) {
-          await pool.query(
-            `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
-             VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
-          );
+          try {
+            await pool.query(
+              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
+               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
+            );
+          } catch (e) {
+            // Fallback for databases without visitor_id column
+            await pool.query(
+              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
+               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+            );
+          }
         }
       }
     } catch (trackErr) {
@@ -4967,11 +4994,19 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
           [qrId, visitorId]
         );
         if (dedupe.rowCount === 0) {
-          await client.query(
-            `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
-             VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
-          );
+          try {
+            await client.query(
+              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
+               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
+            );
+          } catch (e) {
+            await client.query(
+              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
+               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+            );
+          }
         }
       }
     } catch (trackErr) {
