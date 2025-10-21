@@ -211,12 +211,12 @@ export default function SlideshowAccessScreen() {
       }
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
-      // Best-effort analytics: if a qrCodeId is provided by backend linkage, record a scan
+      // Server now records scans with deduplication; avoid client-side double counting
       try {
-        const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
-        if (qrId) {
-          await analyticsService.trackQRScan(qrId, {});
-        }
+        // const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
+        // if (qrId) {
+        //   await analyticsService.trackQRScan(qrId, {});
+        // }
       } catch (e) {
         console.warn('Analytics track scan failed (slideshow-access):', e);
       }

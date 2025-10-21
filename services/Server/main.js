@@ -523,21 +523,29 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    await pool.query(
-      `INSERT INTO qr_scans (
-        qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
-      ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-      [
-        qrCodeId,
-        location || geo.city || null,
-        device || null,
-        countryName || null,
-        geo.countryCode || countryCode || null,
-        deviceType || parsed.deviceType,
-        browserName || parsed.browserName,
-        operatingSystem || parsed.operatingSystem,
-      ]
+    const visitorId = getOrSetVisitorId(req, res);
+    const dedupe = await pool.query(
+      `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
+      [qrCodeId, visitorId]
     );
+    if (dedupe.rowCount === 0) {
+      await pool.query(
+        `INSERT INTO qr_scans (
+          qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id
+        ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          qrCodeId,
+          location || geo.city || null,
+          device || null,
+          countryName || null,
+          geo.countryCode || countryCode || null,
+          deviceType || parsed.deviceType,
+          browserName || parsed.browserName,
+          operatingSystem || parsed.operatingSystem,
+          visitorId,
+        ]
+      );
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -4755,11 +4763,20 @@ app.get('/api/playlist-access/:id', async (req, res) => {
         const geo = resolveGeo(req);
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
-        await pool.query(
-          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-          [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+        const visitorId = getOrSetVisitorId(req, res);
+
+        // Dedupe in last 5 minutes
+        const dedupe = await pool.query(
+          `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
+          [qrId, visitorId]
         );
+        if (dedupe.rowCount === 0) {
+          await pool.query(
+            `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
+             VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
+          );
+        }
       }
     } catch (trackErr) {
       console.warn('📊 ANALYTICS: Failed to link/track playlist scan:', trackErr?.message || trackErr);
@@ -4944,11 +4961,18 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         const geo = resolveGeo(req);
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
-        await client.query(
-          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-          [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+        const visitorId = getOrSetVisitorId(req, res);
+        const dedupe = await client.query(
+          `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
+          [qrId, visitorId]
         );
+        if (dedupe.rowCount === 0) {
+          await client.query(
+            `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
+             VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
+          );
+        }
       }
     } catch (trackErr) {
       console.warn('📊 ANALYTICS: Failed to link/track slideshow scan:', trackErr?.message || trackErr);
