@@ -176,6 +176,7 @@ export default function AnalyticsScreen() {
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [deviceData, setDeviceData] = useState<DeviceData[]>([]);
   const [geoData, setGeoData] = useState<GeographicData | null>(null);
+  const [cityList, setCityList] = useState<Array<{ key: string; label: string; count: number }>>([]);
   const [browserData, setBrowserData] = useState<BrowserData[]>([]);
   const [osData, setOSData] = useState<OSData[]>([]);
   const [timePatternData, setTimePatternData] = useState<TimePatternData[]>([]);
@@ -234,7 +235,7 @@ export default function AnalyticsScreen() {
       // Set device data from real analytics
       setDeviceData(analytics.topDevices || []);
 
-      // Set geographic data from real analytics
+      // Set geographic data from real analytics (countries)
       setGeoData({
         level: 'country',
         data: analytics.topCountries ? analytics.topCountries.map(country => ({
@@ -243,6 +244,14 @@ export default function AnalyticsScreen() {
           count: country.count,
         })) : [],
       });
+      
+      // Keep cities separately for a second list
+      const topCities = (analytics as any).topCities || [];
+      setCityList(topCities.map((c: any) => ({
+        key: `${c.city}|${c.region}|${c.country}`,
+        label: `${c.city}${c.region ? ', ' + c.region : ''}${c.country ? ' • ' + c.country : ''}`,
+        count: c.count || 0,
+      })));
 
       // Clear browser and OS data (will be populated when real tracking is implemented)
       setBrowserData([]);
@@ -563,6 +572,23 @@ export default function AnalyticsScreen() {
                 </View>
                 <Text style={styles.geoCountry}>{country.location_name}</Text>
                 <Text style={styles.geoCount}>{country.count} scans</Text>
+              </View>
+            ))}
+          </View>
+        </ChartContainer>
+      )}
+
+      {/* Top Cities */}
+      {cityList.length > 0 && (
+        <ChartContainer title="Top Cities by Scans">
+          <View style={styles.geoList}>
+            {cityList.slice(0, 10).map((item, index) => (
+              <View key={item.key} style={styles.geoItem}>
+                <View style={styles.geoRank}>
+                  <Text style={styles.geoRankText}>{index + 1}</Text>
+                </View>
+                <Text style={styles.geoCountry}>{item.label}</Text>
+                <Text style={styles.geoCount}>{item.count} scans</Text>
               </View>
             ))}
           </View>

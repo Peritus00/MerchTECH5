@@ -156,6 +156,7 @@ export interface AnalyticsSummary {
     count: number; 
     flag?: string;
   }>;
+  topCities?: Array<{ city: string; region: string; country: string; count: number }>;
   topDevices: Array<{ device: string; count: number }>;
   hourlyData: number[];
   recentScans: Array<{

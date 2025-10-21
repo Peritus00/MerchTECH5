@@ -675,6 +675,22 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
+    // Top cities (city may be null; coalesce to 'Unknown')
+    let citiesRes;
+    try { citiesRes = await pool.query(
+      `SELECT COALESCE(NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
+              COALESCE(NULLIF(TRIM(s.region), ''), '') AS region,
+              COALESCE(s.country_name, s.country_code, '') AS country_code,
+              COUNT(*) AS count
+         FROM qr_scans s
+         JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        GROUP BY city, region, country_code
+        ORDER BY count DESC
+        LIMIT 10`,
+      [userId]
+    ); } catch (e) { console.warn('📊 SUMMARY citiesRes failed:', e.message); citiesRes = { rows: [] }; }
+
     // Top devices
     let devicesRes;
     try { devicesRes = await pool.query(
@@ -720,6 +736,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       dailyGrowth: 0,
       conversionGrowth: 0,
       topCountries: countriesRes.rows.map(r => ({ country: r.country, count: parseInt(r.count) })),
+      topCities: citiesRes.rows.map(r => ({ city: r.city, region: r.region, country: r.country_code, count: parseInt(r.count) })),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
       hourlyData,
       recentScans: recentRes.rows.map(r => ({
