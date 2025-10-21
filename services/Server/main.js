@@ -4776,6 +4776,22 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           if (qrByPath.rows.length > 0) qrId = qrByPath.rows[0].id;
         } catch (_) {}
       }
+      // Fallback 3: strict path equality after stripping domain, query, and trailing slashes
+      if (!qrId) {
+        try {
+          const normalizedPath = `/playlist-access/${id}`;
+          const qrByNormalizedPath = await pool.query(
+            `SELECT id FROM qr_codes
+             WHERE is_active = true AND 
+               regexp_replace(
+                 regexp_replace(url, '^https?://[^/]+', ''),
+                 '/+$', ''
+               ) = $1`,
+            [normalizedPath]
+          );
+          if (qrByNormalizedPath.rows.length > 0) qrId = qrByNormalizedPath.rows[0].id;
+        } catch (_) {}
+      }
       if (qrId) {
         accessData.qr_code_id = qrId;
         const geo = resolveGeo(req);
