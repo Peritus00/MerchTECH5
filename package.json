@@ -20,7 +20,8 @@
     "server:prod": "NODE_ENV=production node ./services/Server/main.js",
     "build": "expo export -p web",
     "fix-db": "node fix-slideshows-db.js",
-    "build:web": "expo export -p web"
+    "build:web": "expo export -p web",
+    "analytics:backfill-geo": "node ./scripts/backfill-qr-scan-geo.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.842.0",

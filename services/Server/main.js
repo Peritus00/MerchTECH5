@@ -754,6 +754,52 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
   }
 });
 
+// Admin-only: Backfill geo for historical scans using stored IPs
+app.post('/api/analytics/backfill-geo', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    let geoip;
+    try { geoip = require('geoip-lite'); } catch (_) { geoip = null; }
+    if (!geoip || !geoip.lookup) {
+      return res.status(500).json({ error: 'geoip-lite not installed on server' });
+    }
+
+    const limit = Math.min(parseInt(req.body?.limit || '500', 10) || 500, 2000);
+    const maxBatches = Math.min(parseInt(req.body?.batches || '20', 10) || 20, 100);
+    let totalUpdated = 0;
+    for (let i = 0; i < maxBatches; i++) {
+      const sel = await pool.query(
+        `SELECT id, ip_address FROM qr_scans
+         WHERE ip_address IS NOT NULL
+           AND (country_code IS NULL OR country_code = '')
+           AND (city IS NULL OR city = '')
+         ORDER BY id ASC
+         LIMIT $1`,
+        [limit]
+      );
+      if (sel.rowCount === 0) {
+        return res.json({ updated: totalUpdated, done: true });
+      }
+      for (const row of sel.rows) {
+        const r = geoip.lookup(row.ip_address);
+        if (!r) continue;
+        await pool.query(
+          `UPDATE qr_scans
+           SET country_code = COALESCE($2, country_code),
+               region = COALESCE($3, region),
+               city = COALESCE($4, city)
+           WHERE id = $1`,
+          [row.id, r.country || null, r.region || null, r.city || null]
+        );
+        totalUpdated++;
+      }
+    }
+    res.json({ updated: totalUpdated, done: false });
+  } catch (error) {
+    console.error('📊 ANALYTICS: backfill-geo failed:', error);
+    res.status(500).json({ error: 'Backfill failed' });
+  }
+});
+
 // User analytics (used by frontend to get total QR codes)
 app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
   try {
