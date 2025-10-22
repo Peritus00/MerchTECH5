@@ -3749,7 +3749,9 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
     try {
       const ip = getClientIp(req);
       const result = await writeScan(pool, qr.id, req, res);
-      if (!result?.inserted) {
+      // Only insert fallback if writeScan completely failed (threw error or returned falsy)
+      // Don't insert fallback if scan was deduplicated (result.deduped = true)
+      if (!result?.inserted && !result?.deduped) {
         // As a last resort record a minimal row with ip only
         const ua = req.headers['user-agent'] || '';
         const parsed = parseUserAgent(ua);
