@@ -23,6 +23,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
+import LocationPromptModal from '@/components/LocationPromptModal';
+import { shouldShowLocationPrompt, saveUserLocation, markLocationPromptShown, getLocationForTracking } from '@/utils/locationStorage';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -52,6 +54,9 @@ export default function PlaylistAccessScreen() {
     firstName: '',
   });
 
+  // Location prompt state
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+
   useEffect(() => {
     fetchPlaylist();
   }, [id]);
@@ -62,6 +67,17 @@ export default function PlaylistAccessScreen() {
       checkExistingAccess();
     }
   }, [playlist, isAuthenticated, user]);
+
+  // Show location prompt after playlist loads (if applicable)
+  useEffect(() => {
+    if (playlist && !isLoading && shouldShowLocationPrompt()) {
+      // Show prompt after a short delay to not interrupt loading
+      const timer = setTimeout(() => {
+        setShowLocationPrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [playlist, isLoading]);
 
   const fetchPlaylist = async () => {
     try {
@@ -809,6 +825,19 @@ export default function PlaylistAccessScreen() {
     );
   }
 
+  // Location prompt handlers
+  const handleLocationSubmit = (location: { city: string; state: string; zip?: string }) => {
+    console.log('📍 PLAYLIST_ACCESS: User provided location:', location);
+    saveUserLocation(location);
+    setShowLocationPrompt(false);
+  };
+
+  const handleLocationSkip = () => {
+    console.log('📍 PLAYLIST_ACCESS: User skipped location prompt');
+    markLocationPromptShown();
+    setShowLocationPrompt(false);
+  };
+
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
@@ -937,6 +966,14 @@ export default function PlaylistAccessScreen() {
         </View>
       </View>
       </ScrollView>
+
+      {/* Location Prompt Modal */}
+      <LocationPromptModal
+        visible={showLocationPrompt}
+        artistName={playlist?.creatorName || playlist?.username}
+        onSubmit={handleLocationSubmit}
+        onSkip={handleLocationSkip}
+      />
     </ThemedView>
   );
 }

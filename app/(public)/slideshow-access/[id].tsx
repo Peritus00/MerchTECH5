@@ -27,6 +27,8 @@ import PreviewPlayer from '@/components/PreviewPlayer';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
+import LocationPromptModal from '@/components/LocationPromptModal';
+import { shouldShowLocationPrompt, saveUserLocation, markLocationPromptShown, getLocationForTracking } from '@/utils/locationStorage';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -57,6 +59,9 @@ export default function SlideshowAccessScreen() {
     username: '',
     firstName: '',
   });
+
+  // Location prompt state
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -128,6 +133,17 @@ export default function SlideshowAccessScreen() {
   useEffect(() => {
     fetchSlideshow();
   }, [id]);
+
+  // Show location prompt after slideshow loads (if applicable)
+  useEffect(() => {
+    if (slideshow && !isLoading && shouldShowLocationPrompt()) {
+      // Show prompt after a short delay to not interrupt loading
+      const timer = setTimeout(() => {
+        setShowLocationPrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [slideshow, isLoading]);
 
   // Check access after slideshow is loaded or user authentication changes
   useEffect(() => {
@@ -666,7 +682,18 @@ export default function SlideshowAccessScreen() {
     );
   }
 
+  // Location prompt handlers
+  const handleLocationSubmit = (location: { city: string; state: string; zip?: string }) => {
+    console.log('📍 SLIDESHOW_ACCESS: User provided location:', location);
+    saveUserLocation(location);
+    setShowLocationPrompt(false);
+  };
 
+  const handleLocationSkip = () => {
+    console.log('📍 SLIDESHOW_ACCESS: User skipped location prompt');
+    markLocationPromptShown();
+    setShowLocationPrompt(false);
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -790,6 +817,14 @@ export default function SlideshowAccessScreen() {
         </View>
       </View>
       </ScrollView>
+
+      {/* Location Prompt Modal */}
+      <LocationPromptModal
+        visible={showLocationPrompt}
+        artistName={slideshow?.creatorName || slideshow?.username}
+        onSubmit={handleLocationSubmit}
+        onSkip={handleLocationSkip}
+      />
     </ThemedView>
   );
 }

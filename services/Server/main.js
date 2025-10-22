@@ -374,13 +374,22 @@ function extractUtm(query) {
 }
 
 // Shared scan writer with dedupe and graceful fallbacks
-async function writeScan(poolLike, qrCodeId, req, res) {
+// Accepts optional userLocation from request body for user-provided location data
+async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
   const geo = resolveGeo(req);
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUserAgent(ua);
   const referrer = req.headers['referer'] || req.headers['referrer'] || null;
   const utm = extractUtm(req.query || {});
   const visitorId = getOrSetVisitorId(req, res);
+
+  // Determine location source: 'user' if provided by user, 'auto' if from IP/headers, 'unknown' otherwise
+  let locationSource = 'unknown';
+  if (userLocation && userLocation.city && userLocation.state) {
+    locationSource = 'user';
+  } else if (geo.city || geo.countryCode) {
+    locationSource = 'auto';
+  }
 
   try {
     // Use ON CONFLICT with the unique constraint for atomic dedupe
@@ -389,12 +398,12 @@ async function writeScan(poolLike, qrCodeId, req, res) {
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
          country_code, country_name, region, city, referrer,
          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-         visitor_id
+         visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source
        ) VALUES (
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14
+         $14, $15, $16, $17, $18
        )
        ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO NOTHING
        RETURNING id`,
@@ -413,13 +422,17 @@ async function writeScan(poolLike, qrCodeId, req, res) {
         utm.utm_term,
         utm.utm_content,
         visitorId,
+        userLocation?.city || null,
+        userLocation?.state || null,
+        userLocation?.zip || null,
+        locationSource,
       ]
     );
     
     if (result.rowCount === 0) {
       return { deduped: true };
     }
-    return { inserted: true };
+    return { inserted: true, locationSource };
   } catch (e) {
     // Fallback without visitor_id/extra fields for older schemas (or if constraint doesn't exist yet)
     try {
@@ -569,6 +582,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       deviceType,
       browserName,
       operatingSystem,
+      userLocation, // NEW: User-provided location { city, state, zip }
       // ipAddress ignored for privacy
     } = req.body || {};
 
@@ -587,9 +601,14 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    await writeScan(pool, qrCodeId, req, res);
+    // Pass userLocation to writeScan if provided
+    const result = await writeScan(pool, qrCodeId, req, res, userLocation);
 
-    res.json({ success: true });
+    res.json({ 
+      success: true, 
+      locationSource: result.locationSource,
+      deduped: result.deduped || false 
+    });
   } catch (error) {
     console.error('📊 ANALYTICS: track-scan failed:', error);
     res.status(500).json({ error: 'Failed to track scan' });
@@ -725,12 +744,14 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
-    // Top cities (city may be null; coalesce to 'Unknown')
+    // Top cities (prioritize user-provided location over auto-detected)
     let citiesRes;
     try { citiesRes = await pool.query(
-      `SELECT COALESCE(NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
-              COALESCE(NULLIF(TRIM(s.region), ''), '') AS region,
+      `SELECT 
+              COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
+              COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), '') AS region,
               COALESCE(s.country_name, s.country_code, '') AS country_code,
+              SUM(CASE WHEN s.location_source = 'user' THEN 1 ELSE 0 END) AS user_provided_count,
               COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -798,7 +819,13 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       dailyGrowth: 0,
       conversionGrowth: 0,
       topCountries: countriesRes.rows.map(r => ({ country: r.country, count: parseInt(r.count) })),
-      topCities: citiesRes.rows.map(r => ({ city: r.city, region: r.region, country: r.country_code, count: parseInt(r.count) })),
+      topCities: citiesRes.rows.map(r => ({ 
+        city: r.city, 
+        region: r.region, 
+        country: r.country_code, 
+        count: parseInt(r.count),
+        userProvidedCount: parseInt(r.user_provided_count || 0)
+      })),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
       hourlyData,
       recentScans: recentRes.rows.map(r => ({
