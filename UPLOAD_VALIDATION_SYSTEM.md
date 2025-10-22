@@ -1,3 +1,18 @@
+## Visitor/Geo Backfill
+
+Run anonymized visitor_id and geo backfills in maintenance mode when needed:
+
+```bash
+node scripts/backfill-qr-visitor-id.js --days=30 --limit=5000
+```
+
+Geo backfill for historical scans (requires geoip-lite installed on server):
+
+```bash
+curl -X POST -H "Authorization: Bearer <admin-token>" \
+  https://<server>/api/analytics/backfill-geo -d '{"limit":500,"batches":5}'
+```
+
 # Upload Validation System 🔍
 
 ## Overview

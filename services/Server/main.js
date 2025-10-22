@@ -373,6 +373,70 @@ function extractUtm(query) {
   };
 }
 
+// Shared scan writer with dedupe and graceful fallbacks
+async function writeScan(poolLike, qrCodeId, req, res) {
+  const geo = resolveGeo(req);
+  const ua = req.headers['user-agent'] || '';
+  const parsed = parseUserAgent(ua);
+  const referrer = req.headers['referer'] || req.headers['referrer'] || null;
+  const utm = extractUtm(req.query || {});
+  const visitorId = getOrSetVisitorId(req, res);
+
+  try {
+    // Use ON CONFLICT with the unique constraint for atomic dedupe
+    const result = await poolLike.query(
+      `INSERT INTO qr_scans (
+         qr_code_id, scanned_at, device_type, browser_name, operating_system,
+         country_code, country_name, region, city, referrer,
+         utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+         visitor_id
+       ) VALUES (
+         $1, NOW(), $2, $3, $4,
+         $5, NULL, $6, $7, $8,
+         $9, $10, $11, $12, $13,
+         $14
+       )
+       ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO NOTHING
+       RETURNING id`,
+      [
+        qrCodeId,
+        parsed.deviceType,
+        parsed.browserName,
+        parsed.operatingSystem,
+        geo.countryCode || null,
+        geo.region || null,
+        geo.city || null,
+        referrer,
+        utm.utm_source,
+        utm.utm_medium,
+        utm.utm_campaign,
+        utm.utm_term,
+        utm.utm_content,
+        visitorId,
+      ]
+    );
+    
+    if (result.rowCount === 0) {
+      return { deduped: true };
+    }
+    return { inserted: true };
+  } catch (e) {
+    // Fallback without visitor_id/extra fields for older schemas (or if constraint doesn't exist yet)
+    try {
+      await poolLike.query(
+        `INSERT INTO qr_scans (
+           qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
+         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+        [qrCodeId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+      );
+      return { inserted: true, fallback: true };
+    } catch (fallbackErr) {
+      console.error('❌ writeScan: Both insert attempts failed:', e.message, fallbackErr.message);
+      throw fallbackErr;
+    }
+  }
+}
+
 // Set or get anonymous visitor id
 function getOrSetVisitorId(req, res) {
   const cookieHeader = req.headers.cookie || '';
@@ -523,47 +587,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    const visitorId = getOrSetVisitorId(req, res);
-    const dedupe = await pool.query(
-      `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
-      [qrCodeId, visitorId]
-    );
-    if (dedupe.rowCount === 0) {
-      try {
-        await pool.query(
-          `INSERT INTO qr_scans (
-            qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id
-          ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            qrCodeId,
-            location || geo.city || null,
-            device || null,
-            countryName || null,
-            geo.countryCode || countryCode || null,
-            deviceType || parsed.deviceType,
-            browserName || parsed.browserName,
-            operatingSystem || parsed.operatingSystem,
-            visitorId,
-          ]
-        );
-      } catch (e) {
-        await pool.query(
-          `INSERT INTO qr_scans (
-            qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
-          ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-          [
-            qrCodeId,
-            location || geo.city || null,
-            device || null,
-            countryName || null,
-            geo.countryCode || countryCode || null,
-            deviceType || parsed.deviceType,
-            browserName || parsed.browserName,
-            operatingSystem || parsed.operatingSystem,
-          ]
-        );
-      }
-    }
+    await writeScan(pool, qrCodeId, req, res);
 
     res.json({ success: true });
   } catch (error) {
@@ -749,6 +773,18 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       week: weekRes.rows[0]?.c
     });
     
+    const playsTotals = { media: 0, playlist: 0, slideshow: 0, uniqueUsers: 0 };
+    try {
+      const mediaTotal = await pool.query(`SELECT COUNT(*) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      const playlistTotal = await pool.query(`SELECT COUNT(*) AS c FROM playlist_plays pp JOIN playlists p ON pp.playlist_id = p.id WHERE p.user_id = $1`, [userId]);
+      const slideshowTotal = await pool.query(`SELECT COUNT(*) AS c FROM slideshow_plays sp JOIN slideshows s ON sp.slideshow_id = s.id WHERE s.user_id = $1`, [userId]);
+      const uniqueUsers = await pool.query(`SELECT COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      playsTotals.media = parseInt(mediaTotal.rows[0]?.c || 0);
+      playsTotals.playlist = parseInt(playlistTotal.rows[0]?.c || 0);
+      playsTotals.slideshow = parseInt(slideshowTotal.rows[0]?.c || 0);
+      playsTotals.uniqueUsers = parseInt(uniqueUsers.rows[0]?.c || 0);
+    } catch (e) { console.warn('📊 SUMMARY plays totals failed:', e.message); }
+
     const summary = {
       totalScans: parseInt(totalRes.rows[0]?.c || 0),
       todayScans: parseInt(last24HoursRes.rows[0]?.c || 0), // Changed to last 24 hours
@@ -771,6 +807,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         device: r.device,
         timestamp: r.timestamp,
       })),
+      playsTotals,
     };
 
     res.json(summary);
@@ -3118,6 +3155,85 @@ app.get('/api/stripe/health', (req, res) => {
   });
 });
 
+// Sales summary for current user
+// Uses normalized orders/order_items tables; supports optional ?days= filter
+app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const days = Math.min(parseInt(req.query.days) || 30, 365);
+
+    // Aggregate totals from normalized orders/order_items tables
+    const totals = await pool.query(
+      `WITH filtered_orders AS (
+         SELECT * FROM orders
+         WHERE user_id = $1 AND purchased_at >= NOW() - ($2 || ' days')::interval
+       )
+       SELECT 
+         COALESCE(SUM(o.total_amount), 0) AS total_revenue,
+         COUNT(o.id) AS orders,
+         COALESCE(SUM(oi.quantity), 0) AS items_count
+       FROM filtered_orders o
+       LEFT JOIN order_items oi ON oi.order_id = o.id
+      `,
+      [userId, days]
+    );
+
+    const topProducts = await pool.query(
+      `SELECT oi.product_name AS product,
+              SUM(oi.quantity) AS qty,
+              SUM(oi.amount) AS revenue
+       FROM order_items oi
+       JOIN orders o ON oi.order_id = o.id
+       WHERE o.user_id = $1 AND o.purchased_at >= NOW() - ($2 || ' days')::interval
+       GROUP BY oi.product_name
+       ORDER BY revenue DESC NULLS LAST, qty DESC
+       LIMIT 10`,
+      [userId, days]
+    );
+
+    const recent = await pool.query(
+      `SELECT stripe_session_id, total_amount, purchased_at
+         FROM orders
+        WHERE user_id = $1 AND purchased_at >= NOW() - ($2 || ' days')::interval
+        ORDER BY purchased_at DESC
+        LIMIT 10`,
+      [userId, days]
+    );
+
+    res.json({
+      totalRevenue: parseInt(totals.rows[0]?.total_revenue || 0),
+      orders: parseInt(totals.rows[0]?.orders || 0),
+      items: parseInt(totals.rows[0]?.items_count || 0),
+      topProducts: topProducts.rows.map(r => ({
+        product: r.product || 'Unknown',
+        quantity: parseInt(r.qty || 0),
+        revenue: parseInt(r.revenue || 0),
+      })),
+      recent: recent.rows,
+      windowDays: days,
+    });
+  } catch (e) {
+    console.error('📊 SALES SUMMARY error:', e);
+    res.status(500).json({ totalRevenue: 0, orders: 0, items: 0, topProducts: [], recent: [], windowDays: 30 });
+  }
+});
+
+// Admin: recent scans debug
+app.get('/api/analytics/debug/recent-scans', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const rows = await pool.query(
+      `SELECT id, qr_code_id, scanned_at, country_code, region, city, device_type, browser_name, operating_system
+         FROM qr_scans ORDER BY scanned_at DESC LIMIT $1`,
+      [limit]
+    );
+    res.json({ scans: rows.rows });
+  } catch (e) {
+    console.error('📊 DEBUG recent-scans error:', e);
+    res.status(500).json({ scans: [] });
+  }
+});
+
 app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
   try {
     const { amount, subscriptionTier } = req.body;
@@ -3332,21 +3448,67 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           amount: item.amount_total,
         }));
 
-        // Track the purchase
-        const existing = await pool.query(
-          'SELECT id FROM purchase_events WHERE stripe_session_id = $1',
-          [session.id]
-        );
+        // Track the purchase in both normalized tables and events (idempotent)
+        try {
+          const existing = await pool.query(
+            'SELECT id FROM orders WHERE stripe_session_id = $1',
+            [session.id]
+          );
 
-        if (existing.rows.length === 0) {
+          let orderId;
+          if (existing.rows.length === 0) {
+            const inserted = await pool.query(
+              `INSERT INTO orders (user_id, stripe_session_id, total_amount, currency, customer_email)
+               VALUES ($1, $2, $3, $4, $5)
+               ON CONFLICT (stripe_session_id) DO UPDATE SET total_amount = EXCLUDED.total_amount
+               RETURNING id`,
+              [userId, session.id, session.amount_total || 0, session.currency || 'usd', session.customer_details?.email || null]
+            );
+            orderId = inserted.rows[0].id;
+          } else {
+            orderId = existing.rows[0].id;
+          }
+
+          // Upsert order items
+          for (const it of items) {
+            await pool.query(
+              `INSERT INTO order_items (order_id, product_name, quantity, amount)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT ON CONSTRAINT uq_order_item_dedupe DO NOTHING`,
+              [orderId, it.productName, it.quantity || 1, it.amount || 0]
+            );
+          }
+
+          // Mirror into purchase_events for backward compatibility
           await pool.query(
             `INSERT INTO purchase_events (stripe_session_id, user_id, total_amount, items) 
-             VALUES ($1, $2, $3, $4)`,
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (stripe_session_id) DO NOTHING`,
             [session.id, userId, session.amount_total, JSON.stringify(items)]
           );
-          console.log('💳 STRIPE_WEBHOOK: Purchase tracked successfully');
-        } else {
-          console.log('💳 STRIPE_WEBHOOK: Purchase already tracked');
+          console.log('💳 STRIPE_WEBHOOK: Order recorded and events mirrored');
+
+          // Notify merchant via email (best-effort)
+          try {
+            const merchant = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+            const to = merchant.rows[0]?.email;
+            if (to) {
+              const totalUsd = ((session.amount_total || 0) / 100).toFixed(2);
+              await transporter.sendMail({
+                from: 'help@merchtrader.org',
+                to,
+                subject: `New order $${totalUsd}`,
+                html: `<p>You received a new order for <strong>$${totalUsd}</strong>.</p>
+                       <p>Items:</p>
+                       <ul>${items.map(i => `<li>${i.quantity}× ${i.productName} — $${(i.amount/100).toFixed(2)}</li>`).join('')}</ul>
+                       <p>Session: ${session.id}</p>`
+              });
+            }
+          } catch (mailErr) {
+            console.warn('📧 Order email failed:', mailErr?.message || mailErr);
+          }
+        } catch (err) {
+          console.error('💳 STRIPE_WEBHOOK: Failed to record order/items:', err);
         }
 
         break;
@@ -3559,14 +3721,17 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
     // Record scan (best-effort)
     try {
       const ip = getClientIp(req);
-      const geo = resolveGeo(req);
-      const ua = req.headers['user-agent'] || '';
-      const parsed = parseUserAgent(ua);
-      await pool.query(
-        `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
-         VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [qr.id, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
-      );
+      const result = await writeScan(pool, qr.id, req, res);
+      if (!result?.inserted) {
+        // As a last resort record a minimal row with ip only
+        const ua = req.headers['user-agent'] || '';
+        const parsed = parseUserAgent(ua);
+        await pool.query(
+          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
+           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [qr.id, null, null, null, null, null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+        );
+      }
     } catch (trackErr) {
       console.warn('📊 REDIRECT TRACK FAILED:', trackErr?.message || trackErr);
     }
@@ -4794,32 +4959,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
-        const geo = resolveGeo(req);
-        const ua = req.headers['user-agent'] || '';
-        const parsed = parseUserAgent(ua);
-        const visitorId = getOrSetVisitorId(req, res);
-
-        // Dedupe in last 5 minutes
-        const dedupe = await pool.query(
-          `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
-          [qrId, visitorId]
-        );
-        if (dedupe.rowCount === 0) {
-          try {
-            await pool.query(
-              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
-               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
-            );
-          } catch (e) {
-            // Fallback for databases without visitor_id column
-            await pool.query(
-              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
-               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
-            );
-          }
-        }
+        await writeScan(pool, qrId, req, res);
       }
     } catch (trackErr) {
       console.warn('📊 ANALYTICS: Failed to link/track playlist scan:', trackErr?.message || trackErr);
@@ -5001,29 +5141,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
       if (qrId) {
         fullSlideshow.qr_code_id = qrId;
-        const geo = resolveGeo(req);
-        const ua = req.headers['user-agent'] || '';
-        const parsed = parseUserAgent(ua);
-        const visitorId = getOrSetVisitorId(req, res);
-        const dedupe = await client.query(
-          `SELECT 1 FROM qr_scans WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes' LIMIT 1`,
-          [qrId, visitorId]
-        );
-        if (dedupe.rowCount === 0) {
-          try {
-            await client.query(
-              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, visitor_id)
-               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, visitorId]
-            );
-          } catch (e) {
-            await client.query(
-              `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system)
-               VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-              [qrId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
-            );
-          }
-        }
+        await writeScan(client, qrId, req, res);
       }
     } catch (trackErr) {
       console.warn('📊 ANALYTICS: Failed to link/track slideshow scan:', trackErr?.message || trackErr);
