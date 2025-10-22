@@ -509,56 +509,8 @@ app.get('/r/:id', async (req, res) => {
     }
     const destinationUrl = qrRes.rows[0].url;
 
-    // Collect metadata
-    const ua = req.headers['user-agent'] || '';
-    const { deviceType, browserName, operatingSystem } = parseUserAgent(ua);
-    const referrer = req.headers['referer'] || req.headers['referrer'] || null;
-    const utm = extractUtm(req.query || {});
-    const geo = resolveGeo(req);
-    const visitorId = getOrSetVisitorId(req, res);
-
-    // Dedupe: skip insert if same visitor scanned same code within last 5 minutes
-    try {
-      const dedupe = await pool.query(
-        `SELECT 1 FROM qr_scans
-         WHERE qr_code_id = $1 AND visitor_id = $2 AND scanned_at >= NOW() - INTERVAL '5 minutes'
-         LIMIT 1`,
-        [qrId, visitorId]
-      );
-      if (dedupe.rowCount === 0) {
-        await pool.query(
-          `INSERT INTO qr_scans (
-            qr_code_id, scanned_at, device_type, browser_name, operating_system,
-            country_code, country_name, region, city, referrer,
-            utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-            visitor_id
-          ) VALUES (
-            $1, NOW(), $2, $3, $4,
-            $5, NULL, $6, $7, $8,
-            $9, $10, $11, $12, $13,
-            $14
-          )`,
-          [
-            qrId,
-            deviceType,
-            browserName,
-            operatingSystem,
-            geo.countryCode || null,
-            geo.region || null,
-            geo.city || null,
-            referrer,
-            utm.utm_source,
-            utm.utm_medium,
-            utm.utm_campaign,
-            utm.utm_term,
-            utm.utm_content,
-            visitorId,
-          ]
-        );
-      }
-    } catch (e) {
-      console.warn('QR redirect logging failed (non-fatal):', e.message);
-    }
+    // Scan tracking is handled by the main /r/:code and /qr/:code endpoints
+    // This /r/:id endpoint is for legacy numeric ID redirects only
 
     // Build redirect URL (preserve original query including UTMs)
     const originalQs = req.url.split('?')[1];
