@@ -758,7 +758,26 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
        ORDER BY d.timestamp DESC
        LIMIT 10`,
       [userId]
-    ); } catch (e) { console.warn('📊 SUMMARY recentRes failed:', e.message); recentRes = { rows: [] }; }
+    ); } catch (e) {
+      console.warn('📊 SUMMARY recentRes dedup failed, falling back to raw scans:', e.message);
+      try {
+        recentRes = await pool.query(
+          `SELECT q.name AS qr_name,
+                  COALESCE(s.country_name, s.country_code, '') AS location,
+                  COALESCE(s.device_type, s.device, '') AS device,
+                  s.scanned_at AS timestamp
+             FROM qr_scans s
+             JOIN qr_codes q ON s.qr_code_id = q.id
+            WHERE q.user_id = $1
+            ORDER BY s.scanned_at DESC
+            LIMIT 10`,
+          [userId]
+        );
+      } catch (e2) {
+        console.warn('📊 SUMMARY recentRes raw fallback failed:', e2.message);
+        recentRes = { rows: [] };
+      }
+    }
 
     console.log('📊 ANALYTICS: Final counts:', {
       total: totalRes.rows[0]?.c,
