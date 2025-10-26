@@ -673,7 +673,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Optional filters
     const days = Math.max(1, Math.min(parseInt(req.query.days) || 7, 365));
     const qrFilterId = req.query.qrCodeId ? parseInt(String(req.query.qrCodeId), 10) : null;
-    const hasQrFilter = Number.isFinite(qrFilterId) && qrFilterId! > 0;
+    const hasQrFilter = typeof qrFilterId === 'number' && !Number.isNaN(qrFilterId) && qrFilterId > 0;
 
     // Date boundaries (now and rangeStart)
     const now = new Date();
@@ -693,11 +693,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Configurable dedupe window (seconds), default 60
     const DEDUP_WINDOW_SECONDS = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
 
-    // Helper CTE to dedupe scans per visitor within the window
+    // Helper CTE to dedupe scans per QR code within a minute window
+    // Using IP address and browser/OS combination as visitor identifier
     const dedupCTE = `WITH dedup AS (
       SELECT DISTINCT ON (
         s.qr_code_id,
-        COALESCE(s.qr_visitor_id, s.visitor_id::text),
+        COALESCE(s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
         date_trunc('minute', s.scanned_at)
       ) s.id, s.qr_code_id, s.scanned_at
       FROM qr_scans s
@@ -705,6 +706,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       WHERE q.user_id = $1
         AND s.scanned_at >= $2
         ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
+      ORDER BY s.qr_code_id, COALESCE(s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
     )`;
 
     // Total scans for this user's QR codes (deduped)
@@ -762,15 +764,13 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       hasQrFilter ? [userId, monthStart, qrFilterId] : [userId, monthStart]
     ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
-    // Prefer privacy-preserving visitor_id when available; fallback to UA heuristic
+    // Count unique visitors using IP address and browser/OS combination
     let uniqueVisitorsRes;
     try {
       uniqueVisitorsRes = await pool.query(
         `SELECT COUNT(*) AS c FROM (
            SELECT DISTINCT
-             CASE WHEN visitor_id IS NOT NULL THEN visitor_id::text
-                  ELSE CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))
-             END AS vkey
+             COALESCE(ip_address::text, CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))) AS vkey
            FROM qr_scans s
            JOIN qr_codes q ON s.qr_code_id = q.id
            WHERE q.user_id = $1
@@ -1032,17 +1032,39 @@ app.post('/api/analytics/backfill-geo', authenticateToken, isAdmin, async (req, 
 app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('📊 USER ANALYTICS: Request for user', id, 'from authenticated user', req.user.userId);
+    console.log('📊 USER ANALYTICS: Comparison:', String(req.user.userId), '!==', String(id), '=', String(req.user.userId) !== String(id));
+    
     if (String(req.user.userId) !== String(id)) {
+      console.log('📊 USER ANALYTICS: Access denied - user mismatch');
       return res.status(403).json({ error: 'Forbidden' });
     }
+    
+    console.log('📊 USER ANALYTICS: Fetching QR codes count for user', id);
     let totalQRCodes = 0;
+    let totalPlaylists = 0;
+    let totalSlideshows = 0;
+    let totalProducts = 0;
+    
     try {
-      const qrRes = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]);
+      const [qrRes, playlistsRes, slideshowsRes, productsRes] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]),
+        pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [id]),
+        pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [id]),
+        pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1', [id]),
+      ]);
+      
       totalQRCodes = parseInt(qrRes.rows[0]?.count || 0);
+      totalPlaylists = parseInt(playlistsRes.rows[0]?.count || 0);
+      totalSlideshows = parseInt(slideshowsRes.rows[0]?.count || 0);
+      totalProducts = parseInt(productsRes.rows[0]?.count || 0);
+      
+      console.log('📊 USER ANALYTICS: Counts:', { totalQRCodes, totalPlaylists, totalSlideshows, totalProducts });
     } catch (e) {
       console.warn('📊 USER ANALYTICS: count failed:', e.message);
     }
-    res.json({ totalQRCodes });
+    
+    res.json({ totalQRCodes, totalPlaylists, totalSlideshows, totalProducts });
   } catch (error) {
     console.error('📊 USER ANALYTICS: error', error);
     res.status(500).json({ error: 'Failed to fetch user analytics' });
