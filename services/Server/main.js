@@ -392,6 +392,23 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
   }
 
   try {
+    // Manual dedupe guard in case the unique index is missing or not yet applied
+    try {
+      const existsRes = await poolLike.query(
+        `SELECT id FROM qr_scans
+          WHERE qr_code_id = $1
+            AND COALESCE(qr_visitor_id, visitor_id::text) = $2
+            AND scanned_at >= NOW() - INTERVAL '60 seconds'
+          LIMIT 1`,
+        [qrCodeId, visitorId]
+      );
+      if (existsRes.rowCount > 0) {
+        return { deduped: true, keptId: existsRes.rows[0].id };
+      }
+    } catch (_e) {
+      // ignore; proceed to insert with ON CONFLICT
+    }
+
     // Use ON CONFLICT with the unique constraint for atomic dedupe (minute-level)
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
@@ -741,13 +758,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       `WITH dedup AS (
          SELECT DISTINCT ON (
            s.qr_code_id,
-           COALESCE(s.qr_visitor_id, s.visitor_id::text),
            date_trunc('minute', s.scanned_at)
          ) s.id, s.qr_code_id, s.scanned_at, s.country_name, s.country_code, s.device_type, s.device
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
          WHERE q.user_id = $1
-         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+         ORDER BY s.qr_code_id, date_trunc('minute', s.scanned_at), s.scanned_at ASC
        )
        SELECT q.name AS qr_name,
               COALESCE(d.country_name, d.country_code, '') AS location,
