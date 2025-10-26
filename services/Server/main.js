@@ -93,31 +93,7 @@ app.use(helmet({
   },
 }));
 
-// Admin-only debug endpoint to inspect IP/geo headers (no raw IP storage)
-app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
-  const ip = getClientIp(req);
-  const fromHeaders = inferGeo(req);
-  res.json({
-    ip,
-    headers: {
-      'cf-connecting-ip': req.headers['cf-connecting-ip'] || null,
-      'cf-ipcountry': req.headers['cf-ipcountry'] || null,
-      'x-vercel-ip-country': req.headers['x-vercel-ip-country'] || null,
-      'x-vercel-ip-country-region': req.headers['x-vercel-ip-country-region'] || null,
-      'x-vercel-ip-city': req.headers['x-vercel-ip-city'] || null,
-      'fastly-country-code': req.headers['fastly-country-code'] || null,
-      'fly-client-ip-country': req.headers['fly-client-ip-country'] || null,
-      'x-appengine-country': req.headers['x-appengine-country'] || null,
-      'x-appengine-region': req.headers['x-appengine-region'] || null,
-      'x-appengine-city': req.headers['x-appengine-city'] || null,
-      'x-real-ip': req.headers['x-real-ip'] || null,
-      'true-client-ip': req.headers['true-client-ip'] || null,
-      'x-forwarded-for': req.headers['x-forwarded-for'] || null,
-    },
-    inferredGeo: fromHeaders,
-    provider: process.env.GEO_PROVIDER || 'none'
-  });
-});
+// Admin-only debug endpoint is defined later, after auth middleware declarations
 
 // 🔧 INCREASED LIMITS FOR LARGE VIDEO FILES
 app.use(express.json({ limit: '1gb' })); // Increased from 50mb to 1gb
@@ -282,6 +258,32 @@ const isAdmin = async (req, res, next) => {
 };
 
 // --- ROUTES ---
+
+// Admin-only debug endpoint to inspect IP/geo headers (no raw IP storage)
+app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
+  const ip = getClientIp(req);
+  const fromHeaders = inferGeo(req);
+  res.json({
+    ip,
+    headers: {
+      'cf-connecting-ip': req.headers['cf-connecting-ip'] || null,
+      'cf-ipcountry': req.headers['cf-ipcountry'] || null,
+      'x-vercel-ip-country': req.headers['x-vercel-ip-country'] || null,
+      'x-vercel-ip-country-region': req.headers['x-vercel-ip-country-region'] || null,
+      'x-vercel-ip-city': req.headers['x-vercel-ip-city'] || null,
+      'fastly-country-code': req.headers['fastly-country-code'] || null,
+      'fly-client-ip-country': req.headers['fly-client-ip-country'] || null,
+      'x-appengine-country': req.headers['x-appengine-country'] || null,
+      'x-appengine-region': req.headers['x-appengine-region'] || null,
+      'x-appengine-city': req.headers['x-appengine-city'] || null,
+      'x-real-ip': req.headers['x-real-ip'] || null,
+      'true-client-ip': req.headers['true-client-ip'] || null,
+      'x-forwarded-for': req.headers['x-forwarded-for'] || null,
+    },
+    inferredGeo: fromHeaders,
+    provider: process.env.GEO_PROVIDER || 'none'
+  });
+});
 
 app.get('/api/health', (req, res) => {
     try {
