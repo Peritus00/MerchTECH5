@@ -392,18 +392,18 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
   }
 
   try {
-    // Use ON CONFLICT with the unique constraint for atomic dedupe
+    // Use ON CONFLICT with the unique constraint for atomic dedupe (minute-level)
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
          country_code, country_name, region, city, referrer,
          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-         visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source
+         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source
        ) VALUES (
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14, $15, $16, $17, $18
+         $14, $14, $15, $16, $17, $18
        )
        ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO NOTHING
        RETURNING id`,
@@ -587,15 +587,30 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       monthStart: monthStart.toISOString()
     });
 
-    // Total scans for this user's QR codes
+    // Configurable dedupe window (seconds), default 60
+    const DEDUP_WINDOW_SECONDS = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
+
+    // Helper CTE to dedupe scans per visitor within the window
+    const dedupCTE = `WITH dedup AS (
+      SELECT DISTINCT ON (
+        s.qr_code_id,
+        COALESCE(s.qr_visitor_id, s.visitor_id::text),
+        date_trunc('minute', s.scanned_at)
+      ) s.id, s.qr_code_id, s.scanned_at
+      FROM qr_scans s
+      JOIN qr_codes q ON s.qr_code_id = q.id
+      WHERE q.user_id = $1
+    )`;
+
+    // Total scans for this user's QR codes (deduped)
     let totalRes;
-    try { totalRes = await pool.query(
-      `SELECT COUNT(*) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1`,
-      [userId]
-    ); } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
+    try {
+      totalRes = await pool.query(
+        `${dedupCTE}
+         SELECT COUNT(*) AS c FROM dedup`,
+        [userId]
+      );
+    } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
 
     let last24HoursRes;
     try { 
@@ -621,10 +636,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       });
       
       last24HoursRes = await pool.query(
-        `SELECT COUNT(*) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+        `${dedupCTE}
+         SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
         [userId, last24Hours]
       );
       console.log('📊 ANALYTICS: Last 24h count result:', last24HoursRes.rows[0]);
@@ -632,19 +645,15 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
     let weekRes;
     try { weekRes = await pool.query(
-      `SELECT COUNT(*) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+      `${dedupCTE}
+       SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       [userId, weekStart]
     ); } catch (e) { console.warn('📊 SUMMARY weekRes failed:', e.message); weekRes = { rows: [{ c: 0 }] }; }
 
     let monthRes;
     try { monthRes = await pool.query(
-      `SELECT COUNT(*) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1 AND s.scanned_at >= $2`,
+      `${dedupCTE}
+       SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       [userId, monthStart]
     ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
@@ -671,13 +680,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Hourly distribution (last 24h)
     let hourlyRes;
     try { hourlyRes = await pool.query(
-      `SELECT EXTRACT(HOUR FROM s.scanned_at) AS hr, COUNT(*) AS c
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1
-          AND s.scanned_at >= NOW() - INTERVAL '24 HOURS'
-        GROUP BY hr
-        ORDER BY hr`,
+      `${dedupCTE}
+       SELECT EXTRACT(HOUR FROM d.scanned_at) AS hr, COUNT(*) AS c
+       FROM dedup d
+       WHERE d.scanned_at >= NOW() - INTERVAL '24 HOURS'
+       GROUP BY hr
+       ORDER BY hr`,
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY hourlyRes failed:', e.message); hourlyRes = { rows: [] }; }
     const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
@@ -730,13 +738,25 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Recent scans
     let recentRes;
     try { recentRes = await pool.query(
-      `SELECT q.name AS qr_name, COALESCE(s.country_name, s.country_code, '') AS location,
-              COALESCE(s.device_type, s.device, '') AS device, s.scanned_at AS timestamp
+      `WITH dedup AS (
+         SELECT DISTINCT ON (
+           s.qr_code_id,
+           COALESCE(s.qr_visitor_id, s.visitor_id::text),
+           date_trunc('minute', s.scanned_at)
+         ) s.id, s.qr_code_id, s.scanned_at, s.country_name, s.country_code, s.device_type, s.device
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1
-        ORDER BY s.scanned_at DESC
-        LIMIT 10`,
+         WHERE q.user_id = $1
+         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+       )
+       SELECT q.name AS qr_name,
+              COALESCE(d.country_name, d.country_code, '') AS location,
+              COALESCE(d.device_type, d.device, '') AS device,
+              d.scanned_at AS timestamp
+       FROM dedup d
+       JOIN qr_codes q ON d.qr_code_id = q.id
+       ORDER BY d.timestamp DESC
+       LIMIT 10`,
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY recentRes failed:', e.message); recentRes = { rows: [] }; }
 
