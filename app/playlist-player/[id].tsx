@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
@@ -17,6 +18,32 @@ export default function PlaylistPlayerScreen() {
   useEffect(() => {
     fetchPlaylist();
   }, [id]);
+
+  // Attempt geolocation on player too (some QR flows go straight here)
+  useEffect(() => {
+    const submitGeo = async () => {
+      try {
+        if (!('geolocation' in navigator)) return;
+        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 60000, timeout: 4000 })
+        );
+        const pos = await getPos();
+        const qrId = (playlist as any)?.qr_code_id || (playlist as any)?.qrCodeId;
+        await analyticsService.submitBrowserGeo(
+          qrId ? Number(qrId) : Number(id),
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
+        );
+      } catch (_e) {
+        // ignore
+      }
+    };
+    if (playlist && !loading) {
+      const t = setTimeout(submitGeo, 1200);
+      return () => clearTimeout(t);
+    }
+  }, [playlist, loading, id]);
 
   const fetchPlaylist = async () => {
     try {

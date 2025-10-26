@@ -289,8 +289,8 @@ app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
 app.post('/api/analytics/geo', async (req, res) => {
   try {
     const { qrCodeId, lat, lng, accuracy } = req.body || {};
-    if (!qrCodeId || typeof lat !== 'number' || typeof lng !== 'number') {
-      return res.status(400).json({ error: 'qrCodeId, lat, lng required' });
+    if (typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ error: 'lat, lng required' });
     }
     // Round server-side as well for privacy
     const r = (n) => Math.round(n * 100) / 100;
@@ -300,16 +300,30 @@ app.post('/api/analytics/geo', async (req, res) => {
 
     // Find most recent scan for this visitor and QR within dedupe window (default 60s)
     const windowSeconds = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
-    const recent = await pool.query(
-      `SELECT id, city, region, country_code, location_source
-         FROM qr_scans
-        WHERE qr_code_id = $1
-          AND COALESCE(qr_visitor_id, visitor_id::text) = $2
-          AND scanned_at >= NOW() - ($3 || ' seconds')::interval
-        ORDER BY scanned_at DESC
-        LIMIT 1`,
-      [qrCodeId, visitorId, windowSeconds]
-    );
+    let recent;
+    if (qrCodeId) {
+      recent = await pool.query(
+        `SELECT id, city, region, country_code, location_source
+           FROM qr_scans
+          WHERE qr_code_id = $1
+            AND COALESCE(qr_visitor_id, visitor_id::text) = $2
+            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+          ORDER BY scanned_at DESC
+          LIMIT 1`,
+        [qrCodeId, visitorId, windowSeconds]
+      );
+    } else {
+      // Fallback: last scan for this visitor across any QR in the window
+      recent = await pool.query(
+        `SELECT id, city, region, country_code, location_source
+           FROM qr_scans
+          WHERE COALESCE(qr_visitor_id, visitor_id::text) = $1
+            AND scanned_at >= NOW() - ($2 || ' seconds')::interval
+          ORDER BY scanned_at DESC
+          LIMIT 1`,
+        [visitorId, windowSeconds]
+      );
+    }
 
     if (recent.rowCount === 0) {
       // Nothing to upgrade; silently accept

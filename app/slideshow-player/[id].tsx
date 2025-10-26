@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { analyticsService } from '@/services/analyticsService';
 
 export default function SlideshowPlayerScreen() {
   const route = useRoute();
@@ -25,6 +26,32 @@ export default function SlideshowPlayerScreen() {
       setPresignedAudioUrl(slideshow.audio_url);
     }
   }, [slideshow]);
+
+  // Attempt geolocation on player as well
+  useEffect(() => {
+    const submitGeo = async () => {
+      try {
+        if (!('geolocation' in navigator)) return;
+        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 60000, timeout: 4000 })
+        );
+        const pos = await getPos();
+        const qrId = (slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId;
+        await analyticsService.submitBrowserGeo(
+          qrId ? Number(qrId) : Number(id),
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
+        );
+      } catch (_e) {
+        // ignore
+      }
+    };
+    if (slideshow && !loading) {
+      const t = setTimeout(submitGeo, 1200);
+      return () => clearTimeout(t);
+    }
+  }, [slideshow, loading, id]);
 
   const fetchSlideshow = async () => {
     try {
