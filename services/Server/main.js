@@ -765,7 +765,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          WHERE q.user_id = $1
          ORDER BY s.qr_code_id, date_trunc('minute', s.scanned_at), s.scanned_at ASC
        )
-       SELECT q.name AS qr_name,
+       SELECT q.id AS qr_code_id,
+              q.name AS qr_name,
               COALESCE(d.country_name, d.country_code, '') AS location,
               COALESCE(d.device_type, d.device, '') AS device,
               d.scanned_at AS timestamp
@@ -778,7 +779,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       console.warn('📊 SUMMARY recentRes dedup failed, falling back to raw scans:', e.message);
       try {
         recentRes = await pool.query(
-          `SELECT q.name AS qr_name,
+          `SELECT q.id AS qr_code_id,
+                  q.name AS qr_name,
                   COALESCE(s.country_name, s.country_code, '') AS location,
                   COALESCE(s.device_type, s.device, '') AS device,
                   s.scanned_at AS timestamp
@@ -5015,11 +5017,10 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
-        // Scan tracking already handled by QR redirect endpoint (/r/:code or /qr/:code)
-        // await writeScan(pool, qrId, req, res);
+        await writeScan(pool, qrId, req, res);
       }
     } catch (trackErr) {
-      console.warn('📊 ANALYTICS: Failed to link QR code to playlist:', trackErr?.message || trackErr);
+      console.warn('📊 ANALYTICS: Failed to link/track playlist scan:', trackErr?.message || trackErr);
     }
     
     console.log('🎵 PLAYLIST_ACCESS: Playlist found:', accessData.name);
@@ -5198,11 +5199,10 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
       if (qrId) {
         fullSlideshow.qr_code_id = qrId;
-        // Scan tracking already handled by QR redirect endpoint (/r/:code or /qr/:code)
-        // await writeScan(client, qrId, req, res);
+        await writeScan(client, qrId, req, res);
       }
     } catch (trackErr) {
-      console.warn('📊 ANALYTICS: Failed to link QR code to slideshow:', trackErr?.message || trackErr);
+      console.warn('📊 ANALYTICS: Failed to link/track slideshow scan:', trackErr?.message || trackErr);
     }
     
     // Step 4: Generate signed URL for audio if it exists
