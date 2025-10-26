@@ -207,8 +207,8 @@ export default function AnalyticsScreen() {
     try {
       setIsLoading(true);
       
-      // Fetch real analytics data
-      const analytics = await analyticsService.getAnalyticsSummary();
+      // Fetch real analytics data with time-range filter
+      const analytics = await analyticsService.getAnalyticsSummary({ days: selectedTimeRange });
       
       // Convert analytics data to match expected format
       setSummaryData({

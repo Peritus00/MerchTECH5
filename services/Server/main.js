@@ -670,12 +670,18 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const userId = req.user.userId;
     console.log('📊 ANALYTICS: Computing summary for user:', userId);
 
-    // Date boundaries
+    // Optional filters
+    const days = Math.max(1, Math.min(parseInt(req.query.days) || 7, 365));
+    const qrFilterId = req.query.qrCodeId ? parseInt(String(req.query.qrCodeId), 10) : null;
+    const hasQrFilter = Number.isFinite(qrFilterId) && qrFilterId! > 0;
+
+    // Date boundaries (now and rangeStart)
     const now = new Date();
-    // Use "last 24 hours" instead of "today in UTC" for better user experience
+    const rangeStart = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+    // Pre-existing buckets
     const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // last 7 days
-    const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000); // last 30 days
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     
     console.log('📊 ANALYTICS: Date boundaries:', {
       now: now.toISOString(),
@@ -697,6 +703,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       FROM qr_scans s
       JOIN qr_codes q ON s.qr_code_id = q.id
       WHERE q.user_id = $1
+        AND s.scanned_at >= $2
+        ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
     )`;
 
     // Total scans for this user's QR codes (deduped)
@@ -705,7 +713,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       totalRes = await pool.query(
         `${dedupCTE}
          SELECT COUNT(*) AS c FROM dedup`,
-        [userId]
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
     } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
 
@@ -735,7 +743,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       last24HoursRes = await pool.query(
         `${dedupCTE}
          SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
-        [userId, last24Hours]
+        hasQrFilter ? [userId, last24Hours, qrFilterId] : [userId, last24Hours]
       );
       console.log('📊 ANALYTICS: Last 24h count result:', last24HoursRes.rows[0]);
     } catch (e) { console.warn('📊 SUMMARY last24HoursRes failed:', e.message); last24HoursRes = { rows: [{ c: 0 }] }; }
@@ -744,14 +752,14 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     try { weekRes = await pool.query(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
-      [userId, weekStart]
+      hasQrFilter ? [userId, weekStart, qrFilterId] : [userId, weekStart]
     ); } catch (e) { console.warn('📊 SUMMARY weekRes failed:', e.message); weekRes = { rows: [{ c: 0 }] }; }
 
     let monthRes;
     try { monthRes = await pool.query(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
-      [userId, monthStart]
+      hasQrFilter ? [userId, monthStart, qrFilterId] : [userId, monthStart]
     ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
     // Prefer privacy-preserving visitor_id when available; fallback to UA heuristic
@@ -783,7 +791,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
        WHERE d.scanned_at >= NOW() - INTERVAL '24 HOURS'
        GROUP BY hr
        ORDER BY hr`,
-      [userId]
+      hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
     ); } catch (e) { console.warn('📊 SUMMARY hourlyRes failed:', e.message); hourlyRes = { rows: [] }; }
     const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
     const hourlyData = Array.from({ length: 24 }, (_, i) => hourlyMap.get(i) || 0);
@@ -795,10 +803,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1
+          AND s.scanned_at >= $2
+          ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
         GROUP BY country
         ORDER BY count DESC
         LIMIT 10`,
-      [userId]
+      hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
     ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
     // Top cities (prioritize user-provided location over auto-detected)
@@ -813,10 +823,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1
+          AND s.scanned_at >= $2
+          ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
         GROUP BY city, region, country_code
         ORDER BY count DESC
         LIMIT 10`,
-      [userId]
+      hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
     ); } catch (e) { console.warn('📊 SUMMARY citiesRes failed:', e.message); citiesRes = { rows: [] }; }
 
     // Top devices

@@ -3,11 +3,15 @@ import { api } from './api';
 
 export const analyticsService = {
   // Get analytics summary from real data
-  async getAnalyticsSummary(): Promise<AnalyticsSummary> {
+  async getAnalyticsSummary(options?: { days?: number; qrCodeId?: number }): Promise<AnalyticsSummary> {
     try {
       // Fetch real analytics data from server
       // Server route is namespaced under /api
-      const response = await api.get('/analytics/summary');
+      const params = new URLSearchParams();
+      if (options?.days) params.set('days', String(options.days));
+      if (options?.qrCodeId) params.set('qrCodeId', String(options.qrCodeId));
+      const qs = params.toString();
+      const response = await api.get(`/analytics/summary${qs ? `?${qs}` : ''}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching analytics summary:', error);
