@@ -22,6 +22,8 @@ console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'con
 console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
 
 const app = express();
+// Trust proxy headers so req.ip and related helpers reflect the original client IP
+app.set('trust proxy', true);
 const PORT = process.env.PORT || 5001;
 
 // --- CORS Configuration ---
@@ -90,6 +92,32 @@ app.use(helmet({
     },
   },
 }));
+
+// Admin-only debug endpoint to inspect IP/geo headers (no raw IP storage)
+app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
+  const ip = getClientIp(req);
+  const fromHeaders = inferGeo(req);
+  res.json({
+    ip,
+    headers: {
+      'cf-connecting-ip': req.headers['cf-connecting-ip'] || null,
+      'cf-ipcountry': req.headers['cf-ipcountry'] || null,
+      'x-vercel-ip-country': req.headers['x-vercel-ip-country'] || null,
+      'x-vercel-ip-country-region': req.headers['x-vercel-ip-country-region'] || null,
+      'x-vercel-ip-city': req.headers['x-vercel-ip-city'] || null,
+      'fastly-country-code': req.headers['fastly-country-code'] || null,
+      'fly-client-ip-country': req.headers['fly-client-ip-country'] || null,
+      'x-appengine-country': req.headers['x-appengine-country'] || null,
+      'x-appengine-region': req.headers['x-appengine-region'] || null,
+      'x-appengine-city': req.headers['x-appengine-city'] || null,
+      'x-real-ip': req.headers['x-real-ip'] || null,
+      'true-client-ip': req.headers['true-client-ip'] || null,
+      'x-forwarded-for': req.headers['x-forwarded-for'] || null,
+    },
+    inferredGeo: fromHeaders,
+    provider: process.env.GEO_PROVIDER || 'none'
+  });
+});
 
 // 🔧 INCREASED LIMITS FOR LARGE VIDEO FILES
 app.use(express.json({ limit: '1gb' })); // Increased from 50mb to 1gb
@@ -329,10 +357,20 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
 
 // --- Analytics helpers ---
 function getClientIp(req) {
-  const xfwd = req.headers['x-forwarded-for'];
-  if (typeof xfwd === 'string') return xfwd.split(',')[0].trim();
-  if (Array.isArray(xfwd) && xfwd.length > 0) return xfwd[0];
-  return req.socket?.remoteAddress || null;
+  const candidates = [
+    req.headers['cf-connecting-ip'],
+    req.headers['true-client-ip'],
+    req.headers['x-real-ip'],
+    Array.isArray(req.headers['x-forwarded-for'])
+      ? req.headers['x-forwarded-for'][0]
+      : (req.headers['x-forwarded-for'] || '').split(',')[0].trim(),
+    req.ip, // respects trust proxy
+    req.socket?.remoteAddress,
+  ].filter(Boolean);
+  const raw = candidates.find(Boolean);
+  if (!raw) return null;
+  if (raw === '::1') return '127.0.0.1';
+  return raw.startsWith('::ffff:') ? raw.slice(7) : raw;
 }
 
 function parseUserAgent(ua) {
@@ -376,7 +414,7 @@ function extractUtm(query) {
 // Shared scan writer with dedupe and graceful fallbacks
 // Accepts optional userLocation from request body for user-provided location data
 async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
-  const geo = resolveGeo(req);
+  const geo = await resolveGeo(req);
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUserAgent(ua);
   const referrer = req.headers['referer'] || req.headers['referrer'] || null;
@@ -482,14 +520,26 @@ function getOrSetVisitorId(req, res) {
 
 // Lightweight geo using cloud/edge headers without storing IP
 function inferGeo(req) {
-  const cc = req.headers['cf-ipcountry'] || req.headers['x-vercel-ip-country'] || null;
-  const region = req.headers['x-vercel-ip-country-region'] || null;
-  const city = req.headers['x-vercel-ip-city'] || null;
+  const cc =
+    req.headers['cf-ipcountry'] ||
+    req.headers['x-vercel-ip-country'] ||
+    req.headers['fastly-country-code'] ||
+    req.headers['fly-client-ip-country'] ||
+    req.headers['x-appengine-country'] ||
+    null;
+  const region =
+    req.headers['x-vercel-ip-country-region'] ||
+    req.headers['x-appengine-region'] ||
+    null;
+  const city =
+    req.headers['x-vercel-ip-city'] ||
+    req.headers['x-appengine-city'] ||
+    null;
   return { countryCode: cc, region, city };
 }
 
 // Resolve geo with graceful IP fallback (uses geoip-lite if available)
-function resolveGeo(req) {
+async function resolveGeo(req) {
   const fromHeaders = inferGeo(req);
   if (fromHeaders.countryCode || fromHeaders.city || fromHeaders.region) {
     return fromHeaders;
@@ -497,12 +547,40 @@ function resolveGeo(req) {
   try {
     const ip = getClientIp(req);
     if (!ip) return { countryCode: null, region: null, city: null };
-    // Lazy-require so the server runs even if geoip-lite is not installed
-    const geoip = require('geoip-lite');
+    // Optional external provider
+    if (process.env.GEO_PROVIDER && process.env.GEO_API_KEY) {
+      try {
+        const provider = String(process.env.GEO_PROVIDER).toLowerCase();
+        if (provider === 'ipinfo') {
+          // ipinfo.io JSON: { country, region, city }
+          const url = `https://ipinfo.io/${encodeURIComponent(ip)}?token=${process.env.GEO_API_KEY}`;
+          const resp = await axios.get(url, { timeout: 2000 });
+          const data = resp?.data || {};
+          return {
+            countryCode: data.country || null,
+            region: data.region || null,
+            city: data.city || null,
+          };
+        } else if (provider === 'ipdata') {
+          const url = `https://api.ipdata.co/${encodeURIComponent(ip)}?api-key=${process.env.GEO_API_KEY}`;
+          const resp = await axios.get(url, { timeout: 2000 });
+          const data = resp?.data || {};
+          return {
+            countryCode: data.country_code || null,
+            region: data.region || data.region_code || null,
+            city: data.city || null,
+          };
+        }
+      } catch (_extErr) {
+        // fall through to local db
+      }
+    }
+    // Local fallback: geoip-lite (if installed)
+    let geoip;
+    try { geoip = require('geoip-lite'); } catch (_e) { geoip = null; }
     if (!geoip || !geoip.lookup) return { countryCode: null, region: null, city: null };
     const r = geoip.lookup(ip);
     if (!r) return { countryCode: null, region: null, city: null };
-    // geoip-lite returns {country, region, city}
     return { countryCode: r.country || null, region: r.region || null, city: r.city || null };
   } catch (_e) {
     return { countryCode: null, region: null, city: null };
@@ -566,7 +644,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     }
 
     // Do not store IP; derive approximate geo
-    const geo = resolveGeo(req);
+    const geo = await resolveGeo(req);
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 

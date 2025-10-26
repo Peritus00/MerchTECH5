@@ -76,11 +76,44 @@ You can start developing by editing the files inside the **app** directory. This
 
 City/region data in analytics defaults to cloud-provided headers when available. For environments that don't inject geo headers (e.g., local or Railway without edge headers), the server will optionally use `geoip-lite` to derive approximate country/region/city from the client IP.
 
-- To enable: install the package in the server environment.
+- To enable local DB fallback: install the package in the server environment.
 ```bash
 npm install geoip-lite
 ```
 - If the package is not present, the server continues to run and simply records `Unknown` for missing geo fields.
+
+### IP and Geo header handling
+
+- Server trusts proxies: `app.set('trust proxy', true)` so `req.ip` honors forwarded headers.
+- Client IP precedence: `CF-Connecting-IP` → `True-Client-IP` → `X-Real-IP` → first `X-Forwarded-For` → `req.ip` → `remoteAddress`.
+- Geo headers used when present: `CF-IPCountry`, `X-Vercel-IP-Country`, `X-Vercel-IP-Country-Region`, `X-Vercel-IP-City`, `Fastly-Country-Code`, `Fly-Client-IP-Country`, `X-AppEngine-Country/Region/City`.
+
+### Optional external provider
+
+Set both to enable, otherwise falls back to headers → `geoip-lite`:
+
+```
+GEO_PROVIDER=ipinfo   # or ipdata
+GEO_API_KEY=your_key
+```
+
+### Admin geo debug
+
+Admin-only endpoint to inspect what the server sees in production:
+
+```
+GET /api/admin/geo-debug  (requires Authorization bearer token and admin user)
+```
+
+Response includes the selected client IP, relevant geo headers, inferred geo, and selected provider.
+
+### Quick tests
+
+Local curl with spoofed IP:
+
+```
+curl -H "X-Forwarded-For: 8.8.8.8" http://localhost:5001/api/admin/geo-debug -H "Authorization: Bearer <ADMIN_TOKEN>"
+```
 
 ## Get a fresh project
 
