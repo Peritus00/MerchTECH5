@@ -285,6 +285,84 @@ app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
   });
 });
 
+// Submit browser geolocation to upgrade recent scan's geo (no auth; links via cookie)
+app.post('/api/analytics/geo', async (req, res) => {
+  try {
+    const { qrCodeId, lat, lng, accuracy } = req.body || {};
+    if (!qrCodeId || typeof lat !== 'number' || typeof lng !== 'number') {
+      return res.status(400).json({ error: 'qrCodeId, lat, lng required' });
+    }
+    // Round server-side as well for privacy
+    const r = (n) => Math.round(n * 100) / 100;
+    const latR = r(lat);
+    const lngR = r(lng);
+    const visitorId = getOrSetVisitorId(req, res);
+
+    // Find most recent scan for this visitor and QR within dedupe window (default 60s)
+    const windowSeconds = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
+    const recent = await pool.query(
+      `SELECT id, city, region, country_code, location_source
+         FROM qr_scans
+        WHERE qr_code_id = $1
+          AND COALESCE(qr_visitor_id, visitor_id::text) = $2
+          AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+        ORDER BY scanned_at DESC
+        LIMIT 1`,
+      [qrCodeId, visitorId, windowSeconds]
+    );
+
+    if (recent.rowCount === 0) {
+      // Nothing to upgrade; silently accept
+      return res.json({ success: true, updated: 0 });
+    }
+
+    let city = null, region = null, countryCode = null;
+    // Optional reverse geocoding
+    try {
+      if (process.env.GEOCODER_PROVIDER && process.env.GEOCODER_API_KEY) {
+        const provider = String(process.env.GEOCODER_PROVIDER).toLowerCase();
+        if (provider === 'opencage') {
+          const url = `https://api.opencagedata.com/geocode/v1/json?q=${encodeURIComponent(latR + ',' + lngR)}&key=${process.env.GEOCODER_API_KEY}&no_annotations=1&limit=1`;
+          const resp = await axios.get(url, { timeout: 2500 });
+          const comp = resp?.data?.results?.[0]?.components || {};
+          city = comp.city || comp.town || comp.village || null;
+          region = comp.state || comp.county || null;
+          countryCode = comp.country_code ? String(comp.country_code).toUpperCase() : null;
+        }
+      }
+    } catch (_e) {
+      // Ignore geocoder failures
+    }
+
+    // Only upgrade if current row is lower priority or fields are empty
+    const row = recent.rows[0];
+    const shouldUpgrade = row.location_source === 'auto' || row.location_source === 'unknown' || !row.city;
+
+    if (!shouldUpgrade) {
+      // Still update lat/lng for analytics if present
+      await pool.query(
+        `UPDATE qr_scans SET geo_lat = COALESCE($2, geo_lat), geo_lng = COALESCE($3, geo_lng), geo_accuracy_m = COALESCE($4, geo_accuracy_m)
+          WHERE id = $1`,
+        [row.id, latR, lngR, accuracy || null]
+      );
+      return res.json({ success: true, updated: 0 });
+    }
+
+    await pool.query(
+      `UPDATE qr_scans
+          SET geo_lat = $2, geo_lng = $3, geo_accuracy_m = $4,
+              city = COALESCE($5, city), region = COALESCE($6, region), country_code = COALESCE($7, country_code),
+              location_source = 'browser', geo_consent = 'browser-granted'
+        WHERE id = $1`,
+      [row.id, latR, lngR, accuracy || null, city, region, countryCode]
+    );
+    return res.json({ success: true, updated: 1 });
+  } catch (e) {
+    console.error('📍 Browser geo submit failed:', e.message);
+    return res.status(500).json({ error: 'Failed to save geolocation' });
+  }
+});
+
 app.get('/api/health', (req, res) => {
     try {
         const healthData = {

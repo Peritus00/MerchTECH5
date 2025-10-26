@@ -36,6 +36,22 @@ export const analyticsService = {
     }
   },
 
+  // Submit browser geolocation for a recent scan (links via qr_vid cookie)
+  async submitBrowserGeo(qrCodeId: number, lat: number, lng: number, accuracy?: number): Promise<void> {
+    try {
+      // Round client-side to ~2 decimals (~1–3 km)
+      const r = (n: number) => Math.round(n * 100) / 100;
+      await api.post('/analytics/geo', {
+        qrCodeId,
+        lat: r(lat),
+        lng: r(lng),
+        accuracy,
+      });
+    } catch (error) {
+      console.error('Error submitting browser geolocation:', error);
+    }
+  },
+
   // Get detailed scan data from real tracking
   async getScanData(qrCodeId: number): Promise<ScanData[]> {
     try {

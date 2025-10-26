@@ -145,6 +145,31 @@ export default function SlideshowAccessScreen() {
     }
   }, [slideshow, isLoading]);
 
+  // Attempt browser geolocation shortly after load and submit
+  useEffect(() => {
+    const submitGeo = async () => {
+      try {
+        const qrId = (slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId;
+        if (!qrId) return;
+        if (!('geolocation' in navigator)) return;
+        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 60000, timeout: 4000 })
+        );
+        const pos = await getPos();
+        const { analyticsService } = await import('@/services/analyticsService');
+        await analyticsService.submitBrowserGeo(
+          Number(qrId), pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
+        );
+      } catch (_e) {
+        // ignore failures
+      }
+    };
+    if (slideshow && !isLoading) {
+      const t = setTimeout(submitGeo, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [slideshow, isLoading]);
+
   // Check access after slideshow is loaded or user authentication changes
   useEffect(() => {
     if (slideshow) {
