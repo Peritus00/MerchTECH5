@@ -813,6 +813,26 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       playsTotals.uniqueUsers = parseInt(uniqueUsers.rows[0]?.c || 0);
     } catch (e) { console.warn('📊 SUMMARY plays totals failed:', e.message); }
 
+    // Post-process recent scans to collapse rapid duplicates per QR within 60s
+    let recentRows = recentRes.rows || [];
+    try {
+      recentRows = recentRows.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      const dedupedRecent = [];
+      const lastKeptByQr = new Map();
+      for (const row of recentRows) {
+        const qid = row.qr_id || row.qr_code_id || null;
+        const ts = new Date(row.timestamp).getTime();
+        const lastTs = lastKeptByQr.get(qid);
+        if (!qid || lastTs === undefined || ts < lastTs - 60000) {
+          dedupedRecent.push(row);
+          if (qid) lastKeptByQr.set(qid, ts);
+        }
+      }
+      recentRows = dedupedRecent;
+    } catch (_e) {
+      // If anything goes wrong, keep original rows
+    }
+
     const summary = {
       totalScans: parseInt(totalRes.rows[0]?.c || 0),
       todayScans: parseInt(last24HoursRes.rows[0]?.c || 0), // Changed to last 24 hours
@@ -835,7 +855,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       })),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
       hourlyData,
-      recentScans: recentRes.rows.map(r => ({
+      recentScans: recentRows.map(r => ({
         qrName: r.qr_name,
         location: r.location,
         device: r.device,
