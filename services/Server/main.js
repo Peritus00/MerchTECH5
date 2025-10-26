@@ -5015,10 +5015,11 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       }
       if (qrId) {
         accessData.qr_code_id = qrId;
-        await writeScan(pool, qrId, req, res);
+        // Scan tracking already handled by QR redirect endpoint (/r/:code or /qr/:code)
+        // await writeScan(pool, qrId, req, res);
       }
     } catch (trackErr) {
-      console.warn('📊 ANALYTICS: Failed to link/track playlist scan:', trackErr?.message || trackErr);
+      console.warn('📊 ANALYTICS: Failed to link QR code to playlist:', trackErr?.message || trackErr);
     }
     
     console.log('🎵 PLAYLIST_ACCESS: Playlist found:', accessData.name);
@@ -5197,10 +5198,11 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
       if (qrId) {
         fullSlideshow.qr_code_id = qrId;
-        await writeScan(client, qrId, req, res);
+        // Scan tracking already handled by QR redirect endpoint (/r/:code or /qr/:code)
+        // await writeScan(client, qrId, req, res);
       }
     } catch (trackErr) {
-      console.warn('📊 ANALYTICS: Failed to link/track slideshow scan:', trackErr?.message || trackErr);
+      console.warn('📊 ANALYTICS: Failed to link QR code to slideshow:', trackErr?.message || trackErr);
     }
     
     // Step 4: Generate signed URL for audio if it exists
