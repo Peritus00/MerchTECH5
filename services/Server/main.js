@@ -917,7 +917,10 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         WHERE q.user_id = $1
           AND s.scanned_at >= $2
           ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
-        GROUP BY city, region, country_code
+        GROUP BY 
+          COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown'),
+          COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), ''),
+          COALESCE(s.country_name, s.country_code, '')
         ORDER BY count DESC
         LIMIT 10`,
       hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
