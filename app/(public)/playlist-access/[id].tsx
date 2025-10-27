@@ -145,6 +145,21 @@ export default function PlaylistAccessScreen() {
       }
 
       setPlaylist(mappedPlaylist);
+
+      // Create a scan row so browser geo can upgrade it (server dedupes within 60s)
+      try {
+        const qrId = (playlistData && (playlistData.qr_code_id || playlistData.qrCodeId)) ? Number(playlistData.qr_code_id || playlistData.qrCodeId) : null;
+        if (qrId) {
+          const userLoc = getLocationForTracking?.();
+          await (await import('@/services/analyticsService')).analyticsService.trackQRScan(qrId, {
+            // We do not send IP; server resolves auto geo
+            // Send user-provided city/state if available
+            ...(userLoc ? { location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}` } : {}),
+          });
+        }
+      } catch (e) {
+        console.warn('Analytics track scan failed (playlist-access):', e);
+      }
     } catch (error: any) {
       console.error('🔴 PLAYLIST_ACCESS: Error fetching playlist:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load playlist';

@@ -252,12 +252,15 @@ export default function SlideshowAccessScreen() {
       }
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
-      // Server now records scans with deduplication; avoid client-side double counting
+      // Ensure a scan row exists so browser geo can upgrade it
       try {
-        // const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
-        // if (qrId) {
-        //   await analyticsService.trackQRScan(qrId, {});
-        // }
+        const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
+        if (qrId) {
+          const userLoc = getLocationForTracking?.();
+          await analyticsService.trackQRScan(qrId, {
+            ...(userLoc ? { location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}` } : {}),
+          });
+        }
       } catch (e) {
         console.warn('Analytics track scan failed (slideshow-access):', e);
       }
