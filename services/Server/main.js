@@ -924,20 +924,23 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
     const hourlyData = Array.from({ length: 24 }, (_, i) => hourlyMap.get(i) || 0);
 
-    // Top countries
+    // Top countries (deduped: one event per visitor per minute)
     let countriesRes;
-    try { countriesRes = await pool.query(
-      `SELECT COALESCE(s.country_name, s.country_code, 'Unknown') AS country, COUNT(*) AS count
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1
-          AND s.scanned_at >= $2
-          ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
-        GROUP BY country
-        ORDER BY count DESC
-        LIMIT 10`,
-      hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
-    ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
+    try {
+      const countriesSql = `
+        ${dedupCTE}
+        SELECT COALESCE(s.country_name, s.country_code, 'Unknown') AS country,
+               COUNT(*) AS count
+          FROM dedup d
+          JOIN qr_scans s ON s.id = d.id
+         GROUP BY country
+         ORDER BY count DESC
+         LIMIT 10`;
+      countriesRes = await pool.query(
+        countriesSql,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
     // Top cities (deduped to one event per visitor per minute; prioritize user-provided location)
     let citiesRes;
