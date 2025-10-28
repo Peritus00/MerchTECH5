@@ -939,28 +939,33 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
     ); } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
-    // Top cities (prioritize user-provided location over auto-detected)
+    // Top cities (deduped to one event per visitor per minute; prioritize user-provided location)
     let citiesRes;
-    try { citiesRes = await pool.query(
-      `SELECT 
-              COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
-              COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), '') AS region,
-              COALESCE(s.country_name, s.country_code, '') AS country_code,
-              SUM(CASE WHEN s.location_source = 'user' THEN 1 ELSE 0 END) AS user_provided_count,
-              COUNT(*) AS count
-         FROM qr_scans s
-         JOIN qr_codes q ON s.qr_code_id = q.id
-        WHERE q.user_id = $1
-          AND s.scanned_at >= $2
-          ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
+    try {
+      const citiesSql = `
+        ${dedupCTE}
+        SELECT 
+          COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
+          COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), '') AS region,
+          COALESCE(s.country_name, s.country_code, '') AS country_code,
+          SUM(CASE WHEN s.location_source = 'user' THEN 1 ELSE 0 END) AS user_provided_count,
+          COUNT(*) AS count
+        FROM dedup d
+        JOIN qr_scans s ON s.id = d.id
         GROUP BY 
           COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown'),
           COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), ''),
           COALESCE(s.country_name, s.country_code, '')
         ORDER BY count DESC
-        LIMIT 10`,
-      hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
-    ); } catch (e) { console.warn('📊 SUMMARY citiesRes failed:', e.message); citiesRes = { rows: [] }; }
+        LIMIT 10`;
+      citiesRes = await pool.query(
+        citiesSql,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) {
+      console.warn('📊 SUMMARY citiesRes failed:', e.message);
+      citiesRes = { rows: [] };
+    }
 
     // Top devices
     let devicesRes;
