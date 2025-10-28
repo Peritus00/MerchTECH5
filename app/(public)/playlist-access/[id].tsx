@@ -153,8 +153,11 @@ export default function PlaylistAccessScreen() {
           const userLoc = getLocationForTracking?.();
           await (await import('@/services/analyticsService')).analyticsService.trackQRScan(qrId, {
             // We do not send IP; server resolves auto geo
-            // Send user-provided city/state if available
-            ...(userLoc ? { location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}` } : {}),
+            // Send user-provided location as structured data if available
+            ...(userLoc ? { 
+              location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}`,
+              userLocation: userLoc 
+            } : {}),
           });
         }
       } catch (e) {

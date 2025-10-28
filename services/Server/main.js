@@ -635,23 +635,37 @@ function inferGeo(req) {
 // Resolve geo with graceful IP fallback (uses geoip-lite if available)
 async function resolveGeo(req) {
   const fromHeaders = inferGeo(req);
-  if (fromHeaders.countryCode || fromHeaders.city || fromHeaders.region) {
+  console.log('🌍 resolveGeo: Headers provided:', fromHeaders);
+  
+  // CRITICAL FIX: Only use headers for country, still try to get city/region from IP
+  // Previously, this would return early if country was in headers, skipping city lookup
+  if (fromHeaders.city && fromHeaders.region) {
+    console.log('🌍 resolveGeo: Headers have complete city/region data, using headers');
     return fromHeaders;
   }
+  
   try {
     const ip = getClientIp(req);
-    if (!ip) return { countryCode: null, region: null, city: null };
+    console.log('🌍 resolveGeo: Client IP:', ip);
+    if (!ip) {
+      console.log('🌍 resolveGeo: No IP found, returning headers only');
+      return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+    }
+    
     // Optional external provider
     if (process.env.GEO_PROVIDER && process.env.GEO_API_KEY) {
       try {
         const provider = String(process.env.GEO_PROVIDER).toLowerCase();
+        console.log(`🌍 resolveGeo: Calling external provider: ${provider} for IP: ${ip}`);
+        
         if (provider === 'ipinfo') {
           // ipinfo.io JSON: { country, region, city }
           const url = `https://ipinfo.io/${encodeURIComponent(ip)}?token=${process.env.GEO_API_KEY}`;
           const resp = await axios.get(url, { timeout: 2000 });
           const data = resp?.data || {};
+          console.log(`🌍 resolveGeo: ipinfo response for ${ip}:`, { country: data.country, region: data.region, city: data.city });
           return {
-            countryCode: data.country || null,
+            countryCode: data.country || fromHeaders.countryCode || null,
             region: data.region || null,
             city: data.city || null,
           };
@@ -659,25 +673,42 @@ async function resolveGeo(req) {
           const url = `https://api.ipdata.co/${encodeURIComponent(ip)}?api-key=${process.env.GEO_API_KEY}`;
           const resp = await axios.get(url, { timeout: 2000 });
           const data = resp?.data || {};
+          console.log(`🌍 resolveGeo: ipdata response for ${ip}:`, { country: data.country_code, region: data.region, city: data.city });
           return {
-            countryCode: data.country_code || null,
+            countryCode: data.country_code || fromHeaders.countryCode || null,
             region: data.region || data.region_code || null,
             city: data.city || null,
           };
         }
       } catch (_extErr) {
+        console.warn('🌍 resolveGeo: External provider failed:', _extErr.message);
         // fall through to local db
       }
+    } else {
+      console.log('🌍 resolveGeo: No external provider configured');
     }
     // Local fallback: geoip-lite (if installed)
+    console.log('🌍 resolveGeo: Trying geoip-lite fallback');
     let geoip;
     try { geoip = require('geoip-lite'); } catch (_e) { geoip = null; }
-    if (!geoip || !geoip.lookup) return { countryCode: null, region: null, city: null };
+    if (!geoip || !geoip.lookup) {
+      console.log('🌍 resolveGeo: geoip-lite not available, using country from headers only');
+      return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+    }
     const r = geoip.lookup(ip);
-    if (!r) return { countryCode: null, region: null, city: null };
-    return { countryCode: r.country || null, region: r.region || null, city: r.city || null };
+    if (!r) {
+      console.log('🌍 resolveGeo: geoip-lite returned no results');
+      return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+    }
+    console.log(`🌍 resolveGeo: geoip-lite result:`, { country: r.country, region: r.region, city: r.city });
+    return { 
+      countryCode: r.country || fromHeaders.countryCode || null, 
+      region: r.region || null, 
+      city: r.city || null 
+    };
   } catch (_e) {
-    return { countryCode: null, region: null, city: null };
+    console.warn('🌍 resolveGeo: Exception:', _e.message);
+    return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
   }
 }
 

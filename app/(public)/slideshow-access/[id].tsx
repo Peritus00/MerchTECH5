@@ -258,7 +258,11 @@ export default function SlideshowAccessScreen() {
         if (qrId) {
           const userLoc = getLocationForTracking?.();
           await analyticsService.trackQRScan(qrId, {
-            ...(userLoc ? { location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}` } : {}),
+            // Send user-provided location as structured data if available
+            ...(userLoc ? { 
+              location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}`,
+              userLocation: userLoc 
+            } : {}),
           });
         }
       } catch (e) {
