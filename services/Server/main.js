@@ -542,8 +542,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
       // ignore; proceed to insert with ON CONFLICT
     }
 
-    // Use ON CONFLICT with the unique constraint for atomic dedupe (minute-level)
-    // BUT update city/region if the new data is better than existing NULL values
+    // Simply insert - the manual dedupe check above already prevents duplicates
     console.log('💾 writeScan: Inserting with values:', {
       qrCodeId,
       country_code: geo.countryCode || null,
@@ -563,14 +562,6 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
          $9, $10, $11, $12, $13,
          $14, $14, $15, $16, $17, $18
        )
-       ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO UPDATE SET
-         city = COALESCE(EXCLUDED.city, qr_scans.city),
-         region = COALESCE(EXCLUDED.region, qr_scans.region),
-         country_code = COALESCE(EXCLUDED.country_code, qr_scans.country_code),
-         location_source = CASE WHEN EXCLUDED.city IS NOT NULL THEN EXCLUDED.location_source ELSE qr_scans.location_source END,
-         user_provided_city = COALESCE(EXCLUDED.user_provided_city, qr_scans.user_provided_city),
-         user_provided_state = COALESCE(EXCLUDED.user_provided_state, qr_scans.user_provided_state),
-         user_provided_zip = COALESCE(EXCLUDED.user_provided_zip, qr_scans.user_provided_zip)
        RETURNING id`,
       [
         qrCodeId,
@@ -594,9 +585,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
       ]
     );
     
-    if (result.rowCount === 0) {
-      return { deduped: true };
-    }
+    console.log('💾 writeScan: Insert successful, returned ID:', result.rows[0]?.id);
     return { inserted: true, locationSource };
   } catch (e) {
     // Fallback without visitor_id/extra fields for older schemas (or if constraint doesn't exist yet)
