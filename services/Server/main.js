@@ -543,6 +543,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
     }
 
     // Use ON CONFLICT with the unique constraint for atomic dedupe (minute-level)
+    // BUT update city/region if the new data is better than existing NULL values
     console.log('💾 writeScan: Inserting with values:', {
       qrCodeId,
       country_code: geo.countryCode || null,
@@ -562,7 +563,14 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
          $9, $10, $11, $12, $13,
          $14, $14, $15, $16, $17, $18
        )
-       ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO NOTHING
+       ON CONFLICT ON CONSTRAINT uq_qr_scans_minute_dedupe DO UPDATE SET
+         city = COALESCE(EXCLUDED.city, qr_scans.city),
+         region = COALESCE(EXCLUDED.region, qr_scans.region),
+         country_code = COALESCE(EXCLUDED.country_code, qr_scans.country_code),
+         location_source = CASE WHEN EXCLUDED.city IS NOT NULL THEN EXCLUDED.location_source ELSE qr_scans.location_source END,
+         user_provided_city = COALESCE(EXCLUDED.user_provided_city, qr_scans.user_provided_city),
+         user_provided_state = COALESCE(EXCLUDED.user_provided_state, qr_scans.user_provided_state),
+         user_provided_zip = COALESCE(EXCLUDED.user_provided_zip, qr_scans.user_provided_zip)
        RETURNING id`,
       [
         qrCodeId,
