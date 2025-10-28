@@ -588,14 +588,26 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
     console.log('💾 writeScan: Insert successful, returned ID:', result.rows[0]?.id);
     return { inserted: true, locationSource };
   } catch (e) {
-    // Fallback without visitor_id/extra fields for older schemas (or if constraint doesn't exist yet)
+    // Fallback using new schema columns (for any edge cases)
+    console.error('⚠️  writeScan: Main insert failed, using fallback:', e.message);
     try {
       await poolLike.query(
         `INSERT INTO qr_scans (
-           qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
+           qr_code_id, scanned_at, device_type, browser_name, operating_system,
+           country_code, region, city, location_source
          ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
-        [qrCodeId, geo.city || null, null, null, geo.countryCode || null, parsed.deviceType, parsed.browserName, parsed.operatingSystem]
+        [
+          qrCodeId, 
+          parsed.deviceType, 
+          parsed.browserName, 
+          parsed.operatingSystem,
+          geo.countryCode || null,
+          geo.region || null,
+          geo.city || null,
+          locationSource
+        ]
       );
+      console.log('💾 writeScan: Fallback insert successful with city:', geo.city);
       return { inserted: true, fallback: true };
     } catch (fallbackErr) {
       console.error('❌ writeScan: Both insert attempts failed:', e.message, fallbackErr.message);
