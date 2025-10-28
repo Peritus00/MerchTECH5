@@ -193,16 +193,6 @@ export default function AnalyticsScreen() {
     fetchAllAnalytics();
   }, [selectedTimeRange]);
 
-  // Auto-refresh analytics every 30 seconds for near real-time updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      console.log('📊 ANALYTICS: Auto-refreshing data...');
-      fetchAllAnalytics();
-    }, 30000); // 30 seconds
-
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchAllAnalytics = async () => {
     try {
       setIsLoading(true);
