@@ -6,6 +6,7 @@
  * Safe to run multiple times (idempotent). Uses geoip-lite locally.
  */
 
+require('dotenv').config();
 const { Pool } = require('pg');
 let geoip;
 try { geoip = require('geoip-lite'); } catch (_) { geoip = null; }

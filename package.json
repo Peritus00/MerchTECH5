@@ -21,7 +21,9 @@
     "build": "expo export -p web",
     "fix-db": "node fix-slideshows-db.js",
     "build:web": "expo export -p web",
-    "analytics:backfill-geo": "node ./scripts/backfill-qr-scan-geo.js"
+    "analytics:backfill-geo": "node ./scripts/backfill-qr-scan-geo.js",
+    "db:check-schema": "node ./scripts/check-qr-scans-schema.js",
+    "db:geo-migrations": "node ./scripts/apply-geo-migrations.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.842.0",
