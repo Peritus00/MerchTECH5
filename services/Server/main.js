@@ -509,6 +509,7 @@ function extractUtm(query) {
 // Accepts optional userLocation from request body for user-provided location data
 async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
   const geo = await resolveGeo(req);
+  console.log('💾 writeScan: Geo data received from resolveGeo:', JSON.stringify(geo));
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUserAgent(ua);
   const referrer = req.headers['referer'] || req.headers['referrer'] || null;
@@ -542,6 +543,13 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
     }
 
     // Use ON CONFLICT with the unique constraint for atomic dedupe (minute-level)
+    console.log('💾 writeScan: Inserting with values:', {
+      qrCodeId,
+      country_code: geo.countryCode || null,
+      region: geo.region || null,
+      city: geo.city || null,
+      location_source: locationSource
+    });
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
