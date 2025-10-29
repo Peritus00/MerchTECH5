@@ -507,7 +507,7 @@ function extractUtm(query) {
 
 // Shared scan writer with dedupe and graceful fallbacks
 // Accepts optional userLocation from request body for user-provided location data
-async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
+async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null) {
   const geo = await resolveGeo(req);
   console.log('💾 writeScan: Geo data received from resolveGeo:', JSON.stringify(geo));
   const ua = req.headers['user-agent'] || '';
@@ -548,19 +548,20 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
       country_code: geo.countryCode || null,
       region: geo.region || null,
       city: geo.city || null,
-      location_source: locationSource
+      location_source: locationSource,
+      user_age: userAge || null
     });
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
          country_code, country_name, region, city, referrer,
          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source
+         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source, user_provided_age_range
        ) VALUES (
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14, $14, $15, $16, $17, $18
+         $14, $14, $15, $16, $17, $18, $19
        )
        RETURNING id`,
       [
@@ -582,6 +583,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null) {
         userLocation?.state || null,
         userLocation?.zip || null,
         locationSource,
+        userAge || null,
       ]
     );
     
@@ -772,6 +774,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       browserName,
       operatingSystem,
       userLocation, // NEW: User-provided location { city, state, zip }
+      userAge, // NEW: User-provided age range (e.g., "18-24", "25-34")
       // ipAddress ignored for privacy
     } = req.body || {};
 
@@ -790,8 +793,8 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    // Pass userLocation to writeScan if provided
-    const result = await writeScan(pool, qrCodeId, req, res, userLocation);
+    // Pass userLocation and userAge to writeScan if provided
+    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge);
 
     res.json({ 
       success: true, 
@@ -995,6 +998,35 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       [userId]
     ); } catch (e) { console.warn('📊 SUMMARY devicesRes failed:', e.message); devicesRes = { rows: [] }; }
 
+    // Age demographics (deduped: one event per visitor per minute)
+    let ageRangesRes;
+    try {
+      const ageRangesSql = `
+        ${dedupCTE}
+        SELECT 
+          COALESCE(s.user_provided_age_range, 'Unknown') AS age_range,
+          COUNT(*) AS count
+        FROM dedup d
+        JOIN qr_scans s ON s.id = d.id
+        WHERE s.user_provided_age_range IS NOT NULL
+        GROUP BY s.user_provided_age_range
+        ORDER BY 
+          CASE s.user_provided_age_range
+            WHEN 'Under 18' THEN 1
+            WHEN '18-24' THEN 2
+            WHEN '25-34' THEN 3
+            WHEN '35-44' THEN 4
+            WHEN '45-54' THEN 5
+            WHEN '55-64' THEN 6
+            WHEN '65+' THEN 7
+            ELSE 8
+          END`;
+      ageRangesRes = await pool.query(
+        ageRangesSql,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) { console.warn('📊 SUMMARY ageRangesRes failed:', e.message); ageRangesRes = { rows: [] }; }
+
     // Recent scans
     let recentRes;
     try { recentRes = await pool.query(
@@ -1099,6 +1131,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         userProvidedCount: parseInt(r.user_provided_count || 0)
       })),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
+      ageRanges: ageRangesRes.rows.map(r => ({ ageRange: r.age_range, count: parseInt(r.count) })),
       hourlyData,
       recentScans: recentRows.map(r => ({
         qrName: r.qr_name,

@@ -23,8 +23,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
-import LocationPromptModal from '@/components/LocationPromptModal';
-import { shouldShowLocationPrompt, saveUserLocation, markLocationPromptShown, getLocationForTracking } from '@/utils/locationStorage';
+import AgePromptModal from '@/components/AgePromptModal';
+import { shouldShowAgePrompt, saveUserAge, markAgePromptShown, getAgeForTracking } from '@/utils/ageStorage';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -54,8 +54,8 @@ export default function PlaylistAccessScreen() {
     firstName: '',
   });
 
-  // Location prompt state
-  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  // Age prompt state
+  const [showAgePrompt, setShowAgePrompt] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -92,12 +92,12 @@ export default function PlaylistAccessScreen() {
     }
   }, [playlist, isLoading]);
 
-  // Show location prompt after playlist loads (if applicable)
+  // Show age prompt after playlist loads (if applicable)
   useEffect(() => {
-    if (playlist && !isLoading && shouldShowLocationPrompt()) {
+    if (playlist && !isLoading && shouldShowAgePrompt()) {
       // Show prompt after a short delay to not interrupt loading
       const timer = setTimeout(() => {
-        setShowLocationPrompt(true);
+        setShowAgePrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -151,6 +151,7 @@ export default function PlaylistAccessScreen() {
         const qrId = (playlistData && (playlistData.qr_code_id || playlistData.qrCodeId)) ? Number(playlistData.qr_code_id || playlistData.qrCodeId) : null;
         if (qrId) {
           const userLoc = getLocationForTracking?.();
+          const userAge = getAgeForTracking?.();
           await (await import('@/services/analyticsService')).analyticsService.trackQRScan(qrId, {
             // We do not send IP; server resolves auto geo
             // Send user-provided location as structured data if available
@@ -158,6 +159,8 @@ export default function PlaylistAccessScreen() {
               location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}`,
               userLocation: userLoc 
             } : {}),
+            // Send user-provided age range if available
+            ...(userAge ? { userAge: userAge.ageRange } : {}),
           });
         }
       } catch (e) {
@@ -867,17 +870,11 @@ export default function PlaylistAccessScreen() {
     );
   }
 
-  // Location prompt handlers
-  const handleLocationSubmit = (location: { city: string; state: string; zip?: string }) => {
-    console.log('📍 PLAYLIST_ACCESS: User provided location:', location);
-    saveUserLocation(location);
-    setShowLocationPrompt(false);
-  };
-
-  const handleLocationSkip = () => {
-    console.log('📍 PLAYLIST_ACCESS: User skipped location prompt');
-    markLocationPromptShown();
-    setShowLocationPrompt(false);
+  // Age prompt handler
+  const handleAgeSubmit = (ageRange: string) => {
+    console.log('👤 PLAYLIST_ACCESS: User provided age:', ageRange);
+    saveUserAge(ageRange);
+    setShowAgePrompt(false);
   };
 
   return (
@@ -1009,12 +1006,11 @@ export default function PlaylistAccessScreen() {
       </View>
       </ScrollView>
 
-      {/* Location Prompt Modal */}
-      <LocationPromptModal
-        visible={showLocationPrompt}
+      {/* Age Prompt Modal */}
+      <AgePromptModal
+        visible={showAgePrompt}
         artistName={playlist?.creatorName || playlist?.username}
-        onSubmit={handleLocationSubmit}
-        onSkip={handleLocationSkip}
+        onSubmit={handleAgeSubmit}
       />
     </ThemedView>
   );

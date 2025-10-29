@@ -103,6 +103,7 @@ export const analyticsService = {
     operatingSystem?: string;
     ipAddress?: string;
     userLocation?: { city: string; state: string; zip?: string };
+    userAge?: string;
   }): Promise<void> {
     try {
       await api.post('/analytics/track-scan', {

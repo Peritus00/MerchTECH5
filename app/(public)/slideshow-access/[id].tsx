@@ -27,8 +27,8 @@ import PreviewPlayer from '@/components/PreviewPlayer';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
-import LocationPromptModal from '@/components/LocationPromptModal';
-import { shouldShowLocationPrompt, saveUserLocation, markLocationPromptShown, getLocationForTracking } from '@/utils/locationStorage';
+import AgePromptModal from '@/components/AgePromptModal';
+import { shouldShowAgePrompt, saveUserAge, markAgePromptShown, getAgeForTracking } from '@/utils/ageStorage';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -60,8 +60,8 @@ export default function SlideshowAccessScreen() {
     firstName: '',
   });
 
-  // Location prompt state
-  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  // Age prompt state
+  const [showAgePrompt, setShowAgePrompt] = useState(false);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -134,12 +134,12 @@ export default function SlideshowAccessScreen() {
     fetchSlideshow();
   }, [id]);
 
-  // Show location prompt after slideshow loads (if applicable)
+  // Show age prompt after slideshow loads (if applicable)
   useEffect(() => {
-    if (slideshow && !isLoading && shouldShowLocationPrompt()) {
+    if (slideshow && !isLoading && shouldShowAgePrompt()) {
       // Show prompt after a short delay to not interrupt loading
       const timer = setTimeout(() => {
-        setShowLocationPrompt(true);
+        setShowAgePrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -257,12 +257,15 @@ export default function SlideshowAccessScreen() {
         const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
         if (qrId) {
           const userLoc = getLocationForTracking?.();
+          const userAge = getAgeForTracking?.();
           await analyticsService.trackQRScan(qrId, {
             // Send user-provided location as structured data if available
             ...(userLoc ? { 
               location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}`,
               userLocation: userLoc 
             } : {}),
+            // Send user-provided age range if available
+            ...(userAge ? { userAge: userAge.ageRange } : {}),
           });
         }
       } catch (e) {
@@ -714,17 +717,11 @@ export default function SlideshowAccessScreen() {
     );
   }
 
-  // Location prompt handlers
-  const handleLocationSubmit = (location: { city: string; state: string; zip?: string }) => {
-    console.log('📍 SLIDESHOW_ACCESS: User provided location:', location);
-    saveUserLocation(location);
-    setShowLocationPrompt(false);
-  };
-
-  const handleLocationSkip = () => {
-    console.log('📍 SLIDESHOW_ACCESS: User skipped location prompt');
-    markLocationPromptShown();
-    setShowLocationPrompt(false);
+  // Age prompt handler
+  const handleAgeSubmit = (ageRange: string) => {
+    console.log('👤 SLIDESHOW_ACCESS: User provided age:', ageRange);
+    saveUserAge(ageRange);
+    setShowAgePrompt(false);
   };
 
   return (
@@ -850,12 +847,11 @@ export default function SlideshowAccessScreen() {
       </View>
       </ScrollView>
 
-      {/* Location Prompt Modal */}
-      <LocationPromptModal
-        visible={showLocationPrompt}
+      {/* Age Prompt Modal */}
+      <AgePromptModal
+        visible={showAgePrompt}
         artistName={slideshow?.creatorName || slideshow?.username}
-        onSubmit={handleLocationSubmit}
-        onSkip={handleLocationSkip}
+        onSubmit={handleAgeSubmit}
       />
     </ThemedView>
   );
