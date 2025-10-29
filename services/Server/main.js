@@ -1743,6 +1743,37 @@ app.get('/api/user/demographics', authenticateToken, async (req, res) => {
   }
 });
 
+// Debug endpoint to check database connection and schema
+app.get('/api/debug/database-info', async (req, res) => {
+  try {
+    // Get database name and host
+    const dbInfo = await pool.query('SELECT current_database(), current_user, version()');
+    
+    // Check if demographics columns exist
+    const columns = await pool.query(`
+      SELECT table_name, column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name IN ('qr_scans', 'users')
+        AND column_name IN ('user_provided_age_range', 'user_provided_gender', 'age_range', 'gender')
+      ORDER BY table_name, column_name
+    `);
+    
+    res.json({
+      database: dbInfo.rows[0].current_database,
+      user: dbInfo.rows[0].current_user,
+      version: dbInfo.rows[0].version,
+      host: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] : 'unknown',
+      demographicsColumns: columns.rows,
+      columnsExist: columns.rows.length > 0
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Failed to get database info',
+      details: error.message
+    });
+  }
+});
+
 // Debug endpoint to check demographics in qr_scans table (public for testing)
 app.get('/api/debug/demographics-data', async (req, res) => {
   try {
