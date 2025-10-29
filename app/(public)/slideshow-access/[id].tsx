@@ -27,10 +27,10 @@ import PreviewPlayer from '@/components/PreviewPlayer';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
-import AgePromptModal from '@/components/AgePromptModal';
-import { shouldShowAgePrompt, saveUserAge, markAgePromptShown, getAgeForTracking } from '@/utils/ageStorage';
-import GenderPromptModal from '@/components/GenderPromptModal';
-import { shouldShowGenderPrompt, saveUserGender, markGenderPromptShown, getGenderForTracking } from '@/utils/genderStorage';
+import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
+import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
+import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -62,11 +62,9 @@ export default function SlideshowAccessScreen() {
     firstName: '',
   });
 
-  // Age prompt state
-  const [showAgePrompt, setShowAgePrompt] = useState(false);
-  
-  // Gender prompt state
-  const [showGenderPrompt, setShowGenderPrompt] = useState(false);
+  // Combined demographics survey state
+  const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
+  const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -139,22 +137,41 @@ export default function SlideshowAccessScreen() {
     fetchSlideshow();
   }, [id]);
 
-  // Show age prompt after slideshow loads (if applicable)
+  // Fetch user demographics if authenticated
   useEffect(() => {
-    if (slideshow && !isLoading && shouldShowAgePrompt()) {
-      // Show prompt after a short delay to not interrupt loading
-      const timer = setTimeout(() => {
-        setShowAgePrompt(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    } else if (slideshow && !isLoading && !shouldShowAgePrompt() && shouldShowGenderPrompt()) {
-      // If age already collected but not gender, show gender prompt
-      const timer = setTimeout(() => {
-        setShowGenderPrompt(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [slideshow, isLoading]);
+    const loadUserDemographics = async () => {
+      if (isAuthenticated) {
+        const demographics = await fetchUserDemographics();
+        setUserDemographics(demographics);
+      }
+    };
+    loadUserDemographics();
+  }, [isAuthenticated]);
+
+  // Show demographics survey ONLY for anonymous users OR authenticated users without demographics
+  // Show AFTER content starts playing (with access code validated or full access granted)
+  useEffect(() => {
+    const checkAndShowSurvey = async () => {
+      // Only show survey after content is accessible
+      if (!slideshow || isLoading) return;
+      
+      // Don't show during registration flow
+      if (showRegistrationFlow || showAppDownload) return;
+      
+      // Check if survey is needed
+      const needsSurvey = await shouldShowDemographicsSurvey(isAuthenticated, userDemographics);
+      
+      if (needsSurvey) {
+        // Show survey after 15 seconds of content being accessible
+        const timer = setTimeout(() => {
+          setShowDemographicsSurvey(true);
+        }, 15000);
+        return () => clearTimeout(timer);
+      }
+    };
+    
+    checkAndShowSurvey();
+  }, [slideshow, isLoading, isAuthenticated, userDemographics, showRegistrationFlow, showAppDownload]);
 
   // Attempt browser geolocation shortly after load and submit
   useEffect(() => {
@@ -267,19 +284,14 @@ export default function SlideshowAccessScreen() {
       try {
         const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
         if (qrId) {
-          const userLoc = getLocationForTracking?.();
-          const userAge = getAgeForTracking?.();
-          const userGender = getGenderForTracking?.();
+          // Get demographics from user profile or localStorage
+          const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+          
           await analyticsService.trackQRScan(qrId, {
-            // Send user-provided location as structured data if available
-            ...(userLoc ? { 
-              location: `${userLoc.city}${userLoc.state ? ', ' + userLoc.state : ''}`,
-              userLocation: userLoc 
-            } : {}),
-            // Send user-provided age range if available
-            ...(userAge ? { userAge: userAge.ageRange } : {}),
-            // Send user-provided gender if available
-            ...(userGender ? { userGender: userGender.gender } : {}),
+            // We do not send IP; server resolves auto geo
+            // Send user demographics if available
+            ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+            ...(demographics?.gender ? { userGender: demographics.gender } : {}),
           });
         }
       } catch (e) {
@@ -731,25 +743,26 @@ export default function SlideshowAccessScreen() {
     );
   }
 
-  // Age prompt handler
-  const handleAgeSubmit = (ageRange: string) => {
-    console.log('👤 SLIDESHOW_ACCESS: User provided age:', ageRange);
-    saveUserAge(ageRange);
-    setShowAgePrompt(false);
+  // Demographics survey handler
+  const handleDemographicsSubmit = async (demographics: { ageRange: string; gender: string }) => {
+    console.log('👤 SLIDESHOW_ACCESS: User provided demographics:', demographics);
     
-    // After age is submitted, show gender prompt if needed
-    if (shouldShowGenderPrompt()) {
-      setTimeout(() => {
-        setShowGenderPrompt(true);
-      }, 500);
+    // Save demographics (to profile if authenticated, localStorage if anonymous)
+    await saveDemographics(
+      demographics,
+      isAuthenticated,
+      (ageRange, gender) => {
+        saveUserAge(ageRange);
+        saveUserGender(gender);
+      }
+    );
+    
+    // Update local state if authenticated
+    if (isAuthenticated) {
+      setUserDemographics(demographics);
     }
-  };
-
-  // Gender prompt handler
-  const handleGenderSubmit = (gender: string) => {
-    console.log('⚧ SLIDESHOW_ACCESS: User provided gender:', gender);
-    saveUserGender(gender);
-    setShowGenderPrompt(false);
+    
+    setShowDemographicsSurvey(false);
   };
 
   return (
@@ -875,18 +888,11 @@ export default function SlideshowAccessScreen() {
       </View>
       </ScrollView>
 
-      {/* Age Prompt Modal */}
-      <AgePromptModal
-        visible={showAgePrompt}
+      {/* Demographics Survey Overlay */}
+      <DemographicsSurveyOverlay
+        visible={showDemographicsSurvey}
         artistName={slideshow?.creatorName || slideshow?.username}
-        onSubmit={handleAgeSubmit}
-      />
-
-      {/* Gender Prompt Modal */}
-      <GenderPromptModal
-        visible={showGenderPrompt}
-        artistName={slideshow?.creatorName || slideshow?.username}
-        onSubmit={handleGenderSubmit}
+        onSubmit={handleDemographicsSubmit}
       />
     </ThemedView>
   );

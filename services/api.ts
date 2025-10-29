@@ -227,6 +227,14 @@ export const usersAPI = {
     const response = await api.get(`/users/${userId}`);
     return response.data;
   },
+  async getDemographics() {
+    const response = await api.get('/user/demographics');
+    return response.data;
+  },
+  async updateDemographics(ageRange: string, gender: string) {
+    const response = await api.put('/user/demographics', { ageRange, gender });
+    return response.data;
+  },
 };
 
 // Universal Chat API

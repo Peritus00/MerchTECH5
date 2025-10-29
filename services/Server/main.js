@@ -1708,6 +1708,51 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
+// Get current user's demographics
+app.get('/api/user/demographics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const result = await pool.query(
+      'SELECT age_range, gender FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const demographics = result.rows[0];
+    res.json({
+      ageRange: demographics.age_range,
+      gender: demographics.gender,
+      hasData: !!(demographics.age_range && demographics.gender)
+    });
+  } catch (error) {
+    console.error('Error fetching user demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch demographics' });
+  }
+});
+
+// Update current user's demographics
+app.put('/api/user/demographics', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { ageRange, gender } = req.body;
+    
+    console.log('👤 USER_DEMOGRAPHICS: Updating for user:', userId, { ageRange, gender });
+    
+    await pool.query(
+      'UPDATE users SET age_range = $1, gender = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+      [ageRange || null, gender || null, userId]
+    );
+    
+    res.json({ success: true, message: 'Demographics updated successfully' });
+  } catch (error) {
+    console.error('Error updating user demographics:', error);
+    res.status(500).json({ error: 'Failed to update demographics' });
+  }
+});
+
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
