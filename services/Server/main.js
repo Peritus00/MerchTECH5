@@ -1743,6 +1743,80 @@ app.get('/api/user/demographics', authenticateToken, async (req, res) => {
   }
 });
 
+// One-time migration endpoint (ADMIN ONLY - requires secret key)
+app.post('/api/admin/run-demographics-migrations', async (req, res) => {
+  try {
+    const { secretKey } = req.body;
+    
+    // Simple protection - you'll need to provide this key
+    if (secretKey !== 'migrate-demographics-2025') {
+      return res.status(403).json({ error: 'Invalid secret key' });
+    }
+    
+    console.log('🔧 MIGRATION: Running demographics migrations...');
+    
+    const migrations = [
+      {
+        name: 'Add user_provided_age_range to qr_scans',
+        sql: 'ALTER TABLE qr_scans ADD COLUMN IF NOT EXISTS user_provided_age_range TEXT'
+      },
+      {
+        name: 'Add user_provided_gender to qr_scans',
+        sql: 'ALTER TABLE qr_scans ADD COLUMN IF NOT EXISTS user_provided_gender TEXT'
+      },
+      {
+        name: 'Add age_range to users',
+        sql: 'ALTER TABLE users ADD COLUMN IF NOT EXISTS age_range TEXT'
+      },
+      {
+        name: 'Add gender to users',
+        sql: 'ALTER TABLE users ADD COLUMN IF NOT EXISTS gender TEXT'
+      },
+      {
+        name: 'Index qr_scans age_range',
+        sql: 'CREATE INDEX IF NOT EXISTS idx_qr_scans_age_range ON qr_scans(user_provided_age_range)'
+      },
+      {
+        name: 'Index qr_scans gender',
+        sql: 'CREATE INDEX IF NOT EXISTS idx_qr_scans_gender ON qr_scans(user_provided_gender)'
+      },
+      {
+        name: 'Index users age_range',
+        sql: 'CREATE INDEX IF NOT EXISTS idx_users_age_range ON users(age_range)'
+      },
+      {
+        name: 'Index users gender',
+        sql: 'CREATE INDEX IF NOT EXISTS idx_users_gender ON users(gender)'
+      },
+    ];
+    
+    const results = [];
+    
+    for (const migration of migrations) {
+      try {
+        console.log(`  Running: ${migration.name}`);
+        await pool.query(migration.sql);
+        results.push({ name: migration.name, status: 'success' });
+        console.log(`  ✅ ${migration.name}`);
+      } catch (error) {
+        console.error(`  ❌ ${migration.name}:`, error.message);
+        results.push({ name: migration.name, status: 'error', error: error.message });
+      }
+    }
+    
+    console.log('🔧 MIGRATION: Complete!');
+    
+    res.json({
+      success: true,
+      message: 'Migrations completed',
+      results
+    });
+  } catch (error) {
+    console.error('🔧 MIGRATION: Failed:', error);
+    res.status(500).json({ error: 'Migration failed', details: error.message });
+  }
+});
+
 // Debug endpoint to check database connection and schema
 app.get('/api/debug/database-info', async (req, res) => {
   try {
