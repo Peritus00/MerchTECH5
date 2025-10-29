@@ -6,6 +6,10 @@ import PlaylistPlayer from '@/components/PlaylistPlayer';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
+import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import { saveUserAge } from '@/utils/ageStorage';
+import { saveUserGender } from '@/utils/genderStorage';
+import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
 
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
@@ -13,11 +17,27 @@ export default function PlaylistPlayerScreen() {
   const [playlist, setPlaylist] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  
+  // Demographics survey state
+  const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
+  const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
 
   useEffect(() => {
     fetchPlaylist();
   }, [id]);
+
+  // Fetch user demographics if authenticated
+  useEffect(() => {
+    const loadUserDemographics = async () => {
+      if (isAuthenticated) {
+        const demographics = await fetchUserDemographics();
+        console.log('🔍 PLAYER_DEMOGRAPHICS: Loaded user demographics:', demographics);
+        setUserDemographics(demographics);
+      }
+    };
+    loadUserDemographics();
+  }, [isAuthenticated]);
 
   // Attempt geolocation on player too (some QR flows go straight here)
   useEffect(() => {
@@ -44,6 +64,42 @@ export default function PlaylistPlayerScreen() {
       return () => clearTimeout(t);
     }
   }, [playlist, loading, id]);
+
+  // Show demographics survey after content starts playing
+  useEffect(() => {
+    const checkAndShowSurvey = async () => {
+      console.log('🔍 PLAYER_DEMOGRAPHICS: Checking if survey needed...', {
+        hasPlaylist: !!playlist,
+        loading,
+        isAuthenticated,
+        userDemographics,
+      });
+      
+      // Only show survey after content is loaded
+      if (!playlist || loading) {
+        console.log('🔍 PLAYER_DEMOGRAPHICS: Skipping - playlist not loaded');
+        return;
+      }
+      
+      // Check if survey is needed
+      const needsSurvey = await shouldShowDemographicsSurvey(isAuthenticated, userDemographics);
+      console.log('🔍 PLAYER_DEMOGRAPHICS: Survey needed?', needsSurvey);
+      
+      if (needsSurvey) {
+        console.log('🔍 PLAYER_DEMOGRAPHICS: Setting 5-second timer for survey...');
+        // Show survey after 5 seconds of playback
+        const timer = setTimeout(() => {
+          console.log('✅ PLAYER_DEMOGRAPHICS: Showing survey now!');
+          setShowDemographicsSurvey(true);
+        }, 5000);
+        return () => clearTimeout(timer);
+      } else {
+        console.log('🔍 PLAYER_DEMOGRAPHICS: Survey not needed - user already has demographics');
+      }
+    };
+    
+    checkAndShowSurvey();
+  }, [playlist, loading, isAuthenticated, userDemographics]);
 
   const fetchPlaylist = async () => {
     try {
@@ -90,12 +146,43 @@ export default function PlaylistPlayerScreen() {
     );
   }
 
+  // Demographics survey handler
+  const handleDemographicsSubmit = async (demographics: { ageRange: string; gender: string }) => {
+    console.log('👤 PLAYER_DEMOGRAPHICS: User provided demographics:', demographics);
+    
+    // Save demographics (to profile if authenticated, localStorage if anonymous)
+    await saveDemographics(
+      demographics,
+      isAuthenticated,
+      (ageRange, gender) => {
+        saveUserAge(ageRange);
+        saveUserGender(gender);
+      }
+    );
+    
+    // Update local state if authenticated
+    if (isAuthenticated) {
+      setUserDemographics(demographics);
+    }
+    
+    setShowDemographicsSurvey(false);
+  };
+
   return (
-    <PlaylistPlayer
-      playlistId={id}
-      playlist={playlist}
-      autoPlay={false}
-    />
+    <>
+      <PlaylistPlayer
+        playlistId={id}
+        playlist={playlist}
+        autoPlay={false}
+      />
+      
+      {/* Demographics Survey Overlay */}
+      <DemographicsSurveyOverlay
+        visible={showDemographicsSurvey}
+        artistName={playlist?.creatorName || playlist?.username}
+        onSubmit={handleDemographicsSubmit}
+      />
+    </>
   );
 }
 

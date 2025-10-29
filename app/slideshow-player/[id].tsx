@@ -6,6 +6,10 @@ import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
+import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import { saveUserAge } from '@/utils/ageStorage';
+import { saveUserGender } from '@/utils/genderStorage';
+import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
 
 export default function SlideshowPlayerScreen() {
   const route = useRoute();
@@ -14,7 +18,11 @@ export default function SlideshowPlayerScreen() {
   const [presignedAudioUrl, setPresignedAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  
+  // Demographics survey state
+  const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
+  const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
 
   useEffect(() => {
     fetchSlideshow();
@@ -26,6 +34,18 @@ export default function SlideshowPlayerScreen() {
       setPresignedAudioUrl(slideshow.audio_url);
     }
   }, [slideshow]);
+
+  // Fetch user demographics if authenticated
+  useEffect(() => {
+    const loadUserDemographics = async () => {
+      if (isAuthenticated) {
+        const demographics = await fetchUserDemographics();
+        console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Loaded user demographics:', demographics);
+        setUserDemographics(demographics);
+      }
+    };
+    loadUserDemographics();
+  }, [isAuthenticated]);
 
   // Attempt geolocation on player as well
   useEffect(() => {
@@ -52,6 +72,42 @@ export default function SlideshowPlayerScreen() {
       return () => clearTimeout(t);
     }
   }, [slideshow, loading, id]);
+
+  // Show demographics survey after content starts playing
+  useEffect(() => {
+    const checkAndShowSurvey = async () => {
+      console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Checking if survey needed...', {
+        hasSlideshow: !!slideshow,
+        loading,
+        isAuthenticated,
+        userDemographics,
+      });
+      
+      // Only show survey after content is loaded
+      if (!slideshow || loading) {
+        console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Skipping - slideshow not loaded');
+        return;
+      }
+      
+      // Check if survey is needed
+      const needsSurvey = await shouldShowDemographicsSurvey(isAuthenticated, userDemographics);
+      console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Survey needed?', needsSurvey);
+      
+      if (needsSurvey) {
+        console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Setting 5-second timer for survey...');
+        // Show survey after 5 seconds of playback
+        const timer = setTimeout(() => {
+          console.log('✅ SLIDESHOW_PLAYER_DEMOGRAPHICS: Showing survey now!');
+          setShowDemographicsSurvey(true);
+        }, 5000);
+        return () => clearTimeout(timer);
+      } else {
+        console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Survey not needed - user already has demographics');
+      }
+    };
+    
+    checkAndShowSurvey();
+  }, [slideshow, loading, isAuthenticated, userDemographics]);
 
   const fetchSlideshow = async () => {
     try {
@@ -98,12 +154,43 @@ export default function SlideshowPlayerScreen() {
     );
   }
 
+  // Demographics survey handler
+  const handleDemographicsSubmit = async (demographics: { ageRange: string; gender: string }) => {
+    console.log('👤 SLIDESHOW_PLAYER_DEMOGRAPHICS: User provided demographics:', demographics);
+    
+    // Save demographics (to profile if authenticated, localStorage if anonymous)
+    await saveDemographics(
+      demographics,
+      isAuthenticated,
+      (ageRange, gender) => {
+        saveUserAge(ageRange);
+        saveUserGender(gender);
+      }
+    );
+    
+    // Update local state if authenticated
+    if (isAuthenticated) {
+      setUserDemographics(demographics);
+    }
+    
+    setShowDemographicsSurvey(false);
+  };
+
   return (
-    <SlideshowPlayer
-      slideshowId={id}
-      slideshow={{ ...slideshow, audioUrl: presignedAudioUrl }}
-      autoPlay={false}
-    />
+    <>
+      <SlideshowPlayer
+        slideshowId={id}
+        slideshow={{ ...slideshow, audioUrl: presignedAudioUrl }}
+        autoPlay={false}
+      />
+      
+      {/* Demographics Survey Overlay */}
+      <DemographicsSurveyOverlay
+        visible={showDemographicsSurvey}
+        artistName={slideshow?.creatorName || slideshow?.username}
+        onSubmit={handleDemographicsSubmit}
+      />
+    </>
   );
 }
 
