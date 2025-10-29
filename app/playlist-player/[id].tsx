@@ -110,6 +110,25 @@ export default function PlaylistPlayerScreen() {
       
       if (response.data) {
         setPlaylist(response.data);
+        
+        // Track QR scan with demographics if available
+        try {
+          const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
+          if (qrId) {
+            // Get demographics from user profile or localStorage
+            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+            
+            console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
+            
+            await analyticsService.trackQRScan(Number(qrId), {
+              // Send user demographics if available
+              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+            });
+          }
+        } catch (e) {
+          console.warn('Analytics track scan failed (playlist-player):', e);
+        }
       } else {
         setError('Playlist not found');
       }
@@ -167,6 +186,21 @@ export default function PlaylistPlayerScreen() {
       // Update local state if authenticated
       if (isAuthenticated) {
         setUserDemographics(demographics);
+      }
+      
+      // Re-track the scan with the new demographics
+      try {
+        const qrId = playlist?.qr_code_id || playlist?.qrCodeId;
+        if (qrId) {
+          console.log('📊 PLAYER_DEMOGRAPHICS: Re-tracking scan with new demographics...');
+          await analyticsService.trackQRScan(Number(qrId), {
+            userAge: demographics.ageRange,
+            userGender: demographics.gender,
+          });
+          console.log('✅ PLAYER_DEMOGRAPHICS: Scan re-tracked with demographics!');
+        }
+      } catch (e) {
+        console.warn('Failed to re-track scan with demographics:', e);
       }
       
       console.log('👤 PLAYER_DEMOGRAPHICS: Closing survey...');

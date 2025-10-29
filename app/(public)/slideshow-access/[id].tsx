@@ -767,22 +767,42 @@ export default function SlideshowAccessScreen() {
   const handleDemographicsSubmit = async (demographics: { ageRange: string; gender: string }) => {
     console.log('👤 SLIDESHOW_ACCESS: User provided demographics:', demographics);
     
-    // Save demographics (to profile if authenticated, localStorage if anonymous)
-    await saveDemographics(
-      demographics,
-      isAuthenticated,
-      (ageRange, gender) => {
-        saveUserAge(ageRange);
-        saveUserGender(gender);
+    try {
+      // Save demographics (to profile if authenticated, localStorage if anonymous)
+      await saveDemographics(
+        demographics,
+        isAuthenticated,
+        (ageRange, gender) => {
+          saveUserAge(ageRange);
+          saveUserGender(gender);
+        }
+      );
+      
+      // Update local state if authenticated
+      if (isAuthenticated) {
+        setUserDemographics(demographics);
       }
-    );
-    
-    // Update local state if authenticated
-    if (isAuthenticated) {
-      setUserDemographics(demographics);
+      
+      // Re-track the scan with the new demographics
+      try {
+        const qrId = slideshow?.qr_code_id || slideshow?.qrCodeId;
+        if (qrId) {
+          console.log('📊 SLIDESHOW_ACCESS: Re-tracking scan with new demographics...');
+          await analyticsService.trackQRScan(Number(qrId), {
+            userAge: demographics.ageRange,
+            userGender: demographics.gender,
+          });
+          console.log('✅ SLIDESHOW_ACCESS: Scan re-tracked with demographics!');
+        }
+      } catch (e) {
+        console.warn('Failed to re-track scan with demographics:', e);
+      }
+      
+      setShowDemographicsSurvey(false);
+    } catch (error) {
+      console.error('❌ SLIDESHOW_ACCESS: Error in demographics submit:', error);
+      setShowDemographicsSurvey(false);
     }
-    
-    setShowDemographicsSurvey(false);
   };
 
   return (

@@ -118,6 +118,25 @@ export default function SlideshowPlayerScreen() {
       
       if (response.data) {
         setSlideshow(response.data);
+        
+        // Track QR scan with demographics if available
+        try {
+          const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
+          if (qrId) {
+            // Get demographics from user profile or localStorage
+            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+            
+            console.log('📊 SLIDESHOW_PLAYER: Tracking scan with demographics:', demographics);
+            
+            await analyticsService.trackQRScan(Number(qrId), {
+              // Send user demographics if available
+              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+            });
+          }
+        } catch (e) {
+          console.warn('Analytics track scan failed (slideshow-player):', e);
+        }
       } else {
         setError('Slideshow not found');
       }
@@ -175,6 +194,21 @@ export default function SlideshowPlayerScreen() {
       // Update local state if authenticated
       if (isAuthenticated) {
         setUserDemographics(demographics);
+      }
+      
+      // Re-track the scan with the new demographics
+      try {
+        const qrId = slideshow?.qr_code_id || slideshow?.qrCodeId;
+        if (qrId) {
+          console.log('📊 SLIDESHOW_PLAYER_DEMOGRAPHICS: Re-tracking scan with new demographics...');
+          await analyticsService.trackQRScan(Number(qrId), {
+            userAge: demographics.ageRange,
+            userGender: demographics.gender,
+          });
+          console.log('✅ SLIDESHOW_PLAYER_DEMOGRAPHICS: Scan re-tracked with demographics!');
+        }
+      } catch (e) {
+        console.warn('Failed to re-track scan with demographics:', e);
       }
       
       console.log('👤 SLIDESHOW_PLAYER_DEMOGRAPHICS: Closing survey...');
