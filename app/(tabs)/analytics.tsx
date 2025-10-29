@@ -714,7 +714,7 @@ export default function AnalyticsScreen() {
           <View style={styles.geoList}>
             {ageData.map((age, index) => {
               const total = ageData.reduce((sum, item) => sum + item.count, 0);
-              const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0);
+              const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0;
               
               return (
                 <View key={index} style={styles.geoItem}>
