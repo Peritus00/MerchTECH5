@@ -598,8 +598,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
       await poolLike.query(
         `INSERT INTO qr_scans (
            qr_code_id, scanned_at, device_type, browser_name, operating_system,
-           country_code, region, city, location_source
-         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8)`,
+           country_code, region, city, location_source, user_provided_age_range, user_provided_gender
+         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           qrCodeId, 
           parsed.deviceType, 
@@ -608,10 +608,12 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
           geo.countryCode || null,
           geo.region || null,
           geo.city || null,
-          locationSource
+          locationSource,
+          userAge || null,
+          userGender || null
         ]
       );
-      console.log('💾 writeScan: Fallback insert successful with city:', geo.city);
+      console.log('💾 writeScan: Fallback insert successful with demographics:', { userAge, userGender });
       return { inserted: true, fallback: true };
     } catch (fallbackErr) {
       console.error('❌ writeScan: Both insert attempts failed:', e.message, fallbackErr.message);
