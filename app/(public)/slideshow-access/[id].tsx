@@ -29,6 +29,8 @@ import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
 import AgePromptModal from '@/components/AgePromptModal';
 import { shouldShowAgePrompt, saveUserAge, markAgePromptShown, getAgeForTracking } from '@/utils/ageStorage';
+import GenderPromptModal from '@/components/GenderPromptModal';
+import { shouldShowGenderPrompt, saveUserGender, markGenderPromptShown, getGenderForTracking } from '@/utils/genderStorage';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -62,6 +64,9 @@ export default function SlideshowAccessScreen() {
 
   // Age prompt state
   const [showAgePrompt, setShowAgePrompt] = useState(false);
+  
+  // Gender prompt state
+  const [showGenderPrompt, setShowGenderPrompt] = useState(false);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -140,6 +145,12 @@ export default function SlideshowAccessScreen() {
       // Show prompt after a short delay to not interrupt loading
       const timer = setTimeout(() => {
         setShowAgePrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else if (slideshow && !isLoading && !shouldShowAgePrompt() && shouldShowGenderPrompt()) {
+      // If age already collected but not gender, show gender prompt
+      const timer = setTimeout(() => {
+        setShowGenderPrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -258,6 +269,7 @@ export default function SlideshowAccessScreen() {
         if (qrId) {
           const userLoc = getLocationForTracking?.();
           const userAge = getAgeForTracking?.();
+          const userGender = getGenderForTracking?.();
           await analyticsService.trackQRScan(qrId, {
             // Send user-provided location as structured data if available
             ...(userLoc ? { 
@@ -266,6 +278,8 @@ export default function SlideshowAccessScreen() {
             } : {}),
             // Send user-provided age range if available
             ...(userAge ? { userAge: userAge.ageRange } : {}),
+            // Send user-provided gender if available
+            ...(userGender ? { userGender: userGender.gender } : {}),
           });
         }
       } catch (e) {
@@ -722,6 +736,20 @@ export default function SlideshowAccessScreen() {
     console.log('👤 SLIDESHOW_ACCESS: User provided age:', ageRange);
     saveUserAge(ageRange);
     setShowAgePrompt(false);
+    
+    // After age is submitted, show gender prompt if needed
+    if (shouldShowGenderPrompt()) {
+      setTimeout(() => {
+        setShowGenderPrompt(true);
+      }, 500);
+    }
+  };
+
+  // Gender prompt handler
+  const handleGenderSubmit = (gender: string) => {
+    console.log('⚧ SLIDESHOW_ACCESS: User provided gender:', gender);
+    saveUserGender(gender);
+    setShowGenderPrompt(false);
   };
 
   return (
@@ -852,6 +880,13 @@ export default function SlideshowAccessScreen() {
         visible={showAgePrompt}
         artistName={slideshow?.creatorName || slideshow?.username}
         onSubmit={handleAgeSubmit}
+      />
+
+      {/* Gender Prompt Modal */}
+      <GenderPromptModal
+        visible={showGenderPrompt}
+        artistName={slideshow?.creatorName || slideshow?.username}
+        onSubmit={handleGenderSubmit}
       />
     </ThemedView>
   );

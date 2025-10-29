@@ -25,6 +25,8 @@ import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import AgePromptModal from '@/components/AgePromptModal';
 import { shouldShowAgePrompt, saveUserAge, markAgePromptShown, getAgeForTracking } from '@/utils/ageStorage';
+import GenderPromptModal from '@/components/GenderPromptModal';
+import { shouldShowGenderPrompt, saveUserGender, markGenderPromptShown, getGenderForTracking } from '@/utils/genderStorage';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -56,6 +58,9 @@ export default function PlaylistAccessScreen() {
 
   // Age prompt state
   const [showAgePrompt, setShowAgePrompt] = useState(false);
+  
+  // Gender prompt state
+  const [showGenderPrompt, setShowGenderPrompt] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -98,6 +103,12 @@ export default function PlaylistAccessScreen() {
       // Show prompt after a short delay to not interrupt loading
       const timer = setTimeout(() => {
         setShowAgePrompt(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    } else if (playlist && !isLoading && !shouldShowAgePrompt() && shouldShowGenderPrompt()) {
+      // If age already collected but not gender, show gender prompt
+      const timer = setTimeout(() => {
+        setShowGenderPrompt(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
@@ -152,6 +163,7 @@ export default function PlaylistAccessScreen() {
         if (qrId) {
           const userLoc = getLocationForTracking?.();
           const userAge = getAgeForTracking?.();
+          const userGender = getGenderForTracking?.();
           await (await import('@/services/analyticsService')).analyticsService.trackQRScan(qrId, {
             // We do not send IP; server resolves auto geo
             // Send user-provided location as structured data if available
@@ -161,6 +173,8 @@ export default function PlaylistAccessScreen() {
             } : {}),
             // Send user-provided age range if available
             ...(userAge ? { userAge: userAge.ageRange } : {}),
+            // Send user-provided gender if available
+            ...(userGender ? { userGender: userGender.gender } : {}),
           });
         }
       } catch (e) {
@@ -875,6 +889,20 @@ export default function PlaylistAccessScreen() {
     console.log('👤 PLAYLIST_ACCESS: User provided age:', ageRange);
     saveUserAge(ageRange);
     setShowAgePrompt(false);
+    
+    // After age is submitted, show gender prompt if needed
+    if (shouldShowGenderPrompt()) {
+      setTimeout(() => {
+        setShowGenderPrompt(true);
+      }, 500);
+    }
+  };
+
+  // Gender prompt handler
+  const handleGenderSubmit = (gender: string) => {
+    console.log('⚧ PLAYLIST_ACCESS: User provided gender:', gender);
+    saveUserGender(gender);
+    setShowGenderPrompt(false);
   };
 
   return (
@@ -1011,6 +1039,13 @@ export default function PlaylistAccessScreen() {
         visible={showAgePrompt}
         artistName={playlist?.creatorName || playlist?.username}
         onSubmit={handleAgeSubmit}
+      />
+
+      {/* Gender Prompt Modal */}
+      <GenderPromptModal
+        visible={showGenderPrompt}
+        artistName={playlist?.creatorName || playlist?.username}
+        onSubmit={handleGenderSubmit}
       />
     </ThemedView>
   );

@@ -181,10 +181,12 @@ export default function AnalyticsScreen() {
   const [osData, setOSData] = useState<OSData[]>([]);
   const [timePatternData, setTimePatternData] = useState<TimePatternData[]>([]);
   const [ageData, setAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
+  const [genderData, setGenderData] = useState<Array<{ gender: string; count: number }>>([]);
   const [selectedTimeRange, setSelectedTimeRange] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'geography' | 'behavior' | 'demographics'>('overview');
+  const [demographicsSubTab, setDemographicsSubTab] = useState<'age' | 'gender'>('age');
   
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
@@ -246,6 +248,9 @@ export default function AnalyticsScreen() {
 
       // Set age demographics from real analytics
       setAgeData((analytics as any).ageRanges || []);
+
+      // Set gender demographics from real analytics
+      setGenderData((analytics as any).genderDistribution || []);
 
       // Clear browser and OS data (will be populated when real tracking is implemented)
       setBrowserData([]);
@@ -679,68 +684,191 @@ export default function AnalyticsScreen() {
 
   const renderDemographicsTab = () => (
     <>
-      {/* Age Distribution */}
-      {ageData.length > 0 && (
-        <ChartContainer title="Age Distribution" subtitle="Age ranges of QR code scanners">
-          <BarChart
-            data={{
-              labels: ageData.map(d => d.ageRange),
-              datasets: [{
-                data: ageData.map(d => d.count),
-              }],
-            }}
-            width={screenWidth - 48}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#fff',
-              backgroundGradientFrom: '#fff',
-              backgroundGradientTo: '#fff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-              style: {
-                borderRadius: 16,
-              },
-            }}
-            style={{
-              borderRadius: 16,
-            }}
-            yAxisLabel=""
-            yAxisSuffix=""
-            fromZero
+      {/* Sub-tab Navigation */}
+      <View style={styles.subTabContainer}>
+        <TouchableOpacity
+          style={[
+            styles.subTab,
+            demographicsSubTab === 'age' && styles.activeSubTab,
+          ]}
+          onPress={() => setDemographicsSubTab('age')}
+        >
+          <MaterialIcons 
+            name="cake" 
+            size={18} 
+            color={demographicsSubTab === 'age' ? '#8b5cf6' : '#6b7280'} 
           />
-          
-          {/* Age List */}
-          <View style={styles.geoList}>
-            {ageData.map((age, index) => {
-              const total = ageData.reduce((sum, item) => sum + item.count, 0);
-              const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0;
-              
-              return (
-                <View key={index} style={styles.geoItem}>
-                  <View style={styles.geoInfo}>
-                    <MaterialIcons name="person" size={20} color="#8b5cf6" />
-                    <Text style={styles.geoName}>{age.ageRange}</Text>
-                  </View>
-                  <View style={styles.geoStats}>
-                    <Text style={styles.geoCount}>{age.count}</Text>
-                    <Text style={styles.geoPercentage}>{percentage}%</Text>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        </ChartContainer>
-      )}
-      
-      {ageData.length === 0 && (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="people-outline" size={64} color="#d1d5db" />
-          <Text style={styles.emptyText}>No age data available yet</Text>
-          <Text style={styles.emptySubtext}>
-            Age demographics will appear here once users start providing their age range
+          <Text style={[
+            styles.subTabText,
+            demographicsSubTab === 'age' && styles.activeSubTabText,
+          ]}>
+            Age
           </Text>
-        </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.subTab,
+            demographicsSubTab === 'gender' && styles.activeSubTab,
+          ]}
+          onPress={() => setDemographicsSubTab('gender')}
+        >
+          <MaterialIcons 
+            name="wc" 
+            size={18} 
+            color={demographicsSubTab === 'gender' ? '#8b5cf6' : '#6b7280'} 
+          />
+          <Text style={[
+            styles.subTabText,
+            demographicsSubTab === 'gender' && styles.activeSubTabText,
+          ]}>
+            Gender
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Age Demographics */}
+      {demographicsSubTab === 'age' && (
+        <>
+          {ageData.length > 0 && (
+            <ChartContainer title="Age Distribution" subtitle="Age ranges of QR code scanners">
+              <BarChart
+                data={{
+                  labels: ageData.map(d => d.ageRange),
+                  datasets: [{
+                    data: ageData.map(d => d.count),
+                  }],
+                }}
+                width={screenWidth - 48}
+                height={220}
+                chartConfig={{
+                  backgroundColor: '#fff',
+                  backgroundGradientFrom: '#fff',
+                  backgroundGradientTo: '#fff',
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  style: {
+                    borderRadius: 16,
+                  },
+                }}
+                style={{
+                  borderRadius: 16,
+                }}
+                yAxisLabel=""
+                yAxisSuffix=""
+                fromZero
+              />
+              
+              {/* Age List */}
+              <View style={styles.geoList}>
+                {ageData.map((age, index) => {
+                  const total = ageData.reduce((sum, item) => sum + item.count, 0);
+                  const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0;
+                  
+                  return (
+                    <View key={index} style={styles.geoItem}>
+                      <View style={styles.geoInfo}>
+                        <MaterialIcons name="person" size={20} color="#8b5cf6" />
+                        <Text style={styles.geoName}>{age.ageRange}</Text>
+                      </View>
+                      <View style={styles.geoStats}>
+                        <Text style={styles.geoCount}>{age.count}</Text>
+                        <Text style={styles.geoPercentage}>{percentage}%</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ChartContainer>
+          )}
+          
+          {ageData.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="people-outline" size={64} color="#d1d5db" />
+              <Text style={styles.emptyText}>No age data available yet</Text>
+              <Text style={styles.emptySubtext}>
+                Age demographics will appear here once users start providing their age range
+              </Text>
+            </View>
+          )}
+        </>
+      )}
+
+      {/* Gender Demographics */}
+      {demographicsSubTab === 'gender' && (
+        <>
+          {genderData.length > 0 && (
+            <ChartContainer title="Gender Distribution" subtitle="Gender identity of QR code scanners">
+              <BarChart
+                data={{
+                  labels: genderData.map(d => d.gender),
+                  datasets: [{
+                    data: genderData.map(d => d.count),
+                  }],
+                }}
+                width={screenWidth - 48}
+                height={220}
+                chartConfig={{
+                  backgroundColor: '#fff',
+                  backgroundGradientFrom: '#fff',
+                  backgroundGradientTo: '#fff',
+                  decimalPlaces: 0,
+                  color: (opacity = 1) => `rgba(236, 72, 153, ${opacity})`,
+                  labelColor: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
+                  style: {
+                    borderRadius: 16,
+                  },
+                }}
+                style={{
+                  borderRadius: 16,
+                }}
+                yAxisLabel=""
+                yAxisSuffix=""
+                fromZero
+              />
+              
+              {/* Gender List */}
+              <View style={styles.geoList}>
+                {genderData.map((gender, index) => {
+                  const total = genderData.reduce((sum, item) => sum + item.count, 0);
+                  const percentage = total > 0 ? Math.round((gender.count / total) * 100) : 0;
+                  
+                  // Select icon based on gender
+                  let iconName = 'person';
+                  if (gender.gender === 'Male') iconName = 'male';
+                  else if (gender.gender === 'Female') iconName = 'female';
+                  else if (gender.gender === 'Non-binary') iconName = 'transgender';
+                  else if (gender.gender === 'Prefer not to say') iconName = 'help-outline';
+                  else if (gender.gender === 'Open-ended') iconName = 'more-horiz';
+                  
+                  return (
+                    <View key={index} style={styles.geoItem}>
+                      <View style={styles.geoInfo}>
+                        <MaterialIcons name={iconName as any} size={20} color="#ec4899" />
+                        <Text style={styles.geoName}>{gender.gender}</Text>
+                      </View>
+                      <View style={styles.geoStats}>
+                        <Text style={styles.geoCount}>{gender.count}</Text>
+                        <Text style={styles.geoPercentage}>{percentage}%</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ChartContainer>
+          )}
+          
+          {genderData.length === 0 && (
+            <View style={styles.emptyState}>
+              <MaterialIcons name="wc" size={64} color="#d1d5db" />
+              <Text style={styles.emptyText}>No gender data available yet</Text>
+              <Text style={styles.emptySubtext}>
+                Gender demographics will appear here once users start providing their gender identity
+              </Text>
+            </View>
+          )}
+        </>
       )}
     </>
   );
@@ -1138,5 +1266,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
+  },
+  subTabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  subTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f9fafb',
+    gap: 6,
+  },
+  activeSubTab: {
+    backgroundColor: '#f3e8ff',
+    borderWidth: 1,
+    borderColor: '#8b5cf6',
+  },
+  subTabText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  activeSubTabText: {
+    color: '#8b5cf6',
   },
 });

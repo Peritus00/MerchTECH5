@@ -507,7 +507,7 @@ function extractUtm(query) {
 
 // Shared scan writer with dedupe and graceful fallbacks
 // Accepts optional userLocation from request body for user-provided location data
-async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null) {
+async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null, userGender = null) {
   const geo = await resolveGeo(req);
   console.log('💾 writeScan: Geo data received from resolveGeo:', JSON.stringify(geo));
   const ua = req.headers['user-agent'] || '';
@@ -549,19 +549,20 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
       region: geo.region || null,
       city: geo.city || null,
       location_source: locationSource,
-      user_age: userAge || null
+      user_age: userAge || null,
+      user_gender: userGender || null
     });
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
          country_code, country_name, region, city, referrer,
          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source, user_provided_age_range
+         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source, user_provided_age_range, user_provided_gender
        ) VALUES (
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14, $14, $15, $16, $17, $18, $19
+         $14, $14, $15, $16, $17, $18, $19, $20
        )
        RETURNING id`,
       [
@@ -584,6 +585,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         userLocation?.zip || null,
         locationSource,
         userAge || null,
+        userGender || null,
       ]
     );
     
@@ -775,6 +777,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       operatingSystem,
       userLocation, // NEW: User-provided location { city, state, zip }
       userAge, // NEW: User-provided age range (e.g., "18-24", "25-34")
+      userGender, // NEW: User-provided gender (Male, Female, Non-binary, etc.)
       // ipAddress ignored for privacy
     } = req.body || {};
 
@@ -793,8 +796,8 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    // Pass userLocation and userAge to writeScan if provided
-    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge);
+    // Pass userLocation, userAge, and userGender to writeScan if provided
+    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender);
 
     res.json({ 
       success: true, 
@@ -1027,6 +1030,33 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       );
     } catch (e) { console.warn('📊 SUMMARY ageRangesRes failed:', e.message); ageRangesRes = { rows: [] }; }
 
+    // Gender demographics (deduped: one event per visitor per minute)
+    let genderDistRes;
+    try {
+      const genderDistSql = `
+        ${dedupCTE}
+        SELECT 
+          COALESCE(s.user_provided_gender, 'Unknown') AS gender,
+          COUNT(*) AS count
+        FROM dedup d
+        JOIN qr_scans s ON s.id = d.id
+        WHERE s.user_provided_gender IS NOT NULL
+        GROUP BY s.user_provided_gender
+        ORDER BY 
+          CASE s.user_provided_gender
+            WHEN 'Male' THEN 1
+            WHEN 'Female' THEN 2
+            WHEN 'Non-binary' THEN 3
+            WHEN 'Prefer not to say' THEN 4
+            WHEN 'Open-ended' THEN 5
+            ELSE 6
+          END`;
+      genderDistRes = await pool.query(
+        genderDistSql,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) { console.warn('📊 SUMMARY genderDistRes failed:', e.message); genderDistRes = { rows: [] }; }
+
     // Recent scans
     let recentRes;
     try { recentRes = await pool.query(
@@ -1132,6 +1162,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       })),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
       ageRanges: ageRangesRes.rows.map(r => ({ ageRange: r.age_range, count: parseInt(r.count) })),
+      genderDistribution: genderDistRes.rows.map(r => ({ gender: r.gender, count: parseInt(r.count) })),
       hourlyData,
       recentScans: recentRows.map(r => ({
         qrName: r.qr_name,
