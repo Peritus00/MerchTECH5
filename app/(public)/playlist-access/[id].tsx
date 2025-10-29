@@ -110,21 +110,41 @@ export default function PlaylistAccessScreen() {
   // Show AFTER content starts playing (with access code validated or full access granted)
   useEffect(() => {
     const checkAndShowSurvey = async () => {
+      console.log('🔍 DEMOGRAPHICS: Checking if survey needed...', {
+        hasPlaylist: !!playlist,
+        isLoading,
+        isAuthenticated,
+        userDemographics,
+        showRegistrationFlow,
+        showAppDownload,
+      });
+      
       // Only show survey after content is accessible
-      if (!playlist || isLoading) return;
+      if (!playlist || isLoading) {
+        console.log('🔍 DEMOGRAPHICS: Skipping - playlist not loaded or still loading');
+        return;
+      }
       
       // Don't show during registration flow
-      if (showRegistrationFlow || showAppDownload) return;
+      if (showRegistrationFlow || showAppDownload) {
+        console.log('🔍 DEMOGRAPHICS: Skipping - in registration or app download flow');
+        return;
+      }
       
       // Check if survey is needed
       const needsSurvey = await shouldShowDemographicsSurvey(isAuthenticated, userDemographics);
+      console.log('🔍 DEMOGRAPHICS: Survey needed?', needsSurvey);
       
       if (needsSurvey) {
-        // Show survey after 15 seconds of content being accessible
+        console.log('🔍 DEMOGRAPHICS: Setting 5-second timer for survey (testing)...');
+        // Show survey after 5 seconds of content being accessible (TESTING - will be 15s in production)
         const timer = setTimeout(() => {
+          console.log('✅ DEMOGRAPHICS: Showing survey now!');
           setShowDemographicsSurvey(true);
-        }, 15000);
+        }, 5000);
         return () => clearTimeout(timer);
+      } else {
+        console.log('🔍 DEMOGRAPHICS: Survey not needed - user already has demographics');
       }
     };
     
