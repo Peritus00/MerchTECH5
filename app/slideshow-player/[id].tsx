@@ -158,22 +158,32 @@ export default function SlideshowPlayerScreen() {
   const handleDemographicsSubmit = async (demographics: { ageRange: string; gender: string }) => {
     console.log('👤 SLIDESHOW_PLAYER_DEMOGRAPHICS: User provided demographics:', demographics);
     
-    // Save demographics (to profile if authenticated, localStorage if anonymous)
-    await saveDemographics(
-      demographics,
-      isAuthenticated,
-      (ageRange, gender) => {
-        saveUserAge(ageRange);
-        saveUserGender(gender);
+    try {
+      // Save demographics (to profile if authenticated, localStorage if anonymous)
+      const success = await saveDemographics(
+        demographics,
+        isAuthenticated,
+        (ageRange, gender) => {
+          console.log('💾 SLIDESHOW_PLAYER_DEMOGRAPHICS: Saving to localStorage:', { ageRange, gender });
+          saveUserAge(ageRange);
+          saveUserGender(gender);
+        }
+      );
+      
+      console.log('👤 SLIDESHOW_PLAYER_DEMOGRAPHICS: Save result:', success);
+      
+      // Update local state if authenticated
+      if (isAuthenticated) {
+        setUserDemographics(demographics);
       }
-    );
-    
-    // Update local state if authenticated
-    if (isAuthenticated) {
-      setUserDemographics(demographics);
+      
+      console.log('👤 SLIDESHOW_PLAYER_DEMOGRAPHICS: Closing survey...');
+      setShowDemographicsSurvey(false);
+    } catch (error) {
+      console.error('❌ SLIDESHOW_PLAYER_DEMOGRAPHICS: Error saving demographics:', error);
+      // Still close the survey even if save failed
+      setShowDemographicsSurvey(false);
     }
-    
-    setShowDemographicsSurvey(false);
   };
 
   return (

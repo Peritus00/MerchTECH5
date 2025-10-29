@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -45,14 +45,37 @@ export default function DemographicsSurveyOverlay({
   const [showAgeList, setShowAgeList] = useState(false);
   const [showGenderList, setShowGenderList] = useState(false);
 
+  // Log when selections change
+  useEffect(() => {
+    console.log('📋 SURVEY: Selection changed', { selectedAge, selectedGender });
+  }, [selectedAge, selectedGender]);
+
   const handleSubmit = () => {
-    if (selectedAge && selectedGender) {
+    console.log('📋 SURVEY: Submit button pressed!', { selectedAge, selectedGender });
+    
+    if (!selectedAge) {
+      console.log('❌ SURVEY: Missing age');
+      return;
+    }
+    
+    if (!selectedGender) {
+      console.log('❌ SURVEY: Missing gender');
+      return;
+    }
+    
+    console.log('✅ SURVEY: Both fields filled, calling onSubmit');
+    
+    try {
       onSubmit({ ageRange: selectedAge, gender: selectedGender });
+      console.log('✅ SURVEY: onSubmit called successfully');
+      
       // Reset form
       setSelectedAge('');
       setSelectedGender('');
       setShowAgeList(false);
       setShowGenderList(false);
+    } catch (error) {
+      console.error('❌ SURVEY: Error in onSubmit:', error);
     }
   };
 
