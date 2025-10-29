@@ -1028,7 +1028,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ageRangesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
-    } catch (e) { console.warn('📊 SUMMARY ageRangesRes failed:', e.message); ageRangesRes = { rows: [] }; }
+      console.log('📊 ANALYTICS: Age ranges results:', ageRangesRes.rows);
+    } catch (e) { 
+      console.warn('📊 SUMMARY ageRangesRes failed:', e.message); 
+      console.error('📊 SUMMARY ageRangesRes error details:', e);
+      ageRangesRes = { rows: [] }; 
+    }
 
     // Gender demographics (deduped: one event per visitor per minute)
     let genderDistRes;
@@ -1055,7 +1060,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         genderDistSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
-    } catch (e) { console.warn('📊 SUMMARY genderDistRes failed:', e.message); genderDistRes = { rows: [] }; }
+      console.log('📊 ANALYTICS: Gender distribution results:', genderDistRes.rows);
+    } catch (e) { 
+      console.warn('📊 SUMMARY genderDistRes failed:', e.message); 
+      console.error('📊 SUMMARY genderDistRes error details:', e);
+      genderDistRes = { rows: [] }; 
+    }
 
     // Recent scans
     let recentRes;
@@ -1729,7 +1739,40 @@ app.get('/api/user/demographics', authenticateToken, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user demographics:', error);
-    res.status(500).json({ error: 'Failed to fetch demographics' });
+    res.status(500).json({ error: 'Failed to fetch demographics', details: error.message });
+  }
+});
+
+// Debug endpoint to check demographics in qr_scans table (public for testing)
+app.get('/api/debug/demographics-data', async (req, res) => {
+  try {
+    // Check if columns exist and have data
+    const result = await pool.query(`
+      SELECT 
+        user_provided_age_range,
+        user_provided_gender,
+        scanned_at,
+        qr_code_id
+      FROM qr_scans 
+      WHERE user_provided_age_range IS NOT NULL 
+         OR user_provided_gender IS NOT NULL
+      ORDER BY scanned_at DESC 
+      LIMIT 20
+    `);
+    
+    res.json({
+      count: result.rows.length,
+      data: result.rows,
+      message: result.rows.length > 0 
+        ? 'Demographics data found!' 
+        : 'No demographics data in database yet'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Query failed', 
+      details: error.message,
+      hint: 'Database columns might not exist yet - check if migrations ran'
+    });
   }
 });
 
