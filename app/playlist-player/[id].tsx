@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,6 +22,9 @@ export default function PlaylistPlayerScreen() {
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
+  
+  // Guard to prevent multiple scan tracking calls
+  const hasTrackedScanRef = useRef<boolean>(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -111,23 +114,29 @@ export default function PlaylistPlayerScreen() {
       if (response.data) {
         setPlaylist(response.data);
         
-        // Track QR scan with demographics if available
-        try {
-          const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
-          if (qrId) {
-            // Get demographics from user profile or localStorage
-            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-            
-            console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
-            
-            await analyticsService.trackQRScan(Number(qrId), {
-              // Send user demographics if available
-              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-            });
+        // Track QR scan with demographics if available (only once per component mount)
+        if (!hasTrackedScanRef.current) {
+          try {
+            const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
+            if (qrId) {
+              // Get demographics from user profile or localStorage
+              const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+              
+              console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
+              
+              await analyticsService.trackQRScan(Number(qrId), {
+                // Send user demographics if available
+                ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+                ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+              });
+              
+              hasTrackedScanRef.current = true; // Mark as tracked
+            }
+          } catch (e) {
+            console.warn('Analytics track scan failed (playlist-player):', e);
           }
-        } catch (e) {
-          console.warn('Analytics track scan failed (playlist-player):', e);
+        } else {
+          console.log('📊 PLAYER: Skipping duplicate scan tracking (already tracked)');
         }
       } else {
         setError('Playlist not found');

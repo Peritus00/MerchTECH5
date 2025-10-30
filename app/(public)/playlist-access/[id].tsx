@@ -194,23 +194,8 @@ export default function PlaylistAccessScreen() {
 
       setPlaylist(mappedPlaylist);
 
-      // Create a scan row so browser geo can upgrade it (server dedupes within 60s)
-      try {
-        const qrId = (playlistData && (playlistData.qr_code_id || playlistData.qrCodeId)) ? Number(playlistData.qr_code_id || playlistData.qrCodeId) : null;
-        if (qrId) {
-          // Get demographics from user profile or localStorage
-          const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-          
-          await (await import('@/services/analyticsService')).analyticsService.trackQRScan(qrId, {
-            // We do not send IP; server resolves auto geo
-            // Send user demographics if available
-            ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-            ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-          });
-        }
-      } catch (e) {
-        console.warn('Analytics track scan failed (playlist-access):', e);
-      }
+      // NOTE: Tracking is done in playlist-player screen to avoid duplicate scans
+      // when redirecting from playlist-access to playlist-player
     } catch (error: any) {
       console.error('🔴 PLAYLIST_ACCESS: Error fetching playlist:', error);
       const errorMessage = error.response?.data?.error || error.message || 'Failed to load playlist';
