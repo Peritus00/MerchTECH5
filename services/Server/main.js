@@ -4392,29 +4392,39 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
       return res.status(404).send('QR not found');
     }
 
-    // Record scan (best-effort)
-    try {
-      const ip = getClientIp(req);
-      const result = await writeScan(pool, qr.id, req, res);
-      // Only insert fallback if writeScan completely failed (threw error or returned falsy)
-      // Don't insert fallback if scan was deduplicated (result.deduped = true)
-      if (!result?.inserted && !result?.deduped) {
-        // As a last resort record a minimal row with ip only
-        const ua = req.headers['user-agent'] || '';
-        const parsed = parseUserAgent(ua);
-        await pool.query(
-          `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
-           VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [qr.id, null, null, null, null, null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
-        );
-      }
-    } catch (trackErr) {
-      console.warn('📊 REDIRECT TRACK FAILED:', trackErr?.message || trackErr);
-    }
-
     // Redirect to target
     const target = qr.url;
     if (!target) return res.status(500).send('Target URL missing');
+    
+    // NOTE: Scan tracking is handled by the destination page (playlist-access/slideshow-access)
+    // to avoid duplicate tracking. Only track here for external URLs that don't have their own tracking.
+    // For playlist/slideshow URLs, the player screen will handle tracking.
+    const isPlaylistOrSlideshowUrl = target.includes('/playlist-access/') || target.includes('/slideshow-access/');
+    
+    if (!isPlaylistOrSlideshowUrl) {
+      // Only track for external URLs or other destinations
+      try {
+        const ip = getClientIp(req);
+        const result = await writeScan(pool, qr.id, req, res);
+        // Only insert fallback if writeScan completely failed (threw error or returned falsy)
+        // Don't insert fallback if scan was deduplicated (result.deduped = true)
+        if (!result?.inserted && !result?.deduped) {
+          // As a last resort record a minimal row with ip only
+          const ua = req.headers['user-agent'] || '';
+          const parsed = parseUserAgent(ua);
+          await pool.query(
+            `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
+             VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
+            [qr.id, null, null, null, null, null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
+          );
+        }
+      } catch (trackErr) {
+        console.warn('📊 REDIRECT TRACK FAILED:', trackErr?.message || trackErr);
+      }
+    } else {
+      console.log('📊 REDIRECT: Skipping scan tracking - will be handled by destination page');
+    }
+    
     return res.redirect(302, target);
   } catch (error) {
     console.error('🔴 QR REDIRECT ERROR:', error);
