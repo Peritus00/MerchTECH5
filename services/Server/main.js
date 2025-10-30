@@ -526,17 +526,51 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
 
   try {
     // Manual dedupe guard in case the unique index is missing or not yet applied
+    // If demographics are provided, check for existing scan within 1 hour (instead of 60 seconds)
+    // This allows updating existing scans with demographics instead of creating duplicates
+    const dedupeWindowSeconds = (userAge || userGender) ? 3600 : 60; // 1 hour for demographics, 60s otherwise
     try {
       const existsRes = await poolLike.query(
         `SELECT id FROM qr_scans
           WHERE qr_code_id = $1
             AND COALESCE(qr_visitor_id, visitor_id::text) = $2
-            AND scanned_at >= NOW() - INTERVAL '60 seconds'
+            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+          ORDER BY scanned_at DESC
           LIMIT 1`,
-        [qrCodeId, visitorId]
+        [qrCodeId, visitorId, dedupeWindowSeconds]
       );
       if (existsRes.rowCount > 0) {
-        return { deduped: true, keptId: existsRes.rows[0].id };
+        const existingScanId = existsRes.rows[0].id;
+        
+        // If demographics are provided, update the existing scan instead of creating duplicate
+        if (userAge || userGender) {
+          console.log('💾 writeScan: Updating existing scan with demographics:', {
+            scanId: existingScanId,
+            userAge,
+            userGender
+          });
+          await poolLike.query(
+            `UPDATE qr_scans 
+             SET user_provided_age_range = COALESCE($1, user_provided_age_range),
+                 user_provided_gender = COALESCE($2, user_provided_gender),
+                 user_provided_city = COALESCE($3, user_provided_city),
+                 user_provided_state = COALESCE($4, user_provided_state),
+                 user_provided_zip = COALESCE($5, user_provided_zip)
+             WHERE id = $6`,
+            [
+              userAge || null,
+              userGender || null,
+              userLocation?.city || null,
+              userLocation?.state || null,
+              userLocation?.zip || null,
+              existingScanId
+            ]
+          );
+          return { deduped: true, updated: true, keptId: existingScanId, locationSource };
+        }
+        
+        // No demographics, just skip duplicate
+        return { deduped: true, keptId: existingScanId };
       }
     } catch (_e) {
       // ignore; proceed to insert with ON CONFLICT
@@ -545,6 +579,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
     // Simply insert - the manual dedupe check above already prevents duplicates
     console.log('💾 writeScan: Inserting with values:', {
       qrCodeId,
+      visitorId: visitorId?.substring(0, 8) + '...',
       country_code: geo.countryCode || null,
       region: geo.region || null,
       city: geo.city || null,
@@ -593,13 +628,21 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
     return { inserted: true, locationSource };
   } catch (e) {
     // Fallback using new schema columns (for any edge cases)
+    // CRITICAL FIX: Include visitor_id in fallback to enable deduplication
     console.error('⚠️  writeScan: Main insert failed, using fallback:', e.message);
+    console.error('⚠️  writeScan: Error details:', {
+      code: e.code,
+      constraint: e.constraint,
+      detail: e.detail,
+      message: e.message
+    });
     try {
       await poolLike.query(
         `INSERT INTO qr_scans (
            qr_code_id, scanned_at, device_type, browser_name, operating_system,
-           country_code, region, city, location_source, user_provided_age_range, user_provided_gender
-         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+           country_code, region, city, location_source, user_provided_age_range, user_provided_gender,
+           visitor_id, qr_visitor_id, referrer, utm_source, utm_medium, utm_campaign, utm_term, utm_content
+         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14, $15, $16, $17)`,
         [
           qrCodeId, 
           parsed.deviceType, 
@@ -610,10 +653,21 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
           geo.city || null,
           locationSource,
           userAge || null,
-          userGender || null
+          userGender || null,
+          visitorId, // CRITICAL: Include visitor_id in fallback
+          referrer,
+          utm.utm_source,
+          utm.utm_medium,
+          utm.utm_campaign,
+          utm.utm_term,
+          utm.utm_content
         ]
       );
-      console.log('💾 writeScan: Fallback insert successful with demographics:', { userAge, userGender });
+      console.log('💾 writeScan: Fallback insert successful with visitor_id and demographics:', { 
+        visitorId: visitorId?.substring(0, 8) + '...',
+        userAge, 
+        userGender 
+      });
       return { inserted: true, fallback: true };
     } catch (fallbackErr) {
       console.error('❌ writeScan: Both insert attempts failed:', e.message, fallbackErr.message);
@@ -799,7 +853,20 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const parsed = parseUserAgent(ua);
 
     // Pass userLocation, userAge, and userGender to writeScan if provided
+    console.log('📊 ANALYTICS: track-scan called for QR:', qrCodeId, {
+      hasUserLocation: !!userLocation,
+      hasUserAge: !!userAge,
+      hasUserGender: !!userGender,
+      userAgent: req.headers['user-agent']?.substring(0, 50)
+    });
     const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender);
+
+    console.log('📊 ANALYTICS: track-scan result:', {
+      inserted: result.inserted,
+      deduped: result.deduped,
+      fallback: result.fallback,
+      locationSource: result.locationSource
+    });
 
     res.json({ 
       success: true, 
@@ -842,11 +909,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const DEDUP_WINDOW_SECONDS = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
 
     // Helper CTE to dedupe scans per QR code within a minute window
-    // Using IP address and browser/OS combination as visitor identifier
+    // CRITICAL FIX: Use visitor_id when available (matches writeScan logic), fallback to IP/browser/OS combo
+    // This ensures deduplication matches between insert-time and analytics-time
     const dedupCTE = `WITH dedup AS (
       SELECT DISTINCT ON (
         s.qr_code_id,
-        COALESCE(s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+        COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
         date_trunc('minute', s.scanned_at)
       ) s.id, s.qr_code_id, s.scanned_at
       FROM qr_scans s
@@ -854,7 +922,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       WHERE q.user_id = $1
         AND s.scanned_at >= $2
         ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
-      ORDER BY s.qr_code_id, COALESCE(s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
     )`;
 
     // Total scans for this user's QR codes (deduped)
@@ -912,13 +980,13 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       hasQrFilter ? [userId, monthStart, qrFilterId] : [userId, monthStart]
     ); } catch (e) { console.warn('📊 SUMMARY monthRes failed:', e.message); monthRes = { rows: [{ c: 0 }] }; }
 
-    // Count unique visitors using IP address and browser/OS combination
+    // Count unique visitors using visitor_id when available (matches writeScan logic)
     let uniqueVisitorsRes;
     try {
       uniqueVisitorsRes = await pool.query(
         `SELECT COUNT(*) AS c FROM (
            SELECT DISTINCT
-             COALESCE(ip_address::text, CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))) AS vkey
+             COALESCE(qr_visitor_id, visitor_id::text, ip_address::text, CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))) AS vkey
            FROM qr_scans s
            JOIN qr_codes q ON s.qr_code_id = q.id
            WHERE q.user_id = $1
