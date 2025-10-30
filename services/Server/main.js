@@ -600,6 +600,9 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
       user_age: userAge || null,
       user_gender: userGender || null
     });
+    
+    // Cast visitorId to UUID explicitly to avoid type inference issues
+    const visitorIdUuid = visitorId ? visitorId : null;
     const result = await poolLike.query(
       `INSERT INTO qr_scans (
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
@@ -610,7 +613,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         $14, $14, $15, $16, $17, $18, $19, $20
+         CAST($14 AS uuid), $15, $16, $17, $18, $19, $20, $21
        )
        RETURNING id`,
       [
@@ -627,7 +630,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         utm.utm_campaign,
         utm.utm_term,
         utm.utm_content,
-        visitorId,
+        visitorIdUuid, // Will be cast to UUID in SQL
+        visitorId, // qr_visitor_id as text
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
@@ -650,12 +654,14 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
       message: e.message
     });
     try {
+      // Cast visitorId to UUID explicitly to avoid type inference issues
+      const visitorIdUuid = visitorId ? visitorId : null;
       await poolLike.query(
         `INSERT INTO qr_scans (
            qr_code_id, scanned_at, device_type, browser_name, operating_system,
            country_code, region, city, location_source, user_provided_age_range, user_provided_gender,
            visitor_id, qr_visitor_id, referrer, utm_source, utm_medium, utm_campaign, utm_term, utm_content
-         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14, $15, $16, $17)`,
+         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, CAST($11 AS uuid), $12, $13, $14, $15, $16, $17, $18)`,
         [
           qrCodeId, 
           parsed.deviceType, 
@@ -667,7 +673,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
           locationSource,
           userAge || null,
           userGender || null,
-          visitorId, // CRITICAL: Include visitor_id in fallback
+          visitorIdUuid, // Will be cast to UUID in SQL
+          visitorId, // qr_visitor_id as text
           referrer,
           utm.utm_source,
           utm.utm_medium,
