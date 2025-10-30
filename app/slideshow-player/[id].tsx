@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, Alert } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,6 +23,9 @@ export default function SlideshowPlayerScreen() {
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
+  
+  // Guard to prevent multiple scan tracking calls
+  const hasTrackedScanRef = useRef<boolean>(false);
 
   useEffect(() => {
     fetchSlideshow();
@@ -119,10 +122,12 @@ export default function SlideshowPlayerScreen() {
       if (response.data) {
         setSlideshow(response.data);
         
-        // Track QR scan with demographics if available
-        try {
-          const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
-          if (qrId) {
+        // Track QR scan with demographics if available (only once per component mount)
+        // Check and set ref synchronously to prevent race conditions
+        const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
+        if (qrId && !hasTrackedScanRef.current) {
+          hasTrackedScanRef.current = true; // Mark as tracked BEFORE async call to prevent race conditions
+          try {
             // Get demographics from user profile or localStorage
             const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
             
@@ -133,9 +138,13 @@ export default function SlideshowPlayerScreen() {
               ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
               ...(demographics?.gender ? { userGender: demographics.gender } : {}),
             });
+          } catch (e) {
+            console.warn('Analytics track scan failed (slideshow-player):', e);
+            // Reset ref on error so it can retry
+            hasTrackedScanRef.current = false;
           }
-        } catch (e) {
-          console.warn('Analytics track scan failed (slideshow-player):', e);
+        } else if (qrId && hasTrackedScanRef.current) {
+          console.log('📊 SLIDESHOW_PLAYER: Skipping duplicate scan tracking (already tracked)');
         }
       } else {
         setError('Slideshow not found');

@@ -300,23 +300,8 @@ export default function SlideshowAccessScreen() {
       }
 
       console.log('🎬 SLIDESHOW_ACCESS: Loaded slideshow:', slideshowData);
-      // Ensure a scan row exists so browser geo can upgrade it
-      try {
-        const qrId = (slideshowData && (slideshowData.qr_code_id || slideshowData.qrCodeId)) ? Number(slideshowData.qr_code_id || slideshowData.qrCodeId) : null;
-        if (qrId) {
-          // Get demographics from user profile or localStorage
-          const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-          
-          await analyticsService.trackQRScan(qrId, {
-            // We do not send IP; server resolves auto geo
-            // Send user demographics if available
-            ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-            ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-          });
-        }
-      } catch (e) {
-        console.warn('Analytics track scan failed (slideshow-access):', e);
-      }
+      // NOTE: Tracking is done in slideshow-player screen to avoid duplicate scans
+      // when redirecting from slideshow-access to slideshow-player
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow name:', slideshowData?.name);
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow images:', slideshowData?.images);
       console.log('🎬 SLIDESHOW_ACCESS: Images length:', slideshowData?.images?.length);

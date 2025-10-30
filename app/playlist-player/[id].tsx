@@ -115,27 +115,27 @@ export default function PlaylistPlayerScreen() {
         setPlaylist(response.data);
         
         // Track QR scan with demographics if available (only once per component mount)
-        if (!hasTrackedScanRef.current) {
+        // Check and set ref synchronously to prevent race conditions
+        const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
+        if (qrId && !hasTrackedScanRef.current) {
+          hasTrackedScanRef.current = true; // Mark as tracked BEFORE async call to prevent race conditions
           try {
-            const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
-            if (qrId) {
-              // Get demographics from user profile or localStorage
-              const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-              
-              console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
-              
-              await analyticsService.trackQRScan(Number(qrId), {
-                // Send user demographics if available
-                ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-                ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-              });
-              
-              hasTrackedScanRef.current = true; // Mark as tracked
-            }
+            // Get demographics from user profile or localStorage
+            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+            
+            console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
+            
+            await analyticsService.trackQRScan(Number(qrId), {
+              // Send user demographics if available
+              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+            });
           } catch (e) {
             console.warn('Analytics track scan failed (playlist-player):', e);
+            // Reset ref on error so it can retry
+            hasTrackedScanRef.current = false;
           }
-        } else {
+        } else if (qrId && hasTrackedScanRef.current) {
           console.log('📊 PLAYER: Skipping duplicate scan tracking (already tracked)');
         }
       } else {
