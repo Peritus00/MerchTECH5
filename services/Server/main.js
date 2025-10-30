@@ -530,15 +530,25 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
     // This allows updating existing scans with demographics instead of creating duplicates
     const dedupeWindowSeconds = (userAge || userGender) ? 3600 : 60; // 1 hour for demographics, 60s otherwise
     try {
+      console.log('💾 writeScan: Checking for existing scan:', {
+        qrCodeId,
+        visitorId: visitorId?.substring(0, 8) + '...',
+        dedupeWindowSeconds,
+        hasDemographics: !!(userAge || userGender)
+      });
       const existsRes = await poolLike.query(
         `SELECT id FROM qr_scans
           WHERE qr_code_id = $1
             AND COALESCE(qr_visitor_id, visitor_id::text) = $2
-            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+            AND scanned_at >= NOW() - INTERVAL '1 second' * $3
           ORDER BY scanned_at DESC
           LIMIT 1`,
         [qrCodeId, visitorId, dedupeWindowSeconds]
       );
+      console.log('💾 writeScan: Dedupe check result:', {
+        foundExisting: existsRes.rowCount > 0,
+        existingScanId: existsRes.rows[0]?.id
+      });
       if (existsRes.rowCount > 0) {
         const existingScanId = existsRes.rows[0].id;
         
@@ -566,14 +576,17 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
               existingScanId
             ]
           );
+          console.log('💾 writeScan: Scan updated successfully');
           return { deduped: true, updated: true, keptId: existingScanId, locationSource };
         }
         
         // No demographics, just skip duplicate
+        console.log('💾 writeScan: Scan already exists within dedupe window, skipping');
         return { deduped: true, keptId: existingScanId };
       }
-    } catch (_e) {
-      // ignore; proceed to insert with ON CONFLICT
+    } catch (dedupeErr) {
+      // Log the error but proceed to insert - don't let dedupe errors block scans
+      console.error('⚠️  writeScan: Dedupe check failed, proceeding with insert:', dedupeErr.message);
     }
 
     // Simply insert - the manual dedupe check above already prevents duplicates
