@@ -26,8 +26,12 @@ export default function UserStoreScreen() {
     try {
       const allProducts = await productsAPI.getAllProducts();
       // Filter products by user ID and only show in-stock items
+      // Check both user_id (snake_case) and userId (camelCase) since API maps it
       const userProducts = allProducts.filter(
-        (product: Product) => String(product.user_id) === userId && product.in_stock
+        (product: Product) => {
+          const productUserId = product.user_id ?? product.userId;
+          return String(productUserId) === userId && product.in_stock;
+        }
       );
       setProducts(userProducts);
     } catch (error) {

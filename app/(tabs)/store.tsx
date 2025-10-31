@@ -100,8 +100,10 @@ export default function StoreScreen() {
         console.log('🏪 Store: Filtering for user products. User ID:', user.id);
         const beforeFilter = list.length;
         list = list.filter((p) => {
-          const matches = String(p.user_id) === String(user.id);
-          console.log('🏪 Store: Product', p.name, 'user_id:', p.user_id, 'matches user', user.id, ':', matches);
+          // Check both user_id (snake_case) and userId (camelCase) since API maps it
+          const productUserId = p.user_id ?? p.userId;
+          const matches = String(productUserId) === String(user.id);
+          console.log('🏪 Store: Product', p.name, 'user_id/userId:', productUserId, 'matches user', user.id, ':', matches);
           return matches;
         });
         console.log('🏪 Store: After user filter:', list.length, 'products (was', beforeFilter, ')');
