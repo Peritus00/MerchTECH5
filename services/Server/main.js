@@ -664,7 +664,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
     );
     
     console.log('💾 writeScan: Insert successful, returned ID:', result.rows[0]?.id);
-    return { inserted: true, locationSource };
+    return { inserted: true, locationSource, visitorId };
   } catch (e) {
     // Fallback using new schema columns (for any edge cases)
     // CRITICAL FIX: Include visitor_id in fallback to enable deduplication
@@ -710,7 +710,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         userAge, 
         userGender 
       });
-      return { inserted: true, fallback: true };
+      return { inserted: true, fallback: true, visitorId };
     } catch (fallbackErr) {
       console.error('❌ writeScan: Both insert attempts failed:', e.message, fallbackErr.message);
       throw fallbackErr;
@@ -935,22 +935,19 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     });
     const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender, visitorId);
 
-    // Get the visitor ID that was used (for frontend to store)
-    const finalVisitorId = getOrSetVisitorId(req, res, visitorId);
-    
     console.log('📊 ANALYTICS: track-scan result:', {
       inserted: result.inserted,
       deduped: result.deduped,
       fallback: result.fallback,
       locationSource: result.locationSource,
-      visitorId: finalVisitorId?.substring(0, 8) + '...'
+      visitorId: result.visitorId?.substring(0, 8) + '...'
     });
 
     res.json({ 
       success: true, 
       locationSource: result.locationSource,
       deduped: result.deduped || false,
-      visitorId: finalVisitorId // Return visitor ID so frontend can store it
+      visitorId: result.visitorId // Return visitor ID so frontend can store it
     });
   } catch (error) {
     console.error('📊 ANALYTICS: track-scan failed:', error);
