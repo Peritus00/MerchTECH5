@@ -1349,6 +1349,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     } catch (e) { console.warn('📊 SUMMARY countriesRes failed:', e.message); countriesRes = { rows: [] }; }
 
     // Top cities (deduped to one event per visitor per minute; prioritize user-provided location)
+    // Only include scans with meaningful location data (filter out pre-geolocation scans)
     let citiesRes;
     try {
       const citiesSql = `
@@ -1361,6 +1362,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
           COUNT(*) AS count
         FROM dedup d
         JOIN qr_scans s ON s.id = d.id
+        WHERE (
+          s.city IS NOT NULL 
+          OR s.user_provided_city IS NOT NULL 
+          OR s.location_source != 'unknown'
+          OR (s.country_code IS NOT NULL AND s.location_source IS NOT NULL)
+        )
         GROUP BY 
           COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown'),
           COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), ''),
