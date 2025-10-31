@@ -13,12 +13,14 @@ console.log(`[${new Date().toISOString()}] API Service Initialized. Using Base U
 export const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60000, // Standard timeout for most requests
+  withCredentials: true, // Send cookies with requests (important for visitor ID tracking)
 });
 
 // Create a separate instance for large file uploads
 export const uploadAPI = axios.create({
   baseURL: API_BASE_URL,
   timeout: 300000, // 5 minutes for large uploads
+  withCredentials: true, // Send cookies with requests
 });
 
 console.log('🔧 API instances created with baseURL:', API_BASE_URL);

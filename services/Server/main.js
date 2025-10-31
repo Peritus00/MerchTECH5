@@ -27,11 +27,25 @@ app.set('trust proxy', true);
 const PORT = process.env.PORT || 5001;
 
 // --- CORS Configuration ---
+// When credentials: true, cannot use '*' - must specify exact origins
 const corsOptions = {
-  origin: '*', // Allow all origins
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman, curl)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.includes(allowed))) {
+      callback(null, true);
+    } else {
+      // Log blocked origins for debugging
+      console.log('🔗 CORS: Blocked origin:', origin);
+      callback(null, true); // Still allow for now, but log it
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Cookie'],
+  credentials: true, // Allow cookies to be sent
+  exposedHeaders: ['Set-Cookie'] // Expose Set-Cookie header
 };
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
@@ -200,6 +214,7 @@ const allowedOrigins = [
 // Add a separate, more detailed CORS error logger to help debug future issues
 app.use((req, res, next) => {
   console.log('🔗 CORS: Request from origin:', req.headers.origin);
+  console.log('🔗 CORS: Request cookies:', req.headers.cookie ? 'present' : 'missing');
   next();
 });
 
