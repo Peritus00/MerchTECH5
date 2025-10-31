@@ -1302,21 +1302,36 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       }
     }
 
-    // Most popular QR code (highest scan count)
+    // Most popular QR code (highest scan count) - use ALL scans, not just time-filtered
+    // This matches what's shown on the QR code management page
     let mostPopularQRRes;
     try {
+      // Use a separate CTE without time filter for most popular QR code
+      const mostPopularCTE = `WITH dedup_all AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.id, s.qr_code_id, s.scanned_at
+        FROM qr_scans s
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        ${hasQrFilter ? 'AND s.qr_code_id = $2' : ''}
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )`;
+      
       mostPopularQRRes = await pool.query(
-        `${dedupCTE}
+        `${mostPopularCTE}
          SELECT 
            q.id as qr_code_id,
            q.name as qr_name,
            COUNT(*) as scan_count
-         FROM dedup d
+         FROM dedup_all d
          JOIN qr_codes q ON d.qr_code_id = q.id
          GROUP BY q.id, q.name
          ORDER BY scan_count DESC
          LIMIT 1`,
-        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+        hasQrFilter ? [userId, qrFilterId] : [userId]
       );
     } catch (e) {
       console.warn('📊 SUMMARY mostPopularQRRes failed:', e.message);
@@ -4483,13 +4498,26 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
   try {
     console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
     
-    // First try with scan count, fall back to simple query if qr_scans table doesn't exist
+    // First try with scan count (deduplicated to match analytics), fall back to simple query if qr_scans table doesn't exist
     let result;
     try {
+      // Use deduplication to match analytics approach (unique visitor per minute)
+      // This ensures consistency between QR code list and analytics dashboard
       result = await pool.query(
-        `SELECT qr.*, COUNT(qs.id) as scan_count
+        `WITH dedup_scans AS (
+          SELECT DISTINCT ON (
+            s.qr_code_id,
+            COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+            date_trunc('minute', s.scanned_at)
+          ) s.qr_code_id
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+          ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+        )
+        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
          FROM qr_codes qr
-         LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+         LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
          WHERE qr.user_id = $1 AND qr.is_active = true
          GROUP BY qr.id
          ORDER BY qr.created_at DESC`,
