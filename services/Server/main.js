@@ -1182,6 +1182,13 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       WHERE q.user_id = $1
         AND s.scanned_at >= $2
         ${hasQrFilter ? 'AND s.qr_code_id = $3' : ''}
+        -- Filter out scans made before geolocation was configured (no meaningful location data)
+        AND (
+          s.city IS NOT NULL 
+          OR s.user_provided_city IS NOT NULL 
+          OR s.location_source != 'unknown'
+          OR (s.country_code IS NOT NULL AND s.location_source IS NOT NULL)
+        )
       ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
     )`;
 
@@ -1317,6 +1324,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     }
 
     // Top countries (deduped: one event per visitor per minute)
+    // Only include scans with meaningful location data (filter out pre-geolocation scans)
     let countriesRes;
     try {
       const countriesSql = `
@@ -1325,6 +1333,12 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
                COUNT(*) AS count
           FROM dedup d
           JOIN qr_scans s ON s.id = d.id
+          WHERE (
+            s.city IS NOT NULL 
+            OR s.user_provided_city IS NOT NULL 
+            OR s.location_source != 'unknown'
+            OR (s.country_code IS NOT NULL AND s.location_source IS NOT NULL)
+          )
          GROUP BY country
          ORDER BY count DESC
          LIMIT 10`;
