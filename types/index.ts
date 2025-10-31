@@ -159,6 +159,8 @@ export interface AnalyticsSummary {
   topCities?: Array<{ city: string; region: string; country: string; count: number }>;
   topDevices: Array<{ device: string; count: number }>;
   hourlyData: number[];
+  dailyScanHistory?: Array<{ date: string; count: number }>;
+  mostPopularQRCode?: { qrCodeId: number; qrName: string; scanCount: number } | null;
   recentScans: Array<{
     qrName: string;
     location: string;

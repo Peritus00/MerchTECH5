@@ -1088,6 +1088,50 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     const hourlyMap = new Map(hourlyRes.rows.map(r => [parseInt(r.hr), parseInt(r.c)]));
     const hourlyData = Array.from({ length: 24 }, (_, i) => hourlyMap.get(i) || 0);
 
+    // Daily scan history (last N days)
+    let dailyScanHistoryRes;
+    try {
+      dailyScanHistoryRes = await pool.query(
+        `${dedupCTE}
+         SELECT 
+           DATE(d.scanned_at) as scan_date,
+           COUNT(*) as scan_count
+         FROM dedup d
+         WHERE d.scanned_at >= $2
+         GROUP BY DATE(d.scanned_at)
+         ORDER BY scan_date ASC`,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) {
+      console.warn('📊 SUMMARY dailyScanHistoryRes failed:', e.message);
+      dailyScanHistoryRes = { rows: [] };
+    }
+
+    // Fill in missing days with 0 counts for continuous data
+    const dailyScanMap = new Map(
+      dailyScanHistoryRes.rows.map(r => {
+        // Handle PostgreSQL DATE type - convert to ISO string
+        const dateStr = r.scan_date instanceof Date 
+          ? r.scan_date.toISOString().split('T')[0]
+          : typeof r.scan_date === 'string'
+          ? r.scan_date.split('T')[0]
+          : new Date(r.scan_date).toISOString().split('T')[0];
+        return [dateStr, parseInt(r.scan_count)];
+      })
+    );
+    
+    const dailyScanHistory = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      dailyScanHistory.push({
+        date: dateStr,
+        count: dailyScanMap.get(dateStr) || 0
+      });
+    }
+
     // Top countries (deduped: one event per visitor per minute)
     let countriesRes;
     try {
@@ -1258,6 +1302,35 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       }
     }
 
+    // Most popular QR code (highest scan count)
+    let mostPopularQRRes;
+    try {
+      mostPopularQRRes = await pool.query(
+        `${dedupCTE}
+         SELECT 
+           q.id as qr_code_id,
+           q.name as qr_name,
+           COUNT(*) as scan_count
+         FROM dedup d
+         JOIN qr_codes q ON d.qr_code_id = q.id
+         GROUP BY q.id, q.name
+         ORDER BY scan_count DESC
+         LIMIT 1`,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) {
+      console.warn('📊 SUMMARY mostPopularQRRes failed:', e.message);
+      mostPopularQRRes = { rows: [] };
+    }
+
+    const mostPopularQRCode = mostPopularQRRes.rows.length > 0
+      ? {
+          qrCodeId: mostPopularQRRes.rows[0].qr_code_id,
+          qrName: mostPopularQRRes.rows[0].qr_name,
+          scanCount: parseInt(mostPopularQRRes.rows[0].scan_count || 0)
+        }
+      : null;
+
     console.log('📊 ANALYTICS: Final counts:', {
       total: totalRes.rows[0]?.c,
       last24h: last24HoursRes.rows[0]?.c,
@@ -1320,6 +1393,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       ageRanges: ageRangesRes.rows.map(r => ({ ageRange: r.age_range, count: parseInt(r.count) })),
       genderDistribution: genderDistRes.rows.map(r => ({ gender: r.gender, count: parseInt(r.count) })),
       hourlyData,
+      dailyScanHistory,
+      mostPopularQRCode,
       recentScans: recentRows.map(r => ({
         qrName: r.qr_name,
         location: r.location,
@@ -1348,6 +1423,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       topCountries: [],
       topDevices: [],
       hourlyData: Array(24).fill(0),
+      dailyScanHistory: [],
+      mostPopularQRCode: null,
       recentScans: [],
     });
   }
@@ -1761,6 +1838,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
     );
 
     // Get most played media - use actual play counts from media_plays table
+    // Only show media that actually has plays (total_plays > 0)
     const mostPlayed = await pool.query(
       `SELECT 
         m.id, 
@@ -1771,6 +1849,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
        LEFT JOIN media_plays mp ON m.id = mp.media_id
        ${mediaWhere}
        GROUP BY m.id, m.title
+       HAVING COUNT(mp.id) > 0
        ORDER BY total_plays DESC
        LIMIT 10`,
       params

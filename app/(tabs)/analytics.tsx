@@ -211,20 +211,22 @@ export default function AnalyticsScreen() {
         totalCodes: 0, // Will be populated from real QR codes count
         totalScans: analytics.totalScans || 0,
         scansToday: analytics.todayScans || 0,
-        mostPopular: analytics.recentScans && analytics.recentScans.length > 0 ? {
-          id: 1,
-          name: analytics.recentScans[0].qrName || 'Unknown QR Code',
-          scanCount: analytics.totalScans || 0,
+        mostPopular: analytics.mostPopularQRCode ? {
+          id: analytics.mostPopularQRCode.qrCodeId,
+          name: analytics.mostPopularQRCode.qrName,
+          scanCount: analytics.mostPopularQRCode.scanCount,
         } : undefined,
         personalized: true,
       });
 
-      // Set history data from real analytics
+      // Set history data from real analytics - use dailyScanHistory if available, otherwise fallback to empty
       setHistoryData({
-        data: analytics.hourlyData ? analytics.hourlyData.map((count, hour) => ({
-          date: new Date(Date.now() - (23 - hour) * 60 * 60 * 1000).toISOString(),
-          count: count || 0,
-        })) : [],
+        data: analytics.dailyScanHistory && analytics.dailyScanHistory.length > 0
+          ? analytics.dailyScanHistory.map((item: { date: string; count: number }) => ({
+              date: item.date,
+              count: item.count || 0,
+            }))
+          : [],
         personalized: true,
       });
 
@@ -453,7 +455,7 @@ export default function AnalyticsScreen() {
           )}
 
           {/* Most Played Media */}
-          {playStats.mostPlayedMedia && playStats.mostPlayedMedia.length > 0 && (
+          {playStats.mostPlayedMedia && playStats.mostPlayedMedia.length > 0 ? (
             <ChartContainer title="Most Played Media">
               {playStats.mostPlayedMedia.slice(0, 10).map((item: any, index: number) => (
                 <TouchableOpacity
@@ -469,13 +471,23 @@ export default function AnalyticsScreen() {
                     <Text style={styles.listItemName}>{item.title || 'Untitled'}</Text>
                   </View>
                   <View style={styles.listItemRight}>
-                    <Text style={styles.listItemValue}>{item.total_plays || 0} plays</Text>
+                    <Text style={styles.listItemValue}>{parseInt(item.total_plays) || 0} plays</Text>
                     {selectedMediaId === item.id && (
                       <MaterialIcons name="check-circle" size={20} color="#3b82f6" style={{ marginLeft: 8 }} />
                     )}
                   </View>
                 </TouchableOpacity>
               ))}
+            </ChartContainer>
+          ) : (
+            <ChartContainer title="Most Played Media">
+              <View style={styles.emptyState}>
+                <MaterialIcons name="info-outline" size={48} color="#9ca3af" />
+                <Text style={styles.emptyText}>No play data yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Plays are tracked when media is listened to for 30+ seconds. Start playing your media to see analytics here.
+                </Text>
+              </View>
             </ChartContainer>
           )}
         </>
