@@ -107,8 +107,13 @@ export const analyticsService = {
     userGender?: string;
   }): Promise<void> {
     try {
+      // Import visitor ID utility dynamically to avoid SSR issues
+      const { getOrCreateVisitorId } = await import('@/utils/visitorId');
+      const visitorId = getOrCreateVisitorId();
+      
       await api.post('/analytics/track-scan', {
         qrCodeId,
+        visitorId, // Include visitor ID as fallback when cookies don't work
         ...scanData,
       });
     } catch (error) {

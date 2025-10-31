@@ -522,14 +522,15 @@ function extractUtm(query) {
 
 // Shared scan writer with dedupe and graceful fallbacks
 // Accepts optional userLocation from request body for user-provided location data
-async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null, userGender = null) {
+// Accepts optional visitorId from request body as fallback when cookies don't work
+async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null, userGender = null, fallbackVisitorId = null) {
   const geo = await resolveGeo(req);
   console.log('💾 writeScan: Geo data received from resolveGeo:', JSON.stringify(geo));
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUserAgent(ua);
   const referrer = req.headers['referer'] || req.headers['referrer'] || null;
   const utm = extractUtm(req.query || {});
-  const visitorId = getOrSetVisitorId(req, res);
+  const visitorId = getOrSetVisitorId(req, res, fallbackVisitorId);
 
   // Determine location source: 'user' if provided by user, 'auto' if from IP/headers, 'unknown' otherwise
   let locationSource = 'unknown';
@@ -718,11 +719,20 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
 }
 
 // Set or get anonymous visitor id
-function getOrSetVisitorId(req, res) {
+// Accepts optional visitorId from request body as fallback when cookies don't work
+function getOrSetVisitorId(req, res, fallbackVisitorId = null) {
+  // First, try to get from cookie
   const cookieHeader = req.headers.cookie || '';
   const match = cookieHeader.match(/(?:^|;\s*)qr_vid=([^;]+)/);
   let visitorId = match ? match[1] : null;
   
+  // If no cookie, try fallback from request body (for cross-origin cookie issues)
+  if (!visitorId && fallbackVisitorId) {
+    visitorId = fallbackVisitorId;
+    console.log('🍪 COOKIE: Using visitor ID from request body (cookie fallback):', visitorId.substring(0, 8) + '...');
+  }
+  
+  // If still no visitor ID, generate a new one
   if (!visitorId) {
     visitorId = uuidv4();
     // Set cookie for 180 days
@@ -744,8 +754,8 @@ function getOrSetVisitorId(req, res) {
       sameSite,
       secure: secureFlag.includes('Secure')
     });
-  } else {
-    console.log('🍪 COOKIE: Using existing visitor ID:', visitorId.substring(0, 8) + '...');
+  } else if (match) {
+    console.log('🍪 COOKIE: Using existing visitor ID from cookie:', visitorId.substring(0, 8) + '...');
   }
   
   return visitorId;
@@ -896,6 +906,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       userLocation, // NEW: User-provided location { city, state, zip }
       userAge, // NEW: User-provided age range (e.g., "18-24", "25-34")
       userGender, // NEW: User-provided gender (Male, Female, Non-binary, etc.)
+      visitorId, // NEW: Fallback visitor ID from localStorage when cookies don't work
       // ipAddress ignored for privacy
     } = req.body || {};
 
@@ -914,14 +925,15 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     const ua = req.headers['user-agent'] || '';
     const parsed = parseUserAgent(ua);
 
-    // Pass userLocation, userAge, and userGender to writeScan if provided
+    // Pass userLocation, userAge, userGender, and visitorId to writeScan if provided
     console.log('📊 ANALYTICS: track-scan called for QR:', qrCodeId, {
       hasUserLocation: !!userLocation,
       hasUserAge: !!userAge,
       hasUserGender: !!userGender,
+      hasVisitorId: !!visitorId,
       userAgent: req.headers['user-agent']?.substring(0, 50)
     });
-    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender);
+    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender, visitorId);
 
     console.log('📊 ANALYTICS: track-scan result:', {
       inserted: result.inserted,
