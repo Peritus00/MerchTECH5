@@ -722,11 +722,32 @@ function getOrSetVisitorId(req, res) {
   const cookieHeader = req.headers.cookie || '';
   const match = cookieHeader.match(/(?:^|;\s*)qr_vid=([^;]+)/);
   let visitorId = match ? match[1] : null;
+  
   if (!visitorId) {
     visitorId = uuidv4();
-    // Set cookie for 180 days, lax; do not mark secure to allow http local dev; HttpOnly true
-    res.setHeader('Set-Cookie', `qr_vid=${visitorId}; Max-Age=${60 * 60 * 24 * 180}; Path=/; SameSite=Lax; HttpOnly`);
+    // Set cookie for 180 days
+    // SameSite=Lax allows cookies in cross-site GET requests (like QR redirects)
+    // HttpOnly prevents JavaScript access (security)
+    // Secure should be true in production but we allow http for local dev
+    const isProduction = process.env.NODE_ENV === 'production';
+    const origin = req.headers.origin;
+    
+    // For cross-origin requests, SameSite=None requires Secure
+    const sameSite = origin && !origin.includes('localhost') && isProduction ? 'SameSite=None' : 'SameSite=Lax';
+    const secureFlag = sameSite === 'SameSite=None' ? '; Secure' : '';
+    
+    res.setHeader('Set-Cookie', `qr_vid=${visitorId}; Max-Age=${60 * 60 * 24 * 180}; Path=/; ${sameSite}; HttpOnly${secureFlag}`);
+    
+    console.log('🍪 COOKIE: Setting new visitor ID cookie:', {
+      visitorId: visitorId.substring(0, 8) + '...',
+      origin: origin || 'no origin',
+      sameSite,
+      secure: secureFlag.includes('Secure')
+    });
+  } else {
+    console.log('🍪 COOKIE: Using existing visitor ID:', visitorId.substring(0, 8) + '...');
   }
+  
   return visitorId;
 }
 
