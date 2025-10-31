@@ -876,3 +876,21 @@ export const slideshowChatAPI = {
 
 // Main chat API (alias for playlist chat for backward compatibility)
 export const chatAPI = playlistChatAPI;
+
+// Admin API
+export const adminAPI = {
+  async searchUsers(query: string) {
+    const response = await api.get(`/admin/users/search?q=${encodeURIComponent(query)}`);
+    return response.data;
+  },
+
+  async getUserScans(userId: number) {
+    const response = await api.get(`/admin/users/${userId}/scans`);
+    return response.data;
+  },
+
+  async resetUserScans(userId: number) {
+    const response = await api.delete(`/admin/users/${userId}/scans`);
+    return response.data;
+  },
+};

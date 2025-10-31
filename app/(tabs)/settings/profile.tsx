@@ -8,6 +8,7 @@ import {
   ScrollView,
   Switch,
   Modal,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,6 +16,16 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
+import { adminAPI } from '@/services/api';
+import { MaterialIcons } from '@expo/vector-icons';
+
+interface SearchUser {
+  id: number;
+  email: string;
+  username: string;
+  createdAt: string;
+  totalScans: number;
+}
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -30,6 +41,17 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [pushNotificationLoading, setPushNotificationLoading] = useState(false);
+
+  // Admin section state
+  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel' || (user as any).isAdmin);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SearchUser | null>(null);
+  const [userScanDetails, setUserScanDetails] = useState<any>(null);
+  const [loadingScans, setLoadingScans] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resettingScans, setResettingScans] = useState(false);
 
   const handleSave = async () => {
     setLoading(true);
@@ -136,6 +158,67 @@ export default function ProfileScreen() {
     }
   };
 
+  // Admin functions
+  const handleSearchUsers = async () => {
+    if (!searchQuery.trim()) {
+      Alert.alert('Error', 'Please enter a search term');
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const results = await adminAPI.searchUsers(searchQuery.trim());
+      setSearchResults(results);
+      if (results.length === 0) {
+        Alert.alert('No Results', 'No users found matching your search');
+      }
+    } catch (error: any) {
+      console.error('Error searching users:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to search users');
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleViewUserScans = async (userId: number) => {
+    setLoadingScans(true);
+    try {
+      const details = await adminAPI.getUserScans(userId);
+      setUserScanDetails(details);
+      setSelectedUser(searchResults.find(u => u.id === userId) || null);
+    } catch (error: any) {
+      console.error('Error fetching user scan details:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to fetch scan details');
+    } finally {
+      setLoadingScans(false);
+    }
+  };
+
+  const handleResetScans = async () => {
+    if (!selectedUser) return;
+
+    setResettingScans(true);
+    try {
+      const result = await adminAPI.resetUserScans(selectedUser.id);
+      Alert.alert(
+        'Success',
+        `Reset ${result.deletedScans} scan(s) for ${result.user.email}`
+      );
+      setShowResetModal(false);
+      setUserScanDetails(null);
+      setSelectedUser(null);
+      // Refresh search results
+      if (searchQuery.trim()) {
+        await handleSearchUsers();
+      }
+    } catch (error: any) {
+      console.error('Error resetting scans:', error);
+      Alert.alert('Error', error.response?.data?.error || 'Failed to reset scan counts');
+    } finally {
+      setResettingScans(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <ThemedView style={styles.content}>
@@ -238,6 +321,123 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* Admin Section */}
+        {isAdmin && (
+          <View style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Admin Tools
+            </ThemedText>
+            
+            {/* User Search */}
+            <View style={styles.inputGroup}>
+              <ThemedText style={styles.label}>Search Users</ThemedText>
+              <View style={styles.searchContainer}>
+                <TextInput
+                  style={styles.searchInput}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search by email or username"
+                  placeholderTextColor="#999"
+                  onSubmitEditing={handleSearchUsers}
+                />
+                <TouchableOpacity
+                  style={styles.searchButton}
+                  onPress={handleSearchUsers}
+                  disabled={searchLoading}
+                >
+                  {searchLoading ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <MaterialIcons name="search" size={20} color="#fff" />
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Search Results */}
+            {searchResults.length > 0 && (
+              <View style={styles.resultsContainer}>
+                <ThemedText style={styles.resultsTitle}>
+                  Search Results ({searchResults.length})
+                </ThemedText>
+                {searchResults.map((result) => (
+                  <View key={result.id} style={styles.resultCard}>
+                    <View style={styles.resultInfo}>
+                      <ThemedText style={styles.resultEmail}>{result.email}</ThemedText>
+                      {result.username && (
+                        <ThemedText style={styles.resultUsername}>@{result.username}</ThemedText>
+                      )}
+                      <ThemedText style={styles.resultScans}>
+                        Total Scans: {result.totalScans}
+                      </ThemedText>
+                    </View>
+                    <View style={styles.resultActions}>
+                      <TouchableOpacity
+                        style={styles.viewButton}
+                        onPress={() => handleViewUserScans(result.id)}
+                        disabled={loadingScans}
+                      >
+                        <MaterialIcons name="visibility" size={18} color="#007BFF" />
+                        <ThemedText style={styles.viewButtonText}>View</ThemedText>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.resetButton}
+                        onPress={() => {
+                          setSelectedUser(result);
+                          setShowResetModal(true);
+                        }}
+                      >
+                        <MaterialIcons name="refresh" size={18} color="#d9534f" />
+                        <ThemedText style={styles.resetButtonText}>Reset</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {/* User Scan Details */}
+            {userScanDetails && selectedUser && (
+              <View style={styles.scanDetailsContainer}>
+                <View style={styles.scanDetailsHeader}>
+                  <ThemedText type="subtitle" style={styles.scanDetailsTitle}>
+                    Scan Details: {selectedUser.email}
+                  </ThemedText>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setUserScanDetails(null);
+                      setSelectedUser(null);
+                    }}
+                  >
+                    <MaterialIcons name="close" size={24} color="#666" />
+                  </TouchableOpacity>
+                </View>
+                
+                <View style={styles.scanStats}>
+                  <ThemedText style={styles.scanStatLabel}>Total Scans:</ThemedText>
+                  <ThemedText style={styles.scanStatValue}>
+                    {userScanDetails.totalScans}
+                  </ThemedText>
+                </View>
+
+                {userScanDetails.qrCodeBreakdown && userScanDetails.qrCodeBreakdown.length > 0 && (
+                  <View style={styles.qrBreakdown}>
+                    <ThemedText style={styles.breakdownTitle}>By QR Code:</ThemedText>
+                    {userScanDetails.qrCodeBreakdown.map((qr: any) => (
+                      <View key={qr.qrCodeId} style={styles.qrBreakdownItem}>
+                        <ThemedText style={styles.qrBreakdownName}>{qr.qrCodeName}</ThemedText>
+                        <ThemedText style={styles.qrBreakdownCount}>
+                          {qr.scanCount} scan{qr.scanCount !== 1 ? 's' : ''}
+                        </ThemedText>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         <View style={styles.footer}>
           <ThemedText style={styles.footerText}>
             Member since {new Date(user?.createdAt || '').toLocaleDateString()}
@@ -277,6 +477,48 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Reset Scans Confirmation Modal */}
+      {isAdmin && (
+        <Modal
+          visible={showResetModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowResetModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <ThemedText style={styles.modalTitle}>Reset Scan Counts</ThemedText>
+              <ThemedText style={styles.modalMessage}>
+                Are you sure you want to reset all scan counts for {selectedUser?.email}?
+                This will delete {selectedUser?.totalScans || 0} scan record{selectedUser?.totalScans !== 1 ? 's' : ''} and cannot be undone.
+              </ThemedText>
+              
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setShowResetModal(false)}
+                  disabled={resettingScans}
+                >
+                  <ThemedText style={styles.cancelButtonText}>Cancel</ThemedText>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.confirmButton]}
+                  onPress={handleResetScans}
+                  disabled={resettingScans}
+                >
+                  {resettingScans ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <ThemedText style={styles.confirmButtonText}>Reset</ThemedText>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScrollView>
   );
 }
@@ -449,5 +691,163 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
   },
-
+  // Admin section styles
+  searchContainer: {
+    flexDirection: 'row',
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    color: '#333',
+    marginRight: 8,
+  },
+  searchButton: {
+    backgroundColor: '#007BFF',
+    borderRadius: 8,
+    padding: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 50,
+  },
+  resultsContainer: {
+    marginTop: 16,
+  },
+  resultsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 12,
+    color: '#333',
+  },
+  resultCard: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  resultInfo: {
+    marginBottom: 8,
+  },
+  resultEmail: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  resultUsername: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  resultScans: {
+    fontSize: 14,
+    color: '#007BFF',
+    fontWeight: '500',
+  },
+  resultActions: {
+    flexDirection: 'row',
+    marginTop: 8,
+  },
+  viewButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#007BFF',
+    marginRight: 8,
+  },
+  viewButtonText: {
+    color: '#007BFF',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d9534f',
+  },
+  resetButtonText: {
+    color: '#d9534f',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  scanDetailsContainer: {
+    marginTop: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  scanDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scanDetailsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  scanStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+    marginBottom: 12,
+  },
+  scanStatLabel: {
+    fontSize: 16,
+    color: '#666',
+  },
+  scanStatValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#007BFF',
+  },
+  qrBreakdown: {
+    marginTop: 8,
+  },
+  breakdownTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  qrBreakdownItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff',
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  qrBreakdownName: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
+  },
+  qrBreakdownCount: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
 }); 

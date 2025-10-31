@@ -464,6 +464,159 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
   }
 });
 
+// Search users with scan counts
+app.get('/api/admin/users/search', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q || typeof q !== 'string') {
+      return res.status(400).json({ error: 'Search query parameter "q" is required' });
+    }
+
+    const searchTerm = `%${q}%`;
+    const result = await pool.query(`
+      SELECT u.id, 
+             u.email, 
+             u.username,
+             u.created_at,
+             COALESCE(COUNT(s.id), 0)::integer as total_scans
+      FROM users u
+      LEFT JOIN qr_codes q ON q.user_id = u.id
+      LEFT JOIN qr_scans s ON s.qr_code_id = q.id
+      WHERE u.email ILIKE $1 OR u.username ILIKE $1
+      GROUP BY u.id, u.email, u.username, u.created_at
+      ORDER BY u.email
+      LIMIT 50
+    `, [searchTerm]);
+
+    // Transform to camelCase for frontend
+    const users = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      username: row.username,
+      createdAt: row.created_at,
+      totalScans: row.total_scans
+    }));
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error searching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get user scan details
+app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = parseInt(id, 10);
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Get user info
+    const userResult = await pool.query(
+      'SELECT id, email, username, created_at FROM users WHERE id = $1',
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Get total scan count
+    const scanCountResult = await pool.query(`
+      SELECT COUNT(*)::integer as total_scans
+      FROM qr_scans s
+      JOIN qr_codes q ON s.qr_code_id = q.id
+      WHERE q.user_id = $1
+    `, [userId]);
+
+    // Get breakdown by QR code
+    const qrBreakdownResult = await pool.query(`
+      SELECT q.id as qr_code_id,
+             q.name as qr_code_name,
+             COUNT(s.id)::integer as scan_count
+      FROM qr_codes q
+      LEFT JOIN qr_scans s ON s.qr_code_id = q.id
+      WHERE q.user_id = $1
+      GROUP BY q.id, q.name
+      ORDER BY scan_count DESC, q.name
+    `, [userId]);
+
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        createdAt: user.created_at
+      },
+      totalScans: scanCountResult.rows[0]?.total_scans || 0,
+      qrCodeBreakdown: qrBreakdownResult.rows.map(row => ({
+        qrCodeId: row.qr_code_id,
+        qrCodeName: row.qr_code_name,
+        scanCount: row.scan_count
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching user scan details:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset user scan counts
+app.delete('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = parseInt(id, 10);
+    
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: 'Invalid user ID' });
+    }
+
+    // Verify user exists
+    const userResult = await pool.query('SELECT id, email, username FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Get count of scans to be deleted for logging
+    const countResult = await pool.query(`
+      SELECT COUNT(*)::integer as scan_count
+      FROM qr_scans s
+      JOIN qr_codes q ON s.qr_code_id = q.id
+      WHERE q.user_id = $1
+    `, [userId]);
+
+    const scanCount = countResult.rows[0]?.scan_count || 0;
+
+    // Delete all scans for user's QR codes
+    const deleteResult = await pool.query(`
+      DELETE FROM qr_scans
+      WHERE qr_code_id IN (
+        SELECT id FROM qr_codes WHERE user_id = $1
+      )
+    `, [userId]);
+
+    console.log(`Admin ${req.user.userId} reset scan counts for user ${userId} (${userResult.rows[0].email}): ${scanCount} scans deleted`);
+
+    res.json({
+      message: 'Scan counts reset successfully',
+      deletedScans: scanCount,
+      user: {
+        id: userResult.rows[0].id,
+        email: userResult.rows[0].email,
+        username: userResult.rows[0].username
+      }
+    });
+  } catch (error) {
+    console.error('Error resetting user scan counts:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // --- Analytics helpers ---
 function getClientIp(req) {
   const candidates = [
