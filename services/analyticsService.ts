@@ -306,6 +306,24 @@ export const analyticsService = {
     }
   },
 
+  // Get stats for a specific media item
+  async getMediaStats(mediaId: number, userId?: number): Promise<any> {
+    try {
+      const params = userId ? `?userId=${userId}` : '';
+      const response = await api.get(`/analytics/media-stats/${mediaId}${params}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching media stats:', error);
+      return {
+        mediaId,
+        media: null,
+        totalPlays: 0,
+        uniquePlays: 0,
+        averageDuration: 0,
+      };
+    }
+  },
+
   // Get cart conversion statistics
   async getCartConversionStats(userId?: number): Promise<any> {
     try {

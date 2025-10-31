@@ -191,6 +191,9 @@ export default function AnalyticsScreen() {
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
   const [cartConversion, setCartConversion] = useState<any>(null);
+  const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
+  const [selectedMediaStats, setSelectedMediaStats] = useState<any>(null);
+  const [mediaList, setMediaList] = useState<any[]>([]);
 
   useEffect(() => {
     fetchAllAnalytics();
@@ -274,6 +277,12 @@ export default function AnalyticsScreen() {
           
           setPlayStats(plays);
           setCartConversion(conversion);
+          
+          // Extract media list from most played media for filtering
+          if (plays?.mostPlayedMedia) {
+            setMediaList(plays.mostPlayedMedia);
+          }
+          
           console.log('📊 ANALYTICS: Play stats and cart conversion loaded');
         } catch (error) {
           console.error('Error fetching user analytics:', error);
@@ -303,7 +312,25 @@ export default function AnalyticsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    setSelectedMediaId(null);
+    setSelectedMediaStats(null);
     fetchAllAnalytics();
+  };
+
+  const handleMediaItemSelect = async (mediaId: number) => {
+    setSelectedMediaId(mediaId);
+    try {
+      const stats = await analyticsService.getMediaStats(mediaId, user?.id);
+      setSelectedMediaStats(stats);
+    } catch (error) {
+      console.error('Error fetching media stats:', error);
+      setSelectedMediaStats(null);
+    }
+  };
+
+  const handleClearMediaSelection = () => {
+    setSelectedMediaId(null);
+    setSelectedMediaStats(null);
   };
 
   const formatHistoryChartData = () => {
@@ -398,17 +425,56 @@ export default function AnalyticsScreen() {
             />
           </View>
 
+          {/* Media Item Filter */}
+          {selectedMediaId && selectedMediaStats && (
+            <ChartContainer title={`Stats for: ${selectedMediaStats.media?.title || 'Media Item'}`}>
+              <TouchableOpacity 
+                onPress={handleClearMediaSelection}
+                style={styles.clearButton}
+              >
+                <MaterialIcons name="close" size={20} color="#6b7280" />
+                <Text style={styles.clearButtonText}>View All Media</Text>
+              </TouchableOpacity>
+              <View style={styles.mediaStatsContainer}>
+                <View style={styles.mediaStatItem}>
+                  <Text style={styles.mediaStatLabel}>Total Plays</Text>
+                  <Text style={styles.mediaStatValue}>{selectedMediaStats.totalPlays || 0}</Text>
+                </View>
+                <View style={styles.mediaStatItem}>
+                  <Text style={styles.mediaStatLabel}>Unique Plays</Text>
+                  <Text style={styles.mediaStatValue}>{selectedMediaStats.uniquePlays || 0}</Text>
+                </View>
+                <View style={styles.mediaStatItem}>
+                  <Text style={styles.mediaStatLabel}>Avg Duration</Text>
+                  <Text style={styles.mediaStatValue}>{selectedMediaStats.averageDuration || 0}s</Text>
+                </View>
+              </View>
+            </ChartContainer>
+          )}
+
           {/* Most Played Media */}
           {playStats.mostPlayedMedia && playStats.mostPlayedMedia.length > 0 && (
             <ChartContainer title="Most Played Media">
-              {playStats.mostPlayedMedia.slice(0, 5).map((item: any, index: number) => (
-                <View key={item.id} style={styles.listItem}>
+              {playStats.mostPlayedMedia.slice(0, 10).map((item: any, index: number) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[
+                    styles.listItem,
+                    selectedMediaId === item.id && styles.selectedListItem
+                  ]}
+                  onPress={() => handleMediaItemSelect(item.id)}
+                >
                   <View style={styles.listItemLeft}>
                     <Text style={styles.listItemRank}>{index + 1}</Text>
-                    <Text style={styles.listItemName}>{item.title}</Text>
+                    <Text style={styles.listItemName}>{item.title || 'Untitled'}</Text>
                   </View>
-                  <Text style={styles.listItemValue}>{item.total_plays} plays</Text>
-                </View>
+                  <View style={styles.listItemRight}>
+                    <Text style={styles.listItemValue}>{item.total_plays || 0} plays</Text>
+                    {selectedMediaId === item.id && (
+                      <MaterialIcons name="check-circle" size={20} color="#3b82f6" style={{ marginLeft: 8 }} />
+                    )}
+                  </View>
+                </TouchableOpacity>
               ))}
             </ChartContainer>
           )}
@@ -1239,11 +1305,20 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
+  selectedListItem: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+  },
   listItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     gap: 12,
+  },
+  listItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   listItemRank: {
     width: 24,
@@ -1266,6 +1341,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#6b7280',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    marginBottom: 16,
+    gap: 6,
+  },
+  clearButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+  },
+  mediaStatsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 16,
+    gap: 16,
+  },
+  mediaStatItem: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 8,
+    padding: 16,
+  },
+  mediaStatLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b7280',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  mediaStatValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1f2937',
+    textAlign: 'center',
   },
   subTabContainer: {
     flexDirection: 'row',

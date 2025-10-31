@@ -221,6 +221,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     minHeight: 34, // for 2 lines
+    color: '#000000', // Solid black color
+    opacity: 1, // Ensure fully opaque, not transparent
   },
   price: {
     fontSize: 16,

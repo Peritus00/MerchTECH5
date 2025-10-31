@@ -1702,24 +1702,48 @@ app.get('/api/analytics/play-stats', async (req, res) => {
       params.push(userId);
     }
 
-    // Get media stats
-    const mediaStats = await pool.query(
-      `SELECT 
-        COALESCE(SUM(m.total_plays), 0) as total_plays,
-        COALESCE(SUM(m.unique_plays), 0) as unique_plays,
-        COALESCE(AVG(mp.play_duration), 0) as avg_duration
-       FROM media m
-       LEFT JOIN media_plays mp ON m.id = mp.media_id
-       ${mediaWhere}`,
-      params
-    );
+    // Get total media plays - count from media_plays table directly
+    const totalPlaysQuery = userId 
+      ? `SELECT COUNT(*) as total_plays
+         FROM media_plays mp
+         JOIN media m ON mp.media_id = m.id
+         WHERE m.user_id = $1`
+      : `SELECT COUNT(*) as total_plays
+         FROM media_plays mp`;
+    
+    const mediaTotalStats = await pool.query(totalPlaysQuery, userId ? [userId] : []);
+
+    // Get unique plays (only >= 30 seconds) - distinct (media_id, session/user) combinations
+    // This counts each unique listener per song as one unique play
+    // Using concatenation to create a unique key for distinct counting
+    const uniquePlaysQuery = userId
+      ? `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
+         FROM media_plays mp
+         JOIN media m ON mp.media_id = m.id
+         WHERE mp.play_duration >= 30 AND m.user_id = $1`
+      : `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
+         FROM media_plays mp
+         WHERE mp.play_duration >= 30`;
+    
+    const uniquePlaysStats = await pool.query(uniquePlaysQuery, userId ? [userId] : []);
+
+    // Get average duration
+    const avgDurationQuery = userId
+      ? `SELECT COALESCE(AVG(mp.play_duration), 0) as avg_duration
+         FROM media_plays mp
+         JOIN media m ON mp.media_id = m.id
+         WHERE m.user_id = $1`
+      : `SELECT COALESCE(AVG(mp.play_duration), 0) as avg_duration
+         FROM media_plays mp`;
+    
+    const avgDurationStats = await pool.query(avgDurationQuery, userId ? [userId] : []);
 
     // Get playlist stats
     const playlistStats = await pool.query(
       `SELECT 
         COALESCE(SUM(p.total_plays), 0) as total_plays,
         COALESCE(SUM(p.unique_plays), 0) as unique_plays,
-        COALESCE(SUM(p.times_created), 0) as times_created
+        COUNT(*) as times_created
        FROM playlists p
        ${playlistWhere}`,
       params
@@ -1730,27 +1754,33 @@ app.get('/api/analytics/play-stats', async (req, res) => {
       `SELECT 
         COALESCE(SUM(s.total_plays), 0) as total_plays,
         COALESCE(SUM(s.unique_plays), 0) as unique_plays,
-        COALESCE(SUM(s.times_created), 0) as times_created
+        COUNT(*) as times_created
        FROM slideshows s
        ${slideshowWhere}`,
       params
     );
 
-    // Get most played media
+    // Get most played media - use actual play counts from media_plays table
     const mostPlayed = await pool.query(
-      `SELECT m.id, m.title, m.total_plays, m.unique_plays
+      `SELECT 
+        m.id, 
+        m.title, 
+        COUNT(mp.id) as total_plays,
+        COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
        FROM media m
+       LEFT JOIN media_plays mp ON m.id = mp.media_id
        ${mediaWhere}
-       ORDER BY m.total_plays DESC
+       GROUP BY m.id, m.title
+       ORDER BY total_plays DESC
        LIMIT 10`,
       params
     );
 
     const result = {
       media: {
-        totalPlays: parseInt(mediaStats.rows[0]?.total_plays || 0),
-        uniquePlays: parseInt(mediaStats.rows[0]?.unique_plays || 0),
-        averageDuration: Math.round(parseFloat(mediaStats.rows[0]?.avg_duration || 0)),
+        totalPlays: parseInt(mediaTotalStats.rows[0]?.total_plays || 0),
+        uniquePlays: parseInt(uniquePlaysStats.rows[0]?.unique_plays || 0),
+        averageDuration: Math.round(parseFloat(avgDurationStats.rows[0]?.avg_duration || 0)),
       },
       playlists: {
         totalPlays: parseInt(playlistStats.rows[0]?.total_plays || 0),
@@ -1770,6 +1800,67 @@ app.get('/api/analytics/play-stats', async (req, res) => {
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching play stats:', error);
     res.status(500).json({ error: 'Failed to fetch play statistics' });
+  }
+});
+
+// Get stats for a specific media item
+app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
+  try {
+    const { mediaId } = req.params;
+    const { userId } = req.query;
+
+    console.log(`📊 ANALYTICS: Fetching stats for media ${mediaId}${userId ? ` for user ${userId}` : ''}`);
+
+    // Verify media belongs to user if userId is provided
+    if (userId) {
+      const mediaCheck = await pool.query(
+        'SELECT id FROM media WHERE id = $1 AND user_id = $2',
+        [mediaId, userId]
+      );
+      if (mediaCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Media not found or access denied' });
+      }
+    }
+
+    // Get total plays for this media item
+    const totalPlays = await pool.query(
+      'SELECT COUNT(*) as total_plays FROM media_plays WHERE media_id = $1',
+      [mediaId]
+    );
+
+    // Get unique plays for this media item (>= 30 seconds)
+    const uniquePlays = await pool.query(
+      `SELECT COUNT(DISTINCT COALESCE(user_id::text, session_id)) as unique_plays
+       FROM media_plays
+       WHERE media_id = $1 AND play_duration >= 30`,
+      [mediaId]
+    );
+
+    // Get average duration
+    const avgDuration = await pool.query(
+      'SELECT COALESCE(AVG(play_duration), 0) as avg_duration FROM media_plays WHERE media_id = $1',
+      [mediaId]
+    );
+
+    // Get media info
+    const mediaInfo = await pool.query(
+      'SELECT id, title, file_name, type FROM media WHERE id = $1',
+      [mediaId]
+    );
+
+    const result = {
+      mediaId: parseInt(mediaId),
+      media: mediaInfo.rows[0] || null,
+      totalPlays: parseInt(totalPlays.rows[0]?.total_plays || 0),
+      uniquePlays: parseInt(uniquePlays.rows[0]?.unique_plays || 0),
+      averageDuration: Math.round(parseFloat(avgDuration.rows[0]?.avg_duration || 0)),
+    };
+
+    console.log('📊 ANALYTICS: Media stats retrieved');
+    res.json(result);
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching media stats:', error);
+    res.status(500).json({ error: 'Failed to fetch media statistics' });
   }
 });
 
