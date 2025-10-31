@@ -4608,13 +4608,26 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
   try {
     console.log('📱 QR_CODES: Fetching QR codes for user:', req.user.userId);
     
-    // First try with scan count, fall back to simple query if qr_scans table doesn't exist
+    // First try with scan count (deduplicated to match analytics), fall back to simple query if qr_scans table doesn't exist
     let result;
     try {
+      // Use deduplication to match analytics approach (unique visitor per minute)
+      // This ensures consistency between QR code list and analytics dashboard
       result = await pool.query(
-        `SELECT qr.*, COUNT(qs.id) as scan_count
+        `WITH dedup_scans AS (
+          SELECT DISTINCT ON (
+            s.qr_code_id,
+            COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+            date_trunc('minute', s.scanned_at)
+          ) s.qr_code_id
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+          ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+        )
+        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
          FROM qr_codes qr
-         LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+         LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
          WHERE qr.user_id = $1 AND qr.is_active = true
          GROUP BY qr.id
          ORDER BY qr.created_at DESC`,
@@ -4708,10 +4721,21 @@ app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log('📱 QR_CODES: Fetching QR code:', id);
     
+    // Use deduplication to match analytics approach (unique visitor per minute)
     const result = await pool.query(
-      `SELECT qr.*, COUNT(qs.id) as scan_count
+      `WITH dedup_scans AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.qr_code_id
+        FROM qr_scans s
+        WHERE s.qr_code_id = $1
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )
+      SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
        FROM qr_codes qr
-       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
        WHERE qr.id = $1 AND qr.user_id = $2
        GROUP BY qr.id`,
       [id, req.user.userId]
@@ -4742,10 +4766,21 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log('📱 QR_CODES: Fetching QR code:', id);
     
+    // Use deduplication to match analytics approach (unique visitor per minute)
     const result = await pool.query(
-      `SELECT qr.*, COUNT(qs.id) as scan_count
+      `WITH dedup_scans AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.qr_code_id
+        FROM qr_scans s
+        WHERE s.qr_code_id = $1
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )
+      SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
        FROM qr_codes qr
-       LEFT JOIN qr_scans qs ON qr.id = qs.qr_code_id
+       LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
        WHERE qr.id = $1 AND qr.user_id = $2
        GROUP BY qr.id`,
       [id, req.user.userId]
