@@ -473,15 +473,26 @@ app.get('/api/admin/users/search', authenticateToken, isAdmin, async (req, res) 
     }
 
     const searchTerm = `%${q}%`;
+    // Use deduplication to match analytics approach (unique visitor per minute)
     const result = await pool.query(`
+      WITH dedup_scans AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.qr_code_id
+        FROM qr_scans s
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )
       SELECT u.id, 
              u.email, 
              u.username,
              u.created_at,
-             COALESCE(COUNT(s.id), 0)::integer as total_scans
+             COALESCE(COUNT(ds.qr_code_id), 0)::integer as total_scans
       FROM users u
       LEFT JOIN qr_codes q ON q.user_id = u.id
-      LEFT JOIN qr_scans s ON s.qr_code_id = q.id
+      LEFT JOIN dedup_scans ds ON ds.qr_code_id = q.id
       WHERE u.email ILIKE $1 OR u.username ILIKE $1
       GROUP BY u.id, u.email, u.username, u.created_at
       ORDER BY u.email
@@ -526,21 +537,41 @@ app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, re
 
     const user = userResult.rows[0];
 
-    // Get total scan count
+    // Get total scan count (deduplicated to match analytics approach)
     const scanCountResult = await pool.query(`
+      WITH dedup_scans AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.qr_code_id
+        FROM qr_scans s
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )
       SELECT COUNT(*)::integer as total_scans
-      FROM qr_scans s
-      JOIN qr_codes q ON s.qr_code_id = q.id
-      WHERE q.user_id = $1
+      FROM dedup_scans
     `, [userId]);
 
-    // Get breakdown by QR code
+    // Get breakdown by QR code (deduplicated to match analytics approach)
     const qrBreakdownResult = await pool.query(`
+      WITH dedup_scans AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.qr_code_id
+        FROM qr_scans s
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )
       SELECT q.id as qr_code_id,
              q.name as qr_code_name,
-             COUNT(s.id)::integer as scan_count
+             COALESCE(COUNT(ds.qr_code_id), 0)::integer as scan_count
       FROM qr_codes q
-      LEFT JOIN qr_scans s ON s.qr_code_id = q.id
+      LEFT JOIN dedup_scans ds ON ds.qr_code_id = q.id
       WHERE q.user_id = $1
       GROUP BY q.id, q.name
       ORDER BY scan_count DESC, q.name
