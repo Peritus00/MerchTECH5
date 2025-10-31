@@ -111,11 +111,26 @@ export const analyticsService = {
       const { getOrCreateVisitorId } = await import('@/utils/visitorId');
       const visitorId = getOrCreateVisitorId();
       
-      await api.post('/analytics/track-scan', {
+      const response = await api.post('/analytics/track-scan', {
         qrCodeId,
         visitorId, // Include visitor ID as fallback when cookies don't work
         ...scanData,
       });
+      
+      // Store the visitor ID returned from server (in case server generated a new one)
+      if (response.data?.visitorId && typeof window !== 'undefined') {
+        try {
+          const { getOrCreateVisitorId: getVisitorId } = await import('@/utils/visitorId');
+          const currentId = getVisitorId();
+          // Only update if server returned a different ID (shouldn't happen, but be safe)
+          if (response.data.visitorId !== currentId) {
+            localStorage.setItem('qr_visitor_id', response.data.visitorId);
+            console.log('🍪 VISITOR_ID: Updated from server response');
+          }
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }
     } catch (error) {
       console.error('Error tracking QR scan:', error);
     }

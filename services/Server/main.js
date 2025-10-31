@@ -935,17 +935,22 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     });
     const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender, visitorId);
 
+    // Get the visitor ID that was used (for frontend to store)
+    const finalVisitorId = getOrSetVisitorId(req, res, visitorId);
+    
     console.log('📊 ANALYTICS: track-scan result:', {
       inserted: result.inserted,
       deduped: result.deduped,
       fallback: result.fallback,
-      locationSource: result.locationSource
+      locationSource: result.locationSource,
+      visitorId: finalVisitorId?.substring(0, 8) + '...'
     });
 
     res.json({ 
       success: true, 
       locationSource: result.locationSource,
-      deduped: result.deduped || false 
+      deduped: result.deduped || false,
+      visitorId: finalVisitorId // Return visitor ID so frontend can store it
     });
   } catch (error) {
     console.error('📊 ANALYTICS: track-scan failed:', error);
