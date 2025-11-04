@@ -175,7 +175,10 @@ export const analyticsService = {
     mediaId: number,
     playDuration: number,
     sessionId: string,
-    userId?: number
+    userId?: number,
+    ageRange?: string,
+    location?: { city: string; state: string; zip?: string },
+    locationSource?: string
   ): Promise<void> {
     try {
       if (playDuration < 30) {
@@ -188,6 +191,9 @@ export const analyticsService = {
         playDuration,
         sessionId,
         userId,
+        userAge: ageRange,
+        userLocation: location,
+        locationSource,
       });
       console.log(`📊 ANALYTICS: Tracked media play - ID: ${mediaId}, Duration: ${playDuration}s`);
     } catch (error) {
@@ -200,7 +206,10 @@ export const analyticsService = {
     playlistId: number,
     playDuration: number,
     sessionId: string,
-    userId?: number
+    userId?: number,
+    ageRange?: string,
+    location?: { city: string; state: string; zip?: string },
+    locationSource?: string
   ): Promise<void> {
     try {
       if (playDuration < 30) {
@@ -213,6 +222,9 @@ export const analyticsService = {
         playDuration,
         sessionId,
         userId,
+        userAge: ageRange,
+        userLocation: location,
+        locationSource,
       });
       console.log(`📊 ANALYTICS: Tracked playlist play - ID: ${playlistId}, Duration: ${playDuration}s`);
     } catch (error) {
@@ -225,7 +237,10 @@ export const analyticsService = {
     slideshowId: number,
     playDuration: number,
     sessionId: string,
-    userId?: number
+    userId?: number,
+    ageRange?: string,
+    location?: { city: string; state: string; zip?: string },
+    locationSource?: string
   ): Promise<void> {
     try {
       if (playDuration < 30) {
@@ -238,6 +253,9 @@ export const analyticsService = {
         playDuration,
         sessionId,
         userId,
+        userAge: ageRange,
+        userLocation: location,
+        locationSource,
       });
       console.log(`📊 ANALYTICS: Tracked slideshow play - ID: ${slideshowId}, Duration: ${playDuration}s`);
     } catch (error) {
@@ -338,6 +356,43 @@ export const analyticsService = {
         conversionRate: 0,
         totalRevenue: 0,
         averageOrderValue: 0,
+      };
+    }
+  },
+
+  // Get age demographics for media plays
+  async getMediaPlayAgeDemographics(userId?: number, uniqueOnly: boolean = false): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (uniqueOnly) params.set('uniqueOnly', 'true');
+      const response = await api.get(`/analytics/media-plays/age-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching media play age demographics:', error);
+      return {
+        success: false,
+        uniqueOnly,
+        ageRanges: [],
+      };
+    }
+  },
+
+  // Get location demographics for media plays
+  async getMediaPlayLocationDemographics(userId?: number, uniqueOnly: boolean = false): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (uniqueOnly) params.set('uniqueOnly', 'true');
+      const response = await api.get(`/analytics/media-plays/location-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching media play location demographics:', error);
+      return {
+        success: false,
+        uniqueOnly,
+        topCountries: [],
+        topCities: [],
       };
     }
   },

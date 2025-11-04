@@ -188,6 +188,12 @@ export default function AnalyticsScreen() {
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'geography' | 'behavior' | 'demographics'>('overview');
   const [demographicsSubTab, setDemographicsSubTab] = useState<'age' | 'gender'>('age');
   
+  // Media play demographics toggle states
+  const [ageUniqueOnly, setAgeUniqueOnly] = useState(false);
+  const [locationUniqueOnly, setLocationUniqueOnly] = useState(false);
+  const [mediaPlayAgeData, setMediaPlayAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
+  const [mediaPlayLocationData, setMediaPlayLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
+  
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
   const [cartConversion, setCartConversion] = useState<any>(null);
@@ -198,6 +204,51 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     fetchAllAnalytics();
   }, [selectedTimeRange]);
+
+  // Fetch media play age demographics when toggle changes (always fetch for media plays)
+  useEffect(() => {
+    if (activeTab === 'demographics' && demographicsSubTab === 'age') {
+      fetchMediaPlayAgeDemographics();
+    }
+  }, [ageUniqueOnly, activeTab, demographicsSubTab, user]);
+
+  // Fetch media play location demographics when toggle changes (always fetch for media plays)
+  useEffect(() => {
+    if (activeTab === 'geography') {
+      fetchMediaPlayLocationDemographics();
+    }
+  }, [locationUniqueOnly, activeTab, user]);
+
+  const fetchMediaPlayAgeDemographics = async () => {
+    try {
+      const data = await analyticsService.getMediaPlayAgeDemographics(user?.id, ageUniqueOnly);
+      if (data.success) {
+        setMediaPlayAgeData(data.ageRanges || []);
+      } else {
+        setMediaPlayAgeData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching media play age demographics:', error);
+      setMediaPlayAgeData([]);
+    }
+  };
+
+  const fetchMediaPlayLocationDemographics = async () => {
+    try {
+      const data = await analyticsService.getMediaPlayLocationDemographics(user?.id, locationUniqueOnly);
+      if (data.success) {
+        setMediaPlayLocationData({
+          topCountries: data.topCountries || [],
+          topCities: data.topCities || [],
+        });
+      } else {
+        setMediaPlayLocationData(null);
+      }
+    } catch (error) {
+      console.error('Error fetching media play location demographics:', error);
+      setMediaPlayLocationData(null);
+    }
+  };
 
   const fetchAllAnalytics = async () => {
     try {
@@ -636,69 +687,120 @@ export default function AnalyticsScreen() {
     </>
   );
 
-  const renderGeographyTab = () => (
-    <>
-      {/* Top Countries */}
-      {geoData?.data && geoData.data.length > 0 && (
-        <ChartContainer title="Geographic Distribution">
-          <View style={styles.geoList}>
-            {geoData.data.slice(0, 10).map((country, index) => (
-              <View key={country.country} style={styles.geoItem}>
-                <View style={styles.geoRank}>
-                  <Text style={styles.geoRankText}>{index + 1}</Text>
-                </View>
-                <Text style={styles.geoCountry}>{country.location_name}</Text>
-                <Text style={styles.geoCount}>{country.count} scans</Text>
-              </View>
-            ))}
-          </View>
-        </ChartContainer>
-      )}
+  const renderGeographyTab = () => {
+    const displayCountries = mediaPlayLocationData 
+      ? mediaPlayLocationData.topCountries 
+      : [];
+    const displayCities = mediaPlayLocationData
+      ? mediaPlayLocationData.topCities.map(c => ({
+          key: `${c.city}|${c.region}|${c.country}`,
+          label: `${c.city}${c.region ? ', ' + c.region : ''}${c.country ? ' • ' + c.country : ''}`,
+          count: c.count,
+        }))
+      : [];
 
-      {/* Top Cities */}
-      {cityList.length > 0 && (
-        <ChartContainer title="Top Cities by Scans">
-          <View style={styles.geoList}>
-            {cityList.slice(0, 10).map((item, index) => (
-              <View key={item.key} style={styles.geoItem}>
-                <View style={styles.geoRank}>
-                  <Text style={styles.geoRankText}>{index + 1}</Text>
-                </View>
-                <Text style={styles.geoCountry}>{item.label}</Text>
-                <Text style={styles.geoCount}>{item.count} scans</Text>
-              </View>
-            ))}
+    return (
+      <>
+        {/* Toggle for Media Plays */}
+        <View style={styles.toggleContainer}>
+          <Text style={styles.toggleLabel}>View Media Play Location Data:</Text>
+          <View style={styles.toggleButtons}>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                locationUniqueOnly && styles.toggleButtonActive,
+              ]}
+              onPress={() => setLocationUniqueOnly(true)}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                locationUniqueOnly && styles.toggleButtonTextActive,
+              ]}>
+                Unique Plays
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.toggleButton,
+                !locationUniqueOnly && styles.toggleButtonActive,
+              ]}
+              onPress={() => setLocationUniqueOnly(false)}
+            >
+              <Text style={[
+                styles.toggleButtonText,
+                !locationUniqueOnly && styles.toggleButtonTextActive,
+              ]}>
+                Total Plays
+              </Text>
+            </TouchableOpacity>
           </View>
-        </ChartContainer>
-      )}
+        </View>
 
-      {/* Geographic Chart */}
-      {geoData?.data && geoData.data.length > 0 && (
-        <ChartContainer title="Top Countries by Scans">
-          <BarChart
-            data={{
-              labels: geoData.data.slice(0, 5).map(item => item.country.substring(0, 3)),
-              datasets: [{
-                data: geoData.data.slice(0, 5).map(item => item.count),
-              }],
-            }}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-              barPercentage: 0.7,
-            }}
-            style={styles.chart}
-          />
-        </ChartContainer>
-      )}
-    </>
-  );
+        {/* Top Countries */}
+        {displayCountries.length > 0 && (
+          <ChartContainer 
+            title="Geographic Distribution" 
+            subtitle={`Locations of media consumers (>=30s) - ${locationUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+          >
+            <View style={styles.geoList}>
+              {displayCountries.slice(0, 10).map((country, index) => (
+                <View key={country.country || index} style={styles.geoItem}>
+                  <View style={styles.geoRank}>
+                    <Text style={styles.geoRankText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.geoCountry}>{country.location_name || country.country}</Text>
+                  <Text style={styles.geoCount}>{country.count} plays</Text>
+                </View>
+              ))}
+            </View>
+          </ChartContainer>
+        )}
+
+        {/* Top Cities */}
+        {displayCities.length > 0 && (
+          <ChartContainer title={`Top Cities by Plays - ${locationUniqueOnly ? 'Unique' : 'Total'}`}>
+            <View style={styles.geoList}>
+              {displayCities.slice(0, 10).map((item, index) => (
+                <View key={item.key || index} style={styles.geoItem}>
+                  <View style={styles.geoRank}>
+                    <Text style={styles.geoRankText}>{index + 1}</Text>
+                  </View>
+                  <Text style={styles.geoCountry}>{item.label}</Text>
+                  <Text style={styles.geoCount}>{item.count} plays</Text>
+                </View>
+              ))}
+            </View>
+          </ChartContainer>
+        )}
+
+        {/* Geographic Chart */}
+        {displayCountries.length > 0 && (
+          <ChartContainer title={`Top Countries by Plays - ${locationUniqueOnly ? 'Unique' : 'Total'}`}>
+            <BarChart
+              data={{
+                labels: displayCountries.slice(0, 5).map(item => (item.country || item.location_name || '').substring(0, 3)),
+                datasets: [{
+                  data: displayCountries.slice(0, 5).map(item => item.count),
+                }],
+              }}
+              width={screenWidth - 64}
+              height={220}
+              chartConfig={{
+                backgroundColor: '#ffffff',
+                backgroundGradientFrom: '#ffffff',
+                backgroundGradientTo: '#ffffff',
+                decimalPlaces: 0,
+                color: (opacity = 1) => `rgba(16, 185, 129, ${opacity})`,
+                labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
+                barPercentage: 0.7,
+              }}
+              style={styles.chart}
+            />
+          </ChartContainer>
+        )}
+      </>
+    );
+  };
 
   const renderBehaviorTab = () => (
     <>
@@ -808,13 +910,51 @@ export default function AnalyticsScreen() {
       {/* Age Demographics */}
       {demographicsSubTab === 'age' && (
         <>
-          {ageData.length > 0 && (
-            <ChartContainer title="Age Distribution" subtitle="Age ranges of QR code scanners">
+          {/* Toggle for Media Plays */}
+          <View style={styles.toggleContainer}>
+            <Text style={styles.toggleLabel}>View Media Play Age Data:</Text>
+            <View style={styles.toggleButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  ageUniqueOnly && styles.toggleButtonActive,
+                ]}
+                onPress={() => setAgeUniqueOnly(true)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  ageUniqueOnly && styles.toggleButtonTextActive,
+                ]}>
+                  Unique Plays
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  !ageUniqueOnly && styles.toggleButtonActive,
+                ]}
+                onPress={() => setAgeUniqueOnly(false)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  !ageUniqueOnly && styles.toggleButtonTextActive,
+                ]}>
+                  Total Plays
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {mediaPlayAgeData.length > 0 && (
+            <ChartContainer 
+              title="Age Distribution" 
+              subtitle={`Age ranges of media consumers (>=30s) - ${ageUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+            >
               <BarChart
                 data={{
-                  labels: ageData.map(d => d.ageRange),
+                  labels: mediaPlayAgeData.map(d => d.ageRange),
                   datasets: [{
-                    data: ageData.map(d => d.count),
+                    data: mediaPlayAgeData.map(d => d.count),
                   }],
                 }}
                 width={screenWidth - 48}
@@ -840,8 +980,8 @@ export default function AnalyticsScreen() {
               
               {/* Age List */}
               <View style={styles.geoList}>
-                {ageData.map((age, index) => {
-                  const total = ageData.reduce((sum, item) => sum + item.count, 0);
+                {mediaPlayAgeData.map((age, index) => {
+                  const total = mediaPlayAgeData.reduce((sum, item) => sum + item.count, 0);
                   const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0;
                   
                   return (
@@ -1428,5 +1568,49 @@ const styles = StyleSheet.create({
   },
   activeSubTabText: {
     color: '#8b5cf6',
+  },
+  toggleContainer: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  toggleButtons: {
+    flexDirection: 'row',
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 2,
+    gap: 4,
+  },
+  toggleButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleButtonActive: {
+    backgroundColor: '#3b82f6',
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  toggleButtonTextActive: {
+    color: '#fff',
   },
 });

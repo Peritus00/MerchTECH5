@@ -40,6 +40,8 @@ import { env } from '@/config/environment';
 import { useRouter } from 'expo-router';
 import { analyticsService } from '../services/analyticsService';
 import { getSessionId } from '../utils/sessionTracking';
+import { getDemographicsForTracking } from '../utils/demographicsHelper';
+import { getAgeForTracking } from '../utils/ageStorage';
 
 const { width } = Dimensions.get('window');
 
@@ -119,13 +121,52 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         try {
           const sessionId = await getSessionId();
           
+          // Get demographics for tracking
+          let ageRange: string | undefined;
+          let location: { city: string; state: string; zip?: string } | undefined;
+          let locationSource: string | undefined;
+
+          // Get age data
+          if (user) {
+            // For authenticated users, get from demographics helper
+            const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
+            ageRange = demographics?.ageRange;
+          } else {
+            // For anonymous users, get from localStorage
+            const age = getAgeForTracking();
+            ageRange = age?.ageRange;
+          }
+
+          // Get location data (if available in localStorage)
+          if (typeof window !== 'undefined') {
+            try {
+              const locationStr = localStorage.getItem('user_location_preference');
+              if (locationStr) {
+                const locationData = JSON.parse(locationStr);
+                if (locationData.city && locationData.state) {
+                  location = {
+                    city: locationData.city,
+                    state: locationData.state,
+                    zip: locationData.zip,
+                  };
+                  locationSource = 'user';
+                }
+              }
+            } catch (e) {
+              // Location not available, will use null
+            }
+          }
+          
           // Track individual media play
           if (mediaItem.id) {
             await analyticsService.trackMediaPlay(
               mediaItem.id,
               playDurationRef.current,
               sessionId,
-              user?.id
+              user?.id,
+              ageRange,
+              location,
+              locationSource
             );
           }
 
@@ -135,18 +176,24 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               playlist.id,
               playDurationRef.current,
               sessionId,
-              user?.id
+              user?.id,
+              ageRange,
+              location,
+              locationSource
             );
           } else if (slideshow?.id) {
             await analyticsService.trackSlideshowPlay(
               slideshow.id,
               playDurationRef.current,
               sessionId,
-              user?.id
+              user?.id,
+              ageRange,
+              location,
+              locationSource
             );
           }
 
-          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s`);
+          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s, Age: ${ageRange || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
         } catch (error) {
           console.error('Error tracking play:', error);
         }
