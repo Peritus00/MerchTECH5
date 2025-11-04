@@ -2331,14 +2331,13 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
             FROM media_plays mp
             JOIN media m ON mp.media_id = m.id
             WHERE m.user_id = $1
-              AND mp.user_provided_age_range IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_age_range, 'Unknown') AS age_range,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_age_range
+          GROUP BY COALESCE(up.user_provided_age_range, 'Unknown')
           ORDER BY count DESC
         `;
         params = [userId];
@@ -2348,19 +2347,18 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
             SELECT DISTINCT ON (mp.media_id, mp.session_id)
               mp.id, mp.user_provided_age_range, mp.session_id
             FROM media_plays mp
-            WHERE mp.user_provided_age_range IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_age_range, 'Unknown') AS age_range,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_age_range
+          GROUP BY COALESCE(up.user_provided_age_range, 'Unknown')
           ORDER BY count DESC
         `;
       }
     } else {
-      // For total plays, count all plays
+      // For total plays, count all plays (including those without demographics)
       if (userId) {
         baseQuery = `
           SELECT 
@@ -2369,8 +2367,7 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
           FROM media_plays mp
           JOIN media m ON mp.media_id = m.id
           WHERE m.user_id = $1
-            AND mp.user_provided_age_range IS NOT NULL
-          GROUP BY mp.user_provided_age_range
+          GROUP BY COALESCE(mp.user_provided_age_range, 'Unknown')
           ORDER BY count DESC
         `;
         params = [userId];
@@ -2380,8 +2377,7 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
             COALESCE(mp.user_provided_age_range, 'Unknown') AS age_range,
             COUNT(*) AS count
           FROM media_plays mp
-          WHERE mp.user_provided_age_range IS NOT NULL
-          GROUP BY mp.user_provided_age_range
+          GROUP BY COALESCE(mp.user_provided_age_range, 'Unknown')
           ORDER BY count DESC
         `;
       }
@@ -2425,14 +2421,13 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             FROM media_plays mp
             JOIN media m ON mp.media_id = m.id
             WHERE m.user_id = $1
-              AND (mp.user_provided_city IS NOT NULL OR mp.user_provided_state IS NOT NULL)
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_state, 'Unknown') AS country,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_state
+          GROUP BY COALESCE(up.user_provided_state, 'Unknown')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2443,7 +2438,6 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             FROM media_plays mp
             JOIN media m ON mp.media_id = m.id
             WHERE m.user_id = $1
-              AND mp.user_provided_city IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
@@ -2451,7 +2445,7 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             COALESCE(up.user_provided_state, '') AS region,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_city, up.user_provided_state
+          GROUP BY COALESCE(up.user_provided_city, 'Unknown'), COALESCE(up.user_provided_state, '')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2462,14 +2456,13 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             SELECT DISTINCT ON (mp.media_id, mp.session_id)
               mp.id, mp.user_provided_city, mp.user_provided_state, mp.session_id
             FROM media_plays mp
-            WHERE (mp.user_provided_city IS NOT NULL OR mp.user_provided_state IS NOT NULL)
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_state, 'Unknown') AS country,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_state
+          GROUP BY COALESCE(up.user_provided_state, 'Unknown')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2478,7 +2471,6 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             SELECT DISTINCT ON (mp.media_id, mp.session_id)
               mp.id, mp.user_provided_city, mp.user_provided_state, mp.session_id
             FROM media_plays mp
-            WHERE mp.user_provided_city IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
@@ -2486,13 +2478,13 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             COALESCE(up.user_provided_state, '') AS region,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_city, up.user_provided_state
+          GROUP BY COALESCE(up.user_provided_city, 'Unknown'), COALESCE(up.user_provided_state, '')
           ORDER BY count DESC
           LIMIT 10
         `;
       }
     } else {
-      // For total plays, count all plays
+      // For total plays, count all plays (including those without location data)
       if (userId) {
         countriesQuery = `
           SELECT 
@@ -2501,8 +2493,7 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
           FROM media_plays mp
           JOIN media m ON mp.media_id = m.id
           WHERE m.user_id = $1
-            AND (mp.user_provided_city IS NOT NULL OR mp.user_provided_state IS NOT NULL)
-          GROUP BY mp.user_provided_state
+          GROUP BY COALESCE(mp.user_provided_state, 'Unknown')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2514,8 +2505,7 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
           FROM media_plays mp
           JOIN media m ON mp.media_id = m.id
           WHERE m.user_id = $1
-            AND mp.user_provided_city IS NOT NULL
-          GROUP BY mp.user_provided_city, mp.user_provided_state
+          GROUP BY COALESCE(mp.user_provided_city, 'Unknown'), COALESCE(mp.user_provided_state, '')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2526,8 +2516,7 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             COALESCE(mp.user_provided_state, 'Unknown') AS country,
             COUNT(*) AS count
           FROM media_plays mp
-          WHERE (mp.user_provided_city IS NOT NULL OR mp.user_provided_state IS NOT NULL)
-          GROUP BY mp.user_provided_state
+          GROUP BY COALESCE(mp.user_provided_state, 'Unknown')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2537,8 +2526,7 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
             COALESCE(mp.user_provided_state, '') AS region,
             COUNT(*) AS count
           FROM media_plays mp
-          WHERE mp.user_provided_city IS NOT NULL
-          GROUP BY mp.user_provided_city, mp.user_provided_state
+          GROUP BY COALESCE(mp.user_provided_city, 'Unknown'), COALESCE(mp.user_provided_state, '')
           ORDER BY count DESC
           LIMIT 10
         `;
@@ -2592,16 +2580,15 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
             FROM media_plays mp
             JOIN media m ON mp.media_id = m.id
             WHERE m.user_id = $1
-              AND mp.user_provided_gender IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_gender, 'Unknown') AS gender,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_gender
+          GROUP BY COALESCE(up.user_provided_gender, 'Unknown')
           ORDER BY 
-            CASE up.user_provided_gender
+            CASE COALESCE(up.user_provided_gender, 'Unknown')
               WHEN 'Male' THEN 1
               WHEN 'Female' THEN 2
               WHEN 'Non-binary' THEN 3
@@ -2617,16 +2604,15 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
             SELECT DISTINCT ON (mp.media_id, mp.session_id)
               mp.id, mp.user_provided_gender, mp.session_id
             FROM media_plays mp
-            WHERE mp.user_provided_gender IS NOT NULL
             ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
           )
           SELECT 
             COALESCE(up.user_provided_gender, 'Unknown') AS gender,
             COUNT(*) AS count
           FROM unique_plays up
-          GROUP BY up.user_provided_gender
+          GROUP BY COALESCE(up.user_provided_gender, 'Unknown')
           ORDER BY 
-            CASE up.user_provided_gender
+            CASE COALESCE(up.user_provided_gender, 'Unknown')
               WHEN 'Male' THEN 1
               WHEN 'Female' THEN 2
               WHEN 'Non-binary' THEN 3
@@ -2637,7 +2623,7 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
         `;
       }
     } else {
-      // For total plays, count all plays
+      // For total plays, count all plays (including those without demographics)
       if (userId) {
         baseQuery = `
           SELECT 
@@ -2646,10 +2632,9 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
           FROM media_plays mp
           JOIN media m ON mp.media_id = m.id
           WHERE m.user_id = $1
-            AND mp.user_provided_gender IS NOT NULL
-          GROUP BY mp.user_provided_gender
+          GROUP BY COALESCE(mp.user_provided_gender, 'Unknown')
           ORDER BY 
-            CASE mp.user_provided_gender
+            CASE COALESCE(mp.user_provided_gender, 'Unknown')
               WHEN 'Male' THEN 1
               WHEN 'Female' THEN 2
               WHEN 'Non-binary' THEN 3
@@ -2665,10 +2650,9 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
             COALESCE(mp.user_provided_gender, 'Unknown') AS gender,
             COUNT(*) AS count
           FROM media_plays mp
-          WHERE mp.user_provided_gender IS NOT NULL
-          GROUP BY mp.user_provided_gender
+          GROUP BY COALESCE(mp.user_provided_gender, 'Unknown')
           ORDER BY 
-            CASE mp.user_provided_gender
+            CASE COALESCE(mp.user_provided_gender, 'Unknown')
               WHEN 'Male' THEN 1
               WHEN 'Female' THEN 2
               WHEN 'Non-binary' THEN 3
