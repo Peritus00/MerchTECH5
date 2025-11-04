@@ -1764,7 +1764,7 @@ app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) =>
 // Track media play (>= 30 seconds)
 app.post('/api/analytics/track-media-play', async (req, res) => {
   try {
-    const { mediaId, playDuration, sessionId, userId, userAge, userLocation, locationSource } = req.body;
+    const { mediaId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
 
     if (!mediaId || !playDuration || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1788,7 +1788,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
       }
     }
 
-    console.log(`📊 ANALYTICS: Tracking media play - Media: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId}, Age: ${userAge || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
+    console.log(`📊 ANALYTICS: Tracking media play - Media: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId}, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
     // Check if this is a unique play (first play from this session)
     const existingPlay = await pool.query(
@@ -1799,8 +1799,8 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 
     // Insert play record with demographics
     await pool.query(
-      `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         mediaId, 
         userId || null, 
@@ -1808,6 +1808,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
         playDuration, 
         ipAddress,
         userAge || null,
+        userGender || null,
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
@@ -1839,7 +1840,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 // Track playlist play (>= 30 seconds)
 app.post('/api/analytics/track-playlist-play', async (req, res) => {
   try {
-    const { playlistId, playDuration, sessionId, userId, userAge, userLocation, locationSource } = req.body;
+    const { playlistId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
 
     if (!playlistId || !playDuration || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1863,7 +1864,7 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
       }
     }
 
-    console.log(`📊 ANALYTICS: Tracking playlist play - Playlist: ${playlistId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
+    console.log(`📊 ANALYTICS: Tracking playlist play - Playlist: ${playlistId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
     // Check if this is a unique play
     const existingPlay = await pool.query(
@@ -1874,8 +1875,8 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
 
     // Insert play record with demographics
     await pool.query(
-      `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         playlistId, 
         userId || null, 
@@ -1883,6 +1884,7 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
         playDuration, 
         ipAddress,
         userAge || null,
+        userGender || null,
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
@@ -1914,7 +1916,7 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
 // Track slideshow play (>= 30 seconds)
 app.post('/api/analytics/track-slideshow-play', async (req, res) => {
   try {
-    const { slideshowId, playDuration, sessionId, userId, userAge, userLocation, locationSource } = req.body;
+    const { slideshowId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
 
     if (!slideshowId || !playDuration || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -1938,7 +1940,7 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
       }
     }
 
-    console.log(`📊 ANALYTICS: Tracking slideshow play - Slideshow: ${slideshowId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
+    console.log(`📊 ANALYTICS: Tracking slideshow play - Slideshow: ${slideshowId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
     // Check if this is a unique play
     const existingPlay = await pool.query(
@@ -1949,8 +1951,8 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
 
     // Insert play record with demographics
     await pool.query(
-      `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         slideshowId, 
         userId || null, 
@@ -1958,6 +1960,7 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
         playDuration, 
         ipAddress,
         userAge || null,
+        userGender || null,
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
@@ -2565,6 +2568,131 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching location demographics:', error);
     res.status(500).json({ error: 'Failed to fetch location demographics' });
+  }
+});
+
+// Get gender demographics for media plays
+app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
+  try {
+    const { userId, uniqueOnly } = req.query;
+    const isUniqueOnly = uniqueOnly === 'true' || uniqueOnly === true;
+
+    console.log(`📊 ANALYTICS: Fetching gender demographics for media plays${userId ? ` for user ${userId}` : ''}, uniqueOnly: ${isUniqueOnly}`);
+
+    let baseQuery;
+    let params = [];
+
+    if (isUniqueOnly) {
+      // For unique plays, use DISTINCT on (media_id, session_id) combination
+      if (userId) {
+        baseQuery = `
+          WITH unique_plays AS (
+            SELECT DISTINCT ON (mp.media_id, mp.session_id)
+              mp.id, mp.user_provided_gender, mp.session_id
+            FROM media_plays mp
+            JOIN media m ON mp.media_id = m.id
+            WHERE m.user_id = $1
+              AND mp.user_provided_gender IS NOT NULL
+            ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
+          )
+          SELECT 
+            COALESCE(up.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM unique_plays up
+          GROUP BY up.user_provided_gender
+          ORDER BY 
+            CASE up.user_provided_gender
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [userId];
+      } else {
+        baseQuery = `
+          WITH unique_plays AS (
+            SELECT DISTINCT ON (mp.media_id, mp.session_id)
+              mp.id, mp.user_provided_gender, mp.session_id
+            FROM media_plays mp
+            WHERE mp.user_provided_gender IS NOT NULL
+            ORDER BY mp.media_id, mp.session_id, mp.played_at DESC
+          )
+          SELECT 
+            COALESCE(up.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM unique_plays up
+          GROUP BY up.user_provided_gender
+          ORDER BY 
+            CASE up.user_provided_gender
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+      }
+    } else {
+      // For total plays, count all plays
+      if (userId) {
+        baseQuery = `
+          SELECT 
+            COALESCE(mp.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM media_plays mp
+          JOIN media m ON mp.media_id = m.id
+          WHERE m.user_id = $1
+            AND mp.user_provided_gender IS NOT NULL
+          GROUP BY mp.user_provided_gender
+          ORDER BY 
+            CASE mp.user_provided_gender
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [userId];
+      } else {
+        baseQuery = `
+          SELECT 
+            COALESCE(mp.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM media_plays mp
+          WHERE mp.user_provided_gender IS NOT NULL
+          GROUP BY mp.user_provided_gender
+          ORDER BY 
+            CASE mp.user_provided_gender
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+      }
+    }
+
+    const result = await pool.query(baseQuery, params);
+    
+    res.json({
+      success: true,
+      uniqueOnly: isUniqueOnly,
+      genderDistribution: result.rows.map(r => ({
+        gender: r.gender,
+        count: parseInt(r.count)
+      }))
+    });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching gender demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch gender demographics' });
   }
 });
 

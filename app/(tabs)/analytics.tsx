@@ -191,8 +191,10 @@ export default function AnalyticsScreen() {
   // Media play demographics toggle states
   const [ageUniqueOnly, setAgeUniqueOnly] = useState(false);
   const [locationUniqueOnly, setLocationUniqueOnly] = useState(false);
+  const [genderUniqueOnly, setGenderUniqueOnly] = useState(false);
   const [mediaPlayAgeData, setMediaPlayAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
   const [mediaPlayLocationData, setMediaPlayLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
+  const [mediaPlayGenderData, setMediaPlayGenderData] = useState<Array<{ gender: string; count: number }>>([]);
   
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
@@ -218,6 +220,13 @@ export default function AnalyticsScreen() {
       fetchMediaPlayLocationDemographics();
     }
   }, [locationUniqueOnly, activeTab, user]);
+
+  // Fetch media play gender demographics when toggle changes
+  useEffect(() => {
+    if (activeTab === 'demographics' && demographicsSubTab === 'gender') {
+      fetchMediaPlayGenderDemographics();
+    }
+  }, [genderUniqueOnly, activeTab, demographicsSubTab, user]);
 
   const fetchMediaPlayAgeDemographics = async () => {
     try {
@@ -247,6 +256,20 @@ export default function AnalyticsScreen() {
     } catch (error) {
       console.error('Error fetching media play location demographics:', error);
       setMediaPlayLocationData(null);
+    }
+  };
+
+  const fetchMediaPlayGenderDemographics = async () => {
+    try {
+      const data = await analyticsService.getMediaPlayGenderDemographics(user?.id, genderUniqueOnly);
+      if (data.success) {
+        setMediaPlayGenderData(data.genderDistribution || []);
+      } else {
+        setMediaPlayGenderData([]);
+      }
+    } catch (error) {
+      console.error('Error fetching media play gender demographics:', error);
+      setMediaPlayGenderData([]);
     }
   };
 
@@ -1016,13 +1039,51 @@ export default function AnalyticsScreen() {
       {/* Gender Demographics */}
       {demographicsSubTab === 'gender' && (
         <>
-          {genderData.length > 0 && (
-            <ChartContainer title="Gender Distribution" subtitle="Gender identity of QR code scanners">
+          {/* Toggle for Media Plays */}
+          <View style={styles.toggleContainer}>
+            <Text style={styles.toggleLabel}>View Media Play Gender Data:</Text>
+            <View style={styles.toggleButtons}>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  genderUniqueOnly && styles.toggleButtonActive,
+                ]}
+                onPress={() => setGenderUniqueOnly(true)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  genderUniqueOnly && styles.toggleButtonTextActive,
+                ]}>
+                  Unique Plays
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.toggleButton,
+                  !genderUniqueOnly && styles.toggleButtonActive,
+                ]}
+                onPress={() => setGenderUniqueOnly(false)}
+              >
+                <Text style={[
+                  styles.toggleButtonText,
+                  !genderUniqueOnly && styles.toggleButtonTextActive,
+                ]}>
+                  Total Plays
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {mediaPlayGenderData.length > 0 && (
+            <ChartContainer 
+              title="Gender Distribution" 
+              subtitle={`Gender identity of media consumers (>=30s) - ${genderUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+            >
               <BarChart
                 data={{
-                  labels: genderData.map(d => d.gender),
+                  labels: mediaPlayGenderData.map(d => d.gender),
                   datasets: [{
-                    data: genderData.map(d => d.count),
+                    data: mediaPlayGenderData.map(d => d.count),
                   }],
                 }}
                 width={screenWidth - 48}
@@ -1048,8 +1109,8 @@ export default function AnalyticsScreen() {
               
               {/* Gender List */}
               <View style={styles.geoList}>
-                {genderData.map((gender, index) => {
-                  const total = genderData.reduce((sum, item) => sum + item.count, 0);
+                {mediaPlayGenderData.map((gender, index) => {
+                  const total = mediaPlayGenderData.reduce((sum, item) => sum + item.count, 0);
                   const percentage = total > 0 ? Math.round((gender.count / total) * 100) : 0;
                   
                   // Select icon based on gender
@@ -1077,12 +1138,12 @@ export default function AnalyticsScreen() {
             </ChartContainer>
           )}
           
-          {genderData.length === 0 && (
+          {mediaPlayGenderData.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="wc" size={64} color="#d1d5db" />
               <Text style={styles.emptyText}>No gender data available yet</Text>
               <Text style={styles.emptySubtext}>
-                Gender demographics will appear here once users start providing their gender identity
+                Gender demographics for media consumers (>=30s) will appear here once users start providing their gender identity and consuming media
               </Text>
             </View>
           )}

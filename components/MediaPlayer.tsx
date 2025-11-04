@@ -42,6 +42,7 @@ import { analyticsService } from '../services/analyticsService';
 import { getSessionId } from '../utils/sessionTracking';
 import { getDemographicsForTracking } from '../utils/demographicsHelper';
 import { getAgeForTracking } from '../utils/ageStorage';
+import { getUserGender } from '../utils/genderStorage';
 
 const { width } = Dimensions.get('window');
 
@@ -123,18 +124,23 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           
           // Get demographics for tracking
           let ageRange: string | undefined;
+          let gender: string | undefined;
           let location: { city: string; state: string; zip?: string } | undefined;
           let locationSource: string | undefined;
 
-          // Get age data
+          // Get age and gender data
           if (user) {
             // For authenticated users, get from demographics helper
             const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
             ageRange = demographics?.ageRange;
+            gender = demographics?.gender;
           } else {
             // For anonymous users, get from localStorage
             const age = getAgeForTracking();
             ageRange = age?.ageRange;
+            // Get gender from localStorage if available
+            const userGender = getUserGender();
+            gender = userGender?.gender;
           }
 
           // Get location data (if available in localStorage)
@@ -165,6 +171,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               sessionId,
               user?.id,
               ageRange,
+              gender,
               location,
               locationSource
             );
@@ -178,6 +185,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               sessionId,
               user?.id,
               ageRange,
+              gender,
               location,
               locationSource
             );
@@ -188,12 +196,13 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               sessionId,
               user?.id,
               ageRange,
+              gender,
               location,
               locationSource
             );
           }
 
-          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s, Age: ${ageRange || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
+          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s, Age: ${ageRange || 'none'}, Gender: ${gender || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
         } catch (error) {
           console.error('Error tracking play:', error);
         }

@@ -177,6 +177,7 @@ export const analyticsService = {
     sessionId: string,
     userId?: number,
     ageRange?: string,
+    gender?: string,
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
@@ -192,6 +193,7 @@ export const analyticsService = {
         sessionId,
         userId,
         userAge: ageRange,
+        userGender: gender,
         userLocation: location,
         locationSource,
       });
@@ -208,6 +210,7 @@ export const analyticsService = {
     sessionId: string,
     userId?: number,
     ageRange?: string,
+    gender?: string,
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
@@ -223,6 +226,7 @@ export const analyticsService = {
         sessionId,
         userId,
         userAge: ageRange,
+        userGender: gender,
         userLocation: location,
         locationSource,
       });
@@ -239,6 +243,7 @@ export const analyticsService = {
     sessionId: string,
     userId?: number,
     ageRange?: string,
+    gender?: string,
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
@@ -254,6 +259,7 @@ export const analyticsService = {
         sessionId,
         userId,
         userAge: ageRange,
+        userGender: gender,
         userLocation: location,
         locationSource,
       });
@@ -393,6 +399,24 @@ export const analyticsService = {
         uniqueOnly,
         topCountries: [],
         topCities: [],
+      };
+    }
+  },
+
+  // Get gender demographics for media plays
+  async getMediaPlayGenderDemographics(userId?: number, uniqueOnly: boolean = false): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (uniqueOnly) params.set('uniqueOnly', 'true');
+      const response = await api.get(`/analytics/media-plays/gender-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching media play gender demographics:', error);
+      return {
+        success: false,
+        uniqueOnly,
+        genderDistribution: [],
       };
     }
   },
