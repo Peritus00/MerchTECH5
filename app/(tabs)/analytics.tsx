@@ -230,45 +230,57 @@ export default function AnalyticsScreen() {
 
   const fetchMediaPlayAgeDemographics = async () => {
     try {
+      console.log('📊 FRONTEND: Fetching media play age demographics', { userId: user?.id, uniqueOnly: ageUniqueOnly });
       const data = await analyticsService.getMediaPlayAgeDemographics(user?.id, ageUniqueOnly);
+      console.log('📊 FRONTEND: Received age demographics data:', data);
       if (data.success) {
         setMediaPlayAgeData(data.ageRanges || []);
+        console.log('📊 FRONTEND: Set age data:', data.ageRanges?.length || 0, 'items');
       } else {
+        console.warn('📊 FRONTEND: Age demographics fetch returned success: false');
         setMediaPlayAgeData([]);
       }
     } catch (error) {
-      console.error('Error fetching media play age demographics:', error);
+      console.error('📊 FRONTEND: Error fetching media play age demographics:', error);
       setMediaPlayAgeData([]);
     }
   };
 
   const fetchMediaPlayLocationDemographics = async () => {
     try {
+      console.log('📊 FRONTEND: Fetching media play location demographics', { userId: user?.id, uniqueOnly: locationUniqueOnly });
       const data = await analyticsService.getMediaPlayLocationDemographics(user?.id, locationUniqueOnly);
+      console.log('📊 FRONTEND: Received location demographics data:', data);
       if (data.success) {
         setMediaPlayLocationData({
           topCountries: data.topCountries || [],
           topCities: data.topCities || [],
         });
+        console.log('📊 FRONTEND: Set location data:', data.topCountries?.length || 0, 'countries,', data.topCities?.length || 0, 'cities');
       } else {
+        console.warn('📊 FRONTEND: Location demographics fetch returned success: false');
         setMediaPlayLocationData(null);
       }
     } catch (error) {
-      console.error('Error fetching media play location demographics:', error);
+      console.error('📊 FRONTEND: Error fetching media play location demographics:', error);
       setMediaPlayLocationData(null);
     }
   };
 
   const fetchMediaPlayGenderDemographics = async () => {
     try {
+      console.log('📊 FRONTEND: Fetching media play gender demographics', { userId: user?.id, uniqueOnly: genderUniqueOnly });
       const data = await analyticsService.getMediaPlayGenderDemographics(user?.id, genderUniqueOnly);
+      console.log('📊 FRONTEND: Received gender demographics data:', data);
       if (data.success) {
         setMediaPlayGenderData(data.genderDistribution || []);
+        console.log('📊 FRONTEND: Set gender data:', data.genderDistribution?.length || 0, 'items');
       } else {
+        console.warn('📊 FRONTEND: Gender demographics fetch returned success: false');
         setMediaPlayGenderData([]);
       }
     } catch (error) {
-      console.error('Error fetching media play gender demographics:', error);
+      console.error('📊 FRONTEND: Error fetching media play gender demographics:', error);
       setMediaPlayGenderData([]);
     }
   };
@@ -821,6 +833,17 @@ export default function AnalyticsScreen() {
             />
           </ChartContainer>
         )}
+
+        {/* Empty State for Geography */}
+        {displayCountries.length === 0 && displayCities.length === 0 && (
+          <View style={styles.emptyState}>
+            <MaterialIcons name="public" size={64} color="#d1d5db" />
+            <Text style={styles.emptyText}>No location data available yet</Text>
+            <Text style={styles.emptySubtext}>
+              Location demographics for media consumers (>=30s) will appear here once users start consuming media. Plays without location information will be shown as "Unknown".
+            </Text>
+          </View>
+        )}
       </>
     );
   };
@@ -1024,12 +1047,12 @@ export default function AnalyticsScreen() {
             </ChartContainer>
           )}
           
-          {ageData.length === 0 && (
+          {mediaPlayAgeData.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="people-outline" size={64} color="#d1d5db" />
               <Text style={styles.emptyText}>No age data available yet</Text>
               <Text style={styles.emptySubtext}>
-                Age demographics will appear here once users start providing their age range
+                Age demographics for media consumers (>=30s) will appear here once users start consuming media. Plays without age information will be shown as "Unknown".
               </Text>
             </View>
           )}
