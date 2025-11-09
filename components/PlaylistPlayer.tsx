@@ -545,6 +545,21 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         });
       }
       
+      // Track when video/audio starts playing (for mobile expo-av)
+      if (status.isPlaying && !status.didJustFinish) {
+        console.log('📊 TRACKING: expo-av playback started, ensuring tracking');
+        setIsPlaying(true);
+        // Ensure tracking starts for mobile playback
+        const mediaItem = currentMediaItemRef.current;
+        const trackFn = startPlayTrackingRef.current;
+        if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
+          console.log('📊 TRACKING: Starting tracking from expo-av playback status for media:', mediaItem.id);
+          trackFn(mediaItem);
+        }
+      } else if (!status.isPlaying && !status.didJustFinish) {
+        setIsPlaying(false);
+      }
+      
       if (status.didJustFinish) {
         // Track finished - remember to resume on next item and advance
         resumeOnAdvanceRef.current = true;
@@ -888,19 +903,44 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                   console.log('🎵 HTML5_VIDEO: canplay - can start playing');
                 });
                 
-                ref.addEventListener('canplaythrough', () => {
-                  console.log('🎵 HTML5_VIDEO: canplaythrough - can play without stopping');
-                });
-                
-                ref.addEventListener('error', (e) => {
-                  console.error('🎵 HTML5_VIDEO: Native error event:', {
-                    error: ref.error,
-                    networkState: ref.networkState,
-                    readyState: ref.readyState,
-                    src: ref.src,
-                    currentSrc: ref.currentSrc
+                  ref.addEventListener('canplaythrough', () => {
+                    console.log('🎵 HTML5_VIDEO: canplaythrough - can play without stopping');
                   });
-                });
+                  
+                  // Track when video actually starts playing (native event)
+                  ref.addEventListener('playing', () => {
+                    console.log('🎵 HTML5_VIDEO: Native playing event - video is playing');
+                    console.log('📊 TRACKING: Native playing event, ensuring tracking starts');
+                    setIsPlaying(true);
+                    // Ensure tracking starts even if state wasn't updated
+                    const mediaItem = currentMediaItemRef.current;
+                    const trackFn = startPlayTrackingRef.current;
+                    if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
+                      console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
+                      trackFn(mediaItem);
+                    } else {
+                      console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
+                        hasMediaItem: !!mediaItem,
+                        hasTrackFn: !!trackFn,
+                        mediaType: mediaItem?.media_type
+                      });
+                    }
+                  });
+                  
+                  ref.addEventListener('pause', () => {
+                    console.log('🎵 HTML5_VIDEO: Native pause event - video paused');
+                    setIsPlaying(false);
+                  });
+                  
+                  ref.addEventListener('error', (e) => {
+                    console.error('🎵 HTML5_VIDEO: Native error event:', {
+                      error: ref.error,
+                      networkState: ref.networkState,
+                      readyState: ref.readyState,
+                      src: ref.src,
+                      currentSrc: ref.currentSrc
+                    });
+                  });
               }
             }}
             src={itemUri}
