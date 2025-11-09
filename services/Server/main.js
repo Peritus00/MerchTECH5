@@ -2835,6 +2835,252 @@ app.get('/api/analytics/qr-scans/location-demographics', authenticateTokenOption
   }
 });
 
+// Get age demographics for QR code scans
+app.get('/api/analytics/qr-scans/age-demographics', authenticateTokenOptional, async (req, res) => {
+  try {
+    const { userId, days } = req.query;
+    const userIdNum = userId ? parseInt(userId, 10) : null;
+    const daysNum = days ? parseInt(days, 10) : null;
+
+    console.log(`📊 ANALYTICS: Fetching QR scan age demographics${userIdNum ? ` for user ${userIdNum}` : ''}${daysNum ? ` (last ${daysNum} days)` : ''}`);
+
+    let baseQuery;
+    let params = [];
+
+    if (userIdNum) {
+      // Filter by user's QR codes
+      if (daysNum) {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_age_range, 'Unknown') AS age_range,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.scanned_at >= NOW() - ($2 || ' days')::INTERVAL
+            AND s.user_provided_age_range IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_age_range, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_age_range, 'Unknown')
+              WHEN 'Under 18' THEN 1
+              WHEN '18-24' THEN 2
+              WHEN '25-34' THEN 3
+              WHEN '35-44' THEN 4
+              WHEN '45-54' THEN 5
+              WHEN '55-64' THEN 6
+              WHEN '65+' THEN 7
+              ELSE 8
+            END
+        `;
+        params = [userIdNum, daysNum];
+      } else {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_age_range, 'Unknown') AS age_range,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.user_provided_age_range IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_age_range, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_age_range, 'Unknown')
+              WHEN 'Under 18' THEN 1
+              WHEN '18-24' THEN 2
+              WHEN '25-34' THEN 3
+              WHEN '35-44' THEN 4
+              WHEN '45-54' THEN 5
+              WHEN '55-64' THEN 6
+              WHEN '65+' THEN 7
+              ELSE 8
+            END
+        `;
+        params = [userIdNum];
+      }
+    } else {
+      // All QR scans (admin view or no user filter)
+      if (daysNum) {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_age_range, 'Unknown') AS age_range,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.scanned_at >= NOW() - ($1 || ' days')::INTERVAL
+            AND s.user_provided_age_range IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_age_range, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_age_range, 'Unknown')
+              WHEN 'Under 18' THEN 1
+              WHEN '18-24' THEN 2
+              WHEN '25-34' THEN 3
+              WHEN '35-44' THEN 4
+              WHEN '45-54' THEN 5
+              WHEN '55-64' THEN 6
+              WHEN '65+' THEN 7
+              ELSE 8
+            END
+        `;
+        params = [daysNum];
+      } else {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_age_range, 'Unknown') AS age_range,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.user_provided_age_range IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_age_range, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_age_range, 'Unknown')
+              WHEN 'Under 18' THEN 1
+              WHEN '18-24' THEN 2
+              WHEN '25-34' THEN 3
+              WHEN '35-44' THEN 4
+              WHEN '45-54' THEN 5
+              WHEN '55-64' THEN 6
+              WHEN '65+' THEN 7
+              ELSE 8
+            END
+        `;
+        params = [];
+      }
+    }
+
+    const result = await pool.query(baseQuery, params);
+    
+    console.log(`📊 ANALYTICS: QR scan age demographics query returned ${result.rows.length} age ranges`);
+    
+    res.json({
+      success: true,
+      ageRanges: result.rows.map(r => ({
+        ageRange: r.age_range,
+        count: parseInt(r.count)
+      }))
+    });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching QR scan age demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch QR scan age demographics' });
+  }
+});
+
+// Get gender demographics for QR code scans
+app.get('/api/analytics/qr-scans/gender-demographics', authenticateTokenOptional, async (req, res) => {
+  try {
+    const { userId, days } = req.query;
+    const userIdNum = userId ? parseInt(userId, 10) : null;
+    const daysNum = days ? parseInt(days, 10) : null;
+
+    console.log(`📊 ANALYTICS: Fetching QR scan gender demographics${userIdNum ? ` for user ${userIdNum}` : ''}${daysNum ? ` (last ${daysNum} days)` : ''}`);
+
+    let baseQuery;
+    let params = [];
+
+    if (userIdNum) {
+      // Filter by user's QR codes
+      if (daysNum) {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.scanned_at >= NOW() - ($2 || ' days')::INTERVAL
+            AND s.user_provided_gender IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_gender, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_gender, 'Unknown')
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [userIdNum, daysNum];
+      } else {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.user_provided_gender IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_gender, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_gender, 'Unknown')
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [userIdNum];
+      }
+    } else {
+      // All QR scans (admin view or no user filter)
+      if (daysNum) {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.scanned_at >= NOW() - ($1 || ' days')::INTERVAL
+            AND s.user_provided_gender IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_gender, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_gender, 'Unknown')
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [daysNum];
+      } else {
+        baseQuery = `
+          SELECT 
+            COALESCE(s.user_provided_gender, 'Unknown') AS gender,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.user_provided_gender IS NOT NULL
+          GROUP BY COALESCE(s.user_provided_gender, 'Unknown')
+          ORDER BY 
+            CASE COALESCE(s.user_provided_gender, 'Unknown')
+              WHEN 'Male' THEN 1
+              WHEN 'Female' THEN 2
+              WHEN 'Non-binary' THEN 3
+              WHEN 'Prefer not to say' THEN 4
+              WHEN 'Open-ended' THEN 5
+              ELSE 6
+            END
+        `;
+        params = [];
+      }
+    }
+
+    const result = await pool.query(baseQuery, params);
+    
+    console.log(`📊 ANALYTICS: QR scan gender demographics query returned ${result.rows.length} gender categories`);
+    
+    res.json({
+      success: true,
+      genderDistribution: result.rows.map(r => ({
+        gender: r.gender,
+        count: parseInt(r.count)
+      }))
+    });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching QR scan gender demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch QR scan gender demographics' });
+  }
+});
+
 // Get gender demographics for media plays
 app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
   try {

@@ -188,12 +188,10 @@ export default function AnalyticsScreen() {
   const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'geography' | 'behavior' | 'demographics'>('overview');
   const [demographicsSubTab, setDemographicsSubTab] = useState<'age' | 'gender'>('age');
   
-  // Media play demographics toggle states
-  const [ageUniqueOnly, setAgeUniqueOnly] = useState(false);
-  const [genderUniqueOnly, setGenderUniqueOnly] = useState(false);
-  const [mediaPlayAgeData, setMediaPlayAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
+  // QR scan demographics data
+  const [qrScanAgeData, setQrScanAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
   const [qrScanLocationData, setQrScanLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
-  const [mediaPlayGenderData, setMediaPlayGenderData] = useState<Array<{ gender: string; count: number }>>([]);
+  const [qrScanGenderData, setQrScanGenderData] = useState<Array<{ gender: string; count: number }>>([]);
   
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
@@ -206,12 +204,12 @@ export default function AnalyticsScreen() {
     fetchAllAnalytics();
   }, [selectedTimeRange]);
 
-  // Fetch media play age demographics when toggle changes (always fetch for media plays)
+  // Fetch QR scan age demographics when Age tab is active
   useEffect(() => {
     if (activeTab === 'demographics' && demographicsSubTab === 'age') {
-      fetchMediaPlayAgeDemographics();
+      fetchQRScanAgeDemographics();
     }
-  }, [ageUniqueOnly, activeTab, demographicsSubTab, user]);
+  }, [activeTab, demographicsSubTab, user, selectedTimeRange]);
 
   // Fetch QR scan location demographics when Geography tab is active
   useEffect(() => {
@@ -220,28 +218,28 @@ export default function AnalyticsScreen() {
     }
   }, [activeTab, user, selectedTimeRange]);
 
-  // Fetch media play gender demographics when toggle changes
+  // Fetch QR scan gender demographics when Gender tab is active
   useEffect(() => {
     if (activeTab === 'demographics' && demographicsSubTab === 'gender') {
-      fetchMediaPlayGenderDemographics();
+      fetchQRScanGenderDemographics();
     }
-  }, [genderUniqueOnly, activeTab, demographicsSubTab, user]);
+  }, [activeTab, demographicsSubTab, user, selectedTimeRange]);
 
-  const fetchMediaPlayAgeDemographics = async () => {
+  const fetchQRScanAgeDemographics = async () => {
     try {
-      console.log('📊 FRONTEND: Fetching media play age demographics', { userId: user?.id, uniqueOnly: ageUniqueOnly });
-      const data = await analyticsService.getMediaPlayAgeDemographics(user?.id, ageUniqueOnly);
-      console.log('📊 FRONTEND: Received age demographics data:', data);
+      console.log('📊 FRONTEND: Fetching QR scan age demographics', { userId: user?.id, days: selectedTimeRange });
+      const data = await analyticsService.getQRScanAgeDemographics(user?.id, selectedTimeRange);
+      console.log('📊 FRONTEND: Received QR scan age demographics data:', data);
       if (data.success) {
-        setMediaPlayAgeData(data.ageRanges || []);
-        console.log('📊 FRONTEND: Set age data:', data.ageRanges?.length || 0, 'items');
+        setQrScanAgeData(data.ageRanges || []);
+        console.log('📊 FRONTEND: Set QR scan age data:', data.ageRanges?.length || 0, 'items');
       } else {
-        console.warn('📊 FRONTEND: Age demographics fetch returned success: false');
-        setMediaPlayAgeData([]);
+        console.warn('📊 FRONTEND: QR scan age demographics fetch returned success: false');
+        setQrScanAgeData([]);
       }
     } catch (error) {
-      console.error('📊 FRONTEND: Error fetching media play age demographics:', error);
-      setMediaPlayAgeData([]);
+      console.error('📊 FRONTEND: Error fetching QR scan age demographics:', error);
+      setQrScanAgeData([]);
     }
   };
 
@@ -266,21 +264,21 @@ export default function AnalyticsScreen() {
     }
   };
 
-  const fetchMediaPlayGenderDemographics = async () => {
+  const fetchQRScanGenderDemographics = async () => {
     try {
-      console.log('📊 FRONTEND: Fetching media play gender demographics', { userId: user?.id, uniqueOnly: genderUniqueOnly });
-      const data = await analyticsService.getMediaPlayGenderDemographics(user?.id, genderUniqueOnly);
-      console.log('📊 FRONTEND: Received gender demographics data:', data);
+      console.log('📊 FRONTEND: Fetching QR scan gender demographics', { userId: user?.id, days: selectedTimeRange });
+      const data = await analyticsService.getQRScanGenderDemographics(user?.id, selectedTimeRange);
+      console.log('📊 FRONTEND: Received QR scan gender demographics data:', data);
       if (data.success) {
-        setMediaPlayGenderData(data.genderDistribution || []);
-        console.log('📊 FRONTEND: Set gender data:', data.genderDistribution?.length || 0, 'items');
+        setQrScanGenderData(data.genderDistribution || []);
+        console.log('📊 FRONTEND: Set QR scan gender data:', data.genderDistribution?.length || 0, 'items');
       } else {
-        console.warn('📊 FRONTEND: Gender demographics fetch returned success: false');
-        setMediaPlayGenderData([]);
+        console.warn('📊 FRONTEND: QR scan gender demographics fetch returned success: false');
+        setQrScanGenderData([]);
       }
     } catch (error) {
-      console.error('📊 FRONTEND: Error fetching media play gender demographics:', error);
-      setMediaPlayGenderData([]);
+      console.error('📊 FRONTEND: Error fetching QR scan gender demographics:', error);
+      setQrScanGenderData([]);
     }
   };
 
@@ -920,51 +918,16 @@ export default function AnalyticsScreen() {
       {/* Age Demographics */}
       {demographicsSubTab === 'age' && (
         <>
-          {/* Toggle for Media Plays */}
-          <View style={styles.toggleContainer}>
-            <Text style={styles.toggleLabel}>View Media Play Age Data:</Text>
-            <View style={styles.toggleButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  ageUniqueOnly && styles.toggleButtonActive,
-                ]}
-                onPress={() => setAgeUniqueOnly(true)}
-              >
-                <Text style={[
-                  styles.toggleButtonText,
-                  ageUniqueOnly && styles.toggleButtonTextActive,
-                ]}>
-                  Unique Plays
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  !ageUniqueOnly && styles.toggleButtonActive,
-                ]}
-                onPress={() => setAgeUniqueOnly(false)}
-              >
-                <Text style={[
-                  styles.toggleButtonText,
-                  !ageUniqueOnly && styles.toggleButtonTextActive,
-                ]}>
-                  Total Plays
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {mediaPlayAgeData.length > 0 && (
+          {qrScanAgeData.length > 0 && (
             <ChartContainer 
               title="Age Distribution" 
-              subtitle={`Age ranges of media consumers (>=30s) - ${ageUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+              subtitle="Age ranges of QR code scan users"
             >
               <BarChart
                 data={{
-                  labels: mediaPlayAgeData.map(d => d.ageRange),
+                  labels: qrScanAgeData.map(d => d.ageRange),
                   datasets: [{
-                    data: mediaPlayAgeData.map(d => d.count),
+                    data: qrScanAgeData.map(d => d.count),
                   }],
                 }}
                 width={screenWidth - 48}
@@ -990,8 +953,8 @@ export default function AnalyticsScreen() {
               
               {/* Age List */}
               <View style={styles.geoList}>
-                {mediaPlayAgeData.map((age, index) => {
-                  const total = mediaPlayAgeData.reduce((sum, item) => sum + item.count, 0);
+                {qrScanAgeData.map((age, index) => {
+                  const total = qrScanAgeData.reduce((sum, item) => sum + item.count, 0);
                   const percentage = total > 0 ? Math.round((age.count / total) * 100) : 0;
                   
                   return (
@@ -1011,12 +974,12 @@ export default function AnalyticsScreen() {
             </ChartContainer>
           )}
           
-          {mediaPlayAgeData.length === 0 && (
+          {qrScanAgeData.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="people-outline" size={64} color="#d1d5db" />
               <Text style={styles.emptyText}>No age data available yet</Text>
               <Text style={styles.emptySubtext}>
-                Age demographics for media consumers (>=30s) will appear here once users start consuming media. Plays without age information will be shown as "Unknown".
+                Age demographics from QR code scans will appear here once users start scanning your QR codes and providing their age information. Scans without age information will be shown as "Unknown".
               </Text>
             </View>
           )}
@@ -1026,51 +989,16 @@ export default function AnalyticsScreen() {
       {/* Gender Demographics */}
       {demographicsSubTab === 'gender' && (
         <>
-          {/* Toggle for Media Plays */}
-          <View style={styles.toggleContainer}>
-            <Text style={styles.toggleLabel}>View Media Play Gender Data:</Text>
-            <View style={styles.toggleButtons}>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  genderUniqueOnly && styles.toggleButtonActive,
-                ]}
-                onPress={() => setGenderUniqueOnly(true)}
-              >
-                <Text style={[
-                  styles.toggleButtonText,
-                  genderUniqueOnly && styles.toggleButtonTextActive,
-                ]}>
-                  Unique Plays
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.toggleButton,
-                  !genderUniqueOnly && styles.toggleButtonActive,
-                ]}
-                onPress={() => setGenderUniqueOnly(false)}
-              >
-                <Text style={[
-                  styles.toggleButtonText,
-                  !genderUniqueOnly && styles.toggleButtonTextActive,
-                ]}>
-                  Total Plays
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {mediaPlayGenderData.length > 0 && (
+          {qrScanGenderData.length > 0 && (
             <ChartContainer 
               title="Gender Distribution" 
-              subtitle={`Gender identity of media consumers (>=30s) - ${genderUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+              subtitle="Gender identity of QR code scan users"
             >
               <BarChart
                 data={{
-                  labels: mediaPlayGenderData.map(d => d.gender),
+                  labels: qrScanGenderData.map(d => d.gender),
                   datasets: [{
-                    data: mediaPlayGenderData.map(d => d.count),
+                    data: qrScanGenderData.map(d => d.count),
                   }],
                 }}
                 width={screenWidth - 48}
@@ -1096,8 +1024,8 @@ export default function AnalyticsScreen() {
               
               {/* Gender List */}
               <View style={styles.geoList}>
-                {mediaPlayGenderData.map((gender, index) => {
-                  const total = mediaPlayGenderData.reduce((sum, item) => sum + item.count, 0);
+                {qrScanGenderData.map((gender, index) => {
+                  const total = qrScanGenderData.reduce((sum, item) => sum + item.count, 0);
                   const percentage = total > 0 ? Math.round((gender.count / total) * 100) : 0;
                   
                   // Select icon based on gender
@@ -1125,12 +1053,12 @@ export default function AnalyticsScreen() {
             </ChartContainer>
           )}
           
-          {mediaPlayGenderData.length === 0 && (
+          {qrScanGenderData.length === 0 && (
             <View style={styles.emptyState}>
               <MaterialIcons name="wc" size={64} color="#d1d5db" />
               <Text style={styles.emptyText}>No gender data available yet</Text>
               <Text style={styles.emptySubtext}>
-                Gender demographics for media consumers (>=30s) will appear here once users start providing their gender identity and consuming media
+                Gender demographics from QR code scans will appear here once users start scanning your QR codes and providing their gender identity. Scans without gender information will be shown as "Unknown".
               </Text>
             </View>
           )}

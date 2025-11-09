@@ -438,4 +438,38 @@ export const analyticsService = {
       };
     }
   },
+
+  // Get age demographics for QR code scans
+  async getQRScanAgeDemographics(userId?: number, days?: number): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (days) params.set('days', String(days));
+      const response = await api.get(`/analytics/qr-scans/age-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching QR scan age demographics:', error);
+      return {
+        success: false,
+        ageRanges: [],
+      };
+    }
+  },
+
+  // Get gender demographics for QR code scans
+  async getQRScanGenderDemographics(userId?: number, days?: number): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (days) params.set('days', String(days));
+      const response = await api.get(`/analytics/qr-scans/gender-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching QR scan gender demographics:', error);
+      return {
+        success: false,
+        genderDistribution: [],
+      };
+    }
+  },
 };
