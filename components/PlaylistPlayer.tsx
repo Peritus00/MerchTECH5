@@ -376,16 +376,37 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         
         // Track individual media play (all durations are tracked)
         if (mediaItem.id) {
-          await analyticsService.trackMediaPlay(
-            Number(mediaItem.id),
+          const mediaIdNum = typeof mediaItem.id === 'string' ? parseInt(mediaItem.id, 10) : Number(mediaItem.id);
+          if (isNaN(mediaIdNum)) {
+            console.error('📊 TRACKING: Invalid media ID:', mediaItem.id, 'Type:', typeof mediaItem.id);
+            return;
+          }
+          console.log('📊 TRACKING: Calling trackMediaPlay with:', {
+            mediaId: mediaIdNum,
             duration,
-            sessionId,
-            user?.id,
-            ageRange,
-            gender,
-            location,
-            locationSource
-          );
+            sessionId: sessionId?.substring(0, 20) + '...',
+            userId: user?.id,
+            mediaItemId: mediaItem.id,
+            mediaItemType: typeof mediaItem.id
+          });
+          try {
+            await analyticsService.trackMediaPlay(
+              mediaIdNum,
+              duration,
+              sessionId,
+              user?.id,
+              ageRange,
+              gender,
+              location,
+              locationSource
+            );
+            console.log('📊 TRACKING: Successfully called trackMediaPlay');
+          } catch (error) {
+            console.error('📊 TRACKING: Error calling trackMediaPlay:', error);
+            // Don't throw - we don't want tracking errors to break playback
+          }
+        } else {
+          console.warn('📊 TRACKING: Media item has no ID:', mediaItem);
         }
 
         // Track playlist play if applicable (only >= 30s for these)

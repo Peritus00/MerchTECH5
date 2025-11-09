@@ -182,9 +182,11 @@ export const analyticsService = {
     locationSource?: string
   ): Promise<void> {
     try {
+      console.log(`📊 ANALYTICS_SERVICE: Attempting to track media play - ID: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId?.substring(0, 20)}...`);
+      
       // Track all plays regardless of duration
       // Total Plays counts all plays, Unique Plays requires >30 seconds
-      await api.post('/analytics/track-media-play', {
+      const response = await api.post('/analytics/track-media-play', {
         mediaId,
         playDuration,
         sessionId,
@@ -194,9 +196,19 @@ export const analyticsService = {
         userLocation: location,
         locationSource,
       });
-      console.log(`📊 ANALYTICS: Tracked media play - ID: ${mediaId}, Duration: ${playDuration}s`);
-    } catch (error) {
-      console.error('Error tracking media play:', error);
+      
+      console.log(`📊 ANALYTICS_SERVICE: Successfully tracked media play - ID: ${mediaId}, Duration: ${playDuration}s, Response:`, response.data);
+    } catch (error: any) {
+      console.error('📊 ANALYTICS_SERVICE: Error tracking media play:', {
+        error: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        mediaId,
+        playDuration,
+        sessionId: sessionId?.substring(0, 20) + '...'
+      });
+      // Re-throw so caller knows it failed
+      throw error;
     }
   },
 
