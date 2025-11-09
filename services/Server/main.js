@@ -1804,11 +1804,25 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 
     console.log(`📊 ANALYTICS: Tracking media play - Media: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId}, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
+    // Check if there's already a play record for this session/media combination
+    const userKey = userId ? userId.toString() : sessionId;
+    const existingPlay = await pool.query(
+      `SELECT id, play_duration FROM media_plays 
+       WHERE media_id = $1 
+       AND (user_id::text = $2 OR (user_id IS NULL AND session_id = $3))
+       ORDER BY played_at DESC
+       LIMIT 1`,
+      [mediaId, userKey, sessionId]
+    );
+
+    const isNewPlay = existingPlay.rows.length === 0;
+    const existingDuration = existingPlay.rows[0]?.play_duration || 0;
+    const shouldUpdate = !isNewPlay && playDuration > existingDuration;
+
     // Check if this is a unique play (first play >30 seconds for this user/media combination)
     // Unique plays require: play_duration > 30 AND no existing play >30s for this (media_id, user_id/session_id)
     let isUnique = false;
     if (playDuration > 30) {
-      const userKey = userId ? userId.toString() : sessionId;
       const existingUniquePlay = await pool.query(
         `SELECT id FROM media_plays 
          WHERE media_id = $1 
@@ -1819,31 +1833,55 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
       isUnique = existingUniquePlay.rows.length === 0;
     }
 
-    // Insert play record with demographics (all plays are tracked)
-    await pool.query(
-      `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [
-        mediaId, 
-        userId || null, 
-        sessionId, 
-        playDuration, 
-        ipAddress,
-        userAge || null,
-        userGender || null,
-        userLocation?.city || null,
-        userLocation?.state || null,
-        userLocation?.zip || null,
-        finalLocationSource
-      ]
-    );
+    if (isNewPlay) {
+      // Insert new play record with demographics
+      await pool.query(
+        `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          mediaId, 
+          userId || null, 
+          sessionId, 
+          playDuration, 
+          ipAddress,
+          userAge || null,
+          userGender || null,
+          userLocation?.city || null,
+          userLocation?.state || null,
+          userLocation?.zip || null,
+          finalLocationSource
+        ]
+      );
 
-    // Update aggregate counters
-    // Always increment total_plays for all plays
-    await pool.query(
-      'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
-      [mediaId]
-    );
+      // Only increment total_plays for NEW plays (not updates)
+      await pool.query(
+        'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
+        [mediaId]
+      );
+    } else if (shouldUpdate) {
+      // Update existing record with longer duration and latest demographics
+      await pool.query(
+        `UPDATE media_plays 
+         SET play_duration = $1,
+             user_provided_age_range = COALESCE($2, user_provided_age_range),
+             user_provided_gender = COALESCE($3, user_provided_gender),
+             user_provided_city = COALESCE($4, user_provided_city),
+             user_provided_state = COALESCE($5, user_provided_state),
+             user_provided_zip = COALESCE($6, user_provided_zip),
+             location_source = COALESCE($7, location_source)
+         WHERE id = $8`,
+        [
+          playDuration,
+          userAge || null,
+          userGender || null,
+          userLocation?.city || null,
+          userLocation?.state || null,
+          userLocation?.zip || null,
+          finalLocationSource,
+          existingPlay.rows[0].id
+        ]
+      );
+    }
     
     // Only increment unique_plays if this is a unique play (>30s and first time for this user/media)
     if (isUnique) {
