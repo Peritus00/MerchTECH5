@@ -2217,7 +2217,7 @@ app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) 
       `SELECT 
         m.id,
         m.title,
-        m.type,
+        m.file_type as type,
         m.url,
         COUNT(mp.id) as total_plays,
         COUNT(DISTINCT CASE 
@@ -2227,7 +2227,7 @@ app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) 
       FROM media m
       LEFT JOIN media_plays mp ON m.id = mp.media_id
       WHERE m.user_id = $1
-      GROUP BY m.id, m.title, m.type, m.url
+      GROUP BY m.id, m.title, m.file_type, m.url
       ORDER BY total_plays DESC, m.title ASC`,
       [userId]
     );
