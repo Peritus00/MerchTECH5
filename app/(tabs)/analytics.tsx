@@ -199,6 +199,7 @@ export default function AnalyticsScreen() {
   const [selectedMediaId, setSelectedMediaId] = useState<number | null>(null);
   const [selectedMediaStats, setSelectedMediaStats] = useState<any>(null);
   const [mediaList, setMediaList] = useState<any[]>([]);
+  const [mediaItemsStats, setMediaItemsStats] = useState<Array<{ id: number; title: string; type: string; url: string; totalPlays: number; uniquePlays: number }>>([]);
 
   useEffect(() => {
     fetchAllAnalytics();
@@ -224,6 +225,13 @@ export default function AnalyticsScreen() {
       fetchQRScanGenderDemographics();
     }
   }, [activeTab, demographicsSubTab, user, selectedTimeRange]);
+
+  // Fetch media items stats when Behavior tab is active
+  useEffect(() => {
+    if (activeTab === 'behavior') {
+      fetchMediaItemsStats();
+    }
+  }, [activeTab, user]);
 
   const fetchQRScanAgeDemographics = async () => {
     try {
@@ -812,6 +820,45 @@ export default function AnalyticsScreen() {
 
   const renderBehaviorTab = () => (
     <>
+      {/* Media Play Statistics */}
+      {mediaItemsStats.length > 0 && (
+        <ChartContainer title="Media Play Statistics" subtitle="Total Plays and Unique Plays per media item">
+          <View style={styles.mediaItemsList}>
+            {mediaItemsStats.map((item) => (
+              <View key={item.id} style={styles.mediaItemCard}>
+                <View style={styles.mediaItemHeader}>
+                  <MaterialIcons name="music-note" size={20} color="#3b82f6" />
+                  <Text style={styles.mediaItemTitle} numberOfLines={1}>
+                    {item.title || 'Untitled'}
+                  </Text>
+                </View>
+                <View style={styles.mediaItemStats}>
+                  <View style={styles.mediaItemStat}>
+                    <Text style={styles.mediaItemStatLabel}>Total Plays</Text>
+                    <Text style={styles.mediaItemStatValue}>{item.totalPlays}</Text>
+                  </View>
+                  <View style={styles.mediaItemStat}>
+                    <Text style={styles.mediaItemStatLabel}>Unique Plays</Text>
+                    <Text style={styles.mediaItemStatValue}>{item.uniquePlays}</Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+        </ChartContainer>
+      )}
+
+      {/* Empty State for Media Items */}
+      {mediaItemsStats.length === 0 && (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="library-music" size={64} color="#d1d5db" />
+          <Text style={styles.emptyText}>No media play data available yet</Text>
+          <Text style={styles.emptySubtext}>
+            Play statistics for your media items will appear here once users start playing them. Total Plays counts all plays, while Unique Plays counts plays longer than 30 seconds (one per user per media item).
+          </Text>
+        </View>
+      )}
+
       {/* Time Patterns */}
       {timePatternData.length > 0 && (
         <ChartContainer title="Scan Patterns by Hour">
@@ -847,26 +894,28 @@ export default function AnalyticsScreen() {
       )}
 
       {/* Peak Hours */}
-      <ChartContainer title="Peak Activity Hours">
-        <View style={styles.peakHours}>
-          {timePatternData
-            .sort((a, b) => b.count - a.count)
-            .slice(0, 3)
-            .map((hour, index) => (
-              <View key={hour.hour} style={styles.peakHourItem}>
-                <MaterialIcons 
-                  name={index === 0 ? "emoji-events" : "access-time"} 
-                  size={20} 
-                  color={index === 0 ? "#f59e0b" : "#6b7280"} 
-                />
-                <Text style={styles.peakHourText}>
-                  {hour.hour}:00 - {hour.hour + 1}:00
-                </Text>
-                <Text style={styles.peakHourCount}>{hour.count} scans</Text>
-              </View>
-            ))}
-        </View>
-      </ChartContainer>
+      {timePatternData.length > 0 && (
+        <ChartContainer title="Peak Activity Hours">
+          <View style={styles.peakHours}>
+            {timePatternData
+              .sort((a, b) => b.count - a.count)
+              .slice(0, 3)
+              .map((hour, index) => (
+                <View key={hour.hour} style={styles.peakHourItem}>
+                  <MaterialIcons 
+                    name={index === 0 ? "emoji-events" : "access-time"} 
+                    size={20} 
+                    color={index === 0 ? "#f59e0b" : "#6b7280"} 
+                  />
+                  <Text style={styles.peakHourText}>
+                    {hour.hour}:00 - {hour.hour + 1}:00
+                  </Text>
+                  <Text style={styles.peakHourCount}>{hour.count} scans</Text>
+                </View>
+              ))}
+          </View>
+        </ChartContainer>
+      )}
     </>
   );
 
@@ -1588,5 +1637,51 @@ const styles = StyleSheet.create({
   },
   toggleButtonTextActive: {
     color: '#fff',
+  },
+  mediaItemsList: {
+    marginTop: 8,
+  },
+  mediaItemCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  mediaItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  mediaItemTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginLeft: 8,
+    flex: 1,
+  },
+  mediaItemStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+  },
+  mediaItemStat: {
+    alignItems: 'center',
+  },
+  mediaItemStatLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 4,
+  },
+  mediaItemStatValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1f2937',
   },
 });

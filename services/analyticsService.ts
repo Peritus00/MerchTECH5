@@ -170,7 +170,7 @@ export const analyticsService = {
     }
   },
 
-  // Track media play (only counts plays >= 30 seconds)
+  // Track media play (all durations - no restriction)
   async trackMediaPlay(
     mediaId: number,
     playDuration: number,
@@ -182,11 +182,8 @@ export const analyticsService = {
     locationSource?: string
   ): Promise<void> {
     try {
-      if (playDuration < 30) {
-        console.log('📊 ANALYTICS: Media play duration < 30s, not tracking');
-        return;
-      }
-
+      // Track all plays regardless of duration
+      // Total Plays counts all plays, Unique Plays requires >30 seconds
       await api.post('/analytics/track-media-play', {
         mediaId,
         playDuration,
@@ -469,6 +466,20 @@ export const analyticsService = {
       return {
         success: false,
         genderDistribution: [],
+      };
+    }
+  },
+
+  // Get per-media-item stats (for Behavior tab)
+  async getMediaItemsStats(): Promise<any> {
+    try {
+      const response = await api.get('/analytics/media-items-stats');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching media items stats:', error);
+      return {
+        success: false,
+        mediaItems: [],
       };
     }
   },

@@ -1775,17 +1775,17 @@ app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) =>
 
 // ---------- PLAY TRACKING ANALYTICS ENDPOINTS ----------
 
-// Track media play (>= 30 seconds)
+// Track media play (all durations - no restriction)
 app.post('/api/analytics/track-media-play', async (req, res) => {
   try {
     const { mediaId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
 
-    if (!mediaId || !playDuration || !sessionId) {
+    if (!mediaId || playDuration === undefined || playDuration === null || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
-    if (playDuration < 30) {
-      return res.status(400).json({ error: 'Play duration must be at least 30 seconds' });
+    if (playDuration < 0) {
+      return res.status(400).json({ error: 'Play duration must be non-negative' });
     }
 
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
@@ -1804,14 +1804,22 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 
     console.log(`📊 ANALYTICS: Tracking media play - Media: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId}, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
-    // Check if this is a unique play (first play from this session)
-    const existingPlay = await pool.query(
-      'SELECT id FROM media_plays WHERE media_id = $1 AND session_id = $2',
-      [mediaId, sessionId]
-    );
-    const isUnique = existingPlay.rows.length === 0;
+    // Check if this is a unique play (first play >30 seconds for this user/media combination)
+    // Unique plays require: play_duration > 30 AND no existing play >30s for this (media_id, user_id/session_id)
+    let isUnique = false;
+    if (playDuration > 30) {
+      const userKey = userId ? userId.toString() : sessionId;
+      const existingUniquePlay = await pool.query(
+        `SELECT id FROM media_plays 
+         WHERE media_id = $1 
+         AND play_duration > 30 
+         AND (user_id::text = $2 OR (user_id IS NULL AND session_id = $3))`,
+        [mediaId, userKey, sessionId]
+      );
+      isUnique = existingUniquePlay.rows.length === 0;
+    }
 
-    // Insert play record with demographics
+    // Insert play record with demographics (all plays are tracked)
     await pool.query(
       `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
@@ -1831,19 +1839,21 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
     );
 
     // Update aggregate counters
+    // Always increment total_plays for all plays
+    await pool.query(
+      'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
+      [mediaId]
+    );
+    
+    // Only increment unique_plays if this is a unique play (>30s and first time for this user/media)
     if (isUnique) {
       await pool.query(
-        'UPDATE media SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
-        [mediaId]
-      );
-    } else {
-      await pool.query(
-        'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
+        'UPDATE media SET unique_plays = unique_plays + 1 WHERE id = $1',
         [mediaId]
       );
     }
 
-    console.log(`📊 ANALYTICS: Media play tracked - Unique: ${isUnique}`);
+    console.log(`📊 ANALYTICS: Media play tracked - Duration: ${playDuration}s, Unique: ${isUnique}`);
     res.json({ success: true, isUnique });
   } catch (error) {
     console.error('📊 ANALYTICS: Error tracking media play:', error);
@@ -2096,17 +2106,18 @@ app.get('/api/analytics/play-stats', async (req, res) => {
     
     const mediaTotalStats = await pool.query(totalPlaysQuery, userId ? [userId] : []);
 
-    // Get unique plays (only >= 30 seconds) - distinct (media_id, session/user) combinations
+    // Get unique plays (only > 30 seconds) - distinct (media_id, session/user) combinations
     // This counts each unique listener per song as one unique play
     // Using concatenation to create a unique key for distinct counting
+    // Unique plays require: play_duration > 30 AND one per user per media item
     const uniquePlaysQuery = userId
       ? `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
          FROM media_plays mp
          JOIN media m ON mp.media_id = m.id
-         WHERE mp.play_duration >= 30 AND m.user_id = $1`
+         WHERE mp.play_duration > 30 AND m.user_id = $1`
       : `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
          FROM media_plays mp
-         WHERE mp.play_duration >= 30`;
+         WHERE mp.play_duration > 30`;
     
     const uniquePlaysStats = await pool.query(uniquePlaysQuery, userId ? [userId] : []);
 
@@ -2145,12 +2156,16 @@ app.get('/api/analytics/play-stats', async (req, res) => {
 
     // Get most played media - use actual play counts from media_plays table
     // Only show media that actually has plays (total_plays > 0)
+    // Total Plays: all plays, Unique Plays: distinct (media_id, user_id/session_id) where duration > 30
     const mostPlayed = await pool.query(
       `SELECT 
         m.id, 
         m.title, 
         COUNT(mp.id) as total_plays,
-        COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
+        COUNT(DISTINCT CASE 
+          WHEN mp.play_duration > 30 
+          THEN mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id) 
+        END) as unique_plays
        FROM media m
        LEFT JOIN media_plays mp ON m.id = mp.media_id
        ${mediaWhere}
@@ -2188,6 +2203,55 @@ app.get('/api/analytics/play-stats', async (req, res) => {
   }
 });
 
+// Get per-media-item stats for a user (for Behavior tab)
+app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+
+    console.log(`📊 ANALYTICS: Fetching media items stats for user ${userId}`);
+
+    // Get stats for each media item owned by the user
+    // Total Plays: all plays regardless of duration
+    // Unique Plays: distinct (media_id, user_id/session_id) where play_duration > 30
+    const mediaItemsStats = await pool.query(
+      `SELECT 
+        m.id,
+        m.title,
+        m.type,
+        m.url,
+        COUNT(mp.id) as total_plays,
+        COUNT(DISTINCT CASE 
+          WHEN mp.play_duration > 30 
+          THEN mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id) 
+        END) as unique_plays
+      FROM media m
+      LEFT JOIN media_plays mp ON m.id = mp.media_id
+      WHERE m.user_id = $1
+      GROUP BY m.id, m.title, m.type, m.url
+      ORDER BY total_plays DESC, m.title ASC`,
+      [userId]
+    );
+
+    const result = {
+      success: true,
+      mediaItems: mediaItemsStats.rows.map(row => ({
+        id: row.id,
+        title: row.title,
+        type: row.type,
+        url: row.url,
+        totalPlays: parseInt(row.total_plays || 0),
+        uniquePlays: parseInt(row.unique_plays || 0),
+      })),
+    };
+
+    console.log(`📊 ANALYTICS: Media items stats retrieved - ${result.mediaItems.length} items`);
+    res.json(result);
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching media items stats:', error);
+    res.status(500).json({ error: 'Failed to fetch media items statistics' });
+  }
+});
+
 // Get stats for a specific media item
 app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
   try {
@@ -2207,17 +2271,17 @@ app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
       }
     }
 
-    // Get total plays for this media item
+    // Get total plays for this media item (all plays)
     const totalPlays = await pool.query(
       'SELECT COUNT(*) as total_plays FROM media_plays WHERE media_id = $1',
       [mediaId]
     );
 
-    // Get unique plays for this media item (>= 30 seconds)
+    // Get unique plays for this media item (> 30 seconds, one per user)
     const uniquePlays = await pool.query(
-      `SELECT COUNT(DISTINCT COALESCE(user_id::text, session_id)) as unique_plays
-       FROM media_plays
-       WHERE media_id = $1 AND play_duration >= 30`,
+      `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
+       FROM media_plays mp
+       WHERE mp.media_id = $1 AND mp.play_duration > 30`,
       [mediaId]
     );
 

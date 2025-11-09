@@ -89,7 +89,8 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   // Analytics tracking state
   const playDurationRef = useRef<number>(0); // Duration in seconds
   const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasTrackedPlayRef = useRef<boolean>(false);
+  const hasTrackedPlayRef = useRef<boolean>(false); // Tracked 30-second milestone for unique plays
+  const hasTrackedTotalPlayRef = useRef<boolean>(false); // Tracked initial play for total plays
   const currentMediaIdRef = useRef<number | null>(null);
 
   // Cart functionality
@@ -97,12 +98,14 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const { user } = useAuth();
   const router = useRouter();
 
-  // Analytics: Track play duration and report when >= 30 seconds
+  // Analytics: Track ALL plays (no duration restriction)
+  // Also track 30-second milestone for unique plays
   const startPlayTracking = useCallback(async (mediaItem: MediaItem) => {
     // Reset tracking for new media
     if (currentMediaIdRef.current !== mediaItem.id) {
       playDurationRef.current = 0;
       hasTrackedPlayRef.current = false;
+      hasTrackedTotalPlayRef.current = false;
       currentMediaIdRef.current = mediaItem.id;
     }
 
@@ -111,77 +114,72 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
       clearInterval(playTimerRef.current);
     }
 
-    // Start timer to track playback duration
-    playTimerRef.current = setInterval(async () => {
-      playDurationRef.current += 1;
-
-      // Track when we hit 30 seconds
-      if (playDurationRef.current >= 30 && !hasTrackedPlayRef.current) {
-        hasTrackedPlayRef.current = true;
+    // Track initial play start (for Total Plays - all durations)
+    const trackPlay = async (duration: number, isUniqueMilestone: boolean = false) => {
+      try {
+        const sessionId = await getSessionId();
         
-        try {
-          const sessionId = await getSessionId();
-          
-          // Get demographics for tracking
-          let ageRange: string | undefined;
-          let gender: string | undefined;
-          let location: { city: string; state: string; zip?: string } | undefined;
-          let locationSource: string | undefined;
+        // Get demographics for tracking
+        let ageRange: string | undefined;
+        let gender: string | undefined;
+        let location: { city: string; state: string; zip?: string } | undefined;
+        let locationSource: string | undefined;
 
-          // Get age and gender data
-          if (user) {
-            // For authenticated users, get from demographics helper
-            const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
-            ageRange = demographics?.ageRange;
-            gender = demographics?.gender;
-          } else {
-            // For anonymous users, get from localStorage
-            const age = getAgeForTracking();
-            ageRange = age?.ageRange;
-            // Get gender from localStorage if available
-            const userGender = getUserGender();
-            gender = userGender?.gender;
-          }
+        // Get age and gender data
+        if (user) {
+          // For authenticated users, get from demographics helper
+          const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
+          ageRange = demographics?.ageRange;
+          gender = demographics?.gender;
+        } else {
+          // For anonymous users, get from localStorage
+          const age = getAgeForTracking();
+          ageRange = age?.ageRange;
+          // Get gender from localStorage if available
+          const userGender = getUserGender();
+          gender = userGender?.gender;
+        }
 
-          // Get location data (if available in localStorage)
-          if (typeof window !== 'undefined') {
-            try {
-              const locationStr = localStorage.getItem('user_location_preference');
-              if (locationStr) {
-                const locationData = JSON.parse(locationStr);
-                if (locationData.city && locationData.state) {
-                  location = {
-                    city: locationData.city,
-                    state: locationData.state,
-                    zip: locationData.zip,
-                  };
-                  locationSource = 'user';
-                }
+        // Get location data (if available in localStorage)
+        if (typeof window !== 'undefined') {
+          try {
+            const locationStr = localStorage.getItem('user_location_preference');
+            if (locationStr) {
+              const locationData = JSON.parse(locationStr);
+              if (locationData.city && locationData.state) {
+                location = {
+                  city: locationData.city,
+                  state: locationData.state,
+                  zip: locationData.zip,
+                };
+                locationSource = 'user';
               }
-            } catch (e) {
-              // Location not available, will use null
             }
+          } catch (e) {
+            // Location not available, will use null
           }
-          
-          // Track individual media play
-          if (mediaItem.id) {
-            await analyticsService.trackMediaPlay(
-              mediaItem.id,
-              playDurationRef.current,
-              sessionId,
-              user?.id,
-              ageRange,
-              gender,
-              location,
-              locationSource
-            );
-          }
+        }
+        
+        // Track individual media play (all durations are tracked)
+        if (mediaItem.id) {
+          await analyticsService.trackMediaPlay(
+            mediaItem.id,
+            duration,
+            sessionId,
+            user?.id,
+            ageRange,
+            gender,
+            location,
+            locationSource
+          );
+        }
 
-          // Track playlist/slideshow play if applicable
+        // Track playlist/slideshow play if applicable (only >= 30s for these)
+        if (isUniqueMilestone) {
           if (playlist?.id) {
             await analyticsService.trackPlaylistPlay(
               playlist.id,
-              playDurationRef.current,
+              duration,
               sessionId,
               user?.id,
               ageRange,
@@ -192,7 +190,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           } else if (slideshow?.id) {
             await analyticsService.trackSlideshowPlay(
               slideshow.id,
-              playDurationRef.current,
+              duration,
               sessionId,
               user?.id,
               ageRange,
@@ -201,11 +199,28 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
               locationSource
             );
           }
-
-          console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${playDurationRef.current}s, Age: ${ageRange || 'none'}, Gender: ${gender || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
-        } catch (error) {
-          console.error('Error tracking play:', error);
         }
+
+        console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${duration}s, Age: ${ageRange || 'none'}, Gender: ${gender || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
+      } catch (error) {
+        console.error('Error tracking play:', error);
+      }
+    };
+
+    // Track initial play (for Total Plays - tracks all plays)
+    if (!hasTrackedTotalPlayRef.current) {
+      hasTrackedTotalPlayRef.current = true;
+      await trackPlay(1, false);
+    }
+
+    // Start timer to track playback duration
+    playTimerRef.current = setInterval(async () => {
+      playDurationRef.current += 1;
+
+      // Track when we hit 30 seconds (for Unique Plays milestone)
+      if (playDurationRef.current === 30 && !hasTrackedPlayRef.current) {
+        hasTrackedPlayRef.current = true;
+        await trackPlay(playDurationRef.current, true);
       }
     }, 1000); // Update every second
   }, [playlist, slideshow, user]);
@@ -409,8 +424,9 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           
           // If the URL is a direct S3 URL, try to convert it to streaming URL
           if (imageUrl && imageUrl.includes('amazonaws.com') && image.id) {
+            // Use www.merchtrader.org for valid SSL certificate
             const baseUrl = process.env.NODE_ENV === 'production' 
-              ? 'https://merchtrader.org'
+              ? 'https://www.merchtrader.org'
               : 'http://localhost:5001';
             const streamingUrl = `${baseUrl}/api/slideshow-images/${image.id}/stream`;
             
