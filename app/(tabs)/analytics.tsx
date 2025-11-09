@@ -290,6 +290,24 @@ export default function AnalyticsScreen() {
     }
   };
 
+  const fetchMediaItemsStats = async () => {
+    try {
+      console.log('📊 FRONTEND: Fetching media items stats');
+      const data = await analyticsService.getMediaItemsStats();
+      console.log('📊 FRONTEND: Received media items stats data:', data);
+      if (data.success) {
+        setMediaItemsStats(data.mediaItems || []);
+        console.log('📊 FRONTEND: Set media items stats:', data.mediaItems?.length || 0, 'items');
+      } else {
+        console.warn('📊 FRONTEND: Media items stats fetch returned success: false');
+        setMediaItemsStats([]);
+      }
+    } catch (error) {
+      console.error('📊 FRONTEND: Error fetching media items stats:', error);
+      setMediaItemsStats([]);
+    }
+  };
+
   const fetchAllAnalytics = async () => {
     try {
       setIsLoading(true);
