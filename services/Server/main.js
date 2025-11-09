@@ -2385,6 +2385,8 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
 
     const result = await pool.query(baseQuery, params);
     
+    console.log(`📊 ANALYTICS: Age demographics query returned ${result.rows.length} rows`);
+    
     res.json({
       success: true,
       uniqueOnly: isUniqueOnly,
@@ -2538,6 +2540,8 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
       pool.query(citiesQuery, params)
     ]);
     
+    console.log(`📊 ANALYTICS: Location demographics query returned ${countriesResult.rows.length} countries, ${citiesResult.rows.length} cities`);
+    
     res.json({
       success: true,
       uniqueOnly: isUniqueOnly,
@@ -2556,6 +2560,278 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
   } catch (error) {
     console.error('📊 ANALYTICS: Error fetching location demographics:', error);
     res.status(500).json({ error: 'Failed to fetch location demographics' });
+  }
+});
+
+// Get location demographics for QR code scans
+app.get('/api/analytics/qr-scans/location-demographics', authenticateTokenOptional, async (req, res) => {
+  try {
+    const { userId, days } = req.query;
+    const userIdNum = userId ? parseInt(userId, 10) : null;
+    const daysNum = days ? parseInt(days, 10) : null;
+
+    console.log(`📊 ANALYTICS: Fetching QR scan location demographics${userIdNum ? ` for user ${userIdNum}` : ''}${daysNum ? ` (last ${daysNum} days)` : ''}`);
+
+    let countriesQuery;
+    let citiesQuery;
+    let params = [];
+
+    if (userIdNum) {
+      // Filter by user's QR codes
+      if (daysNum) {
+        countriesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, 'Unknown')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.scanned_at >= NOW() - ($2 || ' days')::INTERVAL
+          GROUP BY COALESCE(
+            NULLIF(TRIM(s.country_name), ''),
+            COALESCE(s.country_code, 'Unknown')
+          )
+          ORDER BY count DESC
+          LIMIT 10
+        `;
+        citiesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ) AS city,
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ) AS region,
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+            AND s.scanned_at >= NOW() - ($2 || ' days')::INTERVAL
+          GROUP BY 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            )
+          ORDER BY count DESC
+          LIMIT 20
+        `;
+        params = [userIdNum, daysNum];
+      } else {
+        countriesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, 'Unknown')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+          GROUP BY COALESCE(
+            NULLIF(TRIM(s.country_name), ''),
+            COALESCE(s.country_code, 'Unknown')
+          )
+          ORDER BY count DESC
+          LIMIT 10
+        `;
+        citiesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ) AS city,
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ) AS region,
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          JOIN qr_codes q ON s.qr_code_id = q.id
+          WHERE q.user_id = $1
+          GROUP BY 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            )
+          ORDER BY count DESC
+          LIMIT 20
+        `;
+        params = [userIdNum];
+      }
+    } else {
+      // All QR scans (admin view or no user filter)
+      if (daysNum) {
+        countriesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, 'Unknown')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.scanned_at >= NOW() - ($1 || ' days')::INTERVAL
+          GROUP BY COALESCE(
+            NULLIF(TRIM(s.country_name), ''),
+            COALESCE(s.country_code, 'Unknown')
+          )
+          ORDER BY count DESC
+          LIMIT 10
+        `;
+        citiesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ) AS city,
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ) AS region,
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          WHERE s.scanned_at >= NOW() - ($1 || ' days')::INTERVAL
+          GROUP BY 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            )
+          ORDER BY count DESC
+          LIMIT 20
+        `;
+        params = [daysNum];
+      } else {
+        countriesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, 'Unknown')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          GROUP BY COALESCE(
+            NULLIF(TRIM(s.country_name), ''),
+            COALESCE(s.country_code, 'Unknown')
+          )
+          ORDER BY count DESC
+          LIMIT 10
+        `;
+        citiesQuery = `
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ) AS city,
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ) AS region,
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            ) AS country,
+            COUNT(*) AS count
+          FROM qr_scans s
+          GROUP BY 
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_city), ''),
+              NULLIF(TRIM(s.city), ''),
+              'Unknown'
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.user_provided_state), ''),
+              NULLIF(TRIM(s.region), ''),
+              ''
+            ),
+            COALESCE(
+              NULLIF(TRIM(s.country_name), ''),
+              COALESCE(s.country_code, '')
+            )
+          ORDER BY count DESC
+          LIMIT 20
+        `;
+        params = [];
+      }
+    }
+
+    const [countriesResult, citiesResult] = await Promise.all([
+      pool.query(countriesQuery, params),
+      pool.query(citiesQuery, params)
+    ]);
+    
+    console.log(`📊 ANALYTICS: QR scan location demographics query returned ${countriesResult.rows.length} countries, ${citiesResult.rows.length} cities`);
+    
+    res.json({
+      success: true,
+      topCountries: countriesResult.rows.map(r => ({
+        country: r.country,
+        location_name: r.country,
+        count: parseInt(r.count)
+      })),
+      topCities: citiesResult.rows.map(r => ({
+        city: r.city,
+        region: r.region,
+        country: r.country || '',
+        count: parseInt(r.count)
+      }))
+    });
+  } catch (error) {
+    console.error('📊 ANALYTICS: Error fetching QR scan location demographics:', error);
+    res.status(500).json({ error: 'Failed to fetch QR scan location demographics' });
   }
 });
 
@@ -2665,6 +2941,8 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
     }
 
     const result = await pool.query(baseQuery, params);
+    
+    console.log(`📊 ANALYTICS: Gender demographics query returned ${result.rows.length} rows`);
     
     res.json({
       success: true,

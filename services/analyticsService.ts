@@ -420,4 +420,22 @@ export const analyticsService = {
       };
     }
   },
+
+  // Get location demographics for QR code scans
+  async getQRScanLocationDemographics(userId?: number, days?: number): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      if (userId) params.set('userId', String(userId));
+      if (days) params.set('days', String(days));
+      const response = await api.get(`/analytics/qr-scans/location-demographics?${params.toString()}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching QR scan location demographics:', error);
+      return {
+        success: false,
+        topCountries: [],
+        topCities: [],
+      };
+    }
+  },
 };

@@ -190,10 +190,9 @@ export default function AnalyticsScreen() {
   
   // Media play demographics toggle states
   const [ageUniqueOnly, setAgeUniqueOnly] = useState(false);
-  const [locationUniqueOnly, setLocationUniqueOnly] = useState(false);
   const [genderUniqueOnly, setGenderUniqueOnly] = useState(false);
   const [mediaPlayAgeData, setMediaPlayAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
-  const [mediaPlayLocationData, setMediaPlayLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
+  const [qrScanLocationData, setQrScanLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
   const [mediaPlayGenderData, setMediaPlayGenderData] = useState<Array<{ gender: string; count: number }>>([]);
   
   // New analytics state
@@ -214,12 +213,12 @@ export default function AnalyticsScreen() {
     }
   }, [ageUniqueOnly, activeTab, demographicsSubTab, user]);
 
-  // Fetch media play location demographics when toggle changes (always fetch for media plays)
+  // Fetch QR scan location demographics when Geography tab is active
   useEffect(() => {
     if (activeTab === 'geography') {
-      fetchMediaPlayLocationDemographics();
+      fetchQRScanLocationDemographics();
     }
-  }, [locationUniqueOnly, activeTab, user]);
+  }, [activeTab, user, selectedTimeRange]);
 
   // Fetch media play gender demographics when toggle changes
   useEffect(() => {
@@ -246,24 +245,24 @@ export default function AnalyticsScreen() {
     }
   };
 
-  const fetchMediaPlayLocationDemographics = async () => {
+  const fetchQRScanLocationDemographics = async () => {
     try {
-      console.log('📊 FRONTEND: Fetching media play location demographics', { userId: user?.id, uniqueOnly: locationUniqueOnly });
-      const data = await analyticsService.getMediaPlayLocationDemographics(user?.id, locationUniqueOnly);
-      console.log('📊 FRONTEND: Received location demographics data:', data);
+      console.log('📊 FRONTEND: Fetching QR scan location demographics', { userId: user?.id, days: selectedTimeRange });
+      const data = await analyticsService.getQRScanLocationDemographics(user?.id, selectedTimeRange);
+      console.log('📊 FRONTEND: Received QR scan location demographics data:', data);
       if (data.success) {
-        setMediaPlayLocationData({
+        setQrScanLocationData({
           topCountries: data.topCountries || [],
           topCities: data.topCities || [],
         });
-        console.log('📊 FRONTEND: Set location data:', data.topCountries?.length || 0, 'countries,', data.topCities?.length || 0, 'cities');
+        console.log('📊 FRONTEND: Set QR scan location data:', data.topCountries?.length || 0, 'countries,', data.topCities?.length || 0, 'cities');
       } else {
-        console.warn('📊 FRONTEND: Location demographics fetch returned success: false');
-        setMediaPlayLocationData(null);
+        console.warn('📊 FRONTEND: QR scan location demographics fetch returned success: false');
+        setQrScanLocationData(null);
       }
     } catch (error) {
-      console.error('📊 FRONTEND: Error fetching media play location demographics:', error);
-      setMediaPlayLocationData(null);
+      console.error('📊 FRONTEND: Error fetching QR scan location demographics:', error);
+      setQrScanLocationData(null);
     }
   };
 
@@ -723,11 +722,11 @@ export default function AnalyticsScreen() {
   );
 
   const renderGeographyTab = () => {
-    const displayCountries = mediaPlayLocationData 
-      ? mediaPlayLocationData.topCountries 
+    const displayCountries = qrScanLocationData 
+      ? qrScanLocationData.topCountries 
       : [];
-    const displayCities = mediaPlayLocationData
-      ? mediaPlayLocationData.topCities.map(c => ({
+    const displayCities = qrScanLocationData
+      ? qrScanLocationData.topCities.map(c => ({
           key: `${c.city}|${c.region}|${c.country}`,
           label: `${c.city}${c.region ? ', ' + c.region : ''}${c.country ? ' • ' + c.country : ''}`,
           count: c.count,
@@ -736,46 +735,11 @@ export default function AnalyticsScreen() {
 
     return (
       <>
-        {/* Toggle for Media Plays */}
-        <View style={styles.toggleContainer}>
-          <Text style={styles.toggleLabel}>View Media Play Location Data:</Text>
-          <View style={styles.toggleButtons}>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                locationUniqueOnly && styles.toggleButtonActive,
-              ]}
-              onPress={() => setLocationUniqueOnly(true)}
-            >
-              <Text style={[
-                styles.toggleButtonText,
-                locationUniqueOnly && styles.toggleButtonTextActive,
-              ]}>
-                Unique Plays
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.toggleButton,
-                !locationUniqueOnly && styles.toggleButtonActive,
-              ]}
-              onPress={() => setLocationUniqueOnly(false)}
-            >
-              <Text style={[
-                styles.toggleButtonText,
-                !locationUniqueOnly && styles.toggleButtonTextActive,
-              ]}>
-                Total Plays
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {/* Top Countries */}
         {displayCountries.length > 0 && (
           <ChartContainer 
             title="Geographic Distribution" 
-            subtitle={`Locations of media consumers (>=30s) - ${locationUniqueOnly ? 'Unique Plays' : 'Total Plays'}`}
+            subtitle="Locations of QR code scans"
           >
             <View style={styles.geoList}>
               {displayCountries.slice(0, 10).map((country, index) => (
@@ -784,7 +748,7 @@ export default function AnalyticsScreen() {
                     <Text style={styles.geoRankText}>{index + 1}</Text>
                   </View>
                   <Text style={styles.geoCountry}>{country.location_name || country.country}</Text>
-                  <Text style={styles.geoCount}>{country.count} plays</Text>
+                  <Text style={styles.geoCount}>{country.count} scan{country.count !== 1 ? 's' : ''}</Text>
                 </View>
               ))}
             </View>
@@ -793,7 +757,7 @@ export default function AnalyticsScreen() {
 
         {/* Top Cities */}
         {displayCities.length > 0 && (
-          <ChartContainer title={`Top Cities by Plays - ${locationUniqueOnly ? 'Unique' : 'Total'}`}>
+          <ChartContainer title="Top Cities by Scans">
             <View style={styles.geoList}>
               {displayCities.slice(0, 10).map((item, index) => (
                 <View key={item.key || index} style={styles.geoItem}>
@@ -801,7 +765,7 @@ export default function AnalyticsScreen() {
                     <Text style={styles.geoRankText}>{index + 1}</Text>
                   </View>
                   <Text style={styles.geoCountry}>{item.label}</Text>
-                  <Text style={styles.geoCount}>{item.count} plays</Text>
+                  <Text style={styles.geoCount}>{item.count} scan{item.count !== 1 ? 's' : ''}</Text>
                 </View>
               ))}
             </View>
@@ -810,7 +774,7 @@ export default function AnalyticsScreen() {
 
         {/* Geographic Chart */}
         {displayCountries.length > 0 && (
-          <ChartContainer title={`Top Countries by Plays - ${locationUniqueOnly ? 'Unique' : 'Total'}`}>
+          <ChartContainer title="Top Countries by Scans">
             <BarChart
               data={{
                 labels: displayCountries.slice(0, 5).map(item => (item.country || item.location_name || '').substring(0, 3)),
@@ -840,7 +804,7 @@ export default function AnalyticsScreen() {
             <MaterialIcons name="public" size={64} color="#d1d5db" />
             <Text style={styles.emptyText}>No location data available yet</Text>
             <Text style={styles.emptySubtext}>
-              Location demographics for media consumers (>=30s) will appear here once users start consuming media. Plays without location information will be shown as "Unknown".
+              Location data from QR code scans will appear here once users start scanning your QR codes. Scans without location information will be shown as "Unknown".
             </Text>
           </View>
         )}
