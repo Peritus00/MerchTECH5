@@ -1192,13 +1192,27 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
     )`;
 
-    // Total scans for this user's QR codes (deduped)
+    // Total scans for this user's QR codes (deduped) - ALL TIME, no date filter
+    // This matches what's shown on individual QR codes
     let totalRes;
     try {
+      // Use a separate CTE without date filter for total scans (all time)
+      const totalScansCTE = `WITH dedup_all AS (
+        SELECT DISTINCT ON (
+          s.qr_code_id,
+          COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
+          date_trunc('minute', s.scanned_at)
+        ) s.id, s.qr_code_id, s.scanned_at
+        FROM qr_scans s
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE q.user_id = $1
+        ${hasQrFilter ? 'AND s.qr_code_id = $2' : ''}
+        ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
+      )`;
       totalRes = await pool.query(
-        `${dedupCTE}
-         SELECT COUNT(*) AS c FROM dedup`,
-        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+        `${totalScansCTE}
+         SELECT COUNT(*) AS c FROM dedup_all`,
+        hasQrFilter ? [userId, qrFilterId] : [userId]
       );
     } catch (e) { console.warn('📊 SUMMARY totalRes failed:', e.message); totalRes = { rows: [{ c: 0 }] }; }
 
