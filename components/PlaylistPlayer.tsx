@@ -38,6 +38,12 @@ import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
 import { Alert } from 'react-native';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
+import { analyticsService } from '@/services/analyticsService';
+import { getSessionId } from '@/utils/sessionTracking';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAgeForTracking } from '@/utils/ageStorage';
+import { getUserGender } from '@/utils/genderStorage';
+import { getDemographicsForTracking } from '@/utils/demographicsHelper';
 
 const { width } = Dimensions.get('window');
 
@@ -82,7 +88,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
 
+  // Analytics tracking state
+  const playDurationRef = useRef<number>(0); // Duration in seconds
+  const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const hasTrackedPlayRef = useRef<boolean>(false); // Tracked 30-second milestone for unique plays
+  const hasTrackedTotalPlayRef = useRef<boolean>(false); // Tracked initial play for total plays
+  const currentMediaIdRef = useRef<number | null>(null);
+
   const { addToCart, cart, getTotalItems } = useCart();
+  const { user } = useAuth();
   const router = useRouter();
 
   const isMobile = width < 768;
@@ -285,6 +299,155 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const currentMediaItem = useMemo(() => {
     return media.length > 0 ? media[currentIndex] : null;
   }, [media, currentIndex]);
+
+  // Analytics: Track ALL plays (no duration restriction)
+  // Also track 30-second milestone for unique plays
+  const startPlayTracking = useCallback(async (mediaItem: MediaItem) => {
+    // Only track audio/video, not images
+    if (!mediaItem || (mediaItem.media_type !== 'audio' && mediaItem.media_type !== 'video')) {
+      return;
+    }
+
+    // Reset tracking for new media
+    if (currentMediaIdRef.current !== mediaItem.id) {
+      playDurationRef.current = 0;
+      hasTrackedPlayRef.current = false;
+      hasTrackedTotalPlayRef.current = false;
+      currentMediaIdRef.current = mediaItem.id;
+    }
+
+    // Clear any existing timer
+    if (playTimerRef.current) {
+      clearInterval(playTimerRef.current);
+    }
+
+    // Track initial play start (for Total Plays - all durations)
+    const trackPlay = async (duration: number, isUniqueMilestone: boolean = false) => {
+      try {
+        const sessionId = await getSessionId();
+        
+        // Get demographics for tracking
+        let ageRange: string | undefined;
+        let gender: string | undefined;
+        let location: { city: string; state: string; zip?: string } | undefined;
+        let locationSource: string | undefined;
+
+        // Get age and gender data
+        if (user) {
+          // For authenticated users, get from demographics helper
+          const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
+          ageRange = demographics?.ageRange;
+          gender = demographics?.gender;
+        } else {
+          // For anonymous users, get from localStorage
+          const age = getAgeForTracking();
+          ageRange = age?.ageRange;
+          // Get gender from localStorage if available
+          const userGender = getUserGender();
+          gender = userGender?.gender;
+        }
+
+        // Get location data (if available in localStorage)
+        if (typeof window !== 'undefined') {
+          try {
+            const locationStr = localStorage.getItem('user_location_preference');
+            if (locationStr) {
+              const locationData = JSON.parse(locationStr);
+              if (locationData.city && locationData.state) {
+                location = {
+                  city: locationData.city,
+                  state: locationData.state,
+                  zip: locationData.zip,
+                };
+                locationSource = 'user';
+              }
+            }
+          } catch (e) {
+            // Location not available, will use null
+          }
+        }
+        
+        // Track individual media play (all durations are tracked)
+        if (mediaItem.id) {
+          await analyticsService.trackMediaPlay(
+            Number(mediaItem.id),
+            duration,
+            sessionId,
+            user?.id,
+            ageRange,
+            gender,
+            location,
+            locationSource
+          );
+        }
+
+        // Track playlist play if applicable (only >= 30s for these)
+        if (isUniqueMilestone && playlistData?.id) {
+          await analyticsService.trackPlaylistPlay(
+            playlistData.id,
+            duration,
+            sessionId,
+            user?.id,
+            ageRange,
+            gender,
+            location,
+            locationSource
+          );
+        }
+
+        console.log(`📊 ANALYTICS: Play tracked - Media: ${mediaItem.id}, Duration: ${duration}s, Age: ${ageRange || 'none'}, Gender: ${gender || 'none'}, Location: ${location ? `${location.city}, ${location.state}` : 'none'}`);
+      } catch (error) {
+        console.error('Error tracking play:', error);
+      }
+    };
+
+    // Track initial play (for Total Plays - tracks all plays)
+    if (!hasTrackedTotalPlayRef.current) {
+      hasTrackedTotalPlayRef.current = true;
+      await trackPlay(1, false);
+    }
+
+    // Start timer to track playback duration
+    playTimerRef.current = setInterval(async () => {
+      playDurationRef.current += 1;
+
+      // Track when we hit 30 seconds (for Unique Plays milestone)
+      if (playDurationRef.current === 30 && !hasTrackedPlayRef.current) {
+        hasTrackedPlayRef.current = true;
+        await trackPlay(playDurationRef.current, true);
+      }
+    }, 1000); // Update every second
+  }, [playlistData, user]);
+
+  const stopPlayTracking = useCallback(() => {
+    if (playTimerRef.current) {
+      clearInterval(playTimerRef.current);
+      playTimerRef.current = null;
+    }
+  }, []);
+
+  // Effect to manage play tracking based on isPlaying state
+  useEffect(() => {
+    if (isPlaying && currentMediaItem) {
+      startPlayTracking(currentMediaItem);
+    } else {
+      stopPlayTracking();
+    }
+
+    // Cleanup on unmount or media change
+    return () => {
+      stopPlayTracking();
+    };
+  }, [isPlaying, currentMediaItem, startPlayTracking, stopPlayTracking]);
+
+  // Reset tracking when media changes
+  useEffect(() => {
+    playDurationRef.current = 0;
+    hasTrackedPlayRef.current = false;
+    hasTrackedTotalPlayRef.current = false;
+    currentMediaIdRef.current = null;
+    stopPlayTracking();
+  }, [currentIndex, stopPlayTracking]);
 
   // For playlists, we don't use background audio - each track plays individually
   // This is different from slideshows where we want continuous background music
