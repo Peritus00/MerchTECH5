@@ -1016,6 +1016,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             }}
             onPlaying={() => {
               console.log('🎵 HTML5_VIDEO: onPlaying - React event');
+              console.log('📊 TRACKING: Video started playing, setting isPlaying to true');
               setIsPlaying(true);
             }}
             onPause={() => {
