@@ -1397,6 +1397,43 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       citiesRes = { rows: [] };
     }
 
+    // QR codes per city (deduped: one event per visitor per minute)
+    let cityQRCodesRes;
+    try {
+      const cityQRCodesSql = `
+        ${dedupCTE}
+        SELECT 
+          COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown') AS city,
+          COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), '') AS region,
+          COALESCE(s.country_name, s.country_code, '') AS country_code,
+          q.id AS qr_code_id,
+          q.name AS qr_name,
+          COUNT(*) AS scan_count
+        FROM dedup d
+        JOIN qr_scans s ON s.id = d.id
+        JOIN qr_codes q ON s.qr_code_id = q.id
+        WHERE (
+          s.city IS NOT NULL 
+          OR s.user_provided_city IS NOT NULL 
+          OR s.location_source != 'unknown'
+          OR (s.country_code IS NOT NULL AND s.location_source IS NOT NULL)
+        )
+        GROUP BY 
+          COALESCE(NULLIF(TRIM(s.user_provided_city), ''), NULLIF(TRIM(s.city), ''), 'Unknown'),
+          COALESCE(NULLIF(TRIM(s.user_provided_state), ''), NULLIF(TRIM(s.region), ''), ''),
+          COALESCE(s.country_name, s.country_code, ''),
+          q.id,
+          q.name
+        ORDER BY city, scan_count DESC`;
+      cityQRCodesRes = await pool.query(
+        cityQRCodesSql,
+        hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
+      );
+    } catch (e) {
+      console.warn('📊 SUMMARY cityQRCodesRes failed:', e.message);
+      cityQRCodesRes = { rows: [] };
+    }
+
     // Top devices
     let devicesRes;
     try { devicesRes = await pool.query(
@@ -1616,13 +1653,43 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       dailyGrowth: 0,
       conversionGrowth: 0,
       topCountries: countriesRes.rows.map(r => ({ country: r.country, count: parseInt(r.count) })),
-      topCities: citiesRes.rows.map(r => ({ 
-        city: r.city, 
-        region: r.region, 
-        country: r.country_code, 
-        count: parseInt(r.count),
-        userProvidedCount: parseInt(r.user_provided_count || 0)
-      })),
+      topCities: (() => {
+        // Create a map to aggregate QR codes by city
+        const qrCodesByCity = new Map();
+        if (cityQRCodesRes && cityQRCodesRes.rows) {
+          cityQRCodesRes.rows.forEach(row => {
+            const cityKey = `${row.city}|${row.region}|${row.country_code}`;
+            if (!qrCodesByCity.has(cityKey)) {
+              qrCodesByCity.set(cityKey, []);
+            }
+            const qrCodes = qrCodesByCity.get(cityKey);
+            qrCodes.push({
+              qrCodeId: parseInt(row.qr_code_id),
+              qrName: row.qr_name,
+              scanCount: parseInt(row.scan_count)
+            });
+          });
+        }
+
+        // Map cities and attach QR codes
+        return citiesRes.rows.map(r => {
+          const cityKey = `${r.city}|${r.region}|${r.country_code}`;
+          const qrCodes = qrCodesByCity.get(cityKey) || [];
+          // Sort QR codes by scan count descending and limit to top 15 per city
+          const sortedQRCodes = qrCodes
+            .sort((a, b) => b.scanCount - a.scanCount)
+            .slice(0, 15);
+          
+          return {
+            city: r.city, 
+            region: r.region, 
+            country: r.country_code, 
+            count: parseInt(r.count),
+            userProvidedCount: parseInt(r.user_provided_count || 0),
+            qrCodes: sortedQRCodes.length > 0 ? sortedQRCodes : undefined
+          };
+        });
+      })(),
       topDevices: devicesRes.rows.map(r => ({ device: r.device, count: parseInt(r.count) })),
       ageRanges: ageRangesRes.rows.map(r => ({ ageRange: r.age_range, count: parseInt(r.count) })),
       genderDistribution: genderDistRes.rows.map(r => ({ gender: r.gender, count: parseInt(r.count) })),

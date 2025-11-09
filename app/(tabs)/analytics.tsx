@@ -176,7 +176,8 @@ export default function AnalyticsScreen() {
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [deviceData, setDeviceData] = useState<DeviceData[]>([]);
   const [geoData, setGeoData] = useState<GeographicData | null>(null);
-  const [cityList, setCityList] = useState<Array<{ key: string; label: string; count: number }>>([]);
+  const [cityList, setCityList] = useState<Array<{ key: string; label: string; count: number; qrCodes?: Array<{ qrCodeId: number; qrName: string; scanCount: number }> }>>([]);
+  const [expandedCities, setExpandedCities] = useState<Set<string>>(new Set());
   const [browserData, setBrowserData] = useState<BrowserData[]>([]);
   const [osData, setOSData] = useState<OSData[]>([]);
   const [timePatternData, setTimePatternData] = useState<TimePatternData[]>([]);
@@ -358,6 +359,7 @@ export default function AnalyticsScreen() {
         key: `${c.city}|${c.region}|${c.country}`,
         label: `${c.city}${c.region ? ', ' + c.region : ''}${c.country ? ' • ' + c.country : ''}`,
         count: c.count || 0,
+        qrCodes: c.qrCodes || undefined,
       })));
 
       // Set age demographics from real analytics
@@ -783,15 +785,56 @@ export default function AnalyticsScreen() {
         {displayCities.length > 0 && (
           <ChartContainer title="Top Cities by Scans">
             <View style={styles.geoList}>
-              {displayCities.slice(0, 10).map((item, index) => (
-                <View key={item.key || index} style={styles.geoItem}>
-                  <View style={styles.geoRank}>
-                    <Text style={styles.geoRankText}>{index + 1}</Text>
+              {displayCities.slice(0, 10).map((item, index) => {
+                const isExpanded = expandedCities.has(item.key || '');
+                const hasQRCodes = item.qrCodes && item.qrCodes.length > 0;
+                
+                return (
+                  <View key={item.key || index}>
+                    <TouchableOpacity
+                      style={styles.geoItem}
+                      onPress={() => {
+                        if (hasQRCodes) {
+                          const newExpanded = new Set(expandedCities);
+                          if (isExpanded) {
+                            newExpanded.delete(item.key || '');
+                          } else {
+                            newExpanded.add(item.key || '');
+                          }
+                          setExpandedCities(newExpanded);
+                        }
+                      }}
+                      disabled={!hasQRCodes}
+                    >
+                      <View style={styles.geoItemHeader}>
+                        <View style={styles.geoRank}>
+                          <Text style={styles.geoRankText}>{index + 1}</Text>
+                        </View>
+                        <Text style={styles.geoCountry}>{item.label}</Text>
+                        <Text style={styles.geoCount}>{item.count} scan{item.count !== 1 ? 's' : ''}</Text>
+                        {hasQRCodes && (
+                          <MaterialIcons
+                            name={isExpanded ? 'expand-less' : 'expand-more'}
+                            size={20}
+                            color="#6b7280"
+                            style={styles.expandIcon}
+                          />
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                    {isExpanded && hasQRCodes && (
+                      <View style={styles.qrCodesContainer}>
+                        {item.qrCodes?.map((qrCode) => (
+                          <View key={qrCode.qrCodeId} style={styles.qrCodeItem}>
+                            <Text style={styles.qrCodeName}>{qrCode.qrName}</Text>
+                            <Text style={styles.qrCodeCount}>{qrCode.scanCount} scan{qrCode.scanCount !== 1 ? 's' : ''}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
-                  <Text style={styles.geoCountry}>{item.label}</Text>
-                  <Text style={styles.geoCount}>{item.count} scan{item.count !== 1 ? 's' : ''}</Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </ChartContainer>
         )}
@@ -1430,6 +1473,15 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 12,
   },
+  geoItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  expandIcon: {
+    marginLeft: 'auto',
+  },
   geoRank: {
     width: 24,
     height: 24,
@@ -1452,6 +1504,31 @@ const styles = StyleSheet.create({
   geoCount: {
     fontSize: 14,
     color: '#6b7280',
+  },
+  qrCodesContainer: {
+    paddingLeft: 36,
+    paddingTop: 8,
+    paddingBottom: 4,
+    gap: 6,
+  },
+  qrCodeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 6,
+  },
+  qrCodeName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '400',
+    color: '#4b5563',
+  },
+  qrCodeCount: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
   peakHours: {
     gap: 12,

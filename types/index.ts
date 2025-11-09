@@ -156,7 +156,17 @@ export interface AnalyticsSummary {
     count: number; 
     flag?: string;
   }>;
-  topCities?: Array<{ city: string; region: string; country: string; count: number }>;
+  topCities?: Array<{ 
+    city: string; 
+    region: string; 
+    country: string; 
+    count: number;
+    qrCodes?: Array<{
+      qrCodeId: number;
+      qrName: string;
+      scanCount: number;
+    }>;
+  }>;
   topDevices: Array<{ device: string; count: number }>;
   hourlyData: number[];
   dailyScanHistory?: Array<{ date: string; count: number }>;
