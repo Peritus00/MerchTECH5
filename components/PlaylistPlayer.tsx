@@ -311,9 +311,23 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   // Also track 30-second milestone for unique plays
   const startPlayTracking = useCallback(async (mediaItem: MediaItem) => {
     // Only track audio/video, not images
-    if (!mediaItem || (mediaItem.media_type !== 'audio' && mediaItem.media_type !== 'video')) {
+    // Check both media_type (legacy) and fileType/type (current API format)
+    const mediaType = mediaItem.media_type || mediaItem.fileType || mediaItem.type;
+    if (!mediaItem || (mediaType !== 'audio' && mediaType !== 'video')) {
+      console.log('📊 TRACKING: Skipping tracking - not audio/video:', {
+        id: mediaItem?.id,
+        media_type: mediaItem?.media_type,
+        fileType: mediaItem?.fileType,
+        type: mediaItem?.type,
+        mediaType
+      });
       return;
     }
+    console.log('📊 TRACKING: Starting play tracking for media:', {
+      id: mediaItem.id,
+      title: mediaItem.title,
+      mediaType
+    });
 
     // Reset tracking for new media
     if (currentMediaIdRef.current !== mediaItem.id) {
@@ -470,7 +484,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     
     if (isPlaying && currentMediaItem) {
       // Only track audio/video, not images
-      if (currentMediaItem.media_type === 'audio' || currentMediaItem.media_type === 'video') {
+      const currentMediaType = currentMediaItem.media_type || currentMediaItem.fileType || currentMediaItem.type;
+      if (currentMediaType === 'audio' || currentMediaType === 'video') {
         console.log('📊 TRACKING: Starting play tracking for media:', currentMediaItem.id);
         startPlayTracking(currentMediaItem);
       } else {
@@ -573,7 +588,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         // Ensure tracking starts for mobile playback
         const mediaItem = currentMediaItemRef.current;
         const trackFn = startPlayTrackingRef.current;
-        if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
+        const itemMediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
+        if (mediaItem && trackFn && (itemMediaType === 'audio' || itemMediaType === 'video')) {
           console.log('📊 TRACKING: Starting tracking from expo-av playback status for media:', mediaItem.id);
           trackFn(mediaItem);
         }
@@ -591,7 +607,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   // Reset video position, dimensions, zoom, and fullscreen when changing videos
   useEffect(() => {
-    if (videoRef.current && media[currentIndex]?.media_type === 'video') {
+    const currentItemMediaType = media[currentIndex]?.media_type || media[currentIndex]?.fileType || media[currentIndex]?.type;
+    if (videoRef.current && currentItemMediaType === 'video') {
       videoRef.current.setPositionAsync(0);
       setVideoDimensions(null); // Reset dimensions for new video
       setZoomLevel(1); // Reset zoom level for new video
@@ -670,9 +687,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const handleFullscreen = async () => {
     try {
       const currentItem = media[currentIndex];
-      const isVideo = currentItem?.media_type === 'video' || 
-                     currentItem?.fileType === 'video' || 
-                     currentItem?.type === 'video' ||
+      const itemType = currentItem?.media_type || currentItem?.fileType || currentItem?.type;
+      const isVideo = itemType === 'video' ||
                      currentItem?.contentType?.startsWith('video/');
       
       if (Platform.OS === 'web') {
@@ -759,14 +775,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     if (!currentItem) return null;
     
     // Enhanced media type detection
-    const isVideo = currentItem.media_type === 'video' || 
-                   currentItem.fileType === 'video' || 
-                   currentItem.type === 'video' ||
+    const itemType = currentItem.media_type || currentItem.fileType || currentItem.type;
+    const isVideo = itemType === 'video' ||
                    currentItem.contentType?.startsWith('video/');
     
-    const isAudio = currentItem.media_type === 'audio' || 
-                   currentItem.fileType === 'audio' || 
-                   currentItem.type === 'audio' ||
+    const isAudio = itemType === 'audio' ||
                    currentItem.contentType?.startsWith('audio/');
     
     const isImage = !isVideo && !isAudio; // Default to image if not video or audio
@@ -936,16 +949,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                     // Ensure tracking starts even if state wasn't updated
                     const mediaItem = currentMediaItemRef.current;
                     const trackFn = startPlayTrackingRef.current;
-                    if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
-                      console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
-                      trackFn(mediaItem);
-                    } else {
-                      console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
-                        hasMediaItem: !!mediaItem,
-                        hasTrackFn: !!trackFn,
-                        mediaType: mediaItem?.media_type
-                      });
-                    }
+      const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
+      if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
+        console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
+        trackFn(mediaItem);
+      } else {
+        console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
+          hasMediaItem: !!mediaItem,
+          hasTrackFn: !!trackFn,
+          mediaType: mediaType
+        });
+      }
                   });
                   
                   ref.addEventListener('pause', () => {
@@ -1191,16 +1205,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                     // Ensure tracking starts even if state wasn't updated
                     const mediaItem = currentMediaItemRef.current;
                     const trackFn = startPlayTrackingRef.current;
-                    if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
-                      console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
-                      trackFn(mediaItem);
-                    } else {
-                      console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
-                        hasMediaItem: !!mediaItem,
-                        hasTrackFn: !!trackFn,
-                        mediaType: mediaItem?.media_type
-                      });
-                    }
+      const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
+      if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
+        console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
+        trackFn(mediaItem);
+      } else {
+        console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
+          hasMediaItem: !!mediaItem,
+          hasTrackFn: !!trackFn,
+          mediaType: mediaType
+        });
+      }
                   });
                   
                   ref.addEventListener('pause', () => {
