@@ -94,6 +94,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const hasTrackedPlayRef = useRef<boolean>(false); // Tracked 30-second milestone for unique plays
   const hasTrackedTotalPlayRef = useRef<boolean>(false); // Tracked initial play for total plays
   const currentMediaIdRef = useRef<number | null>(null);
+  const currentMediaItemRef = useRef<MediaItem | null>(null); // Store current media item for ref callbacks
+  const startPlayTrackingRef = useRef<((mediaItem: MediaItem) => Promise<void>) | null>(null); // Store tracking function
 
   const { addToCart, cart, getTotalItems } = useCart();
   const { user } = useAuth();
@@ -300,6 +302,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     return media.length > 0 ? media[currentIndex] : null;
   }, [media, currentIndex]);
 
+  // Update refs when values change
+  useEffect(() => {
+    currentMediaItemRef.current = currentMediaItem;
+  }, [currentMediaItem]);
+
   // Analytics: Track ALL plays (no duration restriction)
   // Also track 30-second milestone for unique plays
   const startPlayTracking = useCallback(async (mediaItem: MediaItem) => {
@@ -419,6 +426,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }, 1000); // Update every second
   }, [playlistData, user]);
 
+  // Store tracking function in ref for use in event listeners
+  useEffect(() => {
+    startPlayTrackingRef.current = startPlayTracking;
+  }, [startPlayTracking]);
+
   const stopPlayTracking = useCallback(() => {
     if (playTimerRef.current) {
       clearInterval(playTimerRef.current);
@@ -428,9 +440,23 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   // Effect to manage play tracking based on isPlaying state
   useEffect(() => {
+    console.log('📊 TRACKING: Effect triggered', { 
+      isPlaying, 
+      hasMediaItem: !!currentMediaItem, 
+      mediaId: currentMediaItem?.id,
+      mediaType: currentMediaItem?.media_type 
+    });
+    
     if (isPlaying && currentMediaItem) {
-      startPlayTracking(currentMediaItem);
+      // Only track audio/video, not images
+      if (currentMediaItem.media_type === 'audio' || currentMediaItem.media_type === 'video') {
+        console.log('📊 TRACKING: Starting play tracking for media:', currentMediaItem.id);
+        startPlayTracking(currentMediaItem);
+      } else {
+        console.log('📊 TRACKING: Skipping tracking for non-audio/video media');
+      }
     } else {
+      console.log('📊 TRACKING: Stopping play tracking');
       stopPlayTracking();
     }
 
@@ -1095,6 +1121,31 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                     console.log('🎵 HTML5_AUDIO: canplaythrough - can play without stopping');
                   });
                   
+                  // Track when audio actually starts playing (native event)
+                  ref.addEventListener('playing', () => {
+                    console.log('🎵 HTML5_AUDIO: Native playing event - audio is playing');
+                    console.log('📊 TRACKING: Native playing event, ensuring tracking starts');
+                    setIsPlaying(true);
+                    // Ensure tracking starts even if state wasn't updated
+                    const mediaItem = currentMediaItemRef.current;
+                    const trackFn = startPlayTrackingRef.current;
+                    if (mediaItem && trackFn && (mediaItem.media_type === 'audio' || mediaItem.media_type === 'video')) {
+                      console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
+                      trackFn(mediaItem);
+                    } else {
+                      console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
+                        hasMediaItem: !!mediaItem,
+                        hasTrackFn: !!trackFn,
+                        mediaType: mediaItem?.media_type
+                      });
+                    }
+                  });
+                  
+                  ref.addEventListener('pause', () => {
+                    console.log('🎵 HTML5_AUDIO: Native pause event - audio paused');
+                    setIsPlaying(false);
+                  });
+                  
                   ref.addEventListener('error', (e) => {
                     console.error('🎵 HTML5_AUDIO: Native error event:', {
                       error: ref.error,
@@ -1172,6 +1223,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               }}
               onPlaying={() => {
                 console.log('🎵 HTML5_AUDIO: onPlaying - React event');
+                console.log('📊 TRACKING: Audio started playing, setting isPlaying to true');
                 setIsPlaying(true);
               }}
               onPause={() => {
