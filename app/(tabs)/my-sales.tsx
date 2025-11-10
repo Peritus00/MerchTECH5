@@ -10,7 +10,9 @@ import {
   Alert,
   Share,
   Dimensions,
+  Text,
 } from 'react-native';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -387,10 +389,18 @@ export default function MySalesScreen() {
       {/* Header */}
       <HeaderWithLogo
         title="My Sales"
-        onRightButtonPress={exportData}
-        rightButtonIcon="download"
-        rightButtonColor="#3b82f6"
       />
+
+      {/* Download Section with Red Text */}
+      <View style={styles.downloadSection}>
+        <TouchableOpacity 
+          style={styles.downloadButtonContainer}
+          onPress={exportData}
+        >
+          <MaterialIconWithFallback name="download" size={24} color="#3b82f6" />
+          <Text style={styles.downloadText}>CLICK HERE TO DOWNLOAD</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Tab Navigation */}
       <ScrollView 
@@ -435,6 +445,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f8fafc',
+  },
+  downloadSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  downloadButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  downloadText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   loadingContainer: {
     flex: 1,
