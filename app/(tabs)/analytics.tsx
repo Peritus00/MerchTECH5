@@ -751,13 +751,8 @@ export default function AnalyticsScreen() {
     const displayCountries = qrScanLocationData 
       ? qrScanLocationData.topCountries 
       : [];
-    const displayCities = qrScanLocationData
-      ? qrScanLocationData.topCities.map(c => ({
-          key: `${c.city}|${c.region}|${c.country}`,
-          label: `${c.city}${c.region ? ', ' + c.region : ''}${c.country ? ' • ' + c.country : ''}`,
-          count: c.count,
-        }))
-      : [];
+    // Use cityList which includes qrCodes from the main analytics summary
+    const displayCities = cityList;
 
     return (
       <>
