@@ -10,7 +10,8 @@ import { IconSymbol } from '@/components/ui/IconSymbol';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ScrollView, RefreshControl, View, TouchableOpacity, Alert, TextInput } from 'react-native';
+import { ScrollView, RefreshControl, View, TouchableOpacity, Alert, TextInput, Text } from 'react-native';
+import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { AdvancedQRCodeGenerator } from '@/components/AdvancedQRCodeGenerator';
 import { AdvancedQREditor } from '@/components/AdvancedQREditor';
 import { qrCodeService } from '@/services/qrCodeService';
