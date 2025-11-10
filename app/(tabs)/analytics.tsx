@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { analyticsService } from '@/services/analyticsService';
 import { useAuth } from '@/contexts/AuthContext';
@@ -171,6 +171,7 @@ const ChartContainer = ({ title, children, subtitle }: {
 
 export default function AnalyticsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
   const { user } = useAuth();
   const [summaryData, setSummaryData] = useState<SummaryData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
@@ -186,13 +187,26 @@ export default function AnalyticsScreen() {
   const [selectedTimeRange, setSelectedTimeRange] = useState(7);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'devices' | 'geography' | 'behavior' | 'demographics'>('overview');
+  
+  // Initialize activeTab from URL parameter if present
+  const getInitialTab = (): 'overview' | 'recentActivity' | 'geography' | 'behavior' | 'demographics' => {
+    const tabParam = params.tab as string;
+    if (tabParam === 'recentActivity' || tabParam === 'overview' || tabParam === 'geography' || tabParam === 'behavior' || tabParam === 'demographics') {
+      return tabParam;
+    }
+    return 'overview';
+  };
+  
+  const [activeTab, setActiveTab] = useState<'overview' | 'recentActivity' | 'geography' | 'behavior' | 'demographics'>(getInitialTab());
   const [demographicsSubTab, setDemographicsSubTab] = useState<'age' | 'gender'>('age');
   
   // QR scan demographics data
   const [qrScanAgeData, setQrScanAgeData] = useState<Array<{ ageRange: string; count: number }>>([]);
   const [qrScanLocationData, setQrScanLocationData] = useState<{ topCountries: any[]; topCities: any[] } | null>(null);
   const [qrScanGenderData, setQrScanGenderData] = useState<Array<{ gender: string; count: number }>>([]);
+  
+  // Recent scans data
+  const [recentScans, setRecentScans] = useState<Array<{ qrName: string; location: string; device: string; timestamp: string }>>([]);
   
   // New analytics state
   const [playStats, setPlayStats] = useState<any>(null);
@@ -205,6 +219,14 @@ export default function AnalyticsScreen() {
   useEffect(() => {
     fetchAllAnalytics();
   }, [selectedTimeRange]);
+
+  // Update activeTab when tab parameter changes
+  useEffect(() => {
+    const tabParam = params.tab as string;
+    if (tabParam && (tabParam === 'recentActivity' || tabParam === 'overview' || tabParam === 'geography' || tabParam === 'behavior' || tabParam === 'demographics')) {
+      setActiveTab(tabParam);
+    }
+  }, [params.tab]);
 
   // Fetch QR scan age demographics when Age tab is active
   useEffect(() => {
@@ -368,6 +390,9 @@ export default function AnalyticsScreen() {
       // Set gender demographics from real analytics
       setGenderData((analytics as any).genderDistribution || []);
 
+      // Set recent scans from real analytics
+      setRecentScans(analytics.recentScans || []);
+
       // Clear browser and OS data (will be populated when real tracking is implemented)
       setBrowserData([]);
       setOSData([]);
@@ -414,6 +439,7 @@ export default function AnalyticsScreen() {
       setHistoryData({ data: [], personalized: false });
       setDeviceData([]);
       setGeoData({ level: 'country', data: [] });
+      setRecentScans([]);
       setBrowserData([]);
       setOSData([]);
       setTimePatternData([]);
@@ -444,6 +470,24 @@ export default function AnalyticsScreen() {
   const handleClearMediaSelection = () => {
     setSelectedMediaId(null);
     setSelectedMediaStats(null);
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+
+    if (diffHours > 24) {
+      return date.toLocaleDateString();
+    } else if (diffHours > 0) {
+      return `${diffHours}h ago`;
+    } else if (diffMinutes > 0) {
+      return `${diffMinutes}m ago`;
+    } else {
+      return 'Just now';
+    }
   };
 
   const formatHistoryChartData = () => {
@@ -579,10 +623,14 @@ export default function AnalyticsScreen() {
                 >
                   <View style={styles.listItemLeft}>
                     <Text style={styles.listItemRank}>{index + 1}</Text>
-                    <Text style={styles.listItemName}>{item.title || 'Untitled'}</Text>
+                    <Text style={styles.listItemName}>
+                      {item.title || 'Untitled'}{' '}
+                      <Text style={styles.playCountText}>
+                        [ {parseInt(item.total_plays) || 0} PLAYS ]
+                      </Text>
+                    </Text>
                   </View>
                   <View style={styles.listItemRight}>
-                    <Text style={styles.listItemValue}>{parseInt(item.total_plays) || 0} plays</Text>
                     {selectedMediaId === item.id && (
                       <MaterialIcons name="check-circle" size={20} color="#3b82f6" style={{ marginLeft: 8 }} />
                     )}
@@ -681,71 +729,45 @@ export default function AnalyticsScreen() {
     </>
   );
 
-  const renderDevicesTab = () => (
-    <>
-      {/* Device Distribution */}
-      {deviceData.length > 0 && (
-        <ChartContainer title="Device Distribution">
-          <PieChart
-            data={formatPieChartData(deviceData, colorPalette)}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={{
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-            }}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="15"
-            absolute
-          />
-        </ChartContainer>
-      )}
+  const renderRecentActivityTab = () => {
+    if (recentScans.length === 0) {
+      return (
+        <View style={styles.emptyState}>
+          <MaterialIcons name="history" size={64} color="#d1d5db" />
+          <Text style={styles.emptyText}>No recent QR code activity</Text>
+          <Text style={styles.emptySubtext}>
+            QR code scan activity will appear here once users start scanning your QR codes.
+          </Text>
+        </View>
+      );
+    }
 
-      {/* Browser Distribution */}
-      {browserData.length > 0 && (
-        <ChartContainer title="Browser Distribution">
-          <BarChart
-            data={{
-              labels: browserData.slice(0, 5).map(item => item.browser),
-              datasets: [{
-                data: browserData.slice(0, 5).map(item => item.count),
-              }],
-            }}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={{
-              backgroundColor: '#ffffff',
-              backgroundGradientFrom: '#ffffff',
-              backgroundGradientTo: '#ffffff',
-              decimalPlaces: 0,
-              color: (opacity = 1) => `rgba(139, 92, 246, ${opacity})`,
-              labelColor: (opacity = 1) => `rgba(107, 114, 128, ${opacity})`,
-              barPercentage: 0.7,
-            }}
-            style={styles.chart}
-          />
-        </ChartContainer>
-      )}
-
-      {/* Operating System Distribution */}
-      {osData.length > 0 && (
-        <ChartContainer title="Operating System Distribution">
-          <PieChart
-            data={formatPieChartData(osData, ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'])}
-            width={screenWidth - 64}
-            height={220}
-            chartConfig={{
-              color: (opacity = 1) => `rgba(0, 0, 0, ${opacity})`,
-            }}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="15"
-            absolute
-          />
-        </ChartContainer>
-      )}
-    </>
-  );
+    return (
+      <ChartContainer title="Recent QR Code Activity">
+        <View style={styles.activityList}>
+          {recentScans.map((scan, index) => (
+            <View key={index} style={styles.activityCard}>
+              <View style={[styles.activityIconContainer, { backgroundColor: '#3b82f620' }]}>
+                <MaterialIcons
+                  name="visibility"
+                  size={16}
+                  color="#3b82f6"
+                />
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityDescription}>
+                  QR Code scanned: {scan.qrName || 'Unknown QR Code'}
+                </Text>
+                <Text style={styles.activityTimestamp}>
+                  {formatTimestamp(scan.timestamp)}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      </ChartContainer>
+    );
+  };
 
   const renderGeographyTab = () => {
     const displayCountries = qrScanLocationData 
@@ -1201,10 +1223,10 @@ export default function AnalyticsScreen() {
       <View style={styles.tabContainer}>
         {[
           { key: 'overview', label: 'Overview', icon: 'dashboard' },
-          { key: 'devices', label: 'Devices', icon: 'devices' },
+          { key: 'recentActivity', label: 'Recent Activity', icon: 'history' },
           { key: 'geography', label: 'Geography', icon: 'public' },
           { key: 'demographics', label: 'Demographics', icon: 'people' },
-          { key: 'behavior', label: 'Behavior', icon: 'schedule' },
+          { key: 'behavior', label: 'Play Counter', icon: 'schedule' },
         ].map((tab) => (
           <TouchableOpacity
             key={tab.key}
@@ -1240,7 +1262,7 @@ export default function AnalyticsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 'overview' && renderOverviewTab()}
-        {activeTab === 'devices' && renderDevicesTab()}
+        {activeTab === 'recentActivity' && renderRecentActivityTab()}
         {activeTab === 'geography' && renderGeographyTab()}
         {activeTab === 'demographics' && renderDemographicsTab()}
         {activeTab === 'behavior' && renderBehaviorTab()}
@@ -1609,6 +1631,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#6b7280',
   },
+  playCountText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#ef4444',
+  },
   clearButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1773,5 +1800,42 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     color: '#1f2937',
+  },
+  activityList: {
+    gap: 8,
+  },
+  activityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  activityIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  activityContent: {
+    flex: 1,
+  },
+  activityDescription: {
+    fontSize: 14,
+    color: '#1f2937',
+    marginBottom: 2,
+    lineHeight: 18,
+  },
+  activityTimestamp: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
 });

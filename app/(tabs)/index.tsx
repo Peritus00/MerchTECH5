@@ -547,7 +547,7 @@ export default function DashboardScreen() {
         <View style={styles.activityContainer}>
           <View style={styles.activityHeader}>
             <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/analytics')}>
+            <TouchableOpacity onPress={() => router.push('/(tabs)/analytics?tab=recentActivity')}>
               <Text style={styles.viewAllText}>View All</Text>
             </TouchableOpacity>
           </View>
