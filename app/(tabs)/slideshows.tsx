@@ -193,10 +193,18 @@ export default function SlideshowsScreen() {
       {/* Header */}
       <HeaderWithLogo
         title="Slideshows"
-        onRightButtonPress={() => setShowCreateModal(true)}
-        rightButtonIcon="add"
-        rightButtonColor="#3b82f6"
       />
+
+      {/* Create Section with Red Text */}
+      <View style={styles.createSection}>
+        <TouchableOpacity 
+          style={styles.createButtonContainer}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <MaterialIconWithFallback name="add" size={24} color="#3b82f6" />
+          <Text style={styles.createText}>CLICK HERE TO CREATE NEW SLIDESHOW</Text>
+        </TouchableOpacity>
+      </View>
 
       <ScrollView
         style={styles.scrollView}
@@ -392,6 +400,24 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     color: '#1f2937',
+  },
+  createSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  createButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  createText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   scrollView: {
     flex: 1,

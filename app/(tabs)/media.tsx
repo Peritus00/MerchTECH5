@@ -195,11 +195,19 @@ export default function MediaScreen() {
       {/* Header */}
       <HeaderWithLogo
         title="Media Library"
-        onRightButtonPress={handleUpload}
-        rightButtonIcon="cloud-upload"
-        rightButtonColor="#3b82f6"
         logoVariant="gold"
       />
+
+      {/* Upload Section with Red Text */}
+      <View style={styles.uploadSection}>
+        <TouchableOpacity 
+          style={styles.uploadButtonContainer}
+          onPress={handleUpload}
+        >
+          <MaterialIconWithFallback name="cloud-upload" size={24} color="#3b82f6" />
+          <Text style={styles.uploadText}>CLICK HERE TO UPLOAD NEW MEDIA</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -311,6 +319,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
+  },
+  uploadSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  uploadButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  uploadText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   uploadButton: {
     flexDirection: 'row',

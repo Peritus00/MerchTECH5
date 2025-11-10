@@ -348,11 +348,19 @@ export default function QRCodesScreen() {
     <ThemedView style={styles.container}>
       <HeaderWithLogo
         title="My QR Codes"
-        onRightButtonPress={() => setCreateModalVisible(true)}
-        rightButtonIcon="add"
-        rightButtonColor="#3b82f6"
         logoVariant="gold"
       />
+
+      {/* Create Section with Red Text */}
+      <View style={styles.createSection}>
+        <TouchableOpacity 
+          style={styles.createButtonContainer}
+          onPress={() => setCreateModalVisible(true)}
+        >
+          <MaterialIconWithFallback name="add" size={24} color="#3b82f6" />
+          <Text style={styles.createText}>CLICK HERE TO CREATE NEW QR CODE</Text>
+        </TouchableOpacity>
+      </View>
       
       <ScrollView
         style={styles.scrollView}
@@ -655,6 +663,24 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  createSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  createButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  createText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   scrollView: {
     flex: 1,

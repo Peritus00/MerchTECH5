@@ -361,10 +361,11 @@ export default function PlaylistsScreen() {
         <View style={styles.headerRight}>
           <CartHeader color="#6b7280" size={24} />
           <TouchableOpacity 
-            style={styles.addButton}
+            style={styles.addButtonContainer}
             onPress={() => setShowCreateModal(true)}
           >
             <MaterialIconWithFallback name="add" size={24} color="#3b82f6" />
+            <Text style={styles.addButtonText}>CLICK HERE TO ADD NEW PLAYLIST</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -556,6 +557,17 @@ const styles = StyleSheet.create({
   },
   addButton: {
     padding: 4,
+  },
+  addButtonContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addButtonText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   searchContainer: {
     flexDirection: 'row',
