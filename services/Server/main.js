@@ -1886,14 +1886,14 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
     const existingDuration = existingPlay.rows[0]?.play_duration || 0;
     const shouldUpdate = !isNewPlay && playDuration > existingDuration;
 
-    // Check if this is a unique play (first play >30 seconds for this user/media combination)
-    // Unique plays require: play_duration > 30 AND no existing play >30s for this (media_id, user_id/session_id)
+    // Check if this is a unique play (first play >=30 seconds for this user/media combination)
+    // Unique plays require: play_duration >= 30 AND no existing play >=30s for this (media_id, user_id/session_id)
     let isUnique = false;
-    if (playDuration > 30) {
+    if (playDuration >= 30) {
       const existingUniquePlay = await pool.query(
         `SELECT id FROM media_plays 
          WHERE media_id = $1 
-         AND play_duration > 30 
+         AND play_duration >= 30 
          AND (user_id::text = $2 OR (user_id IS NULL AND session_id = $3))`,
         [mediaId, userKey, sessionId]
       );
@@ -2211,18 +2211,18 @@ app.get('/api/analytics/play-stats', async (req, res) => {
     
     const mediaTotalStats = await pool.query(totalPlaysQuery, userId ? [userId] : []);
 
-    // Get unique plays (only > 30 seconds) - distinct (media_id, session/user) combinations
+    // Get unique plays (only >= 30 seconds) - distinct (media_id, session/user) combinations
     // This counts each unique listener per song as one unique play
     // Using concatenation to create a unique key for distinct counting
-    // Unique plays require: play_duration > 30 AND one per user per media item
+    // Unique plays require: play_duration >= 30 AND one per user per media item
     const uniquePlaysQuery = userId
       ? `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
          FROM media_plays mp
          JOIN media m ON mp.media_id = m.id
-         WHERE mp.play_duration > 30 AND m.user_id = $1`
+         WHERE mp.play_duration >= 30 AND m.user_id = $1`
       : `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
          FROM media_plays mp
-         WHERE mp.play_duration > 30`;
+         WHERE mp.play_duration >= 30`;
     
     const uniquePlaysStats = await pool.query(uniquePlaysQuery, userId ? [userId] : []);
 
@@ -2261,14 +2261,14 @@ app.get('/api/analytics/play-stats', async (req, res) => {
 
     // Get most played media - use actual play counts from media_plays table
     // Only show media that actually has plays (total_plays > 0)
-    // Total Plays: all plays, Unique Plays: distinct (media_id, user_id/session_id) where duration > 30
+    // Total Plays: all plays, Unique Plays: distinct (media_id, user_id/session_id) where duration >= 30
     const mostPlayed = await pool.query(
       `SELECT 
         m.id, 
         m.title, 
         COUNT(mp.id) as total_plays,
         COUNT(DISTINCT CASE 
-          WHEN mp.play_duration > 30 
+          WHEN mp.play_duration >= 30 
           THEN mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id) 
         END) as unique_plays
        FROM media m
@@ -2317,7 +2317,7 @@ app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) 
 
     // Get stats for each media item owned by the user
     // Total Plays: all plays regardless of duration
-    // Unique Plays: distinct (media_id, user_id/session_id) where play_duration > 30
+    // Unique Plays: distinct (media_id, user_id/session_id) where play_duration >= 30
     const mediaItemsStats = await pool.query(
       `SELECT 
         m.id,
@@ -2326,7 +2326,7 @@ app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) 
         m.url,
         COUNT(mp.id) as total_plays,
         COUNT(DISTINCT CASE 
-          WHEN mp.play_duration > 30 
+          WHEN mp.play_duration >= 30 
           THEN mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id) 
         END) as unique_plays
       FROM media m
@@ -2382,11 +2382,11 @@ app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
       [mediaId]
     );
 
-    // Get unique plays for this media item (> 30 seconds, one per user)
+    // Get unique plays for this media item (>= 30 seconds, one per user)
     const uniquePlays = await pool.query(
       `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
        FROM media_plays mp
-       WHERE mp.media_id = $1 AND mp.play_duration > 30`,
+       WHERE mp.media_id = $1 AND mp.play_duration >= 30`,
       [mediaId]
     );
 
