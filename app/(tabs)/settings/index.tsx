@@ -9,12 +9,14 @@ import { useState } from 'react';
 import { MaterialIcons } from '@expo/vector-icons'; // Import MaterialIcons
 import * as Clipboard from 'expo-clipboard';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
+import { useAppVersion } from '@/hooks/useAppVersion';
 
 export default function Settings() {
   const router = useRouter();
   const { user, logout, isAuthenticated } = useAuth();
   const { unreadCount } = useNotifications();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { currentVersion, versionInfo, checkForUpdates, isChecking } = useAppVersion();
 
   // Check if user is admin (djjetfuel)
   const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
@@ -158,11 +160,33 @@ export default function Settings() {
   };
 
   const handleAbout = () => {
-    const message = 'VERSION 5.1\n\nVisit us at: app.merchtrader.org';
+    const latestVersion = versionInfo?.latestVersion?.version || 'N/A';
+    const updateAvailable = versionInfo?.updateAvailable ? '\n\n⚠️ Update Available!' : '';
+    const message = `Current Version: ${currentVersion}\nLatest Version: ${latestVersion}${updateAvailable}\n\nVisit us at: app.merchtrader.org`;
+    
     if (Platform.OS === 'web') {
       window.alert(message);
     } else {
-      Alert.alert('About', message, [{ text: 'OK' }]);
+      Alert.alert('About', message, [
+        versionInfo?.updateAvailable ? {
+          text: 'Check for Updates',
+          onPress: () => checkForUpdates(true),
+        } : null,
+        { text: 'OK' }
+      ].filter(Boolean) as any);
+    }
+  };
+
+  const handleCheckForUpdates = async () => {
+    await checkForUpdates(true);
+    if (versionInfo?.updateAvailable) {
+      Alert.alert(
+        'Update Available',
+        `A new version (${versionInfo.latestVersion?.version}) is available!`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      Alert.alert('Up to Date', 'You are running the latest version.', [{ text: 'OK' }]);
     }
   };
 
@@ -205,9 +229,16 @@ export default function Settings() {
     },
     {
       title: 'About',
-      description: 'VERSION 5.1',
+      description: `Version ${currentVersion}${versionInfo?.updateAvailable ? ' • Update Available!' : ''}`,
       onPress: handleAbout,
       icon: 'ℹ️',
+    },
+    {
+      title: 'Check for Updates',
+      description: isChecking ? 'Checking...' : 'Check if a new version is available',
+      onPress: handleCheckForUpdates,
+      icon: '🔄',
+      disabled: isChecking,
     },
     {
       title: 'Privacy Policy',
@@ -271,6 +302,13 @@ export default function Settings() {
         icon: '📊',
         adminOnly: true,
       },
+      {
+        title: 'App Version Manager',
+        description: 'Upload and manage app versions',
+        onPress: () => router.push('/settings/app-version-manager'),
+        icon: '📱',
+        adminOnly: true,
+      },
     ] : []),
     // Logout option at the bottom
     {
@@ -317,7 +355,7 @@ export default function Settings() {
                   console.log('❌ No onPress function found for:', option.title);
                 }
               }}
-              disabled={option.isLogout && isLoggingOut}
+              disabled={(option.isLogout && isLoggingOut) || option.disabled}
             >
               <ThemedView style={styles.optionContent}>
                 <ThemedView style={[

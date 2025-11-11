@@ -3,7 +3,7 @@ import { useFonts } from 'expo-font';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import 'react-native-reanimated';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
@@ -16,6 +16,8 @@ import { NotificationProvider } from '@/contexts/NotificationContext';
 import { UploadProvider } from '@/contexts/UploadContext';
 import { UploadProgressIndicator } from '@/components/UploadProgressIndicator';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { useAppVersion } from '@/hooks/useAppVersion';
+import { UpdateNotificationModal } from '@/components/UpdateNotificationModal';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -27,6 +29,8 @@ function RootLayoutNav() {
   const { user, isLoading, isInitialized } = useAuth(); // <-- Add isInitialized
   const segments = useSegments();
   const router = useRouter();
+  const { currentVersion, versionInfo, checkForUpdates } = useAppVersion();
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   // This effect handles waiting for auth to initialize and then hiding the splash screen.
   useEffect(() => {
@@ -34,6 +38,31 @@ function RootLayoutNav() {
       SplashScreen.hideAsync();
     }
   }, [isInitialized]);
+
+  // Check for updates on app launch and show modal if update is available
+  useEffect(() => {
+    if (isInitialized && user) {
+      // Small delay to let the app fully initialize
+      const checkTimer = setTimeout(async () => {
+        await checkForUpdates();
+        // Check versionInfo after a brief delay to ensure state is updated
+        setTimeout(() => {
+          if (versionInfo?.updateAvailable) {
+            setShowUpdateModal(true);
+          }
+        }, 500);
+      }, 2000); // Wait 2 seconds after initialization
+
+      return () => clearTimeout(checkTimer);
+    }
+  }, [isInitialized, user]);
+
+  // Show update modal when versionInfo changes and update is available
+  useEffect(() => {
+    if (versionInfo?.updateAvailable && isInitialized && user) {
+      setShowUpdateModal(true);
+    }
+  }, [versionInfo?.updateAvailable, isInitialized, user]);
   
   // This effect handles auth-based routing.
   useEffect(() => {
@@ -141,6 +170,13 @@ function RootLayoutNav() {
       }} />
       <StatusBar style="auto" />
       <UploadProgressIndicator />
+      <UpdateNotificationModal
+        visible={showUpdateModal}
+        currentVersion={currentVersion}
+        latestVersion={versionInfo?.latestVersion || null}
+        onDismiss={() => setShowUpdateModal(false)}
+        onDownload={() => setShowUpdateModal(false)}
+      />
     </ThemeProvider>
   );
 }

@@ -3810,6 +3810,281 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
     }
 });
 
+// ---------- APP VERSION MANAGEMENT ROUTES ----------
+
+// Check for app updates
+app.get('/api/app/version/check', async (req, res) => {
+  try {
+    const { currentVersion, platform } = req.query;
+    
+    if (!platform || !['android', 'ios'].includes(platform.toLowerCase())) {
+      return res.status(400).json({ error: 'Valid platform (android/ios) is required' });
+    }
+
+    // Get the latest active version for the platform
+    const result = await pool.query(
+      `SELECT id, version, platform, download_url, release_notes, file_size, created_at
+       FROM app_versions 
+       WHERE platform = $1 AND is_active = TRUE 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [platform.toLowerCase()]
+    );
+
+    if (result.rows.length === 0) {
+      return res.json({
+        updateAvailable: false,
+        currentVersion: currentVersion || '1.0.0',
+        latestVersion: null,
+        message: 'No updates available'
+      });
+    }
+
+    const latestVersion = result.rows[0];
+    
+    // Simple version comparison (semantic versioning)
+    const compareVersions = (v1, v2) => {
+      const parts1 = v1.split('.').map(Number);
+      const parts2 = v2.split('.').map(Number);
+      for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
+        const part1 = parts1[i] || 0;
+        const part2 = parts2[i] || 0;
+        if (part1 < part2) return -1;
+        if (part1 > part2) return 1;
+      }
+      return 0;
+    };
+
+    const updateAvailable = currentVersion 
+      ? compareVersions(currentVersion, latestVersion.version) < 0
+      : true;
+
+    res.json({
+      updateAvailable,
+      currentVersion: currentVersion || '1.0.0',
+      latestVersion: updateAvailable ? {
+        version: latestVersion.version,
+        downloadUrl: latestVersion.download_url,
+        releaseNotes: latestVersion.release_notes,
+        fileSize: latestVersion.file_size,
+        createdAt: latestVersion.created_at
+      } : null
+    });
+  } catch (error) {
+    console.error('Error checking app version:', error);
+    res.status(500).json({ error: 'Failed to check for updates' });
+  }
+});
+
+// Admin: Upload new app version
+app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { version, platform, releaseNotes } = req.body;
+
+    if (!version || !platform) {
+      return res.status(400).json({ error: 'Version and platform are required' });
+    }
+
+    if (!['android', 'ios'].includes(platform.toLowerCase())) {
+      return res.status(400).json({ error: 'Platform must be "android" or "ios"' });
+    }
+
+    // Validate file extension
+    const fileExt = req.file.originalname.split('.').pop().toLowerCase();
+    const expectedExt = platform.toLowerCase() === 'android' ? 'apk' : 'ipa';
+    
+    if (fileExt !== expectedExt) {
+      return res.status(400).json({ 
+        error: `Invalid file type. Expected .${expectedExt} for ${platform} platform` 
+      });
+    }
+
+    // Check if version already exists for this platform
+    const existingCheck = await pool.query(
+      'SELECT id FROM app_versions WHERE version = $1 AND platform = $2',
+      [version, platform.toLowerCase()]
+    );
+
+    if (existingCheck.rows.length > 0) {
+      return res.status(400).json({ 
+        error: `Version ${version} already exists for ${platform} platform` 
+      });
+    }
+
+    // Upload to S3
+    const s3Key = `app-updates/${platform.toLowerCase()}/${version}/${req.file.originalname}`;
+    const uploadResult = await s3Service.uploadFile(
+      req.file.buffer,
+      s3Key,
+      req.file.mimetype || 'application/octet-stream'
+    );
+
+    const downloadUrl = uploadResult.Location;
+
+    // Deactivate previous versions for this platform
+    await pool.query(
+      'UPDATE app_versions SET is_active = FALSE WHERE platform = $1 AND is_active = TRUE',
+      [platform.toLowerCase()]
+    );
+
+    // Create new version record
+    const insertResult = await pool.query(
+      `INSERT INTO app_versions 
+       (version, platform, s3_key, download_url, release_notes, is_active, uploaded_by, file_size)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, version, platform, download_url, release_notes, file_size, created_at`,
+      [
+        version,
+        platform.toLowerCase(),
+        s3Key,
+        downloadUrl,
+        releaseNotes || null,
+        true,
+        req.user.userId,
+        req.file.size
+      ]
+    );
+
+    console.log(`✅ Admin uploaded new app version: ${version} for ${platform}`);
+    res.json({
+      success: true,
+      version: insertResult.rows[0],
+      message: `Version ${version} uploaded successfully for ${platform}`
+    });
+  } catch (error) {
+    console.error('Error uploading app version:', error);
+    res.status(500).json({ error: 'Failed to upload app version: ' + error.message });
+  }
+});
+
+// Admin: List all app versions
+app.get('/api/admin/app/versions', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { platform } = req.query;
+    
+    let query = `
+      SELECT 
+        av.id, av.version, av.platform, av.download_url, av.release_notes, 
+        av.is_active, av.file_size, av.created_at, av.updated_at,
+        u.email as uploaded_by_email, u.username as uploaded_by_username
+      FROM app_versions av
+      LEFT JOIN users u ON av.uploaded_by = u.id
+    `;
+    const params = [];
+    
+    if (platform) {
+      query += ' WHERE av.platform = $1';
+      params.push(platform.toLowerCase());
+    }
+    
+    query += ' ORDER BY av.created_at DESC';
+    
+    const result = await pool.query(query, params);
+    res.json({ versions: result.rows });
+  } catch (error) {
+    console.error('Error fetching app versions:', error);
+    res.status(500).json({ error: 'Failed to fetch app versions' });
+  }
+});
+
+// Admin: Delete app version
+app.delete('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Get version info before deleting
+    const versionResult = await pool.query(
+      'SELECT s3_key FROM app_versions WHERE id = $1',
+      [id]
+    );
+
+    if (versionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Version not found' });
+    }
+
+    // Delete from database
+    await pool.query('DELETE FROM app_versions WHERE id = $1', [id]);
+
+    // Delete from S3
+    try {
+      await s3Service.deleteFile(versionResult.rows[0].s3_key);
+    } catch (s3Error) {
+      console.warn('Failed to delete file from S3:', s3Error);
+      // Continue even if S3 delete fails
+    }
+
+    res.json({ success: true, message: 'Version deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting app version:', error);
+    res.status(500).json({ error: 'Failed to delete app version' });
+  }
+});
+
+// Admin: Update app version metadata
+app.patch('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { releaseNotes, isActive } = req.body;
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (releaseNotes !== undefined) {
+      updates.push(`release_notes = $${paramCount++}`);
+      values.push(releaseNotes);
+    }
+
+    if (isActive !== undefined) {
+      updates.push(`is_active = $${paramCount++}`);
+      values.push(isActive);
+      
+      // If activating this version, deactivate others for the same platform
+      if (isActive) {
+        const platformResult = await pool.query(
+          'SELECT platform FROM app_versions WHERE id = $1',
+          [id]
+        );
+        if (platformResult.rows.length > 0) {
+          await pool.query(
+            'UPDATE app_versions SET is_active = FALSE WHERE platform = $1 AND id != $2',
+            [platformResult.rows[0].platform, id]
+          );
+        }
+      }
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+
+    updates.push(`updated_at = NOW()`);
+    values.push(id);
+
+    const query = `
+      UPDATE app_versions 
+      SET ${updates.join(', ')} 
+      WHERE id = $${paramCount}
+      RETURNING id, version, platform, download_url, release_notes, is_active, file_size, created_at, updated_at
+    `;
+
+    const result = await pool.query(query, values);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Version not found' });
+    }
+
+    res.json({ success: true, version: result.rows[0] });
+  } catch (error) {
+    console.error('Error updating app version:', error);
+    res.status(500).json({ error: 'Failed to update app version' });
+  }
+});
+
 // --- Helper Functions ---
 const sanitizeImageUrls = (urls) => {
   if (!Array.isArray(urls)) return [];
