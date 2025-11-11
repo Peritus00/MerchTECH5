@@ -198,40 +198,50 @@ export default function QRCodesScreen() {
     const qrToDelete = qrCodes.find(qr => qr.id === id);
     console.log('🗑️ QR Delete: QR code to delete:', qrToDelete);
     
-    console.log('🗑️ QR Delete: Using window.confirm for web compatibility');
-    
-    const shouldDelete = window.confirm('Are you sure you want to delete this QR code? This action cannot be undone.');
-    
-    if (!shouldDelete) {
-      console.log('🗑️ QR Delete: User cancelled deletion');
-      return;
-    }
-    
-    try {
-      console.log('🗑️ QR Delete: User confirmed deletion, starting delete for ID:', id);
-      console.log('🗑️ QR Delete: Calling qrCodeService.deleteQRCode');
-      
-      await qrCodeService.deleteQRCode(id);
-      
-      console.log('🗑️ QR Delete: Delete successful, updating UI');
-      const updatedQrCodes = qrCodes.filter(qr => qr.id !== id);
-      console.log('🗑️ QR Delete: Updated QR codes count:', updatedQrCodes.length);
-      
-      setQrCodes(updatedQrCodes);
-      applyFiltersAndSort(updatedQrCodes, searchQuery, sortBy);
-      
-      console.log('🗑️ QR Delete: Showing success alert');
-      Alert.alert('Success', 'QR code deleted successfully');
-    } catch (error: any) {
-      console.error('🗑️ QR Delete: Delete failed:', error);
-      console.error('🗑️ QR Delete: Error details:', {
-        message: error.message,
-        status: error.status,
-        response: error.response?.data
-      });
-      const errorMessage = error.message || 'Failed to delete QR code';
-      Alert.alert('Delete Failed', errorMessage);
-    }
+    Alert.alert(
+      'Delete QR Code',
+      'Are you sure you want to delete this QR code? This action cannot be undone.',
+      [
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('🗑️ QR Delete: User cancelled deletion');
+          }
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('🗑️ QR Delete: User confirmed deletion, starting delete for ID:', id);
+              console.log('🗑️ QR Delete: Calling qrCodeService.deleteQRCode');
+              
+              await qrCodeService.deleteQRCode(id);
+              
+              console.log('🗑️ QR Delete: Delete successful, updating UI');
+              const updatedQrCodes = qrCodes.filter(qr => qr.id !== id);
+              console.log('🗑️ QR Delete: Updated QR codes count:', updatedQrCodes.length);
+              
+              setQrCodes(updatedQrCodes);
+              applyFiltersAndSort(updatedQrCodes, searchQuery, sortBy);
+              
+              console.log('🗑️ QR Delete: Showing success alert');
+              Alert.alert('Success', 'QR code deleted successfully');
+            } catch (error: any) {
+              console.error('🗑️ QR Delete: Delete failed:', error);
+              console.error('🗑️ QR Delete: Error details:', {
+                message: error.message,
+                status: error.status,
+                response: error.response?.data
+              });
+              const errorMessage = error.message || 'Failed to delete QR code';
+              Alert.alert('Delete Failed', errorMessage);
+            }
+          },
+        },
+      ]
+    );
   };
 
   // Screensaver functions
