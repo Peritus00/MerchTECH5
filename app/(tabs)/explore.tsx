@@ -640,11 +640,6 @@ export default function QRCodesScreen() {
                   style={styles.deleteButton}
                   onPress={() => {
                     console.log('🗑️ QR Delete: Delete button pressed for QR code:', qrCode.name, 'ID:', qrCode.id);
-                    console.log('🗑️ QR Delete: Platform.OS:', Platform.OS);
-                    console.log('🗑️ QR Delete: Alert available:', typeof Alert !== 'undefined');
-                    console.log('🗑️ QR Delete: Alert.alert available:', typeof Alert.alert !== 'undefined');
-                    // Show immediate test alert to verify button works
-                    Alert.alert('Test', 'Button pressed!', [{ text: 'OK' }]);
                     handleDeleteQR(qrCode.id);
                   }}
                   activeOpacity={0.7}
