@@ -19,6 +19,9 @@ import { ConsentBanner } from '@/components/ConsentBanner';
 import { useAppVersion } from '@/hooks/useAppVersion';
 import { UpdateNotificationModal } from '@/components/UpdateNotificationModal';
 
+// Initialize debug logging system early to capture all logs from app startup
+import '@/utils/debugLogger';
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
