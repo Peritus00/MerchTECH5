@@ -79,9 +79,19 @@ export default function AppVersionManagerScreen() {
 
       const data = await response.json();
       setVersions(data.versions || []);
+      
+      // Show warning if migration is needed
+      if (data.error && data.error.includes('migration')) {
+        Alert.alert(
+          'Database Migration Required',
+          'The app_versions table needs to be created. Please run the migration script:\n\nnpm run db:migrate-app-versions\n\nOr run the SQL file: database/migrations/024_create_app_versions_table.sql',
+          [{ text: 'OK' }]
+        );
+      }
     } catch (error) {
       console.error('Error fetching versions:', error);
-      Alert.alert('Error', 'Failed to load app versions');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to load app versions';
+      Alert.alert('Error', errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -147,8 +157,9 @@ export default function AppVersionManagerScreen() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Upload failed');
+        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
+        const errorMessage = errorData.details || errorData.error || 'Upload failed';
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();

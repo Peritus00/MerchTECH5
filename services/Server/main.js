@@ -4406,14 +4406,27 @@ app.get('/api/app/version/check', async (req, res) => {
     }
 
     // Get the latest active version for the platform
-    const result = await pool.query(
-      `SELECT id, version, platform, download_url, release_notes, file_size, created_at
-       FROM app_versions 
-       WHERE platform = $1 AND is_active = TRUE 
-       ORDER BY created_at DESC 
-       LIMIT 1`,
-      [platform.toLowerCase()]
-    );
+    let result;
+    try {
+      result = await pool.query(
+        `SELECT id, version, platform, download_url, release_notes, file_size, created_at
+         FROM app_versions 
+         WHERE platform = $1 AND is_active = TRUE 
+         ORDER BY created_at DESC 
+         LIMIT 1`,
+        [platform.toLowerCase()]
+      );
+    } catch (dbError) {
+      // Check if table doesn't exist
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        console.error('❌ app_versions table does not exist. Please run migration 024_create_app_versions_table.sql');
+        return res.status(503).json({ 
+          error: 'Version check service not available. Database migration required.',
+          details: 'The app_versions table has not been created. Please contact support.'
+        });
+      }
+      throw dbError;
+    }
 
     if (result.rows.length === 0) {
       return res.json({
@@ -4488,10 +4501,22 @@ app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('fil
     }
 
     // Check if version already exists for this platform
-    const existingCheck = await pool.query(
-      'SELECT id FROM app_versions WHERE version = $1 AND platform = $2',
-      [version, platform.toLowerCase()]
-    );
+    let existingCheck;
+    try {
+      existingCheck = await pool.query(
+        'SELECT id FROM app_versions WHERE version = $1 AND platform = $2',
+        [version, platform.toLowerCase()]
+      );
+    } catch (dbError) {
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        console.error('❌ app_versions table does not exist. Please run migration 024_create_app_versions_table.sql');
+        return res.status(503).json({ 
+          error: 'Database migration required',
+          details: 'The app_versions table has not been created. Please run migration 024_create_app_versions_table.sql before uploading versions.'
+        });
+      }
+      throw dbError;
+    }
 
     if (existingCheck.rows.length > 0) {
       return res.status(400).json({ 
@@ -4567,11 +4592,24 @@ app.get('/api/admin/app/versions', authenticateToken, isAdmin, async (req, res) 
     
     query += ' ORDER BY av.created_at DESC';
     
-    const result = await pool.query(query, params);
+    let result;
+    try {
+      result = await pool.query(query, params);
+    } catch (dbError) {
+      if (dbError.message && dbError.message.includes('does not exist')) {
+        console.error('❌ app_versions table does not exist. Please run migration 024_create_app_versions_table.sql');
+        return res.status(503).json({ 
+          error: 'Database migration required',
+          details: 'The app_versions table has not been created. Please run migration 024_create_app_versions_table.sql',
+          versions: []
+        });
+      }
+      throw dbError;
+    }
     res.json({ versions: result.rows });
   } catch (error) {
     console.error('Error fetching app versions:', error);
-    res.status(500).json({ error: 'Failed to fetch app versions' });
+    res.status(500).json({ error: 'Failed to fetch app versions: ' + error.message });
   }
 });
 
