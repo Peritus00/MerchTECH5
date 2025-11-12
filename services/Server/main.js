@@ -4476,8 +4476,20 @@ app.get('/api/app/version/check', async (req, res) => {
 // Admin: Upload new app version
 app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('file'), async (req, res) => {
   try {
+    console.log('📤 APP VERSION UPLOAD: Request received');
+    console.log('📤 APP VERSION UPLOAD: req.file:', req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      fieldname: req.file.fieldname
+    } : 'NO FILE');
+    console.log('📤 APP VERSION UPLOAD: req.body:', req.body);
+    console.log('📤 APP VERSION UPLOAD: req.headers content-type:', req.headers['content-type']);
+    
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      console.error('❌ APP VERSION UPLOAD: No file in request');
+      console.error('❌ APP VERSION UPLOAD: req.files:', req.files);
+      return res.status(400).json({ error: 'No file uploaded. Make sure the file field is named "file".' });
     }
 
     const { version, platform, releaseNotes } = req.body;

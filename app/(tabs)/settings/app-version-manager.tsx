@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
 
 interface AppVersion {
   id: number;
@@ -136,17 +137,45 @@ export default function AppVersionManagerScreen() {
       if (!selectedFile.canceled && selectedFile.assets && selectedFile.assets.length > 0) {
         const asset = selectedFile.assets[0];
         
-        // For React Native, create a file object with uri, name, and type
-        const file = {
-          uri: asset.uri,
-          type: asset.mimeType || (platform === 'android' ? 'application/vnd.android.package-archive' : 'application/octet-stream'),
-          name: asset.name || (platform === 'android' ? 'app.apk' : 'app.ipa'),
-        } as any;
+        let fileToUpload: any;
         
-        formData.append('file', file);
+        if (Platform.OS === 'web') {
+          // Web platform - convert URI to File object
+          console.log('📤 Uploading on web, converting file...');
+          try {
+            const response = await fetch(asset.uri);
+            const blob = await response.blob();
+            const fileName = asset.name || (platform === 'android' ? 'app.apk' : 'app.ipa');
+            const mimeType = asset.mimeType || (platform === 'android' ? 'application/vnd.android.package-archive' : 'application/octet-stream');
+            fileToUpload = new File([blob], fileName, { type: mimeType });
+            console.log('✅ File converted for web:', fileName, fileToUpload.size, 'bytes');
+          } catch (error) {
+            console.error('❌ Error converting file for web:', error);
+            throw new Error('Failed to prepare file for upload: ' + (error instanceof Error ? error.message : 'Unknown error'));
+          }
+        } else {
+          // Mobile platforms (iOS/Android) - use URI directly
+          fileToUpload = {
+            uri: asset.uri,
+            type: asset.mimeType || (platform === 'android' ? 'application/vnd.android.package-archive' : 'application/octet-stream'),
+            name: asset.name || (platform === 'android' ? 'app.apk' : 'app.ipa'),
+          };
+          console.log('📤 Uploading on mobile:', fileToUpload.name);
+        }
+        
+        formData.append('file', fileToUpload);
       }
 
       const token = await AsyncStorage.getItem('authToken');
+      
+      console.log('📤 Starting upload:', {
+        version,
+        platform,
+        fileName: selectedFile.assets?.[0]?.name,
+        fileSize: selectedFile.assets?.[0]?.size,
+        hasToken: !!token
+      });
+      
       const response = await fetch(`${API_URL}/admin/app/upload`, {
         method: 'POST',
         headers: {
@@ -155,6 +184,8 @@ export default function AppVersionManagerScreen() {
         },
         body: formData,
       });
+      
+      console.log('📤 Upload response status:', response.status, response.statusText);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
@@ -174,8 +205,10 @@ export default function AppVersionManagerScreen() {
       // Refresh versions list
       await fetchVersions();
     } catch (error) {
-      console.error('Error uploading version:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to upload version');
+      console.error('❌ Error uploading version:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to upload version';
+      console.error('❌ Full error details:', error);
+      Alert.alert('Upload Failed', errorMessage);
     } finally {
       setIsUploading(false);
     }
