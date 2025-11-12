@@ -3622,16 +3622,48 @@ app.post('/api/auth/login', async (req, res) => {
     // Case-insensitive email lookup using LOWER()
     const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
-    const user = result.rows[0];
-    const isValidPassword = await bcrypt.compare(password, user.password_hash);
+    const dbUser = result.rows[0];
+    const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
     if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
+    
+    // Transform user object to camelCase for frontend
+    const user = {
+      id: dbUser.id,
+      email: dbUser.email,
+      username: dbUser.username,
+      firstName: dbUser.first_name,
+      lastName: dbUser.last_name,
+      isAdmin: dbUser.is_admin || false,
+      subscriptionTier: dbUser.subscription_tier || 'free',
+      isEmailVerified: dbUser.is_email_verified || false,
+      isSuspended: dbUser.is_suspended || false,
+      createdAt: dbUser.created_at,
+      lastActive: dbUser.updated_at || dbUser.created_at,
+      canViewLogs: dbUser.can_view_logs || false,
+      // Set default permissions based on subscription tier
+      canViewAnalytics: dbUser.subscription_tier === 'premium',
+      canManagePlaylists: true,
+      canEditPlaylists: dbUser.subscription_tier !== 'free',
+      canUploadMedia: true,
+      canGenerateCodes: dbUser.subscription_tier !== 'free',
+      canAccessStore: true,
+      canViewFanmail: dbUser.subscription_tier === 'premium',
+      canManageQRCodes: true,
+      maxPlaylists: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
+      maxVideos: dbUser.max_videos || 0,
+      maxAudioFiles: dbUser.max_audio_files || 0,
+      maxActivationCodes: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
+      maxProducts: dbUser.max_products || 0,
+      maxQrCodes: dbUser.max_qr_codes || 0,
+      maxSlideshows: dbUser.max_slideshows || 0,
+    };
     
     // **FIX**: Ensure isAdmin is included in the token payload
     const token = jwt.sign(
       { 
         userId: user.id, 
         email: user.email, 
-        isAdmin: user.is_admin // This was missing
+        isAdmin: user.isAdmin
       }, 
       JWT_SECRET, 
       { expiresIn: '24h' }
