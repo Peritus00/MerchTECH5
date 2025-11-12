@@ -22,6 +22,7 @@ export interface User {
   canAccessStore: boolean;
   canViewFanmail: boolean;
   canManageQRCodes: boolean;
+  canViewLogs?: boolean;
   maxPlaylists: number;
   maxVideos: number;
   maxAudioFiles: number;
@@ -176,5 +177,62 @@ export interface AnalyticsSummary {
     location: string;
     device: string;
     timestamp: string;
+  }>;
+}
+
+export interface ActivityLog {
+  id: number;
+  userId: number | null;
+  userEmail: string | null;
+  username: string | null;
+  actionType: string;
+  resourceType: string | null;
+  resourceId: number | null;
+  ipAddress: string | null;
+  userAgent: string | null;
+  requestMethod: string;
+  endpoint: string;
+  statusCode: number;
+  metadata: Record<string, any> | null;
+  errorMessage: string | null;
+  createdAt: string;
+}
+
+export interface ActivityLogFilters {
+  userId?: number;
+  actionType?: string;
+  resourceType?: string;
+  startDate?: string;
+  endDate?: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}
+
+export interface ActivityLogPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface ActivityLogResponse {
+  logs: ActivityLog[];
+  pagination: ActivityLogPagination;
+}
+
+export interface ActivityLogStats {
+  summary: {
+    totalActions: number;
+    uniqueUsers: number;
+    errorCount: number;
+    loginCount: number;
+    createCount: number;
+    updateCount: number;
+    deleteCount: number;
+  };
+  topActions: Array<{
+    actionType: string;
+    count: number;
   }>;
 }

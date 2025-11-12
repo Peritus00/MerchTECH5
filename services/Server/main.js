@@ -272,6 +272,34 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
+// Permission middleware: Check if user can view logs (admin or has can_view_logs permission)
+const canViewLogs = async (req, res, next) => {
+  try {
+    if (!req.user || !req.user.userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const result = await pool.query(
+      'SELECT is_admin, can_view_logs FROM users WHERE id = $1',
+      [req.user.userId]
+    );
+    if (result.rows.length > 0 && (result.rows[0].is_admin || result.rows[0].can_view_logs)) {
+      next();
+    } else {
+      res.status(403).json({ error: 'Forbidden: Log viewing access required' });
+    }
+  } catch (error) {
+    console.error('Error checking log viewing permission:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+// --- Activity Logging Middleware ---
+const { createActivityLogger } = require('./middleware/activityLogger');
+const activityLogger = createActivityLogger(pool);
+
+// Apply activity logging to all routes (after authentication middleware)
+app.use(activityLogger);
+
 // --- ROUTES ---
 
 // Admin-only debug endpoint to inspect IP/geo headers (no raw IP storage)
@@ -447,6 +475,7 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
              is_admin, 
              is_suspended, 
              subscription_tier,
+             can_view_logs,
              max_products,
              max_audio_files,
              max_playlists,
@@ -3730,7 +3759,8 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
         maxQrCodes,
         maxSlideshows,
         maxVideos,
-        maxActivationCodes
+        maxActivationCodes,
+        canViewLogs
     } = req.body;
 
     try {
@@ -3779,6 +3809,10 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
             updates.push(`max_activation_codes = $${paramCount++}`);
             values.push(maxActivationCodes === 0 ? null : maxActivationCodes);
         }
+        if (canViewLogs !== undefined) {
+            updates.push(`can_view_logs = $${paramCount++}`);
+            values.push(canViewLogs);
+        }
 
         if (updates.length === 0) {
             return res.status(400).json({ error: 'No valid fields to update' });
@@ -3793,7 +3827,7 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
             WHERE id = $${paramCount} 
             RETURNING id, email, username, subscription_tier, is_admin, is_suspended, 
                      max_products, max_audio_files, max_playlists, max_qr_codes, 
-                     max_slideshows, max_videos, max_activation_codes, created_at, updated_at
+                     max_slideshows, max_videos, max_activation_codes, can_view_logs, created_at, updated_at
         `;
 
         const result = await pool.query(query, values);
@@ -3808,6 +3842,336 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
         console.error(`Error updating user ${id} permissions:`, error);
         res.status(500).json({ error: 'Internal server error' });
     }
+});
+
+// --- Activity Logs API Endpoints ---
+
+// Get activity logs with filtering and pagination
+app.get('/api/admin/activity-logs', authenticateToken, canViewLogs, async (req, res) => {
+  try {
+    const {
+      userId,
+      actionType,
+      resourceType,
+      startDate,
+      endDate,
+      page = 1,
+      limit = 50,
+      search
+    } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const conditions = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (userId) {
+      conditions.push(`al.user_id = $${paramCount++}`);
+      values.push(parseInt(userId));
+    }
+
+    if (actionType) {
+      conditions.push(`al.action_type = $${paramCount++}`);
+      values.push(actionType);
+    }
+
+    if (resourceType) {
+      conditions.push(`al.resource_type = $${paramCount++}`);
+      values.push(resourceType);
+    }
+
+    if (startDate) {
+      conditions.push(`al.created_at >= $${paramCount++}`);
+      values.push(startDate);
+    }
+
+    if (endDate) {
+      conditions.push(`al.created_at <= $${paramCount++}`);
+      values.push(endDate);
+    }
+
+    if (search) {
+      conditions.push(`(
+        al.action_type ILIKE $${paramCount} OR
+        al.endpoint ILIKE $${paramCount} OR
+        al.error_message ILIKE $${paramCount} OR
+        u.email ILIKE $${paramCount} OR
+        u.username ILIKE $${paramCount}
+      )`);
+      values.push(`%${search}%`);
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM activity_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      ${whereClause}
+    `;
+    const countResult = await pool.query(countQuery, values);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Get logs with user info
+    const query = `
+      SELECT 
+        al.id,
+        al.user_id,
+        al.action_type,
+        al.resource_type,
+        al.resource_id,
+        al.ip_address,
+        al.user_agent,
+        al.request_method,
+        al.endpoint,
+        al.status_code,
+        al.metadata,
+        al.error_message,
+        al.created_at,
+        u.email as user_email,
+        u.username as user_username
+      FROM activity_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      ${whereClause}
+      ORDER BY al.created_at DESC
+      LIMIT $${paramCount++} OFFSET $${paramCount++}
+    `;
+    values.push(parseInt(limit), offset);
+
+    const result = await pool.query(query, values);
+
+    res.json({
+      logs: result.rows.map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        userEmail: row.user_email,
+        username: row.user_username,
+        actionType: row.action_type,
+        resourceType: row.resource_type,
+        resourceId: row.resource_id,
+        ipAddress: row.ip_address,
+        userAgent: row.user_agent,
+        requestMethod: row.request_method,
+        endpoint: row.endpoint,
+        statusCode: row.status_code,
+        metadata: row.metadata,
+        errorMessage: row.error_message,
+        createdAt: row.created_at
+      })),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        totalPages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching activity logs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get single activity log entry
+app.get('/api/admin/activity-logs/:id', authenticateToken, canViewLogs, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await pool.query(
+      `SELECT 
+        al.id,
+        al.user_id,
+        al.action_type,
+        al.resource_type,
+        al.resource_id,
+        al.ip_address,
+        al.user_agent,
+        al.request_method,
+        al.endpoint,
+        al.status_code,
+        al.metadata,
+        al.error_message,
+        al.created_at,
+        u.email as user_email,
+        u.username as user_username
+      FROM activity_logs al
+      LEFT JOIN users u ON al.user_id = u.id
+      WHERE al.id = $1`,
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Log entry not found' });
+    }
+
+    const row = result.rows[0];
+    res.json({
+      id: row.id,
+      userId: row.user_id,
+      userEmail: row.user_email,
+      username: row.user_username,
+      actionType: row.action_type,
+      resourceType: row.resource_type,
+      resourceId: row.resource_id,
+      ipAddress: row.ip_address,
+      userAgent: row.user_agent,
+      requestMethod: row.request_method,
+      endpoint: row.endpoint,
+      statusCode: row.status_code,
+      metadata: row.metadata,
+      errorMessage: row.error_message,
+      createdAt: row.created_at
+    });
+  } catch (error) {
+    console.error('Error fetching activity log:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get activity log statistics
+app.get('/api/admin/activity-logs/stats', authenticateToken, canViewLogs, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const conditions = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (startDate) {
+      conditions.push(`created_at >= $${paramCount++}`);
+      values.push(startDate);
+    }
+
+    if (endDate) {
+      conditions.push(`created_at <= $${paramCount++}`);
+      values.push(endDate);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    // Get various statistics
+    const statsQuery = `
+      SELECT 
+        COUNT(*) as total_actions,
+        COUNT(DISTINCT user_id) as unique_users,
+        COUNT(CASE WHEN status_code >= 400 THEN 1 END) as error_count,
+        COUNT(CASE WHEN action_type = 'LOGIN' THEN 1 END) as login_count,
+        COUNT(CASE WHEN action_type LIKE 'CREATE%' THEN 1 END) as create_count,
+        COUNT(CASE WHEN action_type LIKE 'UPDATE%' THEN 1 END) as update_count,
+        COUNT(CASE WHEN action_type LIKE 'DELETE%' THEN 1 END) as delete_count
+      FROM activity_logs
+      ${whereClause}
+    `;
+
+    const actionTypeQuery = `
+      SELECT action_type, COUNT(*) as count
+      FROM activity_logs
+      ${whereClause}
+      GROUP BY action_type
+      ORDER BY count DESC
+      LIMIT 10
+    `;
+
+    const [statsResult, actionTypeResult] = await Promise.all([
+      pool.query(statsQuery, values),
+      pool.query(actionTypeQuery, values)
+    ]);
+
+    res.json({
+      summary: {
+        totalActions: parseInt(statsResult.rows[0].total_actions),
+        uniqueUsers: parseInt(statsResult.rows[0].unique_users),
+        errorCount: parseInt(statsResult.rows[0].error_count),
+        loginCount: parseInt(statsResult.rows[0].login_count),
+        createCount: parseInt(statsResult.rows[0].create_count),
+        updateCount: parseInt(statsResult.rows[0].update_count),
+        deleteCount: parseInt(statsResult.rows[0].delete_count)
+      },
+      topActions: actionTypeResult.rows.map(row => ({
+        actionType: row.action_type,
+        count: parseInt(row.count)
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching activity log stats:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Cleanup old logs (admin only)
+app.delete('/api/admin/activity-logs/cleanup', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { days = 90 } = req.query; // Default to 90 days
+    const result = await pool.query(
+      `DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '${parseInt(days)} days'`
+    );
+    res.json({
+      message: `Cleaned up ${result.rowCount} log entries older than ${days} days`,
+      deletedCount: result.rowCount
+    });
+  } catch (error) {
+    console.error('Error cleaning up activity logs:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Grant/revoke log viewing access (admin only)
+app.patch('/api/admin/users/:id/log-access', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { canViewLogs } = req.body;
+
+    if (typeof canViewLogs !== 'boolean') {
+      return res.status(400).json({ error: 'canViewLogs must be a boolean' });
+    }
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET can_view_logs = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, email, username, can_view_logs`,
+      [canViewLogs, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      user: {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+        username: result.rows[0].username,
+        canViewLogs: result.rows[0].can_view_logs
+      },
+      message: `Log viewing access ${canViewLogs ? 'granted' : 'revoked'} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating log access:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get users with log viewing access (admin only)
+app.get('/api/admin/users/log-access', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, email, username, can_view_logs, created_at
+       FROM users
+       WHERE can_view_logs = true OR is_admin = true
+       ORDER BY created_at DESC`
+    );
+
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      username: row.username,
+      canViewLogs: row.can_view_logs,
+      createdAt: row.created_at
+    })));
+  } catch (error) {
+    console.error('Error fetching users with log access:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ---------- APP VERSION MANAGEMENT ROUTES ----------

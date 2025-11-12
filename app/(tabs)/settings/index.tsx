@@ -20,6 +20,8 @@ export default function Settings() {
 
   // Check if user is admin (djjetfuel)
   const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  // Check if user can view logs (admin or has canViewLogs permission)
+  const canViewLogs = isAdmin || (user && user.canViewLogs);
 
   // Debug logging
   console.log('🔧 SETTINGS: Current user:', user);
@@ -254,6 +256,14 @@ export default function Settings() {
         router.push('/(tabs)/settings/debug-logs');
       },
       icon: '🐛',
+    }] : []),
+    ...(canViewLogs ? [{
+      title: 'Activity Logs',
+      description: 'View comprehensive activity logs for all users',
+      onPress: () => {
+        router.push('/(tabs)/settings/activity-logs');
+      },
+      icon: '📋',
     }] : []),
     {
       title: 'Privacy Policy',

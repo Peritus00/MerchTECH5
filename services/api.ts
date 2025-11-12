@@ -237,6 +237,14 @@ export const usersAPI = {
     const response = await api.put('/user/demographics', { ageRange, gender });
     return response.data;
   },
+  async updateLogAccess(userId: number, canViewLogs: boolean) {
+    const response = await api.patch(`/admin/users/${userId}/log-access`, { canViewLogs });
+    return response.data;
+  },
+  async getUsersWithLogAccess() {
+    const response = await api.get('/admin/users/log-access');
+    return response.data;
+  },
 };
 
 // Universal Chat API
@@ -891,6 +899,49 @@ export const adminAPI = {
 
   async resetUserScans(userId: number) {
     const response = await api.delete(`/admin/users/${userId}/scans`);
+    return response.data;
+  },
+};
+
+// Activity Logs API
+export const activityLogsAPI = {
+  async getLogs(filters: {
+    userId?: number;
+    actionType?: string;
+    resourceType?: string;
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+    search?: string;
+  } = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        params.append(key, String(value));
+      }
+    });
+    
+    const response = await api.get(`/admin/activity-logs?${params.toString()}`);
+    return response.data;
+  },
+
+  async getLogDetails(id: number) {
+    const response = await api.get(`/admin/activity-logs/${id}`);
+    return response.data;
+  },
+
+  async getStats(startDate?: string, endDate?: string) {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    const response = await api.get(`/admin/activity-logs/stats?${params.toString()}`);
+    return response.data;
+  },
+
+  async cleanupLogs(days: number = 90) {
+    const response = await api.delete(`/admin/activity-logs/cleanup?days=${days}`);
     return response.data;
   },
 };

@@ -28,6 +28,7 @@ interface UserPermissions {
   canAccessStore: boolean;
   canViewFanmail: boolean;
   canManageQRCodes: boolean;
+  canViewLogs?: boolean;
   maxPlaylists: number;
   maxVideos: number;
   maxAudioFiles: number;
@@ -99,6 +100,7 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
       title: 'Administrative',
       permissions: [
         { key: 'isAdmin', label: 'Admin Access', description: 'Full system administrator privileges' },
+        { key: 'canViewLogs', label: 'View Activity Logs', description: 'Access to view comprehensive activity logs for all users' },
       ],
     },
   ];

@@ -95,6 +95,7 @@ const UserPermissionCard = ({
             {user.canGenerateCodes && <ThemedText style={styles.permissionItem}>• Generate Codes</ThemedText>}
             {user.canViewAnalytics && <ThemedText style={styles.permissionItem}>• View Analytics</ThemedText>}
             {user.canAccessStore && <ThemedText style={styles.permissionItem}>• Access Store</ThemedText>}
+            {user.canViewLogs && <ThemedText style={styles.permissionItem}>• View Activity Logs</ThemedText>}
           </View>
         </View>
 
