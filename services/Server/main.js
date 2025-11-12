@@ -132,18 +132,21 @@ const upload = multer({
         size: file.size
     });
 
-    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime/;
+    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime|ipa|apk/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype) || 
                     file.mimetype.startsWith('audio/') || 
                     file.mimetype.startsWith('image/') ||
-                    file.mimetype.startsWith('video/');
+                    file.mimetype.startsWith('video/') ||
+                    file.mimetype === 'application/vnd.android.package-archive' ||
+                    file.mimetype === 'com.apple.itunes.ipa' ||
+                    file.mimetype === 'application/octet-stream';
     
     if (extname || mimetype) {
       console.log(`✅ FILE_FILTER [${requestId}]: File accepted`);
       cb(null, true);
     } else {
-      const filterError = new Error('File type not allowed. Only images, audio, and video are supported.');
+      const filterError = new Error('File type not allowed. Only images, audio, video, IPA, and APK files are supported.');
       filterError.code = 'FILE_TYPE_NOT_ALLOWED';
       console.log(`❌ FILE_FILTER [${requestId}]: File rejected. Type not allowed: ${file.mimetype}`);
       cb(filterError, false);

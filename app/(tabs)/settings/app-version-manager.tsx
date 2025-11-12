@@ -114,18 +114,27 @@ export default function AppVersionManagerScreen() {
   };
 
   const handleUpload = async () => {
+    console.log('📤 UPLOAD: handleUpload called');
+    console.log('📤 UPLOAD: version:', version);
+    console.log('📤 UPLOAD: platform:', platform);
+    console.log('📤 UPLOAD: selectedFile:', selectedFile);
+    console.log('📤 UPLOAD: isUploading:', isUploading);
+    
     if (!version || !selectedFile || selectedFile.canceled) {
+      console.log('❌ UPLOAD: Validation failed - missing fields');
       Alert.alert('Error', 'Please fill in all fields and select a file');
       return;
     }
 
     // Validate version format (basic check)
     if (!/^\d+\.\d+\.\d+$/.test(version)) {
+      console.log('❌ UPLOAD: Validation failed - invalid version format');
       Alert.alert('Error', 'Version must be in format X.Y.Z (e.g., 1.1.0)');
       return;
     }
 
     try {
+      console.log('📤 UPLOAD: Starting upload process...');
       setIsUploading(true);
 
       const formData = new FormData();
@@ -175,6 +184,15 @@ export default function AppVersionManagerScreen() {
         hasToken: !!token
       });
       
+      console.log('📤 UPLOAD: Sending request to:', `${API_URL}/admin/app/upload`);
+      console.log('📤 UPLOAD: FormData entries:', {
+        version,
+        platform,
+        releaseNotes,
+        fileName: selectedFile.assets?.[0]?.name,
+        fileSize: selectedFile.assets?.[0]?.size,
+      });
+      
       const response = await fetch(`${API_URL}/admin/app/upload`, {
         method: 'POST',
         headers: {
@@ -184,7 +202,8 @@ export default function AppVersionManagerScreen() {
         body: formData,
       });
       
-      console.log('📤 Upload response status:', response.status, response.statusText);
+      console.log('📤 UPLOAD: Response received - status:', response.status, response.statusText);
+      console.log('📤 UPLOAD: Response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Upload failed' }));
