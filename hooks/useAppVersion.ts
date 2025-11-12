@@ -51,15 +51,25 @@ export function useAppVersion() {
         }
       }
 
+      console.log('📱 VERSION_CHECK: Checking for updates...');
+      console.log('📱 VERSION_CHECK: Current version:', currentVersion);
+      console.log('📱 VERSION_CHECK: Platform:', platform);
+      console.log('📱 VERSION_CHECK: API URL:', `${API_URL}/app/version/check?currentVersion=${currentVersion}&platform=${platform}`);
+      
       const response = await fetch(
         `${API_URL}/app/version/check?currentVersion=${currentVersion}&platform=${platform}`
       );
 
       if (!response.ok) {
+        console.error('❌ VERSION_CHECK: Response not OK:', response.status, response.statusText);
         throw new Error('Failed to check for updates');
       }
 
       const data: VersionInfo = await response.json();
+      console.log('📱 VERSION_CHECK: Response data:', JSON.stringify(data, null, 2));
+      console.log('📱 VERSION_CHECK: Update available?', data.updateAvailable);
+      console.log('📱 VERSION_CHECK: Latest version:', data.latestVersion?.version);
+      
       setVersionInfo(data);
 
       // Cache the result

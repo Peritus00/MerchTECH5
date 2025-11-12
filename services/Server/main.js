@@ -4404,6 +4404,8 @@ app.get('/api/app/version/check', async (req, res) => {
   try {
     const { currentVersion, platform } = req.query;
     
+    console.log('📱 VERSION_CHECK_API: Request received:', { currentVersion, platform });
+    
     if (!platform || !['android', 'ios'].includes(platform.toLowerCase())) {
       return res.status(400).json({ error: 'Valid platform (android/ios) is required' });
     }
@@ -4442,6 +4444,9 @@ app.get('/api/app/version/check', async (req, res) => {
 
     const latestVersion = result.rows[0];
     
+    console.log('📱 VERSION_CHECK_API: Latest version in DB:', latestVersion.version);
+    console.log('📱 VERSION_CHECK_API: Current version from app:', currentVersion);
+    
     // Simple version comparison (semantic versioning)
     const compareVersions = (v1, v2) => {
       const parts1 = v1.split('.').map(Number);
@@ -4455,9 +4460,11 @@ app.get('/api/app/version/check', async (req, res) => {
       return 0;
     };
 
-    const updateAvailable = currentVersion 
-      ? compareVersions(currentVersion, latestVersion.version) < 0
-      : true;
+    const comparison = currentVersion ? compareVersions(currentVersion, latestVersion.version) : -1;
+    const updateAvailable = comparison < 0;
+    
+    console.log('📱 VERSION_CHECK_API: Version comparison result:', comparison);
+    console.log('📱 VERSION_CHECK_API: Update available?', updateAvailable);
 
     res.json({
       updateAvailable,

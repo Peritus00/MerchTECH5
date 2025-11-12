@@ -7,6 +7,7 @@ import {
   Platform,
   Linking,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -36,16 +37,75 @@ export function UpdateNotificationModal({
     if (!latestVersion?.downloadUrl) return;
     
     try {
-      const canOpen = await Linking.canOpenURL(latestVersion.downloadUrl);
-      if (canOpen) {
-        await Linking.openURL(latestVersion.downloadUrl);
-        onDownload();
+      console.log('📱 UPDATE: Attempting to download update:', latestVersion.downloadUrl);
+      console.log('📱 UPDATE: Platform:', Platform.OS);
+      
+      if (Platform.OS === 'ios') {
+        // iOS requires special handling - IPAs can't be installed directly
+        // For iOS, we need to use itms-services:// protocol with a manifest.plist
+        // OR direct users to TestFlight/App Store
+        
+        // Check if URL is already an itms-services:// link (for enterprise distribution)
+        if (latestVersion.downloadUrl.startsWith('itms-services://')) {
+          const canOpen = await Linking.canOpenURL(latestVersion.downloadUrl);
+          if (canOpen) {
+            await Linking.openURL(latestVersion.downloadUrl);
+            onDownload();
+          } else {
+            Alert.alert(
+              'Update Not Available',
+              'This update requires TestFlight or App Store installation. Please contact support for access.',
+              [{ text: 'OK' }]
+            );
+          }
+        } else {
+          // For direct IPA URLs, iOS can't install them
+          // Show instructions or redirect to TestFlight
+          Alert.alert(
+            'iOS Update Installation',
+            'iOS requires updates to be installed via TestFlight or App Store.\n\n' +
+            'The update file has been prepared. Please:\n' +
+            '1. Contact support for TestFlight access, OR\n' +
+            '2. Install manually via Xcode/Apple Configurator\n\n' +
+            'Download URL will be copied to clipboard.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Copy URL',
+                onPress: async () => {
+                  try {
+                    const Clipboard = (await import('expo-clipboard')).default;
+                    await Clipboard.setStringAsync(latestVersion.downloadUrl);
+                    Alert.alert('Success', 'Download URL copied to clipboard');
+                  } catch (err) {
+                    console.error('Error copying URL:', err);
+                  }
+                }
+              }
+            ]
+          );
+        }
       } else {
-        // Fallback: try to copy URL or show error
-        console.error('Cannot open download URL:', latestVersion.downloadUrl);
+        // Android - can install APKs directly
+        const canOpen = await Linking.canOpenURL(latestVersion.downloadUrl);
+        if (canOpen) {
+          await Linking.openURL(latestVersion.downloadUrl);
+          onDownload();
+        } else {
+          Alert.alert(
+            'Cannot Open Download',
+            'Unable to open the download URL. Please contact support.',
+            [{ text: 'OK' }]
+          );
+        }
       }
     } catch (error) {
       console.error('Error opening download URL:', error);
+      Alert.alert(
+        'Download Error',
+        'Failed to start download. Please try again or contact support.',
+        [{ text: 'OK' }]
+      );
     }
   };
 
