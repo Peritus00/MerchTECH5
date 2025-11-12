@@ -43,15 +43,20 @@ function RootLayoutNav() {
   }, [isInitialized]);
 
   // Check for updates on app launch and show modal if update is available
+  // Force check on startup to always get latest version info
   useEffect(() => {
     if (isInitialized && user) {
       // Small delay to let the app fully initialize
       const checkTimer = setTimeout(async () => {
-        await checkForUpdates();
+        console.log('📱 APP_STARTUP: Forcing version check on app launch...');
+        await checkForUpdates(true); // Force check, bypass cache
         // Check versionInfo after a brief delay to ensure state is updated
         setTimeout(() => {
           if (versionInfo?.updateAvailable) {
+            console.log('📱 APP_STARTUP: Update available, showing modal');
             setShowUpdateModal(true);
+          } else {
+            console.log('📱 APP_STARTUP: No update available');
           }
         }, 500);
       }, 2000); // Wait 2 seconds after initialization

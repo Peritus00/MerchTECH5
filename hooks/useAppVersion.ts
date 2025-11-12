@@ -90,8 +90,26 @@ export function useAppVersion() {
   };
 
   useEffect(() => {
-    // Check for updates on mount
-    checkForUpdates();
+    // Check for updates on mount - use a shorter interval for initial check
+    // This ensures we check more frequently on app startup
+    const performInitialCheck = async () => {
+      const lastCheck = await AsyncStorage.getItem(LAST_CHECK_KEY);
+      const now = Date.now();
+      
+      // If no previous check or it's been more than 1 hour, force check
+      // Otherwise use normal check (respects cache)
+      const shouldForce = !lastCheck || (now - parseInt(lastCheck, 10)) > (60 * 60 * 1000); // 1 hour
+      
+      if (shouldForce) {
+        console.log('📱 VERSION_HOOK: Initial check - forcing update (no recent check or >1 hour)');
+        await checkForUpdates(true);
+      } else {
+        console.log('📱 VERSION_HOOK: Initial check - using cached result if available');
+        await checkForUpdates(false);
+      }
+    };
+    
+    performInitialCheck();
   }, []);
 
   return {
