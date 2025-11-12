@@ -12,6 +12,27 @@ export interface EnvironmentConfig {
   EXPO_PROJECT_ID: string;
 }
 
+/**
+ * Normalizes frontend URL to always use www.merchtrader.org (which has valid SSL)
+ * This ensures QR codes always use the domain with a working certificate
+ */
+function normalizeFrontendUrl(url: string): string {
+  if (!url) {
+    return 'https://www.merchtrader.org';
+  }
+  
+  // Remove trailing slashes
+  url = url.trim().replace(/\/+$/, '');
+  
+  // If it's merchtrader.org without www, add www
+  if (url === 'https://merchtrader.org' || url === 'http://merchtrader.org') {
+    return 'https://www.merchtrader.org';
+  }
+  
+  // If it already has www or is a different domain, return as-is
+  return url;
+}
+
 class Environment {
   private config: EnvironmentConfig;
 
@@ -48,12 +69,21 @@ class Environment {
       }
     }
     
+    // Normalize frontend URL to always use www.merchtrader.org (which has valid SSL)
+    const rawFrontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://www.merchtrader.org';
+    const normalizedFrontendUrl = normalizeFrontendUrl(rawFrontendUrl);
+    
+    // Log if we had to normalize it
+    if (rawFrontendUrl !== normalizedFrontendUrl) {
+      console.log(`🔧 Normalized FRONTEND_URL: ${rawFrontendUrl} → ${normalizedFrontendUrl}`);
+    }
+    
     return {
       API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
       IS_PRODUCTION: isProduction,
       IS_DEVELOPMENT: !isProduction,
-      FRONTEND_URL: process.env.EXPO_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://www.merchtrader.org',
+      FRONTEND_URL: normalizedFrontendUrl,
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
     };
   }

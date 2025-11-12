@@ -288,12 +288,6 @@ export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = (
         <QRCodeSVG {...qrProps} />
         {renderLogo()}
       </View>
-      
-      {optimizeForScanning && logoOptions?.imageData && (
-        <View style={styles.optimizationIndicator}>
-          <ThemedText style={styles.optimizationText}>📱 Scan Optimized</ThemedText>
-        </View>
-      )}
     </View>
   );
 };
@@ -340,18 +334,6 @@ const styles = StyleSheet.create({
   },
   quietZone: {
     position: 'absolute',
-  },
-  optimizationIndicator: {
-    position: 'absolute',
-    bottom: -20,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-  },
-  optimizationText: {
-    fontSize: 8,
-    color: '#10B981',
-    fontWeight: '600',
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -24,6 +24,9 @@ interface FormErrors {
   general?: string;
 }
 
+// Performance monitoring - remove in production if not needed
+const DEBUG_RENDERS = __DEV__;
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,7 +37,19 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuth();
   const router = useRouter();
 
-  const validateForm = (): boolean => {
+  // Performance monitoring
+  useEffect(() => {
+    if (DEBUG_RENDERS) {
+      console.log('🔄 LoginScreen render:', {
+        isLoading,
+        isSubmitting,
+        hasErrors: Object.keys(errors).length > 0,
+        emailLength: email.length,
+      });
+    }
+  }, [isLoading, isSubmitting, errors, email]);
+
+  const validateForm = useCallback((): boolean => {
     const newErrors: FormErrors = {};
 
     if (!email.trim()) {
@@ -51,9 +66,9 @@ export default function LoginScreen() {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
+  }, [email, password]);
 
-  const handleLogin = async () => {
+  const handleLogin = useCallback(async () => {
     console.log('🚀 Login Screen: handleLogin called');
     console.log('🚀 Email:', email);
     console.log('🚀 Password length:', password.length);
@@ -94,23 +109,58 @@ export default function LoginScreen() {
       console.log('🔄 Login Screen: Setting isSubmitting to false');
       setIsSubmitting(false);
     }
-  };
+  }, [email, password, validateForm, login, router]);
 
-  const handleForgotPassword = () => {
+  const handleForgotPassword = useCallback(() => {
     router.push('/auth/forgot-password');
-  };
+  }, [router]);
 
-  const loading = isLoading || isSubmitting;
+  const handleEmailChange = useCallback((text: string) => {
+    setEmail(text);
+    if (errors.email) {
+      setErrors(prev => ({ ...prev, email: undefined }));
+    }
+  }, [errors.email]);
+
+  const handlePasswordChange = useCallback((text: string) => {
+    setPassword(text);
+    if (errors.password) {
+      setErrors(prev => ({ ...prev, password: undefined }));
+    }
+  }, [errors.password]);
+
+  const togglePasswordVisibility = useCallback(() => {
+    setIsPasswordVisible(prev => !prev);
+  }, []);
+
+  const handleRegisterPress = useCallback(() => {
+    router.push('/auth/register');
+  }, [router]);
+
+  // Memoize computed values to prevent unnecessary re-renders
+  const loading = useMemo(() => isLoading || isSubmitting, [isLoading, isSubmitting]);
+  
+  // Memoize keyboard behavior for Android to prevent layout shifts
+  const keyboardBehavior = useMemo(() => {
+    // On Android, use 'padding' instead of 'height' to reduce flickering
+    // 'height' can cause layout recalculations that lead to flickering
+    // But we need to be careful not to break keyboard functionality
+    return Platform.OS === 'ios' ? 'padding' : undefined;
+  }, []);
 
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={keyboardBehavior}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      enabled={Platform.OS === 'ios'}
     >
       <ScrollView 
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // Removed removeClippedSubviews - it can cause TextInput focus issues
+        // Removed bounces={false} - can interfere with keyboard behavior
       >
         <ThemedView style={styles.content}>
           <View style={styles.header}>
@@ -134,18 +184,16 @@ export default function LoginScreen() {
                 <TextInput
                   style={styles.input}
                   value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    if (errors.email) {
-                      setErrors(prev => ({ ...prev, email: undefined }));
-                    }
-                  }}
+                  onChangeText={handleEmailChange}
                   placeholder="Enter your email"
                   placeholderTextColor="#9ca3af"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="email"
+                  textContentType="emailAddress"
+                  returnKeyType="next"
+                  blurOnSubmit={false}
                 />
               </View>
               {errors.email && <Text style={styles.fieldError}>{errors.email}</Text>}
@@ -158,21 +206,20 @@ export default function LoginScreen() {
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    if (errors.password) {
-                      setErrors(prev => ({ ...prev, password: undefined }));
-                    }
-                  }}
+                  onChangeText={handlePasswordChange}
                   placeholder="Enter your password"
                   placeholderTextColor="#9ca3af"
                   secureTextEntry={!isPasswordVisible}
                   autoCapitalize="none"
                   autoComplete="password"
+                  textContentType="password"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
                 />
                 <TouchableOpacity
-                  onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  onPress={togglePasswordVisibility}
                   style={styles.eyeIcon}
+                  activeOpacity={0.7}
                 >
                   <MaterialIconWithFallback 
                     name={isPasswordVisible ? 'visibility' : 'visibility-off'} 
@@ -187,6 +234,7 @@ export default function LoginScreen() {
             <TouchableOpacity
               style={styles.forgotPassword}
               onPress={handleForgotPassword}
+              activeOpacity={0.7}
             >
               <ThemedText style={styles.forgotPasswordText}>
                 Forgot your password?
@@ -197,6 +245,7 @@ export default function LoginScreen() {
               style={[styles.loginButton, loading && styles.disabled]}
               onPress={handleLogin}
               disabled={loading}
+              activeOpacity={0.8}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -213,7 +262,8 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={styles.linkButton}
-              onPress={() => router.push('/auth/register')}
+              onPress={handleRegisterPress}
+              activeOpacity={0.7}
             >
               <ThemedText style={styles.linkText}>
                 Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
@@ -229,15 +279,21 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // Prevent layout shifts on Android
+    ...(Platform.OS === 'android' && {
+      flexDirection: 'column',
+    }),
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
+    // Removed minHeight - was causing layout issues
   },
   content: {
     flex: 1,
     padding: 24,
     justifyContent: 'center',
+    // Removed flexShrink - was interfering with keyboard
   },
   header: {
     alignItems: 'center',
