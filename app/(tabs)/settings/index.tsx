@@ -22,13 +22,19 @@ export default function Settings() {
   const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
 
   // Debug logging
-  console.log('Current user:', user);
-  console.log('User email:', user?.email);
-  console.log('User username:', user?.username);
-  console.log('Is admin check:', isAdmin);
+  console.log('🔧 SETTINGS: Current user:', user);
+  console.log('🔧 SETTINGS: User email:', user?.email);
+  console.log('🔧 SETTINGS: User username:', user?.username);
+  console.log('🔧 SETTINGS: Platform.OS:', Platform.OS);
+  console.log('🔧 SETTINGS: Is admin check:', isAdmin);
+  console.log('🔧 SETTINGS: User object keys:', user ? Object.keys(user) : 'no user');
+  console.log('🔧 SETTINGS: User email check:', user?.email === 'djjetfuel@gmail.com');
+  console.log('🔧 SETTINGS: User username check:', user?.username === 'djjetfuel');
 
   if (isAdmin) {
-    console.log('Adding admin options to settings');
+    console.log('🔧 SETTINGS: Adding admin options to settings');
+  } else {
+    console.log('🔧 SETTINGS: User is NOT admin, admin options will be hidden');
   }
 
   const handleLogout = async () => {
@@ -243,7 +249,10 @@ export default function Settings() {
     ...(isAdmin ? [{
       title: 'Debug Logs',
       description: 'View app console logs and debug information',
-      onPress: () => router.push('/(tabs)/settings/debug-logs'),
+      onPress: () => {
+        console.log('🔧 SETTINGS: Debug Logs button pressed');
+        router.push('/(tabs)/settings/debug-logs');
+      },
       icon: '🐛',
     }] : []),
     {
