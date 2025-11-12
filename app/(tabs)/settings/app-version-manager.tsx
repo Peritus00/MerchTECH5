@@ -678,5 +678,10 @@ const styles = StyleSheet.create({
   deleteButton: {
     padding: 8,
   },
+  errorText: {
+    fontSize: 12,
+    color: '#ef4444',
+    marginTop: 4,
+  },
 });
 
