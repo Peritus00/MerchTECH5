@@ -4,11 +4,13 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { logStorage, type LogEntry } from '@/utils/debugLogger';
 
 export default function DebugLogsScreen() {
   const { user } = useAuth();
+  const router = useRouter();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState('');
   const [filterLevel, setFilterLevel] = useState<'all' | 'log' | 'warn' | 'error' | 'info'>('all');
@@ -127,17 +129,25 @@ export default function DebugLogsScreen() {
     <ThemedView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <ThemedText type="title" style={styles.title}>Debug Logs</ThemedText>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={clearLogs} style={styles.iconButton}>
-            <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
+        <View style={styles.headerTop}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <MaterialIcons name="arrow-back" size={24} color="#2563eb" />
+            <ThemedText style={styles.backButtonText}>Back</ThemedText>
           </TouchableOpacity>
-          <TouchableOpacity onPress={copyLogs} style={styles.iconButton}>
-            <MaterialIcons name="content-copy" size={24} color="#3b82f6" />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={exportLogs} style={styles.iconButton}>
-            <MaterialIcons name="download" size={24} color="#10b981" />
-          </TouchableOpacity>
+        </View>
+        <View style={styles.headerBottom}>
+          <ThemedText type="title" style={styles.title}>Debug Logs</ThemedText>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={clearLogs} style={styles.iconButton}>
+              <MaterialIcons name="delete-outline" size={24} color="#ef4444" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={copyLogs} style={styles.iconButton}>
+              <MaterialIcons name="content-copy" size={24} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={exportLogs} style={styles.iconButton}>
+              <MaterialIcons name="download" size={24} color="#10b981" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -242,10 +252,28 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   header: {
+    marginBottom: 16,
+  },
+  headerTop: {
+    marginBottom: 12,
+  },
+  headerBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignSelf: 'flex-start',
+  },
+  backButtonText: {
+    fontSize: 16,
+    color: '#2563eb',
+    fontWeight: '600',
   },
   title: {
     fontSize: 24,
