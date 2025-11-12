@@ -236,3 +236,42 @@ export interface ActivityLogStats {
     count: number;
   }>;
 }
+
+// Deleted items types (for admin restore functionality)
+export interface DeletedQRCode extends QRCode {
+  owner_id: number;
+  owner_username: string;
+  owner_email: string;
+  deleted_at: string;
+}
+
+export interface DeletedPlaylist {
+  id: number;
+  name: string;
+  description?: string;
+  requires_activation_code: boolean;
+  is_public: boolean;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string;
+  owner_id: number;
+  owner_username: string;
+  owner_email: string;
+}
+
+export interface DeletedSlideshow {
+  id: number;
+  name: string;
+  description?: string;
+  requires_activation_code: boolean;
+  is_public: boolean;
+  autoplay_interval?: number;
+  transition?: string;
+  audio_url?: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string;
+  owner_id: number;
+  owner_username: string;
+  owner_email: string;
+}

@@ -18,8 +18,8 @@ export default function Settings() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentVersion, versionInfo, checkForUpdates, isChecking } = useAppVersion();
 
-  // Check if user is admin (djjetfuel)
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  // Check if user is admin (check isAdmin property or specific admin account)
+  const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
   // Check if user can view logs (admin or has canViewLogs permission)
   const canViewLogs = isAdmin || (user && user.canViewLogs);
 
@@ -297,6 +297,13 @@ export default function Settings() {
         description: 'Manage user roles and permissions',
         onPress: () => router.push('/settings/user-permissions'),
         icon: '🔐',
+        adminOnly: true,
+      },
+      {
+        title: 'Restore Deleted Items',
+        description: 'Restore accidentally deleted QR codes, playlists, and slideshows',
+        onPress: () => router.push('/settings/restore-deleted'),
+        icon: '♻️',
         adminOnly: true,
       },
       {

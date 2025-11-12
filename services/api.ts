@@ -901,6 +901,37 @@ export const adminAPI = {
     const response = await api.delete(`/admin/users/${userId}/scans`);
     return response.data;
   },
+
+  // Deleted items management
+  async getDeletedQRCodes() {
+    const response = await api.get('/admin/deleted/qr-codes');
+    return response.data.deletedQRCodes || [];
+  },
+
+  async getDeletedPlaylists() {
+    const response = await api.get('/admin/deleted/playlists');
+    return response.data.deletedPlaylists || [];
+  },
+
+  async getDeletedSlideshows() {
+    const response = await api.get('/admin/deleted/slideshows');
+    return response.data.deletedSlideshows || [];
+  },
+
+  async restoreQRCode(id: number) {
+    const response = await api.post(`/admin/restore/qr-codes/${id}`);
+    return response.data;
+  },
+
+  async restorePlaylist(id: number) {
+    const response = await api.post(`/admin/restore/playlists/${id}`);
+    return response.data;
+  },
+
+  async restoreSlideshow(id: number) {
+    const response = await api.post(`/admin/restore/slideshows/${id}`);
+    return response.data;
+  },
 };
 
 // Activity Logs API

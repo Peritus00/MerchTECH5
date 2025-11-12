@@ -493,6 +493,194 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
   }
 });
 
+// ---------- ADMIN RESTORE DELETED ITEMS ENDPOINTS ----------
+
+// Get deleted QR codes (admin only, last 90 days)
+app.get('/api/admin/deleted/qr-codes', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        q.id,
+        q.name,
+        q.url,
+        q.description,
+        q.options,
+        q.created_at,
+        q.updated_at,
+        q.user_id as owner_id,
+        u.username as owner_username,
+        u.email as owner_email,
+        q.updated_at as deleted_at
+      FROM qr_codes q
+      JOIN users u ON q.user_id = u.id
+      WHERE q.is_active = false
+        AND q.updated_at >= NOW() - INTERVAL '90 days'
+      ORDER BY q.updated_at DESC
+    `);
+    
+    res.json({ deletedQRCodes: result.rows });
+  } catch (error) {
+    console.error('Error fetching deleted QR codes:', error);
+    res.status(500).json({ error: 'Failed to fetch deleted QR codes' });
+  }
+});
+
+// Get deleted playlists (admin only, last 90 days)
+app.get('/api/admin/deleted/playlists', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        p.id,
+        p.name,
+        p.description,
+        p.requires_activation_code,
+        p.is_public,
+        p.created_at,
+        p.updated_at,
+        p.deleted_at,
+        p.user_id as owner_id,
+        u.username as owner_username,
+        u.email as owner_email
+      FROM playlists p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.deleted_at IS NOT NULL
+        AND p.deleted_at >= NOW() - INTERVAL '90 days'
+      ORDER BY p.deleted_at DESC
+    `);
+    
+    res.json({ deletedPlaylists: result.rows });
+  } catch (error) {
+    console.error('Error fetching deleted playlists:', error);
+    res.status(500).json({ error: 'Failed to fetch deleted playlists' });
+  }
+});
+
+// Get deleted slideshows (admin only, last 90 days)
+app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        s.id,
+        s.name,
+        s.description,
+        s.requires_activation_code,
+        s.is_public,
+        s.autoplay_interval,
+        s.transition,
+        s.audio_url,
+        s.created_at,
+        s.updated_at,
+        s.deleted_at,
+        s.user_id as owner_id,
+        u.username as owner_username,
+        u.email as owner_email
+      FROM slideshows s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.deleted_at IS NOT NULL
+        AND s.deleted_at >= NOW() - INTERVAL '90 days'
+      ORDER BY s.deleted_at DESC
+    `);
+    
+    res.json({ deletedSlideshows: result.rows });
+  } catch (error) {
+    console.error('Error fetching deleted slideshows:', error);
+    res.status(500).json({ error: 'Failed to fetch deleted slideshows' });
+  }
+});
+
+// Restore deleted QR code (admin only)
+app.post('/api/admin/restore/qr-codes/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if QR code exists and is deleted
+    const checkResult = await pool.query(
+      'SELECT id, user_id FROM qr_codes WHERE id = $1 AND is_active = false',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted QR code not found' });
+    }
+    
+    // Restore by setting is_active = true
+    const restoreResult = await pool.query(
+      'UPDATE qr_codes SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    res.json({ 
+      message: 'QR code restored successfully',
+      qrCode: restoreResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Error restoring QR code:', error);
+    res.status(500).json({ error: 'Failed to restore QR code' });
+  }
+});
+
+// Restore deleted playlist (admin only)
+app.post('/api/admin/restore/playlists/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if playlist exists and is deleted
+    const checkResult = await pool.query(
+      'SELECT id, user_id FROM playlists WHERE id = $1 AND deleted_at IS NOT NULL',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted playlist not found' });
+    }
+    
+    // Restore by setting deleted_at = NULL
+    const restoreResult = await pool.query(
+      'UPDATE playlists SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    res.json({ 
+      message: 'Playlist restored successfully',
+      playlist: restoreResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Error restoring playlist:', error);
+    res.status(500).json({ error: 'Failed to restore playlist' });
+  }
+});
+
+// Restore deleted slideshow (admin only)
+app.post('/api/admin/restore/slideshows/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if slideshow exists and is deleted
+    const checkResult = await pool.query(
+      'SELECT id, user_id FROM slideshows WHERE id = $1 AND deleted_at IS NOT NULL',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted slideshow not found' });
+    }
+    
+    // Restore by setting deleted_at = NULL
+    const restoreResult = await pool.query(
+      'UPDATE slideshows SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    res.json({ 
+      message: 'Slideshow restored successfully',
+      slideshow: restoreResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Error restoring slideshow:', error);
+    res.status(500).json({ error: 'Failed to restore slideshow' });
+  }
+});
+
 // Search users with scan counts
 app.get('/api/admin/users/search', authenticateToken, isAdmin, async (req, res) => {
   try {
@@ -1827,8 +2015,8 @@ app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
     try {
       const [qrRes, playlistsRes, slideshowsRes, productsRes] = await Promise.all([
         pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]),
-        pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [id]),
-        pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [id]),
+        pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [id]),
+        pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [id]),
         pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1', [id]),
       ]);
       
@@ -5682,7 +5870,7 @@ app.get('/api/content/:id/type', async (req, res) => {
     
     // Check both tables efficiently with a single query each
     const [playlistCheck, mediaCheck] = await Promise.all([
-      pool.query('SELECT id FROM playlists WHERE id = $1 LIMIT 1', [id]),
+      pool.query('SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [id]),
       pool.query('SELECT id FROM media WHERE id = $1 LIMIT 1', [id])
     ]);
     
@@ -5726,7 +5914,7 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [req.user.userId]);
+    const countResult = await pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -5794,7 +5982,7 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
       `SELECT p.*, u.username 
        FROM playlists p 
        JOIN users u ON p.user_id = u.id 
-       WHERE p.user_id = $1 
+       WHERE p.user_id = $1 AND p.deleted_at IS NULL
        ORDER BY p.created_at DESC`,
       [req.user.userId]
     );
@@ -5857,7 +6045,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
 
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -5903,7 +6091,7 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
 
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -5915,8 +6103,11 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to delete this playlist' });
     }
 
-    // Delete playlist (CASCADE will handle playlist_media)
-    await pool.query('DELETE FROM playlists WHERE id = $1', [id]);
+    // Soft delete playlist by setting deleted_at timestamp
+    await pool.query(
+      'UPDATE playlists SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
+      [id]
+    );
     
     res.json({ message: 'Playlist deleted successfully' });
   } catch (error) {
@@ -5933,7 +6124,7 @@ async function getPlaylistWithMedia(playlistId) {
     `SELECT p.*, u.username 
      FROM playlists p 
      JOIN users u ON p.user_id = u.id 
-     WHERE p.id = $1`,
+     WHERE p.id = $1 AND p.deleted_at IS NULL`,
     [playlistId]
   );
 
@@ -7569,7 +7760,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
     
     const result = await pool.query(
       `SELECT s.* FROM slideshows s 
-       WHERE s.user_id = $1 
+       WHERE s.user_id = $1 AND s.deleted_at IS NULL
        ORDER BY s.created_at DESC`,
       [req.user.userId]
     );
@@ -7629,7 +7820,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
       `SELECT s.*, u.username 
        FROM slideshows s 
        JOIN users u ON s.user_id = u.id
-       WHERE s.id = $1`,
+       WHERE s.id = $1 AND s.deleted_at IS NULL`,
       [id]
     );
     
@@ -7980,7 +8171,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
   try {
     // Fetch the slideshow details first
     console.log(`🎬 GET_SLIDESHOW [${slideshowId}]: Starting fetch for access check.`);
-    const slideshowRes = await client.query('SELECT * FROM slideshows WHERE id = $1', [slideshowId]);
+    const slideshowRes = await client.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [slideshowId]);
 
     if (slideshowRes.rows.length === 0) {
       return res.status(404).json({ message: 'Slideshow not found' });
@@ -8179,7 +8370,7 @@ app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => 
     console.log(`🎵 SLIDESHOW_AUDIO_URL: Fetching audio URL for slideshow ${id}`);
     
     // Fetch the slideshow details
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1', [id]);
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found' });
     }
@@ -8230,7 +8421,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1', [req.user.userId]);
+    const countResult = await pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     let maxSlideshows;
@@ -8297,7 +8488,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     // Check if user owns the slideshow
     console.log('🎬 SLIDESHOWS: Checking slideshow ownership...');
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM slideshows WHERE id = $1',
+      'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -8419,7 +8610,7 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
     
     // Check if user owns the slideshow
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM slideshows WHERE id = $1',
+      'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -8431,8 +8622,11 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to delete this slideshow' });
     }
 
-    // Delete slideshow (this will cascade delete images)
-    await pool.query('DELETE FROM slideshows WHERE id = $1', [id]);
+    // Soft delete slideshow by setting deleted_at timestamp
+    await pool.query(
+      'UPDATE slideshows SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
+      [id]
+    );
     
     console.log('🎬 SLIDESHOWS: Slideshow deleted successfully');
     res.json({ message: 'Slideshow deleted successfully' });
@@ -8563,7 +8757,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     
     // Check if user owns the slideshow
     const slideshowResult = await pool.query(
-      'SELECT user_id FROM slideshows WHERE id = $1',
+      'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
     
@@ -9082,7 +9276,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
     
@@ -9160,7 +9354,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
     
@@ -9202,7 +9396,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     
     // Check if user owns the playlist
     const ownerCheck = await pool.query(
-      'SELECT user_id FROM playlists WHERE id = $1',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
     
@@ -9270,7 +9464,7 @@ app.get('/api/playlists/:playlistId/chat', async (req, res) => {
 
     // Check if playlist exists and is accessible
     const playlistResult = await pool.query(
-      'SELECT id, requires_activation_code, is_public FROM playlists WHERE id = $1',
+      'SELECT id, requires_activation_code, is_public FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [playlistId]
     );
 
@@ -9329,7 +9523,7 @@ app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) 
 
     // Check if playlist exists
     const playlistResult = await pool.query(
-      'SELECT id FROM playlists WHERE id = $1',
+      'SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [playlistId]
     );
 
@@ -9427,7 +9621,7 @@ app.get('/api/slideshows/:slideshowId/chat', async (req, res) => {
 
     // Check if slideshow exists and is accessible
     const slideshowResult = await pool.query(
-      'SELECT id, requires_activation_code, is_public FROM slideshows WHERE id = $1',
+      'SELECT id, requires_activation_code, is_public FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
 
@@ -9486,7 +9680,7 @@ app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res
 
     // Check if slideshow exists
     const slideshowResult = await pool.query(
-      'SELECT id FROM slideshows WHERE id = $1',
+      'SELECT id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
 
@@ -9790,7 +9984,7 @@ app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res)
     console.log('🔗 PRODUCT_LINK: Adding product link:', { playlistId: id, productId, userId: req.user.userId });
 
     // Check if playlist exists and user owns it
-    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
     }
@@ -9840,7 +10034,7 @@ app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, asy
     console.log('🔗 PRODUCT_LINK: Removing product link:', { playlistId: id, productId, userId: req.user.userId });
 
     // Check if playlist exists and user owns it
-    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
     }
@@ -9908,7 +10102,7 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Adding product link:', { slideshowId: id, productId, userId: req.user.userId });
 
     // Check if slideshow exists and user owns it
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
     }
@@ -9958,7 +10152,7 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Removing product link:', { slideshowId: id, productId, userId: req.user.userId });
 
     // Check if slideshow exists and user owns it
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2', [id, req.user.userId]);
+    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
     }
