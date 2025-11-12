@@ -249,62 +249,84 @@ export default function AppVersionManagerScreen() {
   const handleDelete = async (versionId: number) => {
     console.log('🗑️ DELETE: handleDelete called with versionId:', versionId);
     
-    Alert.alert(
-      'Delete Version',
-      'Are you sure you want to delete this version? This action cannot be undone.',
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => console.log('🗑️ DELETE: User cancelled deletion')
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('🗑️ DELETE: User confirmed deletion for versionId:', versionId);
-            try {
-              const token = await AsyncStorage.getItem('authToken');
-              console.log('🗑️ DELETE: Token exists:', !!token);
-              console.log('🗑️ DELETE: Making DELETE request to:', `${API_URL}/admin/app/versions/${versionId}`);
-              
-              const response = await fetch(`${API_URL}/admin/app/versions/${versionId}`, {
-                method: 'DELETE',
-                headers: {
-                  'Authorization': `Bearer ${token || ''}`,
-                  'Content-Type': 'application/json',
-                },
-              });
-
-              console.log('🗑️ DELETE: Response status:', response.status, response.statusText);
-
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: 'Delete failed' }));
-                console.error('🗑️ DELETE: Error response:', errorData);
-                throw new Error(errorData.error || 'Delete failed');
-              }
-
-              const result = await response.json();
-              console.log('🗑️ DELETE: Success response:', result);
-              
-              Alert.alert('Success', 'Version deleted successfully', [
-                { 
-                  text: 'OK',
-                  onPress: async () => {
-                    console.log('🗑️ DELETE: Refreshing versions list...');
-                    await fetchVersions();
-                  }
-                }
-              ]);
-            } catch (error) {
-              console.error('🗑️ DELETE: Error deleting version:', error);
-              const errorMessage = error instanceof Error ? error.message : 'Failed to delete version';
-              Alert.alert('Error', errorMessage);
-            }
+    const performDelete = async () => {
+      console.log('🗑️ DELETE: User confirmed deletion for versionId:', versionId);
+      try {
+        const token = await AsyncStorage.getItem('authToken');
+        console.log('🗑️ DELETE: Token exists:', !!token);
+        console.log('🗑️ DELETE: Making DELETE request to:', `${API_URL}/admin/app/versions/${versionId}`);
+        
+        const response = await fetch(`${API_URL}/admin/app/versions/${versionId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token || ''}`,
+            'Content-Type': 'application/json',
           },
-        },
-      ]
-    );
+        });
+
+        console.log('🗑️ DELETE: Response status:', response.status, response.statusText);
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ error: 'Delete failed' }));
+          console.error('🗑️ DELETE: Error response:', errorData);
+          throw new Error(errorData.error || 'Delete failed');
+        }
+
+        const result = await response.json();
+        console.log('🗑️ DELETE: Success response:', result);
+        
+        if (Platform.OS === 'web') {
+          window.alert('Version deleted successfully');
+          await fetchVersions();
+        } else {
+          Alert.alert('Success', 'Version deleted successfully', [
+            { 
+              text: 'OK',
+              onPress: async () => {
+                console.log('🗑️ DELETE: Refreshing versions list...');
+                await fetchVersions();
+              }
+            }
+          ]);
+        }
+      } catch (error) {
+        console.error('🗑️ DELETE: Error deleting version:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to delete version';
+        if (Platform.OS === 'web') {
+          window.alert(`Error: ${errorMessage}`);
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // Use window.confirm for web
+      const confirmed = window.confirm('Are you sure you want to delete this version? This action cannot be undone.');
+      if (confirmed) {
+        await performDelete();
+      } else {
+        console.log('🗑️ DELETE: User cancelled deletion (web)');
+      }
+    } else {
+      // Use Alert.alert for mobile
+      Alert.alert(
+        'Delete Version',
+        'Are you sure you want to delete this version? This action cannot be undone.',
+        [
+          { 
+            text: 'Cancel', 
+            style: 'cancel',
+            onPress: () => console.log('🗑️ DELETE: User cancelled deletion')
+          },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: performDelete,
+          },
+        ]
+      );
+    }
   };
 
   const formatFileSize = (bytes?: number) => {
