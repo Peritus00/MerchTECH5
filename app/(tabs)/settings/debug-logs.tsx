@@ -130,7 +130,7 @@ export default function DebugLogsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backButton}>
             <MaterialIcons name="arrow-back" size={24} color="#2563eb" />
             <ThemedText style={styles.backButtonText}>Back</ThemedText>
           </TouchableOpacity>

@@ -172,7 +172,7 @@ const ActivityLogsScreen = () => {
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color="#3b82f6" />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Activity Logs</ThemedText>
