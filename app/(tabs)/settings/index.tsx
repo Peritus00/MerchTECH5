@@ -240,6 +240,12 @@ export default function Settings() {
       icon: '🔄',
       disabled: isChecking,
     },
+    ...(isAdmin ? [{
+      title: 'Debug Logs',
+      description: 'View app console logs and debug information',
+      onPress: () => router.push('/(tabs)/settings/debug-logs'),
+      icon: '🐛',
+    }] : []),
     {
       title: 'Privacy Policy',
       description: 'View our privacy policy',
