@@ -120,9 +120,23 @@ export default function AppVersionManagerScreen() {
     console.log('📤 UPLOAD: selectedFile:', selectedFile);
     console.log('📤 UPLOAD: isUploading:', isUploading);
     
-    if (!version || !selectedFile || selectedFile.canceled) {
-      console.log('❌ UPLOAD: Validation failed - missing fields');
-      Alert.alert('Error', 'Please fill in all fields and select a file');
+    if (!version || !version.trim()) {
+      console.log('❌ UPLOAD: Validation failed - version is empty');
+      Alert.alert(
+        'Missing Version Number',
+        'Please enter a version number (e.g., 1.1.0) before uploading.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
+    if (!selectedFile || selectedFile.canceled) {
+      console.log('❌ UPLOAD: Validation failed - no file selected');
+      Alert.alert(
+        'No File Selected',
+        'Please select an IPA or APK file before uploading.',
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -324,14 +338,21 @@ export default function AppVersionManagerScreen() {
             <ThemedText type="subtitle" style={styles.formTitle}>Upload New Version</ThemedText>
             
             <View style={styles.formGroup}>
-              <ThemedText style={styles.label}>Version Number</ThemedText>
+              <ThemedText style={styles.label}>Version Number *</ThemedText>
               <TextInput
                 style={styles.input}
                 value={version}
                 onChangeText={setVersion}
-                placeholder="1.1.0"
+                placeholder="1.1.0 (required)"
                 placeholderTextColor="#999"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
+              {!version && (
+                <ThemedText style={styles.errorText}>
+                  Version number is required
+                </ThemedText>
+              )}
             </View>
 
             <View style={styles.formGroup}>
