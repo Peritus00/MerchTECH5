@@ -33,6 +33,12 @@ export function useAppVersion() {
       setIsChecking(true);
       setError(null);
 
+      // If forcing, clear cache to ensure fresh data
+      if (force) {
+        await AsyncStorage.removeItem('@app_version_info');
+        await AsyncStorage.removeItem(LAST_CHECK_KEY);
+      }
+
       // Check if we should skip this check (unless forced)
       if (!force) {
         const lastCheck = await AsyncStorage.getItem(LAST_CHECK_KEY);

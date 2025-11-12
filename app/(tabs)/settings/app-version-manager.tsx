@@ -247,33 +247,59 @@ export default function AppVersionManagerScreen() {
   };
 
   const handleDelete = async (versionId: number) => {
+    console.log('🗑️ DELETE: handleDelete called with versionId:', versionId);
+    
     Alert.alert(
       'Delete Version',
       'Are you sure you want to delete this version? This action cannot be undone.',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('🗑️ DELETE: User cancelled deletion')
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            console.log('🗑️ DELETE: User confirmed deletion for versionId:', versionId);
             try {
               const token = await AsyncStorage.getItem('authToken');
+              console.log('🗑️ DELETE: Token exists:', !!token);
+              console.log('🗑️ DELETE: Making DELETE request to:', `${API_URL}/admin/app/versions/${versionId}`);
+              
               const response = await fetch(`${API_URL}/admin/app/versions/${versionId}`, {
                 method: 'DELETE',
                 headers: {
                   'Authorization': `Bearer ${token || ''}`,
+                  'Content-Type': 'application/json',
                 },
               });
 
+              console.log('🗑️ DELETE: Response status:', response.status, response.statusText);
+
               if (!response.ok) {
-                throw new Error('Delete failed');
+                const errorData = await response.json().catch(() => ({ error: 'Delete failed' }));
+                console.error('🗑️ DELETE: Error response:', errorData);
+                throw new Error(errorData.error || 'Delete failed');
               }
 
-              Alert.alert('Success', 'Version deleted successfully');
-              await fetchVersions();
+              const result = await response.json();
+              console.log('🗑️ DELETE: Success response:', result);
+              
+              Alert.alert('Success', 'Version deleted successfully', [
+                { 
+                  text: 'OK',
+                  onPress: async () => {
+                    console.log('🗑️ DELETE: Refreshing versions list...');
+                    await fetchVersions();
+                  }
+                }
+              ]);
             } catch (error) {
-              console.error('Error deleting version:', error);
-              Alert.alert('Error', 'Failed to delete version');
+              console.error('🗑️ DELETE: Error deleting version:', error);
+              const errorMessage = error instanceof Error ? error.message : 'Failed to delete version';
+              Alert.alert('Error', errorMessage);
             }
           },
         },
@@ -301,7 +327,7 @@ export default function AppVersionManagerScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+          <TouchableOpacity onPress={() => router.push('/(tabs)/settings')}>
             <ThemedText style={styles.backButton}>← Back</ThemedText>
           </TouchableOpacity>
           <ThemedText type="title">App Version Manager</ThemedText>
@@ -316,7 +342,7 @@ export default function AppVersionManagerScreen() {
   return (
     <ThemedView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.push('/(tabs)/settings')}>
           <ThemedText style={styles.backButton}>← Back</ThemedText>
         </TouchableOpacity>
         <ThemedText type="title">App Version Manager</ThemedText>
@@ -442,7 +468,12 @@ export default function AppVersionManagerScreen() {
                   </View>
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDelete(v.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      console.log('🗑️ DELETE: Delete button pressed for version:', v.id, v.version);
+                      handleDelete(v.id);
+                    }}
+                    activeOpacity={0.7}
                   >
                     <MaterialIcons name="delete" size={20} color="#ef4444" />
                   </TouchableOpacity>
@@ -677,6 +708,11 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     padding: 8,
+    minWidth: 36,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   errorText: {
     fontSize: 12,
