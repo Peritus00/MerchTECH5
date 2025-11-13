@@ -6055,8 +6055,13 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
 
     res.json({ playlists });
   } catch (error) {
-    console.error('Error fetching playlists:', error);
-    res.status(500).json({ error: 'Failed to fetch playlists' });
+    console.error('❌ Error fetching playlists:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error message:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch playlists',
+      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 
@@ -7864,8 +7869,13 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
     res.json({ slideshows });
     
   } catch (error) {
-    console.error('🎬 SLIDESHOWS: Error fetching slideshows:', error);
-    res.status(500).json({ error: 'Failed to fetch slideshows' });
+    console.error('❌ SLIDESHOWS: Error fetching slideshows:', error);
+    console.error('❌ SLIDESHOWS: Error stack:', error.stack);
+    console.error('❌ SLIDESHOWS: Error message:', error.message);
+    res.status(500).json({ 
+      error: 'Failed to fetch slideshows',
+      details: process.env.NODE_ENV === 'production' ? undefined : error.message
+    });
   }
 });
 // Get a specific slideshow by ID

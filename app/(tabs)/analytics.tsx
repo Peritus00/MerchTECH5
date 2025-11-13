@@ -730,7 +730,10 @@ export default function AnalyticsScreen() {
   );
 
   const renderRecentActivityTab = () => {
-    if (recentScans.length === 0) {
+    // Debug: Log recent scans data
+    console.log('📊 FRONTEND: Recent Activity Tab - recentScans:', recentScans);
+    
+    if (!recentScans || recentScans.length === 0) {
       return (
         <View style={styles.emptyState}>
           <MaterialIcons name="history" size={64} color="#d1d5db" />
@@ -745,25 +748,37 @@ export default function AnalyticsScreen() {
     return (
       <ChartContainer title="Recent QR Code Activity">
         <View style={styles.activityList}>
-          {recentScans.map((scan, index) => (
-            <View key={index} style={styles.activityCard}>
-              <View style={[styles.activityIconContainer, { backgroundColor: '#3b82f620' }]}>
-                <MaterialIcons
-                  name="visibility"
-                  size={16}
-                  color="#3b82f6"
-                />
+          {recentScans.map((scan, index) => {
+            const qrName = scan.qrName || scan.qr_name || 'Unknown QR Code';
+            const location = scan.location || 'Unknown location';
+            const device = scan.device || 'Unknown device';
+            const timestamp = scan.timestamp || scan.scanned_at || new Date().toISOString();
+            
+            return (
+              <View key={index} style={styles.activityCard}>
+                <View style={[styles.activityIconContainer, { backgroundColor: '#3b82f620' }]}>
+                  <MaterialIcons
+                    name="visibility"
+                    size={16}
+                    color="#3b82f6"
+                  />
+                </View>
+                <View style={styles.activityContent}>
+                  <Text style={styles.activityDescription}>
+                    QR Code scanned: {qrName}
+                  </Text>
+                  {(location || device) && (
+                    <Text style={styles.activityMeta}>
+                      {location}{device ? ` • ${device}` : ''}
+                    </Text>
+                  )}
+                  <Text style={styles.activityTimestamp}>
+                    {formatTimestamp(timestamp)}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityDescription}>
-                  QR Code scanned: {scan.qrName || 'Unknown QR Code'}
-                </Text>
-                <Text style={styles.activityTimestamp}>
-                  {formatTimestamp(scan.timestamp)}
-                </Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </ChartContainer>
     );
@@ -773,8 +788,39 @@ export default function AnalyticsScreen() {
     const displayCountries = qrScanLocationData 
       ? qrScanLocationData.topCountries 
       : [];
-    // Use cityList which includes qrCodes from the main analytics summary
-    const displayCities = cityList;
+    
+    // Use qrScanLocationData.topCities when available (from location demographics endpoint),
+    // otherwise fall back to cityList (from analytics summary)
+    // Merge QR codes from cityList if available
+    const locationCities = qrScanLocationData?.topCities || [];
+    const cityMap = new Map();
+    
+    // First, add cities from location demographics endpoint
+    locationCities.forEach((city) => {
+      const cityKey = `${city.city}|${city.region || ''}|${city.country || ''}`;
+      const label = `${city.city}${city.region ? ', ' + city.region : ''}${city.country ? ' • ' + city.country : ''}`;
+      cityMap.set(cityKey, {
+        key: cityKey,
+        label: label,
+        count: city.count,
+        qrCodes: undefined, // Will be merged from cityList if available
+      });
+    });
+    
+    // Merge QR codes from cityList if available
+    cityList.forEach((city) => {
+      if (cityMap.has(city.key)) {
+        cityMap.set(city.key, {
+          ...cityMap.get(city.key),
+          qrCodes: city.qrCodes,
+        });
+      } else {
+        // Add cities from cityList that aren't in location demographics
+        cityMap.set(city.key, city);
+      }
+    });
+    
+    const displayCities = Array.from(cityMap.values());
 
     return (
       <>
@@ -1833,6 +1879,11 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 2,
     lineHeight: 18,
+  },
+  activityMeta: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 2,
   },
   activityTimestamp: {
     fontSize: 12,
