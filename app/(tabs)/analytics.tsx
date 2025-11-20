@@ -754,6 +754,13 @@ export default function AnalyticsScreen() {
 
     return (
       <ChartContainer title="Recent QR Code Activity">
+        {/* DEBUG: Test text rendering */}
+        <View style={{ padding: 10, backgroundColor: '#f0f0f0', marginBottom: 10 }}>
+          <Text style={{ color: '#000', fontSize: 14 }}>DEBUG: {recentScans.length} scans found</Text>
+          <Text style={{ color: '#000', fontSize: 12 }}>
+            First scan: {JSON.stringify(recentScans[0] || {}, null, 2)}
+          </Text>
+        </View>
         <View style={styles.activityList}>
           {recentScans.map((scan, index) => {
             // Extract data with multiple fallback options
@@ -796,28 +803,15 @@ export default function AnalyticsScreen() {
                   />
                 </View>
                 <View style={styles.activityContent}>
-                  <Text 
-                    style={styles.activityDescription} 
-                    numberOfLines={2}
-                    ellipsizeMode="tail"
-                    allowFontScaling={true}
-                  >
-                    QR Code scanned: {displayQrName}
+                  <Text style={styles.activityDescription}>
+                    {'QR Code scanned: ' + displayQrName}
                   </Text>
-                  {locationDeviceStr && locationDeviceStr.trim() !== '' ? (
-                    <Text 
-                      style={styles.activityMeta} 
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                      allowFontScaling={true}
-                    >
+                  {locationDeviceStr && locationDeviceStr.trim() !== '' && (
+                    <Text style={styles.activityMeta}>
                       {locationDeviceStr}
                     </Text>
-                  ) : null}
-                  <Text 
-                    style={styles.activityTimestamp}
-                    allowFontScaling={true}
-                  >
+                  )}
+                  <Text style={styles.activityTimestamp}>
                     {displayTimestamp}
                   </Text>
                 </View>
@@ -1580,7 +1574,8 @@ const styles = StyleSheet.create({
     color: '#6b7280',
   },
   chartContent: {
-    alignItems: 'center',
+    alignItems: 'stretch', // Changed from 'center' to allow full-width content
+    width: '100%',
   },
   popularCard: {
     flexDirection: 'row',
@@ -1940,7 +1935,7 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 12,
@@ -1950,6 +1945,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,
+    overflow: 'visible', // Ensure content isn't clipped
   },
   activityIconContainer: {
     width: 32,
@@ -1961,8 +1957,9 @@ const styles = StyleSheet.create({
   },
   activityContent: {
     flex: 1,
-    minWidth: 0, // Allow text to shrink properly
-    flexShrink: 1,
+    minWidth: 0,
+    paddingLeft: 0,
+    paddingRight: 0,
   },
   activityDescription: {
     fontSize: 14,
@@ -1970,23 +1967,16 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginBottom: 4,
     lineHeight: 20,
-    flexShrink: 1,
-    includeFontPadding: false, // Android-specific: removes extra padding (iOS ignores)
-    textAlignVertical: 'center', // Android-specific (iOS ignores)
   },
   activityMeta: {
     fontSize: 12,
     fontWeight: '400',
     color: '#6b7280',
     marginBottom: 4,
-    includeFontPadding: false, // Android-specific: removes extra padding
-    textAlignVertical: 'center',
   },
   activityTimestamp: {
     fontSize: 12,
     fontWeight: '400',
     color: '#9ca3af',
-    includeFontPadding: false, // Android-specific: removes extra padding
-    textAlignVertical: 'center',
   },
 });
