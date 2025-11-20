@@ -1740,7 +1740,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          SELECT DISTINCT ON (
            s.qr_code_id,
            date_trunc('minute', s.scanned_at)
-         ) s.id, s.qr_code_id, s.scanned_at, s.country_name, s.country_code, s.device_type, s.device
+         ) s.id, s.qr_code_id, s.scanned_at, s.country_code, s.city
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
          WHERE q.user_id = $1
@@ -1748,8 +1748,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
        )
        SELECT q.id AS qr_code_id,
               q.name AS qr_name,
-              COALESCE(d.country_name, d.country_code, '') AS location,
-              COALESCE(d.device_type, d.device, '') AS device,
+              d.country_code AS country_code,
+              d.city AS city,
               d.scanned_at AS timestamp
        FROM dedup d
        JOIN qr_codes q ON d.qr_code_id = q.id
@@ -1762,8 +1762,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         recentRes = await pool.query(
           `SELECT q.id AS qr_code_id,
                   q.name AS qr_name,
-                  COALESCE(s.country_name, s.country_code, '') AS location,
-                  COALESCE(s.device_type, s.device, '') AS device,
+                  s.country_code AS country_code,
+                  s.city AS city,
                   s.scanned_at AS timestamp
              FROM qr_scans s
              JOIN qr_codes q ON s.qr_code_id = q.id
@@ -1918,8 +1918,8 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
       mostPopularQRCode,
       recentScans: recentRows.map(r => ({
         qrName: r.qr_name,
-        location: r.location,
-        device: r.device,
+        countryCode: r.country_code || null,
+        city: r.city || null,
         timestamp: r.timestamp,
       })),
       playsTotals,

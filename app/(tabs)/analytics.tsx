@@ -731,12 +731,6 @@ export default function AnalyticsScreen() {
   );
 
   const renderRecentActivityTab = () => {
-    // Debug: Log recent scans data
-    console.log('📊 FRONTEND: Recent Activity Tab - recentScans:', recentScans);
-    console.log('📊 FRONTEND: Recent Activity Tab - recentScans length:', recentScans?.length);
-    if (recentScans && recentScans.length > 0) {
-      console.log('📊 FRONTEND: First scan sample:', JSON.stringify(recentScans[0], null, 2));
-    }
     
     if (!recentScans || recentScans.length === 0) {
       return (
@@ -754,40 +748,23 @@ export default function AnalyticsScreen() {
 
     return (
       <ChartContainer title="Recent QR Code Activity">
-        {/* DEBUG: Test text rendering */}
-        <View style={{ padding: 10, backgroundColor: '#f0f0f0', marginBottom: 10 }}>
-          <Text style={{ color: '#000', fontSize: 14 }}>DEBUG: {recentScans.length} scans found</Text>
-          <Text style={{ color: '#000', fontSize: 12 }}>
-            First scan: {JSON.stringify(recentScans[0] || {}, null, 2)}
-          </Text>
-        </View>
         <View style={styles.activityList}>
           {recentScans.map((scan, index) => {
             // Extract data with multiple fallback options
             const qrName = scan?.qrName || scan?.qr_name || scan?.name || 'Unknown QR Code';
-            const location = scan?.location || scan?.country || scan?.country_name || '';
-            const device = scan?.device || scan?.device_type || '';
+            const countryCode = scan?.countryCode || scan?.country_code || '';
+            const city = scan?.city || '';
             const timestamp = scan?.timestamp || scan?.scanned_at || scan?.date || new Date().toISOString();
             
-            // Build location/device string
-            const locationDeviceParts = [];
-            if (location && location.trim() !== '' && location !== 'Unknown location') {
-              locationDeviceParts.push(location);
+            // Build location string: "countryCode • city"
+            const locationParts = [];
+            if (countryCode && countryCode.trim() !== '') {
+              locationParts.push(countryCode);
             }
-            if (device && device.trim() !== '' && device !== 'Unknown device') {
-              locationDeviceParts.push(device);
+            if (city && city.trim() !== '') {
+              locationParts.push(city);
             }
-            const locationDeviceStr = locationDeviceParts.length > 0 ? locationDeviceParts.join(' • ') : null;
-            
-            // Debug individual scan
-            console.log(`📊 FRONTEND: Rendering scan ${index}:`, {
-              qrName,
-              location,
-              device,
-              timestamp,
-              locationDeviceStr,
-              rawScan: scan
-            });
+            const locationStr = locationParts.length > 0 ? locationParts.join(' • ') : null;
             
             // Ensure we always have valid text content
             const displayQrName = qrName && qrName.trim() !== '' ? qrName : 'Unknown QR Code';
@@ -806,9 +783,9 @@ export default function AnalyticsScreen() {
                   <Text style={styles.activityDescription}>
                     {'QR Code scanned: ' + displayQrName}
                   </Text>
-                  {locationDeviceStr && locationDeviceStr.trim() !== '' && (
+                  {locationStr && locationStr.trim() !== '' && (
                     <Text style={styles.activityMeta}>
-                      {locationDeviceStr}
+                      {locationStr}
                     </Text>
                   )}
                   <Text style={styles.activityTimestamp}>
