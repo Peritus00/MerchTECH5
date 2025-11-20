@@ -1661,7 +1661,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
         WHERE q.user_id = $1
-        GROUP BY device
+        GROUP BY COALESCE(s.device_type, s.device, 'Unknown')
         ORDER BY count DESC
         LIMIT 10`,
       [userId]
@@ -1753,7 +1753,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
               d.scanned_at AS timestamp
        FROM dedup d
        JOIN qr_codes q ON d.qr_code_id = q.id
-       ORDER BY d.timestamp DESC
+       ORDER BY d.scanned_at DESC
        LIMIT 10`,
       [userId]
     ); } catch (e) {
