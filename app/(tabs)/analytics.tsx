@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -781,8 +782,12 @@ export default function AnalyticsScreen() {
               rawScan: scan
             });
             
+            // Ensure we always have valid text content
+            const displayQrName = qrName && qrName.trim() !== '' ? qrName : 'Unknown QR Code';
+            const displayTimestamp = timestamp ? formatTimestamp(timestamp) : 'Just now';
+            
             return (
-              <View key={`scan-${index}-${qrName}`} style={styles.activityCard}>
+              <View key={`scan-${index}-${displayQrName}`} style={styles.activityCard}>
                 <View style={[styles.activityIconContainer, { backgroundColor: '#3b82f620' }]}>
                   <MaterialIcons
                     name="visibility"
@@ -791,16 +796,29 @@ export default function AnalyticsScreen() {
                   />
                 </View>
                 <View style={styles.activityContent}>
-                  <Text style={styles.activityDescription} numberOfLines={2}>
-                    QR Code scanned: {qrName}
+                  <Text 
+                    style={styles.activityDescription} 
+                    numberOfLines={2}
+                    ellipsizeMode="tail"
+                    allowFontScaling={true}
+                  >
+                    QR Code scanned: {displayQrName}
                   </Text>
-                  {locationDeviceStr && (
-                    <Text style={styles.activityMeta} numberOfLines={1}>
+                  {locationDeviceStr && locationDeviceStr.trim() !== '' ? (
+                    <Text 
+                      style={styles.activityMeta} 
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                      allowFontScaling={true}
+                    >
                       {locationDeviceStr}
                     </Text>
-                  )}
-                  <Text style={styles.activityTimestamp}>
-                    {formatTimestamp(timestamp)}
+                  ) : null}
+                  <Text 
+                    style={styles.activityTimestamp}
+                    allowFontScaling={true}
+                  >
+                    {displayTimestamp}
                   </Text>
                 </View>
               </View>
@@ -883,8 +901,13 @@ export default function AnalyticsScreen() {
                     <View style={styles.geoRank}>
                       <Text style={styles.geoRankText}>{index + 1}</Text>
                     </View>
-                    <Text style={styles.geoCountry} numberOfLines={1} ellipsizeMode="tail">
-                      {countryName}
+                    <Text 
+                      style={styles.geoCountry} 
+                      numberOfLines={1} 
+                      ellipsizeMode="tail"
+                      allowFontScaling={true}
+                    >
+                      {countryName && countryName.trim() !== '' ? countryName : 'Unknown'}
                     </Text>
                     <Text style={styles.geoCount}>{country.count} scan{country.count !== 1 ? 's' : ''}</Text>
                   </View>
@@ -927,8 +950,9 @@ export default function AnalyticsScreen() {
                           style={styles.geoCountry} 
                           numberOfLines={1} 
                           ellipsizeMode="tail"
+                          allowFontScaling={true}
                         >
-                          {item.label || 'Unknown Location'}
+                          {item.label && item.label.trim() !== '' ? item.label : 'Unknown Location'}
                         </Text>
                         <Text style={styles.geoCount}>{item.count} scan{item.count !== 1 ? 's' : ''}</Text>
                         {hasQRCodes && (
@@ -1625,6 +1649,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#1f2937',
     minWidth: 0, // Allow text to shrink
+    includeFontPadding: false, // Android-specific: removes extra padding
+    textAlignVertical: 'center',
   },
   geoCount: {
     fontSize: 14,
@@ -1936,21 +1962,31 @@ const styles = StyleSheet.create({
   activityContent: {
     flex: 1,
     minWidth: 0, // Allow text to shrink properly
+    flexShrink: 1,
   },
   activityDescription: {
     fontSize: 14,
+    fontWeight: '400',
     color: '#1f2937',
-    marginBottom: 2,
-    lineHeight: 18,
+    marginBottom: 4,
+    lineHeight: 20,
     flexShrink: 1,
+    includeFontPadding: false, // Android-specific: removes extra padding (iOS ignores)
+    textAlignVertical: 'center', // Android-specific (iOS ignores)
   },
   activityMeta: {
     fontSize: 12,
+    fontWeight: '400',
     color: '#6b7280',
-    marginBottom: 2,
+    marginBottom: 4,
+    includeFontPadding: false, // Android-specific: removes extra padding
+    textAlignVertical: 'center',
   },
   activityTimestamp: {
     fontSize: 12,
+    fontWeight: '400',
     color: '#9ca3af',
+    includeFontPadding: false, // Android-specific: removes extra padding
+    textAlignVertical: 'center',
   },
 });
