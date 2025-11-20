@@ -732,16 +732,22 @@ export default function AnalyticsScreen() {
   const renderRecentActivityTab = () => {
     // Debug: Log recent scans data
     console.log('📊 FRONTEND: Recent Activity Tab - recentScans:', recentScans);
+    console.log('📊 FRONTEND: Recent Activity Tab - recentScans length:', recentScans?.length);
+    if (recentScans && recentScans.length > 0) {
+      console.log('📊 FRONTEND: First scan sample:', JSON.stringify(recentScans[0], null, 2));
+    }
     
     if (!recentScans || recentScans.length === 0) {
       return (
-        <View style={styles.emptyState}>
-          <MaterialIcons name="history" size={64} color="#d1d5db" />
-          <Text style={styles.emptyText}>No recent QR code activity</Text>
-          <Text style={styles.emptySubtext}>
-            QR code scan activity will appear here once users start scanning your QR codes.
-          </Text>
-        </View>
+        <ChartContainer title="Recent QR Code Activity">
+          <View style={styles.emptyState}>
+            <MaterialIcons name="history" size={64} color="#d1d5db" />
+            <Text style={styles.emptyText}>No recent QR code activity</Text>
+            <Text style={styles.emptySubtext}>
+              QR code scan activity will appear here once users start scanning your QR codes.
+            </Text>
+          </View>
+        </ChartContainer>
       );
     }
 
@@ -749,13 +755,34 @@ export default function AnalyticsScreen() {
       <ChartContainer title="Recent QR Code Activity">
         <View style={styles.activityList}>
           {recentScans.map((scan, index) => {
-            const qrName = scan.qrName || scan.qr_name || 'Unknown QR Code';
-            const location = scan.location || 'Unknown location';
-            const device = scan.device || 'Unknown device';
-            const timestamp = scan.timestamp || scan.scanned_at || new Date().toISOString();
+            // Extract data with multiple fallback options
+            const qrName = scan?.qrName || scan?.qr_name || scan?.name || 'Unknown QR Code';
+            const location = scan?.location || scan?.country || scan?.country_name || '';
+            const device = scan?.device || scan?.device_type || '';
+            const timestamp = scan?.timestamp || scan?.scanned_at || scan?.date || new Date().toISOString();
+            
+            // Build location/device string
+            const locationDeviceParts = [];
+            if (location && location.trim() !== '' && location !== 'Unknown location') {
+              locationDeviceParts.push(location);
+            }
+            if (device && device.trim() !== '' && device !== 'Unknown device') {
+              locationDeviceParts.push(device);
+            }
+            const locationDeviceStr = locationDeviceParts.length > 0 ? locationDeviceParts.join(' • ') : null;
+            
+            // Debug individual scan
+            console.log(`📊 FRONTEND: Rendering scan ${index}:`, {
+              qrName,
+              location,
+              device,
+              timestamp,
+              locationDeviceStr,
+              rawScan: scan
+            });
             
             return (
-              <View key={index} style={styles.activityCard}>
+              <View key={`scan-${index}-${qrName}`} style={styles.activityCard}>
                 <View style={[styles.activityIconContainer, { backgroundColor: '#3b82f620' }]}>
                   <MaterialIcons
                     name="visibility"
@@ -764,12 +791,12 @@ export default function AnalyticsScreen() {
                   />
                 </View>
                 <View style={styles.activityContent}>
-                  <Text style={styles.activityDescription}>
+                  <Text style={styles.activityDescription} numberOfLines={2}>
                     QR Code scanned: {qrName}
                   </Text>
-                  {(location || device) && (
-                    <Text style={styles.activityMeta}>
-                      {location}{device ? ` • ${device}` : ''}
+                  {locationDeviceStr && (
+                    <Text style={styles.activityMeta} numberOfLines={1}>
+                      {locationDeviceStr}
                     </Text>
                   )}
                   <Text style={styles.activityTimestamp}>
@@ -785,9 +812,14 @@ export default function AnalyticsScreen() {
   };
 
   const renderGeographyTab = () => {
+    console.log('📊 FRONTEND: Geography Tab - qrScanLocationData:', qrScanLocationData);
+    console.log('📊 FRONTEND: Geography Tab - cityList:', cityList);
+    
     const displayCountries = qrScanLocationData 
       ? qrScanLocationData.topCountries 
       : [];
+    
+    console.log('📊 FRONTEND: Geography Tab - displayCountries:', displayCountries);
     
     // Use qrScanLocationData.topCities when available (from location demographics endpoint),
     // otherwise fall back to cityList (from analytics summary)
@@ -797,8 +829,18 @@ export default function AnalyticsScreen() {
     
     // First, add cities from location demographics endpoint
     locationCities.forEach((city) => {
-      const cityKey = `${city.city}|${city.region || ''}|${city.country || ''}`;
-      const label = `${city.city}${city.region ? ', ' + city.region : ''}${city.country ? ' • ' + city.country : ''}`;
+      const cityName = city.city || 'Unknown';
+      const cityKey = `${cityName}|${city.region || ''}|${city.country || ''}`;
+      const labelParts = [cityName];
+      if (city.region && city.region.trim() !== '') {
+        labelParts.push(city.region);
+      }
+      if (city.country && city.country.trim() !== '') {
+        labelParts.push(city.country);
+      }
+      const label = labelParts.length > 1 
+        ? `${labelParts[0]}, ${labelParts.slice(1).join(' • ')}`
+        : labelParts[0];
       cityMap.set(cityKey, {
         key: cityKey,
         label: label,
@@ -821,6 +863,9 @@ export default function AnalyticsScreen() {
     });
     
     const displayCities = Array.from(cityMap.values());
+    
+    console.log('📊 FRONTEND: Geography Tab - displayCities:', displayCities);
+    console.log('📊 FRONTEND: Geography Tab - displayCities count:', displayCities.length);
 
     return (
       <>
@@ -831,15 +876,20 @@ export default function AnalyticsScreen() {
             subtitle="Locations of QR code scans"
           >
             <View style={styles.geoList}>
-              {displayCountries.slice(0, 10).map((country, index) => (
-                <View key={country.country || index} style={styles.geoItem}>
-                  <View style={styles.geoRank}>
-                    <Text style={styles.geoRankText}>{index + 1}</Text>
+              {displayCountries.slice(0, 10).map((country, index) => {
+                const countryName = country.country || country.location_name || 'Unknown';
+                return (
+                  <View key={country.country || `country-${index}`} style={styles.geoItem}>
+                    <View style={styles.geoRank}>
+                      <Text style={styles.geoRankText}>{index + 1}</Text>
+                    </View>
+                    <Text style={styles.geoCountry} numberOfLines={1} ellipsizeMode="tail">
+                      {countryName}
+                    </Text>
+                    <Text style={styles.geoCount}>{country.count} scan{country.count !== 1 ? 's' : ''}</Text>
                   </View>
-                  <Text style={styles.geoCountry}>{country.location_name || country.country}</Text>
-                  <Text style={styles.geoCount}>{country.count} scan{country.count !== 1 ? 's' : ''}</Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </ChartContainer>
         )}
@@ -873,7 +923,13 @@ export default function AnalyticsScreen() {
                         <View style={styles.geoRank}>
                           <Text style={styles.geoRankText}>{index + 1}</Text>
                         </View>
-                        <Text style={styles.geoCountry}>{item.label}</Text>
+                        <Text 
+                          style={styles.geoCountry} 
+                          numberOfLines={1} 
+                          ellipsizeMode="tail"
+                        >
+                          {item.label || 'Unknown Location'}
+                        </Text>
                         <Text style={styles.geoCount}>{item.count} scan{item.count !== 1 ? 's' : ''}</Text>
                         {hasQRCodes && (
                           <MaterialIcons
@@ -907,7 +963,10 @@ export default function AnalyticsScreen() {
           <ChartContainer title="Top Countries by Scans">
             <BarChart
               data={{
-                labels: displayCountries.slice(0, 5).map(item => (item.country || item.location_name || '').substring(0, 3)),
+                labels: displayCountries.slice(0, 5).map(item => {
+                  const countryName = item.country || item.location_name || 'Unknown';
+                  return countryName.substring(0, 3);
+                }),
                 datasets: [{
                   data: displayCountries.slice(0, 5).map(item => item.count),
                 }],
@@ -1535,12 +1594,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
     gap: 12,
+    minWidth: 0, // Allow flex children to shrink
   },
   geoItemHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     flex: 1,
+    minWidth: 0, // Allow flex children to shrink
   },
   expandIcon: {
     marginLeft: 'auto',
@@ -1563,6 +1624,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#1f2937',
+    minWidth: 0, // Allow text to shrink
   },
   geoCount: {
     fontSize: 14,
@@ -1873,12 +1935,14 @@ const styles = StyleSheet.create({
   },
   activityContent: {
     flex: 1,
+    minWidth: 0, // Allow text to shrink properly
   },
   activityDescription: {
     fontSize: 14,
     color: '#1f2937',
     marginBottom: 2,
     lineHeight: 18,
+    flexShrink: 1,
   },
   activityMeta: {
     fontSize: 12,
