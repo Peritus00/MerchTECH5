@@ -17,23 +17,47 @@ const axios = require('axios');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 
-// Phase 1 Security Middleware
-const { authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter } = require('./middleware/rateLimiter');
-const { validate, validators } = require('./middleware/validator');
-const { errorHandler, errorLogger } = require('./middleware/errorHandler');
-const { logger, requestIdMiddleware, requestLogger, sanitizeLogData } = require('./middleware/logger');
+// Add console logging immediately for startup debugging
+console.log('🚀 Server startup initiated...');
+console.log('📦 Loading middleware modules...');
+
+// Phase 1 Security Middleware - wrap in try-catch to catch initialization errors
+let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter;
+let validate, validators;
+let errorHandler, errorLogger;
+let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
+
+try {
+  console.log('📦 Loading rate limiter...');
+  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter } = require('./middleware/rateLimiter'));
+  
+  console.log('📦 Loading validator...');
+  ({ validate, validators } = require('./middleware/validator'));
+  
+  console.log('📦 Loading error handler...');
+  ({ errorHandler, errorLogger } = require('./middleware/errorHandler'));
+  
+  console.log('📦 Loading logger...');
+  ({ logger, requestIdMiddleware, requestLogger, sanitizeLogData } = require('./middleware/logger'));
+  
+  console.log('✅ All middleware loaded successfully');
+} catch (error) {
+  console.error('❌ CRITICAL: Failed to load middleware:', error.message);
+  console.error('❌ Stack:', error.stack);
+  process.exit(1);
+}
 
 // Environment Variable Validation - Fail fast if critical vars missing
-// Do this BEFORE using logger to avoid circular dependency issues
+console.log('🔍 Validating environment variables...');
 const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
-  // Use console.error directly since logger might not be fully initialized
   console.error('❌ CRITICAL: Missing required environment variables:', missingVars.join(', '));
   console.error('❌ Server cannot start without these variables. Please check your .env file.');
   process.exit(1);
 }
+console.log('✅ Environment variables validated');
 
 const app = express();
 // Trust proxy headers so req.ip and related helpers reflect the original client IP
@@ -11238,20 +11262,62 @@ async function fixActivationCodes() {
 // Environment validation is done inline above (before logger initialization)
 // Additional validation can be added here if needed, but basic checks are done
 
-const server = app.listen(PORT, '0.0.0.0', async () => {
+// Add unhandled error handlers before server starts
+process.on('uncaughtException', (error) => {
+  console.error('❌ UNCAUGHT EXCEPTION:', error.message);
+  console.error('❌ Stack:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ UNHANDLED REJECTION at:', promise);
+  console.error('❌ Reason:', reason);
+  process.exit(1);
+});
+
+console.log(`🌐 Starting server on port ${PORT}...`);
+
+let server;
+try {
+  server = app.listen(PORT, '0.0.0.0', async () => {
   const address = server.address();
-  logger.info({
-    type: 'server_started',
-    message: 'Server listening',
-    address: address.address,
-    port: address.port,
-    timestamp: new Date().toISOString()
-  });
+  
+  // Use console.log for critical startup messages (always visible)
   console.log(`✅ Server listening on http://${address.address}:${address.port}`);
-  console.log(`🚀 To test locally, open http://localhost:${PORT}`);
+  console.log(`🚀 Server ready to accept connections`);
+  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  
+  // Also log via structured logger if available
+  try {
+    logger.info({
+      type: 'server_started',
+      message: 'Server listening',
+      address: address.address,
+      port: address.port,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err) {
+    console.warn('⚠️  Logger not available for structured logging:', err.message);
+  }
   
   // Run database fixes on startup
-  await fixActivationCodes();
+  try {
+    console.log('🔧 Running startup database fixes...');
+    await fixActivationCodes();
+    console.log('✅ Startup database fixes completed');
+  } catch (err) {
+    console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
+  }
+});
+
+// Add error handler for server startup errors
+server.on('error', (err) => {
+  console.error('❌ SERVER STARTUP ERROR:', err.message);
+  console.error('❌ Error code:', err.code);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use`);
+  }
+  process.exit(1);
 });
 
 // 🔧 INCREASE SERVER TIMEOUT FOR LARGE UPLOADS

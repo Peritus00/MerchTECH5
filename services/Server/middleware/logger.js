@@ -1,7 +1,46 @@
 const winston = require('winston');
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs');
+const path = require('path');
+
+// Ensure logs directory exists (gracefully handle if it doesn't)
+let logsDirExists = false;
+try {
+  const logsDir = path.join(__dirname, '../../logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  logsDirExists = true;
+} catch (err) {
+  // Log directory creation failed - continue with console-only logging
+  console.warn('⚠️  Could not create logs directory, using console-only logging:', err.message);
+}
 
 // Create structured logger
+const loggerTransports = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple()
+    )
+  })
+];
+
+// Only add file transport if logs directory exists and is writable
+if (logsDirExists) {
+  try {
+    loggerTransports.push(
+      new winston.transports.File({ 
+        filename: path.join(__dirname, '../../logs/combined.log'),
+        maxsize: 5242880, // 5MB
+        maxFiles: 5
+      })
+    );
+  } catch (err) {
+    console.warn('⚠️  Could not add file transport, using console-only logging:', err.message);
+  }
+}
+
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -9,19 +48,7 @@ const logger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    })
-  ]
+  transports: loggerTransports
 });
 
 // Request ID middleware - adds unique ID to each request

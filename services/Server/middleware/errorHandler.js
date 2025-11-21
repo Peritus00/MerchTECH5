@@ -1,6 +1,45 @@
 const winston = require('winston');
+const fs = require('fs');
+const path = require('path');
+
+// Ensure logs directory exists (gracefully handle if it doesn't)
+let logsDirExists = false;
+try {
+  const logsDir = path.join(__dirname, '../../logs');
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir, { recursive: true });
+  }
+  logsDirExists = true;
+} catch (err) {
+  // Log directory creation failed - continue with console-only logging
+  console.warn('⚠️  Could not create logs directory for error logger, using console-only logging:', err.message);
+}
 
 // Create logger for errors
+const errorLoggerTransports = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.simple()
+    )
+  })
+];
+
+// Only add file transport if logs directory exists and is writable
+if (logsDirExists) {
+  try {
+    errorLoggerTransports.push(
+      new winston.transports.File({ 
+        filename: path.join(__dirname, '../../logs/error.log'),
+        maxsize: 5242880, // 5MB
+        maxFiles: 5
+      })
+    );
+  } catch (err) {
+    console.warn('⚠️  Could not add error file transport, using console-only logging:', err.message);
+  }
+}
+
 const errorLogger = winston.createLogger({
   level: 'error',
   format: winston.format.combine(
@@ -8,19 +47,7 @@ const errorLogger = winston.createLogger({
     winston.format.errors({ stack: true }),
     winston.format.json()
   ),
-  transports: [
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.simple()
-      )
-    }),
-    new winston.transports.File({ 
-      filename: 'logs/error.log',
-      maxsize: 5242880, // 5MB
-      maxFiles: 5
-    })
-  ]
+  transports: errorLoggerTransports
 });
 
 // Centralized error handler middleware
