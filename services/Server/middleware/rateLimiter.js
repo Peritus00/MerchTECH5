@@ -29,13 +29,37 @@ const generalApiLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful requests
 });
 
-// Rate limiter for media creation/confirmation endpoints
+// Rate limiter for media creation/confirmation endpoints (POST/PUT/PATCH/DELETE only)
 const mediaCreationLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // Limit each IP to 20 media creation requests per 15 minutes
   message: { error: 'Too many media creation requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Only apply to write operations (POST, PUT, PATCH, DELETE)
+    return !['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
+  },
+});
+
+// Rate limiter for media GET requests (more lenient for reading media)
+const mediaReadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 500, // Limit each IP to 500 media read requests per 15 minutes (much higher for normal usage)
+  message: { error: 'Too many media read requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful requests
+});
+
+// Rate limiter for media stream endpoints (very lenient - streaming is expected to be frequent)
+const mediaStreamLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // Limit each IP to 1000 stream requests per 15 minutes
+  message: { error: 'Too many media stream requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful requests
 });
 
 module.exports = {
@@ -43,5 +67,7 @@ module.exports = {
   uploadLimiter,
   generalApiLimiter,
   mediaCreationLimiter,
+  mediaReadLimiter,
+  mediaStreamLimiter,
 };
 

@@ -22,14 +22,14 @@ console.log('🚀 Server startup initiated...');
 console.log('📦 Loading middleware modules...');
 
 // Phase 1 Security Middleware - wrap in try-catch to catch initialization errors
-let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter;
+let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter;
 let validate, validators;
 let errorHandler, errorLogger;
 let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
 
 try {
   console.log('📦 Loading rate limiter...');
-  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter } = require('./middleware/rateLimiter'));
+  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter } = require('./middleware/rateLimiter'));
   
   console.log('📦 Loading validator...');
   ({ validate, validators } = require('./middleware/validator'));
@@ -314,7 +314,35 @@ const allowedOrigins = [
 app.use('/api/auth/', authLimiter);
 app.use('/api/upload/presigned', uploadLimiter);
 app.use('/api/upload', uploadLimiter);
-app.use('/api/media', mediaCreationLimiter);
+
+// Media stream endpoints - very lenient rate limiting (streaming is expected to be frequent)
+// Apply to paths matching /api/media/*/stream pattern
+app.use((req, res, next) => {
+  if (req.path.match(/^\/api\/media\/\d+\/stream$/)) {
+    return mediaStreamLimiter(req, res, next);
+  }
+  next();
+});
+
+// Media GET endpoints - lenient rate limiting for reading media
+// Only apply to GET requests on /api/media (not /stream endpoints)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/media') && req.method === 'GET' && !req.path.endsWith('/stream')) {
+    return mediaReadLimiter(req, res, next);
+  }
+  next();
+});
+
+// Media write endpoints (POST/PUT/PATCH/DELETE) - stricter rate limiting
+// Only apply to write operations on /api/media
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/media') && ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return mediaCreationLimiter(req, res, next);
+  }
+  next();
+});
+
+// General API rate limiting (applies to all other /api/ routes)
 app.use('/api/', generalApiLimiter);
 
 app.use('/uploads', express.static(uploadsDir));
