@@ -5851,7 +5851,7 @@ app.post('/api/media',
   validators.optionalString('url', 2048),
   validators.optionalString('filename', 255),
   validators.optionalString('s3_key', 512),
-  body('filesize').optional().isInt({ min: 0, max: 5368709120 }), // Max 5GB
+  validators.fileSize, // File size validation (already defined in validators)
   validate,
   async (req, res) => {
   try {
