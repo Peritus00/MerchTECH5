@@ -469,6 +469,16 @@ app.get('/health', (req, res) => {
 
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
   try {
+    // First check if can_view_logs column exists
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'users' AND column_name = 'can_view_logs'
+    `);
+    
+    const hasCanViewLogs = columnCheck.rows.length > 0;
+    const canViewLogsSelect = hasCanViewLogs ? 'COALESCE(can_view_logs, false) as can_view_logs,' : 'false as can_view_logs,';
+    
     const result = await pool.query(`
       SELECT id, 
              email, 
@@ -478,7 +488,7 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
              is_admin, 
              is_suspended, 
              subscription_tier,
-             can_view_logs,
+             ${canViewLogsSelect}
              max_products,
              max_audio_files,
              max_playlists,
@@ -492,7 +502,9 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
     res.json(result.rows);
   } catch (error) {
     console.error('Error fetching all users:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ error: 'Internal server error', details: error.message });
   }
 });
 
