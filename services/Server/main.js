@@ -17,29 +17,82 @@ const axios = require('axios');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 
-console.log('DEBUG: Server script starting...');
-console.log('DEBUG: .env loaded, DATABASE_URL:', process.env.DATABASE_URL ? 'configured' : 'missing');
-console.log('DEBUG: NODE_ENV:', process.env.NODE_ENV);
+// Phase 1 Security Middleware
+const { authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter } = require('./middleware/rateLimiter');
+const { validate, validators } = require('./middleware/validator');
+const { errorHandler, errorLogger } = require('./middleware/errorHandler');
+const { logger, requestIdMiddleware, requestLogger, sanitizeLogData } = require('./middleware/logger');
+
+// Environment Variable Validation - Fail fast if critical vars missing
+const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
+const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingVars.length > 0) {
+  errorLogger.error({
+    type: 'startup_error',
+    message: 'Missing required environment variables',
+    missingVars: missingVars,
+    timestamp: new Date().toISOString()
+  });
+  console.error('❌ CRITICAL: Missing required environment variables:', missingVars.join(', '));
+  console.error('❌ Server cannot start without these variables. Please check your .env file.');
+  process.exit(1);
+}
+
+logger.info({
+  type: 'server_startup',
+  message: 'Server script starting',
+  nodeEnv: process.env.NODE_ENV,
+  databaseConfigured: !!process.env.DATABASE_URL,
+  timestamp: new Date().toISOString()
+});
 
 const app = express();
 // Trust proxy headers so req.ip and related helpers reflect the original client IP
 app.set('trust proxy', true);
 const PORT = process.env.PORT || 5001;
 
-// --- CORS Configuration ---
+// --- CORS Configuration --- (Tightened for Security)
 // When credentials: true, cannot use '*' - must specify exact origins
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, curl)
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (like mobile apps, Postman, curl) - but log them
+    if (!origin) {
+      logger.warn({
+        type: 'cors_request',
+        message: 'Request with no origin header',
+        ip: this.ip,
+        timestamp: new Date().toISOString()
+      });
+      return callback(null, true);
+    }
     
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin.includes(allowed))) {
+    // Strict origin checking - only allow exact matches or subdomain matches
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (!allowed) return false;
+      // Exact match
+      if (origin === allowed) return true;
+      // Subdomain match (e.g., *.merchtrader.org)
+      if (allowed.includes('*')) {
+        const pattern = allowed.replace(/\*/g, '[a-zA-Z0-9-]+');
+        const regex = new RegExp(`^https://${pattern.replace(/\./g, '\\.')}$`);
+        return regex.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
       callback(null, true);
     } else {
-      // Log blocked origins for debugging
-      console.log('🔗 CORS: Blocked origin:', origin);
-      callback(null, true); // Still allow for now, but log it
+      // Log blocked origins for security monitoring
+      logger.warn({
+        type: 'cors_blocked',
+        message: 'CORS request blocked',
+        origin: origin,
+        allowedOrigins: allowedOrigins.filter(Boolean),
+        timestamp: new Date().toISOString()
+      });
+      callback(new Error('Not allowed by CORS policy'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -50,10 +103,17 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions)); // Enable pre-flight for all routes
 
-// Log environment-specific variables for debugging
-console.log('🔧 Initializing server...');
-console.log(`   - NODE_ENV: ${process.env.NODE_ENV}`);
-console.log(`   - Frontend URL: ${process.env.FRONTEND_URL}`);
+// Request ID and Logging Middleware (must be early in the stack)
+app.use(requestIdMiddleware);
+app.use(requestLogger);
+
+logger.info({
+  type: 'server_init',
+  message: 'Initializing server',
+  nodeEnv: process.env.NODE_ENV,
+  frontendUrl: process.env.FRONTEND_URL ? 'configured' : 'missing',
+  timestamp: new Date().toISOString()
+});
 
 // --- MIDDLEWARE ---
 app.use(helmet({
@@ -109,9 +169,10 @@ app.use(helmet({
 
 // Admin-only debug endpoint is defined later, after auth middleware declarations
 
-// 🔧 INCREASED LIMITS FOR LARGE VIDEO FILES
-app.use(express.json({ limit: '1gb' })); // Increased from 50mb to 1gb
-app.use(express.urlencoded({ limit: '1gb', extended: true })); // Increased from 50mb to 1gb
+// 🔒 SECURITY: Reduced request size limits (files upload directly to S3 via presigned URLs)
+// Only metadata and small JSON payloads come through the server
+app.use(express.json({ limit: '10mb' })); // Reduced from 1gb to 10mb for JSON payloads
+app.use(express.urlencoded({ limit: '10mb', extended: true })); // Reduced from 1gb to 10mb
 
 // --- STATIC FILE SERVING ---
 const uploadsDir = path.join(__dirname, 'uploads');
@@ -162,23 +223,37 @@ const pool = new Pool({
   idleTimeoutMillis: 20000,
   max: 10
 });
-const JWT_SECRET = process.env.JWT_SECRET || 'your-fallback-secret-key';
+// 🔒 SECURITY: JWT_SECRET validation (already checked above, but ensure it's set)
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  errorLogger.error({
+    type: 'startup_error',
+    message: 'JWT_SECRET is required but not set',
+    timestamp: new Date().toISOString()
+  });
+  console.error('❌ CRITICAL: JWT_SECRET environment variable is required');
+  process.exit(1);
+}
 const SALT_ROUNDS = 10;
 
-// --- S3 Service Setup ---
+// --- S3 Service Setup --- (Sanitized logging - no sensitive data)
 try {
-  if (process.env.AWS_ACCESS_KEY_ID) {
-    console.log('AWS Access Key Suffix:', process.env.AWS_ACCESS_KEY_ID.slice(-4));
-  }
-  if (process.env.AWS_SECRET_ACCESS_KEY) {
-    console.log('AWS Secret Key Suffix:', process.env.AWS_SECRET_ACCESS_KEY.slice(-4));
-  }
-  console.log('✅ S3 service loaded and instantiated successfully');
-  console.log('   AWS Region:', process.env.AWS_REGION);
-  console.log('   S3 Bucket:', process.env.AWS_S3_BUCKET_NAME);
-  console.log('   AWS Access Key:', process.env.AWS_ACCESS_KEY_ID ? 'Configured' : 'Missing');
+  logger.info({
+    type: 's3_init',
+    message: 'S3 service initialization',
+    region: process.env.AWS_REGION || 'not configured',
+    bucket: process.env.AWS_S3_BUCKET_NAME || 'not configured',
+    accessKeyConfigured: !!process.env.AWS_ACCESS_KEY_ID,
+    secretKeyConfigured: !!process.env.AWS_SECRET_ACCESS_KEY,
+    timestamp: new Date().toISOString()
+  });
 } catch (error) {
-  console.error('❌ S3 service initialization failed:', error);
+  errorLogger.error({
+    type: 's3_init_error',
+    message: 'S3 service initialization failed',
+    error: error.message,
+    timestamp: new Date().toISOString()
+  });
 }
 
 // Initialize Stripe after loading environment variables
@@ -214,12 +289,12 @@ const allowedOrigins = [
   process.env.EXPO_PUBLIC_FRONTEND_URL
 ].filter(Boolean); // Remove any undefined values
 
-// Add a separate, more detailed CORS error logger to help debug future issues
-app.use((req, res, next) => {
-  console.log('🔗 CORS: Request from origin:', req.headers.origin);
-  console.log('🔗 CORS: Request cookies:', req.headers.cookie ? 'present' : 'missing');
-  next();
-});
+// Rate limiting middleware (apply before routes)
+app.use('/api/auth/', authLimiter);
+app.use('/api/upload/presigned', uploadLimiter);
+app.use('/api/upload', uploadLimiter);
+app.use('/api/media', mediaCreationLimiter);
+app.use('/api/', generalApiLimiter);
 
 app.use('/uploads', express.static(uploadsDir));
 
@@ -4063,10 +4138,13 @@ app.put('/api/user/demographics', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', 
+  validators.email,
+  validators.password,
+  validate,
+  async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
     // Case-insensitive email lookup using LOWER()
     const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
@@ -4124,10 +4202,14 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register',
+  validators.email,
+  validators.password,
+  validators.username,
+  validate,
+  async (req, res) => {
   try {
     const { email, password, username } = req.body;
-    if (!email || !password || !username) return res.status(400).json({ error: 'Email, password, and username are required' });
     // Case-insensitive email check
     const existingUser = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
     if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
@@ -5530,6 +5612,57 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
     });
 });
 
+// --- Presigned URL Endpoint (Direct-to-Cloud Upload) ---
+app.post('/api/upload/presigned', 
+  authenticateToken,
+  validators.fileName,
+  validators.contentType,
+  validators.fileSize,
+  validate,
+  async (req, res) => {
+  try {
+    const { fileName, contentType, fileSize } = req.body;
+    
+    if (!s3Service.isConfigured()) {
+      logger.error({
+        type: 'presigned_url_error',
+        message: 'S3 service not configured',
+        userId: req.user.userId,
+        timestamp: new Date().toISOString()
+      });
+      return res.status(500).json({ error: 'S3 service not configured' });
+    }
+
+    const { uploadUrl, fileUrl, key } = await s3Service.getPresignedUploadUrl(
+      fileName, 
+      contentType, 
+      req.user.userId, 
+      fileSize
+    );
+
+    logger.info({
+      type: 'presigned_url_generated',
+      message: 'Presigned upload URL generated',
+      userId: req.user.userId,
+      fileName: fileName,
+      fileSize: fileSize,
+      key: key,
+      timestamp: new Date().toISOString()
+    });
+
+    res.json({ uploadUrl, fileUrl, key, expiresIn: 3600 });
+  } catch (error) {
+    errorLogger.error({
+      type: 'presigned_url_error',
+      message: 'Failed to generate presigned URL',
+      userId: req.user.userId,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+    res.status(500).json({ error: 'Failed to generate presigned URL' });
+  }
+});
+
 // --- Image Proxy Endpoint ---
 
 // Handle OPTIONS preflight requests for image proxy
@@ -5691,7 +5824,15 @@ app.get('/api/images/local/:filename', async (req, res) => {
     }
 });
 // ---------- MEDIA ROUTES ----------
-app.post('/api/media', authenticateToken, async (req, res) => {
+app.post('/api/media', 
+  authenticateToken,
+  validators.optionalString('title', 255),
+  validators.optionalString('url', 2048),
+  validators.optionalString('filename', 255),
+  validators.optionalString('s3_key', 512),
+  body('filesize').optional().isInt({ min: 0, max: 5368709120 }), // Max 5GB
+  validate,
+  async (req, res) => {
   try {
     const { title, filePath, url, filename, fileType, contentType, filesize, duration, uniqueId, s3_key } = req.body;
     
@@ -10988,6 +11129,9 @@ function generateMediaPlayerHTML(playlist) {
 // REMOVED: app.get('/playlist-access/:id') - This was interfering with React Native app's client-side routing
 // The React Native app handles this route through app/(public)/playlist-access/[id].tsx
 
+// Global error handler (must be after all routes)
+app.use(errorHandler);
+
 // This must be the last non-error-handling route
 app.get('*', (req, res) => {
   // If the request path looks like an API call, it means no API route was matched,
@@ -10998,10 +11142,22 @@ app.get('*', (req, res) => {
 
   // For any other route, serve the main index.html file.
   // This allows the React Native web app's router to handle the path.
-  console.log(`🌐 WEB: Serving index.html for non-API route: ${req.path}`);
+  logger.info({
+    type: 'web_serve',
+    message: 'Serving index.html for non-API route',
+    path: req.path,
+    timestamp: new Date().toISOString()
+  });
   res.sendFile(path.join(distDir, 'index.html'), (err) => {
     if (err) {
-      console.error(`❌ WEB_SERVE_ERROR: Could not send index.html for path ${req.path}:`, err);
+      errorLogger.error({
+        type: 'web_serve_error',
+        message: 'Could not send index.html',
+        path: req.path,
+        error: err.message,
+        code: err.code,
+        timestamp: new Date().toISOString()
+      });
       // Check if the file doesn't exist, which likely means the web app wasn't built.
       if (err.code === 'ENOENT') {
     res.status(500).send(`
@@ -11082,8 +11238,29 @@ async function fixActivationCodes() {
 }
 
 // --- SERVER START ---
+// Validate environment variables before starting server
+const { validateEnvVars } = require('../../scripts/validate-env');
+try {
+  validateEnvVars();
+} catch (error) {
+  errorLogger.error({
+    type: 'startup_error',
+    message: 'Environment validation failed',
+    error: error.message,
+    timestamp: new Date().toISOString()
+  });
+  process.exit(1);
+}
+
 const server = app.listen(PORT, '0.0.0.0', async () => {
   const address = server.address();
+  logger.info({
+    type: 'server_started',
+    message: 'Server listening',
+    address: address.address,
+    port: address.port,
+    timestamp: new Date().toISOString()
+  });
   console.log(`✅ Server listening on http://${address.address}:${address.port}`);
   console.log(`🚀 To test locally, open http://localhost:${PORT}`);
   

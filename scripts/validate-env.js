@@ -1,136 +1,113 @@
 #!/usr/bin/env node
-
 /**
- * Environment Validation Script
- * Quick check to ensure environment is properly configured
+ * Environment Variable Validation Script
+ * Validates all required environment variables before server startup
+ * Fails fast with clear error messages if any are missing
  */
 
-const fs = require('fs');
-const path = require('path');
+require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-function checkFile(filePath, description) {
-  const exists = fs.existsSync(filePath);
-  console.log(`${exists ? '✅' : '❌'} ${description}: ${exists ? 'Found' : 'Missing'}`);
-  return exists;
-}
+const requiredVars = {
+  // Critical - server cannot start without these
+  CRITICAL: [
+    'JWT_SECRET',
+    'DATABASE_URL'
+  ],
+  // Important - server can start but features won't work
+  IMPORTANT: [
+    'AWS_ACCESS_KEY_ID',
+    'AWS_SECRET_ACCESS_KEY',
+    'AWS_S3_BUCKET_NAME',
+    'STRIPE_SECRET_KEY',
+    'BREVO_SMTP_KEY'
+  ],
+  // Optional - nice to have for production
+  OPTIONAL: [
+    'FRONTEND_URL',
+    'GEO_PROVIDER',
+    'GEO_API_KEY'
+  ]
+};
 
-function checkEnvVar(varName, description) {
-  const value = process.env[varName];
-  const exists = !!value;
-  console.log(`${exists ? '✅' : '❌'} ${description}: ${exists ? 'Set' : 'Missing'}`);
-  if (exists && varName.includes('URL')) {
-    console.log(`    → ${value}`);
+function validateEnvVars() {
+  const missing = {
+    critical: [],
+    important: [],
+    optional: []
+  };
+
+  // Check critical vars
+  requiredVars.CRITICAL.forEach(varName => {
+    if (!process.env[varName]) {
+      missing.critical.push(varName);
+    }
+  });
+
+  // Check important vars
+  requiredVars.IMPORTANT.forEach(varName => {
+    if (!process.env[varName]) {
+      missing.important.push(varName);
+    }
+  });
+
+  // Check optional vars
+  requiredVars.OPTIONAL.forEach(varName => {
+    if (!process.env[varName]) {
+      missing.optional.push(varName);
+    }
+  });
+
+  // Report results
+  console.log('\n🔍 Environment Variable Validation\n');
+  console.log('='.repeat(50));
+
+  if (missing.critical.length > 0) {
+    console.error('\n❌ CRITICAL: Missing required environment variables:');
+    missing.critical.forEach(v => console.error(`   - ${v}`));
+    console.error('\n⚠️  Server cannot start without these variables.');
+    console.error('   Please check your .env file and ensure all critical variables are set.\n');
+    process.exit(1);
+  } else {
+    console.log('\n✅ All critical environment variables are set');
   }
-  return exists;
-}
 
-function validateUrls() {
-  console.log('\n🔗 URL Validation:');
-  
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-  const frontendUrl = process.env.FRONTEND_URL;
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  
-  if (apiUrl) {
-    const isHttps = apiUrl.startsWith('https://');
-    const isLocalhost = apiUrl.includes('localhost');
-    
-    if (nodeEnv === 'production') {
-      console.log(`${isHttps ? '✅' : '❌'} API URL uses HTTPS: ${isHttps ? 'Yes' : 'No'}`);
-      console.log(`${!isLocalhost ? '✅' : '❌'} API URL not localhost: ${!isLocalhost ? 'Yes' : 'No'}`);
+  if (missing.important.length > 0) {
+    console.warn('\n⚠️  IMPORTANT: Missing recommended environment variables:');
+    missing.important.forEach(v => console.warn(`   - ${v}`));
+    console.warn('   Server will start but some features may not work correctly.\n');
+  } else {
+    console.log('✅ All important environment variables are set');
+  }
+
+  if (missing.optional.length > 0) {
+    console.log('\nℹ️  OPTIONAL: Missing optional environment variables:');
+    missing.optional.forEach(v => console.log(`   - ${v}`));
+    console.log('   These are nice to have but not required.\n');
+  } else {
+    console.log('✅ All optional environment variables are set');
+  }
+
+  // Validate JWT_SECRET strength
+  if (process.env.JWT_SECRET) {
+    if (process.env.JWT_SECRET.length < 32) {
+      console.warn('\n⚠️  WARNING: JWT_SECRET is less than 32 characters.');
+      console.warn('   For production, use a strong secret (at least 32 characters).');
+    } else if (process.env.JWT_SECRET === 'your-fallback-secret-key') {
+      console.error('\n❌ CRITICAL: JWT_SECRET is using the default fallback value!');
+      console.error('   This is a security risk. Please set a unique, strong secret.');
+      process.exit(1);
     } else {
-      console.log(`ℹ️  Development mode - localhost URLs are OK`);
+      console.log('✅ JWT_SECRET is properly configured');
     }
   }
-  
-  if (frontendUrl) {
-    const isHttps = frontendUrl.startsWith('https://');
-    const isLocalhost = frontendUrl.includes('localhost');
-    
-    if (nodeEnv === 'production') {
-      console.log(`${isHttps ? '✅' : '❌'} Frontend URL uses HTTPS: ${isHttps ? 'Yes' : 'No'}`);
-      console.log(`${!isLocalhost ? '✅' : '❌'} Frontend URL not localhost: ${!isLocalhost ? 'Yes' : 'No'}`);
-    }
-  }
+
+  console.log('\n' + '='.repeat(50));
+  console.log('✅ Environment validation complete\n');
 }
 
-function validateStripeKeys() {
-  console.log('\n💳 Stripe Configuration:');
-  
-  const secretKey = process.env.STRIPE_SECRET_KEY;
-  const publicKey = process.env.STRIPE_PUBLISHABLE_KEY;
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  
-  if (secretKey) {
-    const isLive = secretKey.startsWith('sk_live_');
-    const isTest = secretKey.startsWith('sk_test_');
-    
-    if (nodeEnv === 'production') {
-      console.log(`${isLive ? '✅' : '❌'} Using live secret key: ${isLive ? 'Yes' : 'No'}`);
-    } else {
-      console.log(`${isTest ? '✅' : '⚠️'} Using test secret key: ${isTest ? 'Yes' : 'No'}`);
-    }
-  }
-  
-  if (publicKey) {
-    const isLive = publicKey.startsWith('pk_live_');
-    const isTest = publicKey.startsWith('pk_test_');
-    
-    if (nodeEnv === 'production') {
-      console.log(`${isLive ? '✅' : '❌'} Using live public key: ${isLive ? 'Yes' : 'No'}`);
-    } else {
-      console.log(`${isTest ? '✅' : '⚠️'} Using test public key: ${isTest ? 'Yes' : 'No'}`);
-    }
-  }
-}
-
-function main() {
-  console.log('🔍 Environment Validation\n');
-  
-  // Check for environment files
-  console.log('📁 Environment Files:');
-  const hasEnv = checkFile('.env', '.env file');
-  const hasEnvProd = checkFile('.env.production', '.env.production file');
-  const hasEnvExample = checkFile('env.example', 'env.example template');
-  
-  // Check required environment variables
-  console.log('\n🔧 Environment Variables:');
-  const hasApiUrl = checkEnvVar('EXPO_PUBLIC_API_URL', 'API Base URL');
-  const hasDbUrl = checkEnvVar('DATABASE_URL', 'Database URL');
-  const hasJwtSecret = checkEnvVar('JWT_SECRET', 'JWT Secret');
-  const hasStripeSecret = checkEnvVar('STRIPE_SECRET_KEY', 'Stripe Secret Key');
-  const hasStripePublic = checkEnvVar('STRIPE_PUBLISHABLE_KEY', 'Stripe Public Key');
-  const hasFrontendUrl = checkEnvVar('FRONTEND_URL', 'Frontend URL');
-  
-  // Validate URLs and keys
-  validateUrls();
-  validateStripeKeys();
-  
-  // Check configuration files
-  console.log('\n⚙️ Configuration Files:');
-  checkFile('config/environment.ts', 'Environment config helper');
-  checkFile('PRODUCTION_DEPLOYMENT_GUIDE.md', 'Deployment guide');
-  
-  // Summary
-  console.log('\n📊 Summary:');
-  const nodeEnv = process.env.NODE_ENV || 'development';
-  console.log(`Environment: ${nodeEnv}`);
-  
-  const criticalVars = [hasApiUrl, hasDbUrl, hasJwtSecret];
-  const allCritical = criticalVars.every(Boolean);
-  
-  console.log(`${allCritical ? '✅' : '❌'} Critical variables: ${allCritical ? 'All set' : 'Missing some'}`);
-  
-  if (!allCritical) {
-    console.log('\n💡 To fix missing configuration:');
-    console.log('   npm run deploy:setup');
-  }
-  
-  console.log('\n🚀 Ready for deployment:', allCritical ? 'Yes' : 'No');
-}
-
+// Run validation
 if (require.main === module) {
-  main();
+  validateEnvVars();
 }
 
-module.exports = { main }; 
+module.exports = { validateEnvVars, requiredVars };
