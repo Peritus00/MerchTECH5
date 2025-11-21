@@ -140,7 +140,17 @@ const ActivationCodesScreen = () => {
     setIsLoading(true);
     try {
       if (activeTab === 'generate') {
-        await Promise.all([loadPlaylists(), loadSlideshows()]);
+        // Load playlists and slideshows independently so one failure doesn't block the other
+        await Promise.allSettled([
+          loadPlaylists().catch(err => {
+            console.error('Error loading playlists:', err);
+            setPlaylists([]);
+          }),
+          loadSlideshows().catch(err => {
+            console.error('Error loading slideshows:', err);
+            setSlideshows([]);
+          })
+        ]);
       } else if (activeTab === 'myAccess') {
         await loadMyAccessCodes();
       } else if (activeTab === 'allGenerated') {
@@ -148,7 +158,7 @@ const ActivationCodesScreen = () => {
       }
     } catch (error) {
       console.error('Error loading data:', error);
-      Alert.alert('Error', 'Failed to load data');
+      // Don't show alert for individual failures, just log them
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -171,13 +181,36 @@ const ActivationCodesScreen = () => {
   const loadSlideshows = async () => {
     try {
       console.log('🔑 Loading slideshows for code generation');
-      const slideshowsData = await slideshowsAPI.getAll();
-      console.log('🔑 Raw slideshows data from API:', slideshowsData);
-      setSlideshows(slideshowsData);
-      console.log('🔑 Loaded', slideshowsData.length, 'slideshows:', slideshowsData);
+      const slideshowsResponse = await slideshowsAPI.getAll();
+      console.log('🔑 Raw slideshows response from API:', slideshowsResponse);
+      
+      // Handle both array and object formats
+      const slideshowsData = Array.isArray(slideshowsResponse) 
+        ? slideshowsResponse 
+        : (slideshowsResponse?.slideshows || slideshowsResponse || []);
+      
+      // Filter out any invalid slideshow objects
+      const validSlideshows = (slideshowsData || []).filter((slideshow: any) => {
+        if (!slideshow) {
+          console.warn('🔑 Found null/undefined slideshow, filtering out');
+          return false;
+        }
+        if (!slideshow.name) {
+          console.warn('🔑 Found slideshow without name, filtering out:', slideshow);
+          return false;
+        }
+        if (!slideshow.id) {
+          console.warn('🔑 Found slideshow without id, filtering out:', slideshow);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('🔑 Loaded', validSlideshows.length, 'valid slideshows');
+      setSlideshows(validSlideshows);
     } catch (error) {
       console.error('🔑 Error loading slideshows:', error);
-      throw error;
+      setSlideshows([]); // Set empty array on error instead of throwing
     }
   };
 
