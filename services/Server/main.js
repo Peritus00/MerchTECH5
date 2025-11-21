@@ -11280,45 +11280,50 @@ console.log(`🌐 Starting server on port ${PORT}...`);
 let server;
 try {
   server = app.listen(PORT, '0.0.0.0', async () => {
-  const address = server.address();
-  
-  // Use console.log for critical startup messages (always visible)
-  console.log(`✅ Server listening on http://${address.address}:${address.port}`);
-  console.log(`🚀 Server ready to accept connections`);
-  console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-  
-  // Also log via structured logger if available
-  try {
-    logger.info({
-      type: 'server_started',
-      message: 'Server listening',
-      address: address.address,
-      port: address.port,
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    console.warn('⚠️  Logger not available for structured logging:', err.message);
-  }
-  
-  // Run database fixes on startup
-  try {
-    console.log('🔧 Running startup database fixes...');
-    await fixActivationCodes();
-    console.log('✅ Startup database fixes completed');
-  } catch (err) {
-    console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
-  }
-});
+    const address = server.address();
+    
+    // Use console.log for critical startup messages (always visible)
+    console.log(`✅ Server listening on http://${address.address}:${address.port}`);
+    console.log(`🚀 Server ready to accept connections`);
+    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+    
+    // Also log via structured logger if available
+    try {
+      logger.info({
+        type: 'server_started',
+        message: 'Server listening',
+        address: address.address,
+        port: address.port,
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('⚠️  Logger not available for structured logging:', err.message);
+    }
+    
+    // Run database fixes on startup
+    try {
+      console.log('🔧 Running startup database fixes...');
+      await fixActivationCodes();
+      console.log('✅ Startup database fixes completed');
+    } catch (err) {
+      console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
+    }
+  });
 
-// Add error handler for server startup errors
-server.on('error', (err) => {
-  console.error('❌ SERVER STARTUP ERROR:', err.message);
-  console.error('❌ Error code:', err.code);
-  if (err.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use`);
-  }
+  // Add error handler for server startup errors
+  server.on('error', (err) => {
+    console.error('❌ SERVER STARTUP ERROR:', err.message);
+    console.error('❌ Error code:', err.code);
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${PORT} is already in use`);
+    }
+    process.exit(1);
+  });
+} catch (startupError) {
+  console.error('❌ CRITICAL: Server failed to start:', startupError.message);
+  console.error('❌ Stack:', startupError.stack);
   process.exit(1);
-});
+}
 
 // 🔧 INCREASE SERVER TIMEOUT FOR LARGE UPLOADS
 server.timeout = 10 * 60 * 1000; // 10 minutes timeout
