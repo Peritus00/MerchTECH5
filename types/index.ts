@@ -275,3 +275,27 @@ export interface DeletedSlideshow {
   owner_username: string;
   owner_email: string;
 }
+
+// Admin User Tracking Types
+export interface AdminUserStats {
+  totalSignedInUsers: number;
+  totalAnonymousUsers: number;
+  activeUsers7d: number;
+  activeUsers30d: number;
+  activeAnonymous7d: number;
+  activeAnonymous30d: number;
+  activityBreakdown: UserActivityBreakdown[];
+}
+
+export interface UserActivityBreakdown {
+  activityType: 'qr_scans' | 'media_plays' | 'playlist_plays' | 'slideshow_plays' | 'cart_events';
+  count: number;
+}
+
+export interface AdminUserHistory {
+  timeframe: 'daily' | 'weekly' | 'monthly';
+  signedInUsers: Array<{ date: string; count: number }>;
+  anonymousUsers: Array<{ date: string; count: number }>;
+  activeUsers: Array<{ date: string; count: number }>;
+  activeAnonymousUsers: Array<{ date: string; count: number }>;
+}

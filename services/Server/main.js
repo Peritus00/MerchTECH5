@@ -591,6 +591,247 @@ app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req,
   }
 });
 
+// Get admin user statistics (admin only)
+app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    // Total unique signed-in users
+    const signedInUsersResult = await pool.query(`
+      SELECT COUNT(DISTINCT id) as count
+      FROM users
+    `);
+    const totalSignedInUsers = parseInt(signedInUsersResult.rows[0].count) || 0;
+
+    // Total unique anonymous users (from all tracking tables)
+    // Combine visitor_id and qr_visitor_id from qr_scans
+    const anonymousUsersResult = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
+      FROM qr_scans
+      WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
+    `);
+    const totalAnonymousUsers = parseInt(anonymousUsersResult.rows[0].count) || 0;
+
+    // Active users in last 7 days (signed-in users with activity)
+    const activeUsers7dResult = await pool.query(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM (
+        SELECT user_id FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - INTERVAL '7 days'
+        UNION
+        SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
+        UNION
+        SELECT user_id FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
+        UNION
+        SELECT user_id FROM slideshow_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
+        UNION
+        SELECT user_id FROM cart_events WHERE user_id IS NOT NULL AND added_at >= NOW() - INTERVAL '7 days'
+      ) AS active_users
+    `);
+    const activeUsers7d = parseInt(activeUsers7dResult.rows[0].count) || 0;
+
+    // Active users in last 30 days (signed-in users with activity)
+    const activeUsers30dResult = await pool.query(`
+      SELECT COUNT(DISTINCT user_id) as count
+      FROM (
+        SELECT user_id FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - INTERVAL '30 days'
+        UNION
+        SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
+        UNION
+        SELECT user_id FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
+        UNION
+        SELECT user_id FROM slideshow_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
+        UNION
+        SELECT user_id FROM cart_events WHERE user_id IS NOT NULL AND added_at >= NOW() - INTERVAL '30 days'
+      ) AS active_users
+    `);
+    const activeUsers30d = parseInt(activeUsers30dResult.rows[0].count) || 0;
+
+    // Active anonymous users in last 7 days
+    const activeAnonymous7dResult = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
+      FROM qr_scans
+      WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
+        AND scanned_at >= NOW() - INTERVAL '7 days'
+    `);
+    const activeAnonymous7d = parseInt(activeAnonymous7dResult.rows[0].count) || 0;
+
+    // Active anonymous users in last 30 days
+    const activeAnonymous30dResult = await pool.query(`
+      SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
+      FROM qr_scans
+      WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
+        AND scanned_at >= NOW() - INTERVAL '30 days'
+    `);
+    const activeAnonymous30d = parseInt(activeAnonymous30dResult.rows[0].count) || 0;
+
+    // Activity breakdown by type
+    const activityBreakdownResult = await pool.query(`
+      SELECT 
+        'qr_scans' as activity_type,
+        COUNT(DISTINCT COALESCE(user_id::text, COALESCE(qr_visitor_id, visitor_id::text))) as count
+      FROM qr_scans
+      WHERE scanned_at >= NOW() - INTERVAL '30 days'
+      UNION ALL
+      SELECT 
+        'media_plays' as activity_type,
+        COUNT(DISTINCT COALESCE(user_id::text, session_id)) as count
+      FROM media_plays
+      WHERE played_at >= NOW() - INTERVAL '30 days'
+      UNION ALL
+      SELECT 
+        'playlist_plays' as activity_type,
+        COUNT(DISTINCT COALESCE(user_id::text, session_id)) as count
+      FROM playlist_plays
+      WHERE played_at >= NOW() - INTERVAL '30 days'
+      UNION ALL
+      SELECT 
+        'slideshow_plays' as activity_type,
+        COUNT(DISTINCT COALESCE(user_id::text, session_id)) as count
+      FROM slideshow_plays
+      WHERE played_at >= NOW() - INTERVAL '30 days'
+      UNION ALL
+      SELECT 
+        'cart_events' as activity_type,
+        COUNT(DISTINCT COALESCE(user_id::text, session_id)) as count
+      FROM cart_events
+      WHERE added_at >= NOW() - INTERVAL '30 days'
+    `);
+
+    const activityBreakdown = activityBreakdownResult.rows.map(row => ({
+      activityType: row.activity_type,
+      count: parseInt(row.count) || 0
+    }));
+
+    res.json({
+      totalSignedInUsers,
+      totalAnonymousUsers: totalAnonymousUsers,
+      activeUsers7d,
+      activeUsers30d,
+      activeAnonymous7d,
+      activeAnonymous30d,
+      activityBreakdown
+    });
+  } catch (error) {
+    console.error('Error fetching admin user stats:', error);
+    res.status(500).json({ error: 'Failed to fetch admin user stats' });
+  }
+});
+
+// Get admin user history (admin only)
+app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { timeframe = 'daily' } = req.query; // daily, weekly, monthly
+
+    let dateTrunc, interval, limit;
+    if (timeframe === 'daily') {
+      dateTrunc = 'day';
+      interval = '1 day';
+      limit = 30;
+    } else if (timeframe === 'weekly') {
+      dateTrunc = 'week';
+      interval = '1 week';
+      limit = 12;
+    } else {
+      dateTrunc = 'month';
+      interval = '1 month';
+      limit = 12;
+    }
+
+    // Signed-in users over time (based on created_at)
+    const signedInHistoryResult = await pool.query(`
+      SELECT 
+        date_trunc($1, created_at) as date,
+        COUNT(DISTINCT id) as count
+      FROM users
+      WHERE created_at >= NOW() - ($2::interval * $3)
+      GROUP BY date_trunc($1, created_at)
+      ORDER BY date ASC
+    `, [dateTrunc, interval, limit]);
+
+    // Anonymous users over time (new anonymous users per period, matching signed-in pattern)
+    const anonymousHistoryResult = await pool.query(`
+      WITH first_visits AS (
+        SELECT 
+          COALESCE(qr_visitor_id, visitor_id::text) as visitor_key,
+          MIN(date_trunc($1, scanned_at)) as first_seen_date
+        FROM qr_scans
+        WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
+          AND scanned_at >= NOW() - ($2::interval * $3)
+        GROUP BY COALESCE(qr_visitor_id, visitor_id::text)
+      )
+      SELECT 
+        first_seen_date as date,
+        COUNT(DISTINCT visitor_key) as count
+      FROM first_visits
+      GROUP BY first_seen_date
+      ORDER BY date ASC
+    `, [dateTrunc, interval, limit]);
+
+    // Active users over time (signed-in users with activity)
+    const activeUsersHistoryResult = await pool.query(`
+      WITH activity_dates AS (
+        SELECT user_id, date_trunc($1, scanned_at) as activity_date FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - ($2::interval * $3)
+        UNION
+        SELECT user_id, date_trunc($1, played_at) as activity_date FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        UNION
+        SELECT user_id, date_trunc($1, played_at) as activity_date FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        UNION
+        SELECT user_id, date_trunc($1, played_at) as activity_date FROM slideshow_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        UNION
+        SELECT user_id, date_trunc($1, added_at) as activity_date FROM cart_events WHERE user_id IS NOT NULL AND added_at >= NOW() - ($2::interval * $3)
+      )
+      SELECT 
+        activity_date as date,
+        COUNT(DISTINCT user_id) as count
+      FROM activity_dates
+      GROUP BY activity_date
+      ORDER BY date ASC
+    `, [dateTrunc, interval, limit]);
+
+    // Active anonymous users over time
+    const activeAnonymousHistoryResult = await pool.query(`
+      SELECT 
+        date_trunc($1, scanned_at) as date,
+        COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
+      FROM qr_scans
+      WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
+        AND scanned_at >= NOW() - ($2::interval * $3)
+      GROUP BY date_trunc($1, scanned_at)
+      ORDER BY date ASC
+    `, [dateTrunc, interval, limit]);
+
+    // Convert to arrays with date strings
+    const signedInHistory = signedInHistoryResult.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: parseInt(row.count) || 0
+    }));
+
+    const anonymousHistory = anonymousHistoryResult.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: parseInt(row.count) || 0
+    }));
+
+    const activeUsersHistory = activeUsersHistoryResult.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: parseInt(row.count) || 0
+    }));
+
+    const activeAnonymousHistory = activeAnonymousHistoryResult.rows.map(row => ({
+      date: row.date.toISOString().split('T')[0],
+      count: parseInt(row.count) || 0
+    }));
+
+    res.json({
+      timeframe,
+      signedInUsers: signedInHistory,
+      anonymousUsers: anonymousHistory,
+      activeUsers: activeUsersHistory,
+      activeAnonymousUsers: activeAnonymousHistory
+    });
+  } catch (error) {
+    console.error('Error fetching admin user history:', error);
+    res.status(500).json({ error: 'Failed to fetch admin user history' });
+  }
+});
+
 // Restore deleted QR code (admin only)
 app.post('/api/admin/restore/qr-codes/:id', authenticateToken, isAdmin, async (req, res) => {
   try {

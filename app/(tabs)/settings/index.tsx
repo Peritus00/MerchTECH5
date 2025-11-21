@@ -265,6 +265,14 @@ export default function Settings() {
       },
       icon: '📋',
     }] : []),
+    ...(isAdmin ? [{
+      title: 'Admin User Analytics',
+      description: 'Track user counts and trends (signed-in and anonymous)',
+      onPress: () => {
+        router.push('/(tabs)/settings/admin-analytics');
+      },
+      icon: '📊',
+    }] : []),
     {
       title: 'Privacy Policy',
       description: 'View our privacy policy',

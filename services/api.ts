@@ -932,6 +932,17 @@ export const adminAPI = {
     const response = await api.post(`/admin/restore/slideshows/${id}`);
     return response.data;
   },
+
+  // User statistics
+  async getUserStats() {
+    const response = await api.get('/admin/users/stats');
+    return response.data;
+  },
+
+  async getUserHistory(timeframe: 'daily' | 'weekly' | 'monthly' = 'daily') {
+    const response = await api.get(`/admin/users/history?timeframe=${timeframe}`);
+    return response.data;
+  },
 };
 
 // Activity Logs API
