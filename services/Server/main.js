@@ -711,7 +711,8 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     });
   } catch (error) {
     console.error('Error fetching admin user stats:', error);
-    res.status(500).json({ error: 'Failed to fetch admin user stats' });
+    console.error('Error details:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to fetch admin user stats', details: error.message });
   }
 });
 
@@ -720,6 +721,7 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
   try {
     const { timeframe = 'daily' } = req.query; // daily, weekly, monthly
 
+    // Validate timeframe to prevent SQL injection
     let dateTrunc, interval, limit;
     if (timeframe === 'daily') {
       dateTrunc = 'day';
@@ -729,32 +731,35 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
       dateTrunc = 'week';
       interval = '1 week';
       limit = 12;
-    } else {
+    } else if (timeframe === 'monthly') {
       dateTrunc = 'month';
       interval = '1 month';
       limit = 12;
+    } else {
+      return res.status(400).json({ error: 'Invalid timeframe. Must be daily, weekly, or monthly' });
     }
 
     // Signed-in users over time (based on created_at)
+    // Note: date_trunc first arg must be literal, not parameterized
     const signedInHistoryResult = await pool.query(`
       SELECT 
-        date_trunc($1, created_at) as date,
+        date_trunc('${dateTrunc}', created_at) as date,
         COUNT(DISTINCT id) as count
       FROM users
-      WHERE created_at >= NOW() - ($2::interval * $3)
-      GROUP BY date_trunc($1, created_at)
+      WHERE created_at >= NOW() - ($1::interval * $2)
+      GROUP BY date_trunc('${dateTrunc}', created_at)
       ORDER BY date ASC
-    `, [dateTrunc, interval, limit]);
+    `, [interval, limit]);
 
     // Anonymous users over time (new anonymous users per period, matching signed-in pattern)
     const anonymousHistoryResult = await pool.query(`
       WITH first_visits AS (
         SELECT 
           COALESCE(qr_visitor_id, visitor_id::text) as visitor_key,
-          MIN(date_trunc($1, scanned_at)) as first_seen_date
+          MIN(date_trunc('${dateTrunc}', scanned_at)) as first_seen_date
         FROM qr_scans
         WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
-          AND scanned_at >= NOW() - ($2::interval * $3)
+          AND scanned_at >= NOW() - ($1::interval * $2)
         GROUP BY COALESCE(qr_visitor_id, visitor_id::text)
       )
       SELECT 
@@ -763,20 +768,20 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
       FROM first_visits
       GROUP BY first_seen_date
       ORDER BY date ASC
-    `, [dateTrunc, interval, limit]);
+    `, [interval, limit]);
 
     // Active users over time (signed-in users with activity)
     const activeUsersHistoryResult = await pool.query(`
       WITH activity_dates AS (
-        SELECT user_id, date_trunc($1, scanned_at) as activity_date FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - ($2::interval * $3)
+        SELECT user_id, date_trunc('${dateTrunc}', scanned_at) as activity_date FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - ($1::interval * $2)
         UNION
-        SELECT user_id, date_trunc($1, played_at) as activity_date FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
         UNION
-        SELECT user_id, date_trunc($1, played_at) as activity_date FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
         UNION
-        SELECT user_id, date_trunc($1, played_at) as activity_date FROM slideshow_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($2::interval * $3)
+        SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM slideshow_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
         UNION
-        SELECT user_id, date_trunc($1, added_at) as activity_date FROM cart_events WHERE user_id IS NOT NULL AND added_at >= NOW() - ($2::interval * $3)
+        SELECT user_id, date_trunc('${dateTrunc}', added_at) as activity_date FROM cart_events WHERE user_id IS NOT NULL AND added_at >= NOW() - ($1::interval * $2)
       )
       SELECT 
         activity_date as date,
@@ -784,19 +789,19 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
       FROM activity_dates
       GROUP BY activity_date
       ORDER BY date ASC
-    `, [dateTrunc, interval, limit]);
+    `, [interval, limit]);
 
     // Active anonymous users over time
     const activeAnonymousHistoryResult = await pool.query(`
       SELECT 
-        date_trunc($1, scanned_at) as date,
+        date_trunc('${dateTrunc}', scanned_at) as date,
         COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
       FROM qr_scans
       WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
-        AND scanned_at >= NOW() - ($2::interval * $3)
-      GROUP BY date_trunc($1, scanned_at)
+        AND scanned_at >= NOW() - ($1::interval * $2)
+      GROUP BY date_trunc('${dateTrunc}', scanned_at)
       ORDER BY date ASC
-    `, [dateTrunc, interval, limit]);
+    `, [interval, limit]);
 
     // Convert to arrays with date strings
     const signedInHistory = signedInHistoryResult.rows.map(row => ({
@@ -828,7 +833,8 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
     });
   } catch (error) {
     console.error('Error fetching admin user history:', error);
-    res.status(500).json({ error: 'Failed to fetch admin user history' });
+    console.error('Error details:', error.message, error.stack);
+    res.status(500).json({ error: 'Failed to fetch admin user history', details: error.message });
   }
 });
 
