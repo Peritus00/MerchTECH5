@@ -611,11 +611,10 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const totalAnonymousUsers = parseInt(anonymousUsersResult.rows[0].count) || 0;
 
     // Active users in last 7 days (signed-in users with activity)
+    // Note: qr_scans doesn't have user_id, so we only check other activity tables
     const activeUsers7dResult = await pool.query(`
       SELECT COUNT(DISTINCT user_id) as count
       FROM (
-        SELECT user_id FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - INTERVAL '7 days'
-        UNION
         SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
         UNION
         SELECT user_id FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
@@ -631,8 +630,6 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const activeUsers30dResult = await pool.query(`
       SELECT COUNT(DISTINCT user_id) as count
       FROM (
-        SELECT user_id FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - INTERVAL '30 days'
-        UNION
         SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
         UNION
         SELECT user_id FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
@@ -663,12 +660,14 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const activeAnonymous30d = parseInt(activeAnonymous30dResult.rows[0].count) || 0;
 
     // Activity breakdown by type
+    // Note: qr_scans doesn't have user_id, so we count anonymous visitors only
     const activityBreakdownResult = await pool.query(`
       SELECT 
         'qr_scans' as activity_type,
-        COUNT(DISTINCT COALESCE(user_id::text, COALESCE(qr_visitor_id, visitor_id::text))) as count
+        COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
       FROM qr_scans
       WHERE scanned_at >= NOW() - INTERVAL '30 days'
+        AND COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
       UNION ALL
       SELECT 
         'media_plays' as activity_type,
@@ -739,12 +738,12 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
       return res.status(400).json({ error: 'Invalid timeframe. Must be daily, weekly, or monthly' });
     }
 
-    // Signed-in users over time (based on created_at)
+    // Signed-in users over time (new users created per period)
     // Note: date_trunc first arg must be literal, not parameterized
     const signedInHistoryResult = await pool.query(`
       SELECT 
         date_trunc('${dateTrunc}', created_at) as date,
-        COUNT(DISTINCT id) as count
+        COUNT(*) as count
       FROM users
       WHERE created_at >= NOW() - ($1::interval * $2)
       GROUP BY date_trunc('${dateTrunc}', created_at)
@@ -771,10 +770,9 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
     `, [interval, limit]);
 
     // Active users over time (signed-in users with activity)
+    // Note: qr_scans doesn't have user_id, so we only check other activity tables
     const activeUsersHistoryResult = await pool.query(`
       WITH activity_dates AS (
-        SELECT user_id, date_trunc('${dateTrunc}', scanned_at) as activity_date FROM qr_scans WHERE user_id IS NOT NULL AND scanned_at >= NOW() - ($1::interval * $2)
-        UNION
         SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
         UNION
         SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM playlist_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
