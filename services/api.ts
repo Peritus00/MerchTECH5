@@ -90,6 +90,18 @@ api.interceptors.response.use(
       console.error('🔐 Access forbidden - insufficient permissions');
     } else if (error.response?.status === 404) {
       console.error('🔍 Resource not found');
+    } else if (error.response?.status === 429) {
+      // Rate limit exceeded - provide user-friendly error
+      console.error('⏱️ Rate limit exceeded - too many requests');
+      const retryAfter = error.response?.headers['retry-after'] || error.response?.headers['Retry-After'];
+      const errorMessage = error.response?.data?.error || 'Too many requests. Please wait a moment and try again.';
+      
+      // Enhance error with retry information
+      error.rateLimitInfo = {
+        retryAfter: retryAfter ? parseInt(retryAfter, 10) : null,
+        message: errorMessage,
+        isRateLimit: true
+      };
     } else if (error.response?.status >= 500) {
       console.error('🔥 Server error');
     }
