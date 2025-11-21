@@ -13,6 +13,7 @@ import {
   Share,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/contexts/AuthContext';
@@ -121,6 +122,13 @@ const ActivationCodesScreen = () => {
   useEffect(() => {
     loadData();
   }, [activeTab]);
+
+  // Reload data when screen comes into focus (fixes mobile tab navigation issue)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [activeTab])
+  );
 
   useEffect(() => {
     if (showCreateModal) {

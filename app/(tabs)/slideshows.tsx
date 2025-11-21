@@ -11,6 +11,7 @@ import {
   TextInput,
   Platform,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -62,6 +63,13 @@ export default function SlideshowsScreen() {
   useEffect(() => {
     fetchSlideshows();
   }, []);
+
+  // Reload data when screen comes into focus (fixes mobile tab navigation issue)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchSlideshows();
+    }, [])
+  );
 
   const fetchSlideshows = async () => {
     try {

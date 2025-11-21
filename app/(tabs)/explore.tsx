@@ -11,6 +11,7 @@ import HeaderWithLogo from '@/components/HeaderWithLogo';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { ScrollView, RefreshControl, View, TouchableOpacity, Alert, TextInput, Text } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { AdvancedQRCodeGenerator } from '@/components/AdvancedQRCodeGenerator';
 import { AdvancedQREditor } from '@/components/AdvancedQREditor';
@@ -194,6 +195,14 @@ export default function QRCodesScreen() {
     fetchQRCodes();
     checkScreensaverState();
   }, []);
+
+  // Reload data when screen comes into focus (fixes mobile tab navigation issue)
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchQRCodes();
+      checkScreensaverState();
+    }, [])
+  );
 
   const onRefresh = () => {
     setRefreshing(true);
