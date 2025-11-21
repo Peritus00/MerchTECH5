@@ -73,6 +73,25 @@ logger.info({
   timestamp: new Date().toISOString()
 });
 
+// --- CORS Allowed Origins --- (Must be defined before corsOptions)
+const allowedOrigins = [
+  'https://app.merchtrader.org',
+  'http://localhost:8081',
+  'http://localhost:19006',
+  'https://merchtech.app',
+  'exp://192.168.1.70:8081',
+  // Add production frontend URLs
+  'https://merchtech5-production.up.railway.app',
+  'https://merchtrader.org',
+  'https://www.merchtrader.org',
+  // Add Vercel deployment URLs (common patterns)
+  'https://merchtechapp5.vercel.app',
+  'https://merchtech-app.vercel.app',
+  // Add any custom domain that might be configured
+  process.env.FRONTEND_URL,
+  process.env.EXPO_PUBLIC_FRONTEND_URL
+].filter(Boolean); // Remove any undefined values
+
 // --- CORS Configuration --- (Tightened for Security)
 // When credentials: true, cannot use '*' - must specify exact origins
 const corsOptions = {
@@ -291,24 +310,6 @@ const transporter = nodemailer.createTransport({
     pass: process.env.BREVO_SMTP_KEY,
   },
 });
-
-const allowedOrigins = [
-  'https://app.merchtrader.org',
-  'http://localhost:8081',
-  'http://localhost:19006',
-  'https://merchtech.app',
-  'exp://192.168.1.70:8081',
-  // Add production frontend URLs
-  'https://merchtech5-production.up.railway.app',
-  'https://merchtrader.org',
-  'https://www.merchtrader.org',
-  // Add Vercel deployment URLs (common patterns)
-  'https://merchtechapp5.vercel.app',
-  'https://merchtech-app.vercel.app',
-  // Add any custom domain that might be configured
-  process.env.FRONTEND_URL,
-  process.env.EXPO_PUBLIC_FRONTEND_URL
-].filter(Boolean); // Remove any undefined values
 
 // Rate limiting middleware (apply before routes)
 app.use('/api/auth/', authLimiter);
