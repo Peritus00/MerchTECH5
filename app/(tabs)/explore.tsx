@@ -109,18 +109,30 @@ export default function QRCodesScreen() {
     try {
       const codes = await qrCodeService.getQRCodes();
       console.log('🔍 DEBUG: Fetched QR codes:', codes);
-      console.log('🔍 DEBUG: First QR code structure:', codes[0]);
-      if (codes[0]) {
-        console.log('🔍 DEBUG: First QR code createdAt:', codes[0].createdAt);
-        console.log('🔍 DEBUG: First QR code createdAt type:', typeof codes[0].createdAt);
-        console.log('🔍 DEBUG: First QR code created_at:', codes[0].created_at);
-        console.log('🔍 DEBUG: All keys in first QR code:', Object.keys(codes[0]));
-      }
-      setQrCodes(codes);
-      applyFiltersAndSort(codes, searchQuery, sortBy);
+      console.log('🔍 DEBUG: Number of QR codes:', codes?.length || 0);
+      
+      // Ensure codes is an array
+      const validCodes = Array.isArray(codes) ? codes : [];
+      
+      // Filter out any invalid QR code objects
+      const filteredCodes = validCodes.filter((code: any) => {
+        if (!code) return false;
+        if (!code.id) {
+          console.warn('🔍 Found QR code without id, filtering out:', code);
+          return false;
+        }
+        return true;
+      });
+      
+      console.log('🔍 DEBUG: Valid QR codes after filtering:', filteredCodes.length);
+      setQrCodes(filteredCodes);
+      applyFiltersAndSort(filteredCodes, searchQuery, sortBy);
     } catch (error) {
       console.error('Error fetching QR codes:', error);
-      Alert.alert('Error', 'Failed to load QR codes');
+      console.error('Error details:', error);
+      setQrCodes([]); // Set empty array on error
+      applyFiltersAndSort([], searchQuery, sortBy);
+      // Don't show alert, just log the error
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -72,8 +72,11 @@ export default function SlideshowsScreen() {
       const serverSlideshows = serverSlideshowsResponse?.slideshows || serverSlideshowsResponse || [];
       console.log('📥 Extracted slideshows array:', serverSlideshows);
       
+      // Ensure it's an array
+      const slideshowsArray = Array.isArray(serverSlideshows) ? serverSlideshows : [];
+      
       // Filter out any invalid slideshow objects
-      const validSlideshows = (serverSlideshows || []).filter((slideshow: any) => {
+      const validSlideshows = slideshowsArray.filter((slideshow: any) => {
         if (!slideshow) {
           console.warn('🎬 SLIDESHOWS: Found null/undefined slideshow, filtering out');
           return false;
@@ -93,7 +96,9 @@ export default function SlideshowsScreen() {
       setSlideshows(validSlideshows);
     } catch (error) {
       console.error('Error fetching slideshows:', error);
-      Alert.alert('Error', 'Failed to load slideshows');
+      console.error('Error details:', error);
+      setSlideshows([]); // Set empty array on error
+      // Don't show alert, just log the error
     } finally {
       setIsLoading(false);
       setRefreshing(false);
