@@ -24,21 +24,23 @@ const { errorHandler, errorLogger } = require('./middleware/errorHandler');
 const { logger, requestIdMiddleware, requestLogger, sanitizeLogData } = require('./middleware/logger');
 
 // Environment Variable Validation - Fail fast if critical vars missing
+// Do this BEFORE using logger to avoid circular dependency issues
 const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
 const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
 
 if (missingVars.length > 0) {
-  errorLogger.error({
-    type: 'startup_error',
-    message: 'Missing required environment variables',
-    missingVars: missingVars,
-    timestamp: new Date().toISOString()
-  });
+  // Use console.error directly since logger might not be fully initialized
   console.error('❌ CRITICAL: Missing required environment variables:', missingVars.join(', '));
   console.error('❌ Server cannot start without these variables. Please check your .env file.');
   process.exit(1);
 }
 
+const app = express();
+// Trust proxy headers so req.ip and related helpers reflect the original client IP
+app.set('trust proxy', true);
+const PORT = process.env.PORT || 5001;
+
+// Log server startup (logger is now initialized)
 logger.info({
   type: 'server_startup',
   message: 'Server script starting',
@@ -46,11 +48,6 @@ logger.info({
   databaseConfigured: !!process.env.DATABASE_URL,
   timestamp: new Date().toISOString()
 });
-
-const app = express();
-// Trust proxy headers so req.ip and related helpers reflect the original client IP
-app.set('trust proxy', true);
-const PORT = process.env.PORT || 5001;
 
 // --- CORS Configuration --- (Tightened for Security)
 // When credentials: true, cannot use '*' - must specify exact origins
@@ -11238,19 +11235,8 @@ async function fixActivationCodes() {
 }
 
 // --- SERVER START ---
-// Validate environment variables before starting server
-const { validateEnvVars } = require('../../scripts/validate-env');
-try {
-  validateEnvVars();
-} catch (error) {
-  errorLogger.error({
-    type: 'startup_error',
-    message: 'Environment validation failed',
-    error: error.message,
-    timestamp: new Date().toISOString()
-  });
-  process.exit(1);
-}
+// Environment validation is done inline above (before logger initialization)
+// Additional validation can be added here if needed, but basic checks are done
 
 const server = app.listen(PORT, '0.0.0.0', async () => {
   const address = server.address();
