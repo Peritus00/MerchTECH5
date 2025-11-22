@@ -216,34 +216,37 @@ app.use(express.json({ limit: '10mb' })); // Reduced from 1gb to 10mb for JSON p
 app.use(express.urlencoded({ limit: '10mb', extended: true })); // Reduced from 1gb to 10mb
 
 // Phase 3: Performance Optimization Middleware (after body parsing, before routes)
+// TEMPORARILY DISABLED - Re-enable after CORS issues are resolved
 // Wrap in try-catch to prevent server crashes if middleware fails
-try {
-  const {
-    compressionMiddleware,
-    staticCacheMiddleware,
-    responseTimeMiddleware
-  } = require('./config/performance');
+if (false && process.env.ENABLE_PERFORMANCE_MIDDLEWARE === 'true') {
+  try {
+    const {
+      compressionMiddleware,
+      staticCacheMiddleware,
+      responseTimeMiddleware
+    } = require('./config/performance');
 
-  // Apply performance middleware (order matters)
-  app.use(responseTimeMiddleware); // Add response time header
-  app.use(compressionMiddleware); // Compress responses
-  app.use(staticCacheMiddleware); // Set cache headers for static files
-  
-  logger.info({
-    type: 'performance_middleware_loaded',
-    message: 'Performance optimization middleware loaded successfully',
-    timestamp: new Date().toISOString()
-  });
-} catch (error) {
-  // Log error but don't crash server - performance optimizations are optional
-  errorLogger.error({
-    type: 'performance_middleware_error',
-    message: 'Failed to load performance middleware - continuing without optimizations',
-    error: error.message,
-    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-    timestamp: new Date().toISOString()
-  });
-  console.error('⚠️  Performance middleware failed to load, continuing without optimizations:', error.message);
+    // Apply performance middleware (order matters)
+    app.use(responseTimeMiddleware); // Add response time header
+    app.use(compressionMiddleware); // Compress responses
+    app.use(staticCacheMiddleware); // Set cache headers for static files
+    
+    logger.info({
+      type: 'performance_middleware_loaded',
+      message: 'Performance optimization middleware loaded successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    // Log error but don't crash server - performance optimizations are optional
+    errorLogger.error({
+      type: 'performance_middleware_error',
+      message: 'Failed to load performance middleware - continuing without optimizations',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+      timestamp: new Date().toISOString()
+    });
+    console.error('⚠️  Performance middleware failed to load, continuing without optimizations:', error.message);
+  }
 }
 
 // --- STATIC FILE SERVING ---
