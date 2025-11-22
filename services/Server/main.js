@@ -252,6 +252,29 @@ try {
   console.error('⚠️  Performance middleware failed to load, continuing without optimizations:', error.message);
 }
 
+// Phase 4: Advanced Monitoring & Alerting Middleware
+try {
+  const { monitoringMiddleware } = require('./config/monitoring');
+  
+  // Apply monitoring middleware (tracks all requests)
+  app.use(monitoringMiddleware);
+  
+  logger.info({
+    type: 'monitoring_middleware_loaded',
+    message: 'Advanced monitoring middleware loaded successfully',
+    timestamp: new Date().toISOString()
+  });
+} catch (error) {
+  errorLogger.error({
+    type: 'monitoring_middleware_error',
+    message: 'Failed to load monitoring middleware - continuing without monitoring',
+    error: error.message,
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
+  console.error('⚠️  Monitoring middleware failed to load, continuing without monitoring:', error.message);
+}
+
 // --- STATIC FILE SERVING ---
 const uploadsDir = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsDir));
@@ -593,10 +616,20 @@ app.post('/api/analytics/geo', async (req, res) => {
   }
 });
 
-// Enhanced health check with database pool monitoring
+// Enhanced health check with database pool monitoring and system metrics
 app.get('/api/health', async (req, res) => {
     try {
         const dbHealth = await db.healthCheck();
+        
+        // Get monitoring metrics if available
+        let monitoringMetrics = null;
+        try {
+            const { getMetrics } = require('./config/monitoring');
+            monitoringMetrics = getMetrics();
+        } catch (err) {
+            // Monitoring not available, continue without it
+        }
+        
         const healthData = {
             status: dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
             timestamp: new Date().toISOString(),
@@ -612,6 +645,21 @@ app.get('/api/health', async (req, res) => {
                 brevo: !!process.env.BREVO_API_KEY
             }
         };
+        
+        // Add monitoring data if available
+        if (monitoringMetrics) {
+            healthData.monitoring = {
+                requests: monitoringMetrics.requests.total,
+                errorRate: monitoringMetrics.errorRate,
+                avgResponseTime: monitoringMetrics.responseTimes.avg,
+                system: {
+                    memory: monitoringMetrics.system.memory,
+                    cpu: monitoringMetrics.system.cpu,
+                    uptime: monitoringMetrics.uptime
+                },
+                alerts: monitoringMetrics.alerts.filter(a => a.severity === 'high').length
+            };
+        }
         
         // Safely check S3 service
         try {
@@ -701,6 +749,82 @@ app.get('/api/metrics/cache', authenticateToken, isAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch cache metrics'
+        });
+    }
+});
+
+// Phase 4: Advanced Monitoring & Alerting Endpoints
+
+// System metrics endpoint (admin only)
+app.get('/api/metrics/system', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { getMetrics } = require('./config/monitoring');
+        const metrics = getMetrics();
+        res.status(200).json({
+            success: true,
+            metrics,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'system_metrics_error',
+            message: 'Failed to fetch system metrics',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch metrics'
+        });
+    }
+});
+
+// Reset system metrics endpoint (admin only)
+app.post('/api/metrics/system/reset', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { resetMetrics } = require('./config/monitoring');
+        const result = resetMetrics();
+        res.status(200).json({
+            success: true,
+            ...result,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'system_metrics_reset_error',
+            message: 'Failed to reset system metrics',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to reset metrics'
+        });
+    }
+});
+
+// Alerts endpoint (admin only)
+app.get('/api/metrics/alerts', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { getAlerts } = require('./config/monitoring');
+        const severity = req.query.severity || null; // Optional filter: high, medium, low
+        const alerts = getAlerts(severity);
+        res.status(200).json({
+            success: true,
+            alerts,
+            count: alerts.length,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'alerts_error',
+            message: 'Failed to fetch alerts',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch alerts'
         });
     }
 });
