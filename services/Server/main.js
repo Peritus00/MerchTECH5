@@ -156,6 +156,18 @@ logger.info({
   timestamp: new Date().toISOString()
 });
 
+// Phase 3: Performance Optimization Middleware
+const {
+  compressionMiddleware,
+  staticCacheMiddleware,
+  responseTimeMiddleware
+} = require('./config/performance');
+
+// Apply performance middleware (order matters)
+app.use(responseTimeMiddleware); // Add response time header
+app.use(compressionMiddleware); // Compress responses
+app.use(staticCacheMiddleware); // Set cache headers for static files
+
 // --- MIDDLEWARE ---
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -640,6 +652,66 @@ app.post('/api/metrics/database/reset', authenticateToken, isAdmin, async (req, 
         res.status(500).json({
             success: false,
             error: 'Failed to reset metrics'
+        });
+    }
+});
+
+// Cache metrics endpoint (admin only)
+app.get('/api/metrics/cache', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { getCacheStats } = require('./config/performance');
+        const stats = getCacheStats();
+        res.status(200).json({
+            success: true,
+            cache: stats,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'cache_metrics_error',
+            message: 'Failed to fetch cache metrics',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch cache metrics'
+        });
+    }
+});
+
+// Clear cache endpoint (admin only)
+app.post('/api/metrics/cache/clear', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { cache } = require('./config/performance');
+        const { pattern } = req.body;
+        
+        if (pattern) {
+            const { invalidateCache } = require('./config/performance');
+            invalidateCache(pattern);
+            res.status(200).json({
+                success: true,
+                message: `Cache cleared for pattern: ${pattern}`,
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            cache.clear();
+            res.status(200).json({
+                success: true,
+                message: 'All cache cleared successfully',
+                timestamp: new Date().toISOString()
+            });
+        }
+    } catch (error) {
+        errorLogger.error({
+            type: 'cache_clear_error',
+            message: 'Failed to clear cache',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to clear cache'
         });
     }
 });
@@ -1803,7 +1875,13 @@ app.post('/api/analytics/track-scan', async (req, res) => {
 });
 
 // Analytics summary endpoint (scans derived from qr_scans)
-app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
+// Apply caching middleware - cache for 2 minutes (analytics data changes frequently)
+app.get('/api/analytics/summary', authenticateToken, 
+  require('./config/performance').cacheMiddleware({ 
+    ttl: 120000, // 2 minutes cache
+    keyGenerator: (req) => `analytics:summary:${req.user.userId}:${req.query.days || 7}:${req.query.qrCodeId || 'all'}`
+  }),
+  async (req, res) => {
   try {
     const userId = req.user.userId;
     console.log('📊 ANALYTICS: Computing summary for user:', userId);
@@ -6856,7 +6934,13 @@ app.get('/api/stripe/health', (req, res) => {
 
 // Sales summary for current user
 // Uses normalized orders/order_items tables; supports optional ?days= filter
-app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
+// Sales summary endpoint with caching (5 minutes cache)
+app.get('/api/analytics/sales-summary', authenticateToken,
+  require('./config/performance').cacheMiddleware({
+    ttl: 300000, // 5 minutes cache
+    keyGenerator: (req) => `analytics:sales:${req.user.userId}:${req.query.days || 30}`
+  }),
+  async (req, res) => {
   try {
     const userId = req.user.userId;
     const days = Math.min(parseInt(req.query.days) || 30, 365);
