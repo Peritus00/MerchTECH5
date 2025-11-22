@@ -198,11 +198,28 @@ const query = async (text, params = [], options = {}) => {
       });
     }
     
+    // Record metrics to monitoring system if available
+    try {
+      const { metricsCollector } = require('./monitoring');
+      const isSlow = queryTime > 1000;
+      metricsCollector.recordDatabaseQuery(queryTime, isSlow, false);
+    } catch (err) {
+      // Monitoring not available, continue without it
+    }
+    
     return result;
     
   } catch (error) {
     poolMetrics.failedQueries++;
     const queryTime = Date.now() - startTime;
+    
+    // Record failed query to monitoring system if available
+    try {
+      const { metricsCollector } = require('./monitoring');
+      metricsCollector.recordDatabaseQuery(queryTime, false, true);
+    } catch (err) {
+      // Monitoring not available, continue without it
+    }
     
     // Handle timeout errors
     if (error.message.includes('timeout')) {
