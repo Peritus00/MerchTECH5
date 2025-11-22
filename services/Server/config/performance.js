@@ -7,9 +7,10 @@ const crypto = require('crypto');
  */
 
 // Compression middleware configuration
+// Note: Compression middleware preserves all headers including CORS headers
 const compressionMiddleware = compression({
   filter: (req, res) => {
-    // Don't compress OPTIONS requests (CORS preflight)
+    // Don't compress OPTIONS requests (CORS preflight) - let CORS handle these
     if (req.method === 'OPTIONS') {
       return false;
     }
@@ -19,15 +20,9 @@ const compressionMiddleware = compression({
       return false;
     }
     
-    // Compress all text-based responses
-    const contentType = res.getHeader('content-type') || '';
-    return compression.filter(req, res) && (
-      contentType.includes('application/json') ||
-      contentType.includes('text/') ||
-      contentType.includes('application/javascript') ||
-      contentType.includes('application/xml') ||
-      contentType.includes('application/xhtml+xml')
-    );
+    // Use default compression filter which checks Accept-Encoding header
+    // This ensures we only compress when client supports it
+    return compression.filter(req, res);
   },
   level: 6, // Compression level (1-9, 6 is a good balance)
   threshold: 1024, // Only compress responses larger than 1KB
