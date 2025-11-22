@@ -275,6 +275,40 @@ try {
   console.error('⚠️  Monitoring middleware failed to load, continuing without monitoring:', error.message);
 }
 
+// Phase 5: Advanced Security Features Middleware
+try {
+  const {
+    sanitizeInput,
+    securityHeadersMiddleware,
+    apiSecurityMiddleware
+  } = require('./config/security');
+  
+  // Apply security middleware (order matters)
+  // API security checks first (blocks suspicious requests early)
+  app.use(apiSecurityMiddleware);
+  
+  // Input sanitization (sanitizes all user input)
+  app.use(sanitizeInput);
+  
+  // Additional security headers (beyond Helmet)
+  app.use(securityHeadersMiddleware);
+  
+  logger.info({
+    type: 'security_middleware_loaded',
+    message: 'Advanced security middleware loaded successfully',
+    timestamp: new Date().toISOString()
+  });
+} catch (error) {
+  errorLogger.error({
+    type: 'security_middleware_error',
+    message: 'Failed to load security middleware - continuing without advanced security',
+    error: error.message,
+    stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
+  console.error('⚠️  Security middleware failed to load, continuing without advanced security:', error.message);
+}
+
 // --- STATIC FILE SERVING ---
 const uploadsDir = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsDir));
@@ -419,13 +453,33 @@ app.use((req, res, next) => {
   next();
 });
 
+// Enhanced authenticateToken with security audit logging
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
-  if (token == null) return res.sendStatus(401);
+  
+  if (token == null) {
+    // Log authentication failure
+    try {
+      const { authenticationFailureHandler } = require('./config/security');
+      authenticationFailureHandler(req, 'No token provided');
+    } catch (err) {
+      // Security module not available, continue
+    }
+    return res.sendStatus(401);
+  }
 
   jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
+    if (err) {
+      // Log authentication failure
+      try {
+        const { authenticationFailureHandler } = require('./config/security');
+        authenticationFailureHandler(req, err.message);
+      } catch (err) {
+        // Security module not available, continue
+      }
+      return res.sendStatus(403);
+    }
     req.user = user;
     next();
   });
@@ -457,6 +511,13 @@ const isAdmin = async (req, res, next) => {
     if (result.rows.length > 0 && result.rows[0].is_admin) {
       next();
     } else {
+      // Log authorization failure
+      try {
+        const { authorizationFailureHandler } = require('./config/security');
+        authorizationFailureHandler(req, req.user.userId, req.path, 'admin_access');
+      } catch (err) {
+        // Security module not available, continue
+      }
       res.status(403).json({ error: 'Forbidden: Admins only' });
     }
   } catch (error) {
@@ -825,6 +886,82 @@ app.get('/api/metrics/alerts', authenticateToken, isAdmin, async (req, res) => {
         res.status(500).json({
             success: false,
             error: 'Failed to fetch alerts'
+        });
+    }
+});
+
+// Phase 5: Advanced Security Features Endpoints
+
+// Security audit logs endpoint (admin only)
+app.get('/api/security/audit', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { securityAuditLogger, logSensitiveOperation } = require('./config/security');
+        
+        // Log access to audit logs
+        logSensitiveOperation(req, 'view_security_audit_logs', {
+            filters: req.query
+        });
+        
+        const filters = {
+            type: req.query.type || null,
+            severity: req.query.severity || null,
+            userId: req.query.userId ? parseInt(req.query.userId) : null,
+            success: req.query.success !== undefined ? req.query.success === 'true' : undefined,
+            startDate: req.query.startDate || null,
+            endDate: req.query.endDate || null
+        };
+        
+        const logs = securityAuditLogger.getLogs(filters);
+        const limit = parseInt(req.query.limit) || 100;
+        const offset = parseInt(req.query.offset) || 0;
+        
+        res.status(200).json({
+            success: true,
+            logs: logs.slice(offset, offset + limit),
+            total: logs.length,
+            limit,
+            offset,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'security_audit_error',
+            message: 'Failed to fetch security audit logs',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch audit logs'
+        });
+    }
+});
+
+// Clear security audit logs endpoint (admin only)
+app.post('/api/security/audit/clear', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { securityAuditLogger, logSensitiveOperation } = require('./config/security');
+        
+        // Log clearing of audit logs
+        logSensitiveOperation(req, 'clear_security_audit_logs', {});
+        
+        securityAuditLogger.clear();
+        
+        res.status(200).json({
+            success: true,
+            message: 'Security audit logs cleared successfully',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'security_audit_clear_error',
+            message: 'Failed to clear security audit logs',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to clear audit logs'
         });
     }
 });
