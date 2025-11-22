@@ -9,6 +9,11 @@ const crypto = require('crypto');
 // Compression middleware configuration
 const compressionMiddleware = compression({
   filter: (req, res) => {
+    // Don't compress OPTIONS requests (CORS preflight)
+    if (req.method === 'OPTIONS') {
+      return false;
+    }
+    
     // Don't compress responses if request has no-transform cache-control
     if (req.headers['cache-control'] && req.headers['cache-control'].includes('no-transform')) {
       return false;
@@ -173,6 +178,11 @@ const cacheMiddleware = (options = {}) => {
   } = options;
 
   return (req, res, next) => {
+    // Skip caching for OPTIONS requests (CORS preflight)
+    if (req.method === 'OPTIONS') {
+      return next();
+    }
+    
     // Skip caching for non-GET requests or if shouldCache returns false
     if (!shouldCache(req, res)) {
       return next();
@@ -222,6 +232,11 @@ const cacheMiddleware = (options = {}) => {
  * Sets appropriate cache headers for static assets
  */
 const staticCacheMiddleware = (req, res, next) => {
+  // Skip OPTIONS requests (CORS preflight) - don't modify headers
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+  
   // Set cache headers for static assets
   if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$/)) {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); // 1 year
