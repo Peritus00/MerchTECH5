@@ -11922,7 +11922,7 @@ server.headersTimeout = 10 * 60 * 1000; // 10 minutes headers timeout
 
 console.log(`🔧 Server timeouts set to 10 minutes for large uploads`);
 
-// Graceful shutdown handling
+// Phase 6: Enhanced Graceful Shutdown with Resilience Patterns
 const gracefulShutdown = async (signal) => {
   logger.info({
     type: 'server_shutdown',
@@ -11932,14 +11932,47 @@ const gracefulShutdown = async (signal) => {
   
   console.log(`\n🛑 ${signal} signal received: starting graceful shutdown...`);
   
+  let shutdownTimeout;
+  
   // Stop accepting new connections
   server.close(async () => {
     console.log('✅ HTTP server closed');
     
     try {
-      // Close database pool gracefully
-      await db.close();
-      console.log('✅ Database pool closed');
+      // Use resilience patterns for cleanup
+      const { withTimeout, retryWithBackoff } = require('./config/resilience');
+      
+      // Close database pool gracefully with timeout and retry
+      try {
+        await withTimeout(
+          retryWithBackoff(
+            async () => {
+              await db.close();
+              console.log('✅ Database pool closed');
+            },
+            {
+              maxRetries: 2,
+              initialDelay: 1000,
+              retryableErrors: ['timeout']
+            }
+          ),
+          10000, // 10 second timeout
+          'Database pool close timeout'
+        );
+      } catch (dbError) {
+        console.warn('⚠️  Database pool close failed (non-critical):', dbError.message);
+        errorLogger.warn({
+          type: 'database_pool_close_warning',
+          message: 'Database pool close failed during shutdown',
+          error: dbError.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // Clear shutdown timeout
+      if (shutdownTimeout) {
+        clearTimeout(shutdownTimeout);
+      }
       
       logger.info({
         type: 'server_shutdown_complete',
@@ -11962,7 +11995,7 @@ const gracefulShutdown = async (signal) => {
   });
   
   // Force shutdown after 30 seconds if graceful shutdown doesn't complete
-  setTimeout(() => {
+  shutdownTimeout = setTimeout(() => {
     console.error('❌ Forced shutdown after 30 seconds');
     errorLogger.error({
       type: 'server_shutdown_timeout',
