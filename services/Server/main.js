@@ -966,6 +966,101 @@ app.post('/api/security/audit/clear', authenticateToken, isAdmin, async (req, re
     }
 });
 
+// Phase 6: Advanced Error Handling & Recovery Endpoints
+
+// Circuit breaker status endpoint (admin only)
+app.get('/api/resilience/circuit-breakers', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { circuitBreakers } = require('./config/resilience');
+        const statuses = {};
+        
+        for (const [name, breaker] of Object.entries(circuitBreakers)) {
+            statuses[name] = breaker.getStatus();
+        }
+        
+        res.status(200).json({
+            success: true,
+            circuitBreakers: statuses,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'circuit_breaker_status_error',
+            message: 'Failed to fetch circuit breaker status',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch circuit breaker status'
+        });
+    }
+});
+
+// Reset circuit breaker endpoint (admin only)
+app.post('/api/resilience/circuit-breakers/:name/reset', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { circuitBreakers } = require('./config/resilience');
+        const { name } = req.params;
+        
+        if (!circuitBreakers[name]) {
+            return res.status(404).json({
+                success: false,
+                error: `Circuit breaker '${name}' not found`
+            });
+        }
+        
+        circuitBreakers[name].reset();
+        
+        res.status(200).json({
+            success: true,
+            message: `Circuit breaker '${name}' reset successfully`,
+            status: circuitBreakers[name].getStatus(),
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'circuit_breaker_reset_error',
+            message: 'Failed to reset circuit breaker',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to reset circuit breaker'
+        });
+    }
+});
+
+// Bulkhead status endpoint (admin only)
+app.get('/api/resilience/bulkheads', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const { bulkheads } = require('./config/resilience');
+        const statuses = {};
+        
+        for (const [name, bulkhead] of Object.entries(bulkheads)) {
+            statuses[name] = bulkhead.getStatus();
+        }
+        
+        res.status(200).json({
+            success: true,
+            bulkheads: statuses,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'bulkhead_status_error',
+            message: 'Failed to fetch bulkhead status',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch bulkhead status'
+        });
+    }
+});
+
 // Clear cache endpoint (admin only)
 app.post('/api/metrics/cache/clear', authenticateToken, isAdmin, async (req, res) => {
     try {
@@ -11723,16 +11818,51 @@ async function fixActivationCodes() {
 // Additional validation can be added here if needed, but basic checks are done
 
 // Add unhandled error handlers before server starts
+// Phase 6: Enhanced Process Management & Error Recovery
+// Enhanced uncaught exception handler with recovery attempts
 process.on('uncaughtException', (error) => {
+  errorLogger.error({
+    type: 'uncaught_exception',
+    message: 'Uncaught exception detected',
+    error: error.message,
+    stack: error.stack,
+    timestamp: new Date().toISOString()
+  });
+  
   console.error('❌ UNCAUGHT EXCEPTION:', error.message);
   console.error('❌ Stack:', error.stack);
-  process.exit(1);
+  
+  // Attempt graceful shutdown instead of immediate exit
+  if (server) {
+    gracefulShutdown('UNCAUGHT_EXCEPTION');
+  } else {
+    // Server not started yet, exit immediately
+    process.exit(1);
+  }
 });
 
+// Enhanced unhandled rejection handler
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ UNHANDLED REJECTION at:', promise);
-  console.error('❌ Reason:', reason);
-  process.exit(1);
+  errorLogger.error({
+    type: 'unhandled_rejection',
+    message: 'Unhandled promise rejection detected',
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+    timestamp: new Date().toISOString()
+  });
+  
+  console.error('❌ UNHANDLED REJECTION:', reason);
+  
+  // Log but don't exit - let the application continue
+  // Most unhandled rejections are non-critical
+  if (reason instanceof Error && reason.message.includes('ECONNREFUSED')) {
+    // Database connection issues - attempt recovery
+    logger.warn({
+      type: 'database_connection_lost',
+      message: 'Database connection lost, will retry on next request',
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 console.log(`🌐 Starting server on port ${PORT}...`);
