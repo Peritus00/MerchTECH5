@@ -258,15 +258,19 @@ const responseTimeMiddleware = (req, res, next) => {
   const start = Date.now();
   
   // Override res.end to capture response time before sending
-  const originalEnd = res.end;
+  const originalEnd = res.end.bind(res);
   res.end = function(...args) {
     const duration = Date.now() - start;
     // Only set header if headers haven't been sent yet
     if (!res.headersSent) {
-      res.setHeader('X-Response-Time', `${duration}ms`);
+      try {
+        res.setHeader('X-Response-Time', `${duration}ms`);
+      } catch (err) {
+        // Ignore errors if headers already sent (shouldn't happen with check, but be safe)
+      }
     }
     // Call original end method
-    return originalEnd.apply(this, args);
+    return originalEnd(...args);
   };
 
   next();
