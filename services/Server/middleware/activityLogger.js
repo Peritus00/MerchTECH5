@@ -156,7 +156,7 @@ function sanitizeLogData(data) {
 }
 
 // Core logging function
-async function logActivity(pool, userId, actionType, resourceType, resourceId, metadata, req, statusCode, errorMessage) {
+async function logActivity(db, userId, actionType, resourceType, resourceId, metadata, req, statusCode, errorMessage) {
   try {
     const ipAddress = getClientIp(req);
     const userAgent = req.headers['user-agent'] || null;
@@ -166,7 +166,7 @@ async function logActivity(pool, userId, actionType, resourceType, resourceId, m
     // Sanitize metadata
     const sanitizedMetadata = sanitizeLogData(metadata);
 
-    await pool.query(
+    await db.query(
       `INSERT INTO activity_logs (
         user_id, action_type, resource_type, resource_id,
         ip_address, user_agent, request_method, endpoint,
@@ -184,7 +184,12 @@ async function logActivity(pool, userId, actionType, resourceType, resourceId, m
         statusCode,
         JSON.stringify(sanitizedMetadata),
         errorMessage || null
-      ]
+      ],
+      {
+        queryName: 'activity_log_insert',
+        requestId: req.requestId,
+        timeout: 5000 // Shorter timeout for logging
+      }
     );
   } catch (error) {
     // Don't let logging errors break the application
@@ -193,8 +198,8 @@ async function logActivity(pool, userId, actionType, resourceType, resourceId, m
 }
 
 // Middleware factory function
-function createActivityLogger(poolInstance) {
-  pool = poolInstance;
+function createActivityLogger(dbInstance) {
+  const db = dbInstance;
 
   return async (req, res, next) => {
     // Store original end function
@@ -260,7 +265,7 @@ function createActivityLogger(poolInstance) {
       // Log asynchronously (don't block response)
       setImmediate(() => {
         logActivity(
-          pool,
+          db,
           userId,
           actionType,
           resourceInfo.type,

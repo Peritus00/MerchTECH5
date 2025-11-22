@@ -6,7 +6,8 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { Pool } = require('pg');
+// Database configuration with enhanced pooling, timeouts, and monitoring
+const db = require('./config/database');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const fs = require('fs');
@@ -256,13 +257,13 @@ const upload = multer({
 });
 
 // --- CONFIGURATION ---
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
-  connectionTimeoutMillis: 10000,
-  idleTimeoutMillis: 20000,
-  max: 10
-});
+// Database pool is now configured in config/database.js with:
+// - Optimized pool size (20-50 in production, 15 in development)
+// - Query timeouts (30s default)
+// - Connection pool monitoring
+// - Slow query logging
+// Access via db.query() or db.pool for direct pool access
+const pool = db.pool; // For backward compatibility
 // 🔒 SECURITY: JWT_SECRET validation (already checked above, but ensure it's set)
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -389,7 +390,10 @@ const authenticateTokenOptional = (req, res, next) => {
 
 const isAdmin = async (req, res, next) => {
   try {
-    const result = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const result = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId], { 
+      queryName: 'isAdmin_check',
+      requestId: req.requestId 
+    });
     if (result.rows.length > 0 && result.rows[0].is_admin) {
       next();
     } else {
@@ -406,9 +410,13 @@ const canViewLogs = async (req, res, next) => {
     if (!req.user || !req.user.userId) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT is_admin, can_view_logs FROM users WHERE id = $1',
-      [req.user.userId]
+      [req.user.userId],
+      { 
+        queryName: 'canViewLogs_check',
+        requestId: req.requestId 
+      }
     );
     if (result.rows.length > 0 && (result.rows[0].is_admin || result.rows[0].can_view_logs)) {
       next();
@@ -423,7 +431,7 @@ const canViewLogs = async (req, res, next) => {
 
 // --- Activity Logging Middleware ---
 const { createActivityLogger } = require('./middleware/activityLogger');
-const activityLogger = createActivityLogger(pool);
+const activityLogger = createActivityLogger(db);
 
 // Apply activity logging to all routes (after authentication middleware)
 app.use(activityLogger);
@@ -473,7 +481,7 @@ app.post('/api/analytics/geo', async (req, res) => {
     const windowSeconds = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
     let recent;
     if (qrCodeId) {
-      recent = await pool.query(
+      recent = await db.query(
         `SELECT id, city, region, country_code, location_source
            FROM qr_scans
           WHERE qr_code_id = $1
@@ -485,7 +493,7 @@ app.post('/api/analytics/geo', async (req, res) => {
       );
     } else {
       // Fallback: last scan for this visitor across any QR in the window
-      recent = await pool.query(
+      recent = await db.query(
         `SELECT id, city, region, country_code, location_source
            FROM qr_scans
           WHERE COALESCE(qr_visitor_id, visitor_id::text) = $1
@@ -525,7 +533,7 @@ app.post('/api/analytics/geo', async (req, res) => {
 
     if (!shouldUpgrade) {
       // Still update lat/lng for analytics if present
-      await pool.query(
+      await db.query(
         `UPDATE qr_scans SET geo_lat = COALESCE($2, geo_lat), geo_lng = COALESCE($3, geo_lng), geo_accuracy_m = COALESCE($4, geo_accuracy_m)
           WHERE id = $1`,
         [row.id, latR, lngR, accuracy || null]
@@ -533,7 +541,7 @@ app.post('/api/analytics/geo', async (req, res) => {
       return res.json({ success: true, updated: 0 });
     }
 
-    await pool.query(
+    await db.query(
       `UPDATE qr_scans
           SET geo_lat = $2, geo_lng = $3, geo_accuracy_m = $4,
               city = COALESCE($5, city), region = COALESCE($6, region), country_code = COALESCE($7, country_code),
@@ -548,16 +556,22 @@ app.post('/api/analytics/geo', async (req, res) => {
   }
 });
 
-app.get('/api/health', (req, res) => {
+// Enhanced health check with database pool monitoring
+app.get('/api/health', async (req, res) => {
     try {
+        const dbHealth = await db.healthCheck();
         const healthData = {
-            status: 'healthy',
+            status: dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             version: '1.0.0',
             environment: process.env.NODE_ENV || 'development',
             services: {
-                database: !!process.env.DATABASE_URL,
+                database: {
+                    status: dbHealth.status,
+                    responseTime: dbHealth.responseTime,
+                    pool: dbHealth.pool
+                },
                 brevo: !!process.env.BREVO_API_KEY
             }
         };
@@ -570,7 +584,8 @@ app.get('/api/health', (req, res) => {
             healthData.services.s3 = false;
         }
         
-        res.status(200).json(healthData);
+        const statusCode = healthData.status === 'healthy' ? 200 : 503;
+        res.status(statusCode).json(healthData);
     } catch (error) {
         console.error('Health check error:', error);
         // Always return 200 for Railway health checks, even if there are issues
@@ -579,6 +594,52 @@ app.get('/api/health', (req, res) => {
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             error: error.message
+        });
+    }
+});
+
+// Database pool metrics endpoint (admin only)
+app.get('/api/metrics/database', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        const metrics = db.getMetrics();
+        res.status(200).json({
+            success: true,
+            metrics,
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'metrics_error',
+            message: 'Failed to fetch database metrics',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to fetch metrics'
+        });
+    }
+});
+
+// Reset database metrics endpoint (admin only)
+app.post('/api/metrics/database/reset', authenticateToken, isAdmin, async (req, res) => {
+    try {
+        db.resetMetrics();
+        res.status(200).json({
+            success: true,
+            message: 'Database metrics reset successfully',
+            timestamp: new Date().toISOString()
+        });
+    } catch (error) {
+        errorLogger.error({
+            type: 'metrics_reset_error',
+            message: 'Failed to reset database metrics',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+        res.status(500).json({
+            success: false,
+            error: 'Failed to reset metrics'
         });
     }
 });
@@ -595,7 +656,7 @@ app.get('/health', (req, res) => {
 app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => {
   try {
     // First check if can_view_logs column exists
-    const columnCheck = await pool.query(`
+    const columnCheck = await db.query(`
       SELECT column_name 
       FROM information_schema.columns 
       WHERE table_name = 'users' AND column_name = 'can_view_logs'
@@ -604,7 +665,7 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
     const hasCanViewLogs = columnCheck.rows.length > 0;
     const canViewLogsSelect = hasCanViewLogs ? 'COALESCE(can_view_logs, false) as can_view_logs,' : 'false as can_view_logs,';
     
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT id, 
              email, 
              username, 
@@ -638,7 +699,7 @@ app.get('/api/admin/all-users', authenticateToken, isAdmin, async (req, res) => 
 // Get deleted QR codes (admin only, last 90 days)
 app.get('/api/admin/deleted/qr-codes', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT 
         q.id,
         q.name,
@@ -668,7 +729,7 @@ app.get('/api/admin/deleted/qr-codes', authenticateToken, isAdmin, async (req, r
 // Get deleted playlists (admin only, last 90 days)
 app.get('/api/admin/deleted/playlists', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT 
         p.id,
         p.name,
@@ -698,7 +759,7 @@ app.get('/api/admin/deleted/playlists', authenticateToken, isAdmin, async (req, 
 // Get deleted slideshows (admin only, last 90 days)
 app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT 
         s.id,
         s.name,
@@ -732,7 +793,7 @@ app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req,
 app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) => {
   try {
     // Total unique signed-in users
-    const signedInUsersResult = await pool.query(`
+    const signedInUsersResult = await db.query(`
       SELECT COUNT(DISTINCT id) as count
       FROM users
     `);
@@ -740,7 +801,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
 
     // Total unique anonymous users (from all tracking tables)
     // Combine visitor_id and qr_visitor_id from qr_scans
-    const anonymousUsersResult = await pool.query(`
+    const anonymousUsersResult = await db.query(`
       SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
       FROM qr_scans
       WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
@@ -749,7 +810,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
 
     // Active users in last 7 days (signed-in users with activity)
     // Note: qr_scans doesn't have user_id, so we only check other activity tables
-    const activeUsers7dResult = await pool.query(`
+    const activeUsers7dResult = await db.query(`
       SELECT COUNT(DISTINCT user_id) as count
       FROM (
         SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '7 days'
@@ -764,7 +825,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const activeUsers7d = parseInt(activeUsers7dResult.rows[0].count) || 0;
 
     // Active users in last 30 days (signed-in users with activity)
-    const activeUsers30dResult = await pool.query(`
+    const activeUsers30dResult = await db.query(`
       SELECT COUNT(DISTINCT user_id) as count
       FROM (
         SELECT user_id FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - INTERVAL '30 days'
@@ -779,7 +840,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const activeUsers30d = parseInt(activeUsers30dResult.rows[0].count) || 0;
 
     // Active anonymous users in last 7 days
-    const activeAnonymous7dResult = await pool.query(`
+    const activeAnonymous7dResult = await db.query(`
       SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
       FROM qr_scans
       WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
@@ -788,7 +849,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
     const activeAnonymous7d = parseInt(activeAnonymous7dResult.rows[0].count) || 0;
 
     // Active anonymous users in last 30 days
-    const activeAnonymous30dResult = await pool.query(`
+    const activeAnonymous30dResult = await db.query(`
       SELECT COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
       FROM qr_scans
       WHERE COALESCE(qr_visitor_id, visitor_id::text) IS NOT NULL
@@ -798,7 +859,7 @@ app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) =
 
     // Activity breakdown by type
     // Note: qr_scans doesn't have user_id, so we count anonymous visitors only
-    const activityBreakdownResult = await pool.query(`
+    const activityBreakdownResult = await db.query(`
       SELECT 
         'qr_scans' as activity_type,
         COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
@@ -877,7 +938,7 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
 
     // Signed-in users over time (new users created per period)
     // Note: date_trunc first arg must be literal, not parameterized
-    const signedInHistoryResult = await pool.query(`
+    const signedInHistoryResult = await db.query(`
       SELECT 
         date_trunc('${dateTrunc}', created_at) as date,
         COUNT(*) as count
@@ -888,7 +949,7 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
     `, [interval, limit]);
 
     // Anonymous users over time (new anonymous users per period, matching signed-in pattern)
-    const anonymousHistoryResult = await pool.query(`
+    const anonymousHistoryResult = await db.query(`
       WITH first_visits AS (
         SELECT 
           COALESCE(qr_visitor_id, visitor_id::text) as visitor_key,
@@ -908,7 +969,7 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
 
     // Active users over time (signed-in users with activity)
     // Note: qr_scans doesn't have user_id, so we only check other activity tables
-    const activeUsersHistoryResult = await pool.query(`
+    const activeUsersHistoryResult = await db.query(`
       WITH activity_dates AS (
         SELECT user_id, date_trunc('${dateTrunc}', played_at) as activity_date FROM media_plays WHERE user_id IS NOT NULL AND played_at >= NOW() - ($1::interval * $2)
         UNION
@@ -927,7 +988,7 @@ app.get('/api/admin/users/history', authenticateToken, isAdmin, async (req, res)
     `, [interval, limit]);
 
     // Active anonymous users over time
-    const activeAnonymousHistoryResult = await pool.query(`
+    const activeAnonymousHistoryResult = await db.query(`
       SELECT 
         date_trunc('${dateTrunc}', scanned_at) as date,
         COUNT(DISTINCT COALESCE(qr_visitor_id, visitor_id::text)) as count
@@ -979,7 +1040,7 @@ app.post('/api/admin/restore/qr-codes/:id', authenticateToken, isAdmin, async (r
     const { id } = req.params;
     
     // Check if QR code exists and is deleted
-    const checkResult = await pool.query(
+    const checkResult = await db.query(
       'SELECT id, user_id FROM qr_codes WHERE id = $1 AND is_active = false',
       [id]
     );
@@ -989,7 +1050,7 @@ app.post('/api/admin/restore/qr-codes/:id', authenticateToken, isAdmin, async (r
     }
     
     // Restore by setting is_active = true
-    const restoreResult = await pool.query(
+    const restoreResult = await db.query(
       'UPDATE qr_codes SET is_active = true, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
@@ -1010,7 +1071,7 @@ app.post('/api/admin/restore/playlists/:id', authenticateToken, isAdmin, async (
     const { id } = req.params;
     
     // Check if playlist exists and is deleted
-    const checkResult = await pool.query(
+    const checkResult = await db.query(
       'SELECT id, user_id FROM playlists WHERE id = $1 AND deleted_at IS NOT NULL',
       [id]
     );
@@ -1020,7 +1081,7 @@ app.post('/api/admin/restore/playlists/:id', authenticateToken, isAdmin, async (
     }
     
     // Restore by setting deleted_at = NULL
-    const restoreResult = await pool.query(
+    const restoreResult = await db.query(
       'UPDATE playlists SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
@@ -1041,7 +1102,7 @@ app.post('/api/admin/restore/slideshows/:id', authenticateToken, isAdmin, async 
     const { id } = req.params;
     
     // Check if slideshow exists and is deleted
-    const checkResult = await pool.query(
+    const checkResult = await db.query(
       'SELECT id, user_id FROM slideshows WHERE id = $1 AND deleted_at IS NOT NULL',
       [id]
     );
@@ -1051,7 +1112,7 @@ app.post('/api/admin/restore/slideshows/:id', authenticateToken, isAdmin, async 
     }
     
     // Restore by setting deleted_at = NULL
-    const restoreResult = await pool.query(
+    const restoreResult = await db.query(
       'UPDATE slideshows SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
@@ -1076,7 +1137,7 @@ app.get('/api/admin/users/search', authenticateToken, isAdmin, async (req, res) 
 
     const searchTerm = `%${q}%`;
     // Use deduplication to match analytics approach (unique visitor per minute)
-    const result = await pool.query(`
+    const result = await db.query(`
       WITH dedup_scans AS (
         SELECT DISTINCT ON (
           s.qr_code_id,
@@ -1128,7 +1189,7 @@ app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, re
     }
 
     // Get user info
-    const userResult = await pool.query(
+    const userResult = await db.query(
       'SELECT id, email, username, created_at FROM users WHERE id = $1',
       [userId]
     );
@@ -1140,7 +1201,7 @@ app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, re
     const user = userResult.rows[0];
 
     // Get total scan count (deduplicated to match analytics approach)
-    const scanCountResult = await pool.query(`
+    const scanCountResult = await db.query(`
       WITH dedup_scans AS (
         SELECT DISTINCT ON (
           s.qr_code_id,
@@ -1157,7 +1218,7 @@ app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, re
     `, [userId]);
 
     // Get breakdown by QR code (deduplicated to match analytics approach)
-    const qrBreakdownResult = await pool.query(`
+    const qrBreakdownResult = await db.query(`
       WITH dedup_scans AS (
         SELECT DISTINCT ON (
           s.qr_code_id,
@@ -1210,13 +1271,13 @@ app.delete('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req,
     }
 
     // Verify user exists
-    const userResult = await pool.query('SELECT id, email, username FROM users WHERE id = $1', [userId]);
+    const userResult = await db.query('SELECT id, email, username FROM users WHERE id = $1', [userId]);
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Get count of scans to be deleted for logging
-    const countResult = await pool.query(`
+    const countResult = await db.query(`
       SELECT COUNT(*)::integer as scan_count
       FROM qr_scans s
       JOIN qr_codes q ON s.qr_code_id = q.id
@@ -1226,7 +1287,7 @@ app.delete('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req,
     const scanCount = countResult.rows[0]?.scan_count || 0;
 
     // Delete all scans for user's QR codes
-    const deleteResult = await pool.query(`
+    const deleteResult = await db.query(`
       DELETE FROM qr_scans
       WHERE qr_code_id IN (
         SELECT id FROM qr_codes WHERE user_id = $1
@@ -1658,7 +1719,7 @@ app.get('/r/:id', async (req, res) => {
     }
 
     // Load QR
-    const qrRes = await pool.query('SELECT id, url, is_active FROM qr_codes WHERE id = $1', [qrId]);
+    const qrRes = await db.query('SELECT id, url, is_active FROM qr_codes WHERE id = $1', [qrId]);
     if (qrRes.rowCount === 0 || qrRes.rows[0].is_active === false) {
       return res.status(404).send('QR not found');
     }
@@ -1701,7 +1762,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
     }
 
     // Basic existence check to avoid orphans
-    const exists = await pool.query('SELECT id FROM qr_codes WHERE id = $1 AND is_active = true', [qrCodeId]);
+    const exists = await db.query('SELECT id FROM qr_codes WHERE id = $1 AND is_active = true', [qrCodeId]);
     if (exists.rowCount === 0) {
       return res.status(404).json({ error: 'QR code not found' });
     }
@@ -1811,7 +1872,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ${hasQrFilter ? 'AND s.qr_code_id = $2' : ''}
         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
       )`;
-      totalRes = await pool.query(
+      totalRes = await db.query(
         `${totalScansCTE}
          SELECT COUNT(*) AS c FROM dedup_all`,
         hasQrFilter ? [userId, qrFilterId] : [userId]
@@ -1821,7 +1882,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     let last24HoursRes;
     try { 
       // Debug: Check actual scan timestamps
-      const debugScans = await pool.query(
+      const debugScans = await db.query(
         `SELECT s.scanned_at, 
                 s.scanned_at >= $2 as is_in_last_24h,
                 EXTRACT(EPOCH FROM (NOW() - s.scanned_at))/3600 as hours_ago
@@ -1841,7 +1902,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         }))
       });
       
-      last24HoursRes = await pool.query(
+      last24HoursRes = await db.query(
         `${dedupCTE}
          SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
         hasQrFilter ? [userId, last24Hours, qrFilterId] : [userId, last24Hours]
@@ -1850,14 +1911,14 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     } catch (e) { console.warn('📊 SUMMARY last24HoursRes failed:', e.message); last24HoursRes = { rows: [{ c: 0 }] }; }
 
     let weekRes;
-    try { weekRes = await pool.query(
+    try { weekRes = await db.query(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       hasQrFilter ? [userId, weekStart, qrFilterId] : [userId, weekStart]
     ); } catch (e) { console.warn('📊 SUMMARY weekRes failed:', e.message); weekRes = { rows: [{ c: 0 }] }; }
 
     let monthRes;
-    try { monthRes = await pool.query(
+    try { monthRes = await db.query(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       hasQrFilter ? [userId, monthStart, qrFilterId] : [userId, monthStart]
@@ -1866,7 +1927,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Count unique visitors using visitor_id when available (matches writeScan logic)
     let uniqueVisitorsRes;
     try {
-      uniqueVisitorsRes = await pool.query(
+      uniqueVisitorsRes = await db.query(
         `SELECT COUNT(*) AS c FROM (
            SELECT DISTINCT
              COALESCE(qr_visitor_id, visitor_id::text, ip_address::text, CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))) AS vkey
@@ -1883,7 +1944,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
     // Hourly distribution (last 24h)
     let hourlyRes;
-    try { hourlyRes = await pool.query(
+    try { hourlyRes = await db.query(
       `${dedupCTE}
        SELECT EXTRACT(HOUR FROM d.scanned_at) AS hr, COUNT(*) AS c
        FROM dedup d
@@ -1898,7 +1959,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     // Daily scan history (last N days)
     let dailyScanHistoryRes;
     try {
-      dailyScanHistoryRes = await pool.query(
+      dailyScanHistoryRes = await db.query(
         `${dedupCTE}
          SELECT 
            DATE(d.scanned_at) as scan_date,
@@ -1958,7 +2019,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
          GROUP BY country
          ORDER BY count DESC
          LIMIT 10`;
-      countriesRes = await pool.query(
+      countriesRes = await db.query(
         countriesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -1990,7 +2051,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
           COALESCE(s.country_name, s.country_code, '')
         ORDER BY count DESC
         LIMIT 10`;
-      citiesRes = await pool.query(
+      citiesRes = await db.query(
         citiesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -2027,7 +2088,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
           q.id,
           q.name
         ORDER BY city, scan_count DESC`;
-      cityQRCodesRes = await pool.query(
+      cityQRCodesRes = await db.query(
         cityQRCodesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -2038,7 +2099,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
     // Top devices
     let devicesRes;
-    try { devicesRes = await pool.query(
+    try { devicesRes = await db.query(
       `SELECT COALESCE(s.device_type, s.device, 'Unknown') AS device, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -2072,7 +2133,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
             WHEN '65+' THEN 7
             ELSE 8
           END`;
-      ageRangesRes = await pool.query(
+      ageRangesRes = await db.query(
         ageRangesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -2104,7 +2165,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
             WHEN 'Open-ended' THEN 5
             ELSE 6
           END`;
-      genderDistRes = await pool.query(
+      genderDistRes = await db.query(
         genderDistSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -2117,7 +2178,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
 
     // Recent scans
     let recentRes;
-    try { recentRes = await pool.query(
+    try { recentRes = await db.query(
       `WITH dedup AS (
          SELECT DISTINCT ON (
            s.qr_code_id,
@@ -2141,7 +2202,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     ); } catch (e) {
       console.warn('📊 SUMMARY recentRes dedup failed, falling back to raw scans:', e.message);
       try {
-        recentRes = await pool.query(
+        recentRes = await db.query(
           `SELECT q.id AS qr_code_id,
                   q.name AS qr_name,
                   s.country_code AS country_code,
@@ -2178,7 +2239,7 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
       )`;
       
-      mostPopularQRRes = await pool.query(
+      mostPopularQRRes = await db.query(
         `${mostPopularCTE}
          SELECT 
            q.id as qr_code_id,
@@ -2212,10 +2273,10 @@ app.get('/api/analytics/summary', authenticateToken, async (req, res) => {
     
     const playsTotals = { media: 0, playlist: 0, slideshow: 0, uniqueUsers: 0 };
     try {
-      const mediaTotal = await pool.query(`SELECT COUNT(*) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
-      const playlistTotal = await pool.query(`SELECT COUNT(*) AS c FROM playlist_plays pp JOIN playlists p ON pp.playlist_id = p.id WHERE p.user_id = $1`, [userId]);
-      const slideshowTotal = await pool.query(`SELECT COUNT(*) AS c FROM slideshow_plays sp JOIN slideshows s ON sp.slideshow_id = s.id WHERE s.user_id = $1`, [userId]);
-      const uniqueUsers = await pool.query(`SELECT COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      const mediaTotal = await db.query(`SELECT COUNT(*) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      const playlistTotal = await db.query(`SELECT COUNT(*) AS c FROM playlist_plays pp JOIN playlists p ON pp.playlist_id = p.id WHERE p.user_id = $1`, [userId]);
+      const slideshowTotal = await db.query(`SELECT COUNT(*) AS c FROM slideshow_plays sp JOIN slideshows s ON sp.slideshow_id = s.id WHERE s.user_id = $1`, [userId]);
+      const uniqueUsers = await db.query(`SELECT COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
       playsTotals.media = parseInt(mediaTotal.rows[0]?.c || 0);
       playsTotals.playlist = parseInt(playlistTotal.rows[0]?.c || 0);
       playsTotals.slideshow = parseInt(slideshowTotal.rows[0]?.c || 0);
@@ -2346,7 +2407,7 @@ app.post('/api/analytics/backfill-geo', authenticateToken, isAdmin, async (req, 
     const maxBatches = Math.min(parseInt(req.body?.batches || '20', 10) || 20, 100);
     let totalUpdated = 0;
     for (let i = 0; i < maxBatches; i++) {
-      const sel = await pool.query(
+      const sel = await db.query(
         `SELECT id, ip_address FROM qr_scans
          WHERE ip_address IS NOT NULL
            AND (country_code IS NULL OR country_code = '')
@@ -2361,7 +2422,7 @@ app.post('/api/analytics/backfill-geo', authenticateToken, isAdmin, async (req, 
       for (const row of sel.rows) {
         const r = geoip.lookup(row.ip_address);
         if (!r) continue;
-        await pool.query(
+        await db.query(
           `UPDATE qr_scans
            SET country_code = COALESCE($2, country_code),
                region = COALESCE($3, region),
@@ -2399,10 +2460,10 @@ app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
     
     try {
       const [qrRes, playlistsRes, slideshowsRes, productsRes] = await Promise.all([
-        pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]),
-        pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [id]),
-        pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [id]),
-        pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1', [id]),
+        db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [id]),
+        db.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [id]),
+        db.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [id]),
+        db.query('SELECT COUNT(*) FROM products WHERE user_id = $1', [id]),
       ]);
       
       totalQRCodes = parseInt(qrRes.rows[0]?.count || 0);
@@ -2426,11 +2487,11 @@ app.get('/api/analytics/user/:id', authenticateToken, async (req, res) => {
 app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) => {
   try {
     const { qrCodeId } = req.params;
-    const owner = await pool.query('SELECT user_id FROM qr_codes WHERE id = $1', [qrCodeId]);
+    const owner = await db.query('SELECT user_id FROM qr_codes WHERE id = $1', [qrCodeId]);
     if (owner.rowCount === 0 || owner.rows[0].user_id !== req.user.userId) {
       return res.status(404).json({ error: 'QR code not found' });
     }
-    const scans = await pool.query(
+    const scans = await db.query(
       `SELECT id, qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system
          FROM qr_scans WHERE qr_code_id = $1 ORDER BY scanned_at DESC LIMIT 500`,
       [qrCodeId]
@@ -2475,7 +2536,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 
     // Check if there's already a play record for this session/media combination
     const userKey = userId ? userId.toString() : sessionId;
-    const existingPlay = await pool.query(
+    const existingPlay = await db.query(
       `SELECT id, play_duration FROM media_plays 
        WHERE media_id = $1 
        AND (user_id::text = $2 OR (user_id IS NULL AND session_id = $3))
@@ -2492,7 +2553,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
     // Unique plays require: play_duration >= 30 AND no existing play >=30s for this (media_id, user_id/session_id)
     let isUnique = false;
     if (playDuration >= 30) {
-      const existingUniquePlay = await pool.query(
+      const existingUniquePlay = await db.query(
         `SELECT id FROM media_plays 
          WHERE media_id = $1 
          AND play_duration >= 30 
@@ -2504,7 +2565,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 
     if (isNewPlay) {
       // Insert new play record with demographics
-      await pool.query(
+      await db.query(
         `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
@@ -2523,13 +2584,13 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
       );
 
       // Only increment total_plays for NEW plays (not updates)
-      await pool.query(
+      await db.query(
         'UPDATE media SET total_plays = total_plays + 1 WHERE id = $1',
         [mediaId]
       );
     } else if (shouldUpdate) {
       // Update existing record with longer duration and latest demographics
-      await pool.query(
+      await db.query(
         `UPDATE media_plays 
          SET play_duration = $1,
              user_provided_age_range = COALESCE($2, user_provided_age_range),
@@ -2554,7 +2615,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
     
     // Only increment unique_plays if this is a unique play (>30s and first time for this user/media)
     if (isUnique) {
-      await pool.query(
+      await db.query(
         'UPDATE media SET unique_plays = unique_plays + 1 WHERE id = $1',
         [mediaId]
       );
@@ -2598,14 +2659,14 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
     console.log(`📊 ANALYTICS: Tracking playlist play - Playlist: ${playlistId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
     // Check if this is a unique play
-    const existingPlay = await pool.query(
+    const existingPlay = await db.query(
       'SELECT id FROM playlist_plays WHERE playlist_id = $1 AND session_id = $2',
       [playlistId, sessionId]
     );
     const isUnique = existingPlay.rows.length === 0;
 
     // Insert play record with demographics
-    await pool.query(
+    await db.query(
       `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
@@ -2625,12 +2686,12 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
 
     // Update aggregate counters
     if (isUnique) {
-      await pool.query(
+      await db.query(
         'UPDATE playlists SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
         [playlistId]
       );
     } else {
-      await pool.query(
+      await db.query(
         'UPDATE playlists SET total_plays = total_plays + 1 WHERE id = $1',
         [playlistId]
       );
@@ -2674,14 +2735,14 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
     console.log(`📊 ANALYTICS: Tracking slideshow play - Slideshow: ${slideshowId}, Duration: ${playDuration}s, Age: ${userAge || 'none'}, Gender: ${userGender || 'none'}, Location: ${userLocation ? `${userLocation.city}, ${userLocation.state}` : 'none'}`);
 
     // Check if this is a unique play
-    const existingPlay = await pool.query(
+    const existingPlay = await db.query(
       'SELECT id FROM slideshow_plays WHERE slideshow_id = $1 AND session_id = $2',
       [slideshowId, sessionId]
     );
     const isUnique = existingPlay.rows.length === 0;
 
     // Insert play record with demographics
-    await pool.query(
+    await db.query(
       `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
@@ -2701,12 +2762,12 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
 
     // Update aggregate counters
     if (isUnique) {
-      await pool.query(
+      await db.query(
         'UPDATE slideshows SET total_plays = total_plays + 1, unique_plays = unique_plays + 1 WHERE id = $1',
         [slideshowId]
       );
     } else {
-      await pool.query(
+      await db.query(
         'UPDATE slideshows SET total_plays = total_plays + 1 WHERE id = $1',
         [slideshowId]
       );
@@ -2733,7 +2794,7 @@ app.post('/api/analytics/track-cart-add', async (req, res) => {
 
     console.log(`📊 ANALYTICS: Tracking cart add - Product: ${productId}, Qty: ${quantity}`);
 
-    await pool.query(
+    await db.query(
       `INSERT INTO cart_events (product_id, user_id, session_id, quantity) 
        VALUES ($1, $2, $3, $4)`,
       [productId, userId || null, sessionId, quantity]
@@ -2758,7 +2819,7 @@ app.post('/api/analytics/track-purchase', async (req, res) => {
     console.log(`📊 ANALYTICS: Tracking purchase - Session: ${stripeSessionId}, Amount: ${totalAmount}`);
 
     // Check if this purchase was already tracked
-    const existing = await pool.query(
+    const existing = await db.query(
       'SELECT id FROM purchase_events WHERE stripe_session_id = $1',
       [stripeSessionId]
     );
@@ -2768,7 +2829,7 @@ app.post('/api/analytics/track-purchase', async (req, res) => {
       return res.json({ success: true, alreadyTracked: true });
     }
 
-    await pool.query(
+    await db.query(
       `INSERT INTO purchase_events (stripe_session_id, user_id, total_amount, items) 
        VALUES ($1, $2, $3, $4)`,
       [stripeSessionId, userId || null, totalAmount, JSON.stringify(items)]
@@ -2811,7 +2872,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
       : `SELECT COUNT(*) as total_plays
          FROM media_plays mp`;
     
-    const mediaTotalStats = await pool.query(totalPlaysQuery, userId ? [userId] : []);
+    const mediaTotalStats = await db.query(totalPlaysQuery, userId ? [userId] : []);
 
     // Get unique plays (only >= 30 seconds) - distinct (media_id, session/user) combinations
     // This counts each unique listener per song as one unique play
@@ -2826,7 +2887,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
          FROM media_plays mp
          WHERE mp.play_duration >= 30`;
     
-    const uniquePlaysStats = await pool.query(uniquePlaysQuery, userId ? [userId] : []);
+    const uniquePlaysStats = await db.query(uniquePlaysQuery, userId ? [userId] : []);
 
     // Get average duration
     const avgDurationQuery = userId
@@ -2837,10 +2898,10 @@ app.get('/api/analytics/play-stats', async (req, res) => {
       : `SELECT COALESCE(AVG(mp.play_duration), 0) as avg_duration
          FROM media_plays mp`;
     
-    const avgDurationStats = await pool.query(avgDurationQuery, userId ? [userId] : []);
+    const avgDurationStats = await db.query(avgDurationQuery, userId ? [userId] : []);
 
     // Get playlist stats
-    const playlistStats = await pool.query(
+    const playlistStats = await db.query(
       `SELECT 
         COALESCE(SUM(p.total_plays), 0) as total_plays,
         COALESCE(SUM(p.unique_plays), 0) as unique_plays,
@@ -2851,7 +2912,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
     );
 
     // Get slideshow stats
-    const slideshowStats = await pool.query(
+    const slideshowStats = await db.query(
       `SELECT 
         COALESCE(SUM(s.total_plays), 0) as total_plays,
         COALESCE(SUM(s.unique_plays), 0) as unique_plays,
@@ -2864,7 +2925,7 @@ app.get('/api/analytics/play-stats', async (req, res) => {
     // Get most played media - use actual play counts from media_plays table
     // Only show media that actually has plays (total_plays > 0)
     // Total Plays: all plays, Unique Plays: distinct (media_id, user_id/session_id) where duration >= 30
-    const mostPlayed = await pool.query(
+    const mostPlayed = await db.query(
       `SELECT 
         m.id, 
         m.title, 
@@ -2920,7 +2981,7 @@ app.get('/api/analytics/media-items-stats', authenticateToken, async (req, res) 
     // Get stats for each media item owned by the user
     // Total Plays: all plays regardless of duration
     // Unique Plays: distinct (media_id, user_id/session_id) where play_duration >= 30
-    const mediaItemsStats = await pool.query(
+    const mediaItemsStats = await db.query(
       `SELECT 
         m.id,
         m.title,
@@ -2969,7 +3030,7 @@ app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
 
     // Verify media belongs to user if userId is provided
     if (userId) {
-      const mediaCheck = await pool.query(
+      const mediaCheck = await db.query(
         'SELECT id FROM media WHERE id = $1 AND user_id = $2',
         [mediaId, userId]
       );
@@ -2979,13 +3040,13 @@ app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
     }
 
     // Get total plays for this media item (all plays)
-    const totalPlays = await pool.query(
+    const totalPlays = await db.query(
       'SELECT COUNT(*) as total_plays FROM media_plays WHERE media_id = $1',
       [mediaId]
     );
 
     // Get unique plays for this media item (>= 30 seconds, one per user)
-    const uniquePlays = await pool.query(
+    const uniquePlays = await db.query(
       `SELECT COUNT(DISTINCT mp.media_id || '|' || COALESCE(mp.user_id::text, mp.session_id)) as unique_plays
        FROM media_plays mp
        WHERE mp.media_id = $1 AND mp.play_duration >= 30`,
@@ -2993,13 +3054,13 @@ app.get('/api/analytics/media-stats/:mediaId', async (req, res) => {
     );
 
     // Get average duration
-    const avgDuration = await pool.query(
+    const avgDuration = await db.query(
       'SELECT COALESCE(AVG(play_duration), 0) as avg_duration FROM media_plays WHERE media_id = $1',
       [mediaId]
     );
 
     // Get media info
-    const mediaInfo = await pool.query(
+    const mediaInfo = await db.query(
       'SELECT id, title, file_name, type FROM media WHERE id = $1',
       [mediaId]
     );
@@ -3038,7 +3099,7 @@ app.get('/api/analytics/cart-conversion', async (req, res) => {
     }
 
     // Get cart additions
-    const cartStats = await pool.query(
+    const cartStats = await db.query(
       `SELECT 
         COUNT(*) as total_additions,
         COALESCE(SUM(quantity), 0) as total_items_added
@@ -3048,7 +3109,7 @@ app.get('/api/analytics/cart-conversion', async (req, res) => {
     );
 
     // Get purchases
-    const purchaseStats = await pool.query(
+    const purchaseStats = await db.query(
       `SELECT 
         COUNT(*) as total_purchases,
         COALESCE(SUM(total_amount), 0) as total_revenue
@@ -3058,7 +3119,7 @@ app.get('/api/analytics/cart-conversion', async (req, res) => {
     );
 
     // Calculate items purchased from items JSONB
-    const itemsPurchased = await pool.query(
+    const itemsPurchased = await db.query(
       `SELECT 
         COALESCE(SUM((item->>'quantity')::integer), 0) as total_items_purchased
        FROM purchase_events pe, jsonb_array_elements(pe.items) as item
@@ -3168,7 +3229,7 @@ app.get('/api/analytics/media-plays/age-demographics', async (req, res) => {
       }
     }
 
-    const result = await pool.query(baseQuery, params);
+    const result = await db.query(baseQuery, params);
     
     console.log(`📊 ANALYTICS: Age demographics query returned ${result.rows.length} rows`);
     
@@ -3321,8 +3382,8 @@ app.get('/api/analytics/media-plays/location-demographics', async (req, res) => 
     }
 
     const [countriesResult, citiesResult] = await Promise.all([
-      pool.query(countriesQuery, params),
-      pool.query(citiesQuery, params)
+      db.query(countriesQuery, params),
+      db.query(citiesQuery, params)
     ]);
     
     console.log(`📊 ANALYTICS: Location demographics query returned ${countriesResult.rows.length} countries, ${citiesResult.rows.length} cities`);
@@ -3594,8 +3655,8 @@ app.get('/api/analytics/qr-scans/location-demographics', authenticateTokenOption
     }
 
     const [countriesResult, citiesResult] = await Promise.all([
-      pool.query(countriesQuery, params),
-      pool.query(citiesQuery, params)
+      db.query(countriesQuery, params),
+      db.query(citiesQuery, params)
     ]);
     
     console.log(`📊 ANALYTICS: QR scan location demographics query returned ${countriesResult.rows.length} countries, ${citiesResult.rows.length} cities`);
@@ -3730,7 +3791,7 @@ app.get('/api/analytics/qr-scans/age-demographics', authenticateTokenOptional, a
       }
     }
 
-    const result = await pool.query(baseQuery, params);
+    const result = await db.query(baseQuery, params);
     
     console.log(`📊 ANALYTICS: QR scan age demographics query returned ${result.rows.length} age ranges`);
     
@@ -3849,7 +3910,7 @@ app.get('/api/analytics/qr-scans/gender-demographics', authenticateTokenOptional
       }
     }
 
-    const result = await pool.query(baseQuery, params);
+    const result = await db.query(baseQuery, params);
     
     console.log(`📊 ANALYTICS: QR scan gender demographics query returned ${result.rows.length} gender categories`);
     
@@ -3971,7 +4032,7 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
       }
     }
 
-    const result = await pool.query(baseQuery, params);
+    const result = await db.query(baseQuery, params);
     
     console.log(`📊 ANALYTICS: Gender demographics query returned ${result.rows.length} rows`);
     
@@ -3992,7 +4053,7 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
 app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('SELECT id, email, username, created_at FROM users WHERE id = $1', [id]);
+    const result = await db.query('SELECT id, email, username, created_at FROM users WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
@@ -4009,7 +4070,7 @@ app.get('/api/users/:id', async (req, res) => {
 app.get('/api/user/demographics', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT age_range, gender FROM users WHERE id = $1',
       [userId]
     );
@@ -4082,7 +4143,7 @@ app.post('/api/admin/run-demographics-migrations', async (req, res) => {
     for (const migration of migrations) {
       try {
         console.log(`  Running: ${migration.name}`);
-        await pool.query(migration.sql);
+        await db.query(migration.sql);
         results.push({ name: migration.name, status: 'success' });
         console.log(`  ✅ ${migration.name}`);
       } catch (error) {
@@ -4108,10 +4169,10 @@ app.post('/api/admin/run-demographics-migrations', async (req, res) => {
 app.get('/api/debug/database-info', async (req, res) => {
   try {
     // Get database name and host
-    const dbInfo = await pool.query('SELECT current_database(), current_user, version()');
+    const dbInfo = await db.query('SELECT current_database(), current_user, version()');
     
     // Check if demographics columns exist
-    const columns = await pool.query(`
+    const columns = await db.query(`
       SELECT table_name, column_name, data_type 
       FROM information_schema.columns 
       WHERE table_name IN ('qr_scans', 'users')
@@ -4139,7 +4200,7 @@ app.get('/api/debug/database-info', async (req, res) => {
 app.get('/api/debug/demographics-data', async (req, res) => {
   try {
     // Check if columns exist and have data
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT 
         user_provided_age_range,
         user_provided_gender,
@@ -4176,7 +4237,7 @@ app.put('/api/user/demographics', authenticateToken, async (req, res) => {
     
     console.log('👤 USER_DEMOGRAPHICS: Updating for user:', userId, { ageRange, gender });
     
-    await pool.query(
+    await db.query(
       'UPDATE users SET age_range = $1, gender = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
       [ageRange || null, gender || null, userId]
     );
@@ -4196,7 +4257,7 @@ app.post('/api/auth/login',
   try {
     const { email, password } = req.body;
     // Case-insensitive email lookup using LOWER()
-    const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    const result = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
     const dbUser = result.rows[0];
     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
@@ -4261,10 +4322,10 @@ app.post('/api/auth/register',
   try {
     const { email, password, username } = req.body;
     // Case-insensitive email check
-    const existingUser = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
+    const existingUser = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
     if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
     const hashedPassword = await bcrypt.hash(password, 12);
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, is_admin`,
       [email, username, hashedPassword]
     );
@@ -4297,7 +4358,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
 
-    const userResult = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    const userResult = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (userResult.rows.length === 0) return res.status(404).json({ error: 'User not found' });
 
     const user = userResult.rows[0];
@@ -4305,7 +4366,7 @@ app.post('/api/auth/send-verification', async (req, res) => {
 
     const verificationToken = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '24h' });
 
-    await pool.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
+    await db.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
 
     const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
 
@@ -4329,7 +4390,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
     const { token } = req.params;
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE users SET is_email_verified = true, verification_token = null WHERE id = $1 AND is_email_verified = false RETURNING id`,
       [decoded.userId]
     );
@@ -4349,7 +4410,7 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
 app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
     const { id } = req.params;
     try {
-        const deleteResult = await pool.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+        const deleteResult = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
         if (deleteResult.rowCount === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
@@ -4442,7 +4503,7 @@ app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) =
                      max_slideshows, max_videos, max_activation_codes, can_view_logs, created_at, updated_at
         `;
 
-        const result = await pool.query(query, values);
+        const result = await db.query(query, values);
         
         if (result.rowCount === 0) {
             return res.status(404).json({ error: 'User not found' });
@@ -4523,7 +4584,7 @@ app.get('/api/admin/activity-logs', authenticateToken, canViewLogs, async (req, 
       LEFT JOIN users u ON al.user_id = u.id
       ${whereClause}
     `;
-    const countResult = await pool.query(countQuery, values);
+    const countResult = await db.query(countQuery, values);
     const total = parseInt(countResult.rows[0].total);
 
     // Get logs with user info
@@ -4552,7 +4613,7 @@ app.get('/api/admin/activity-logs', authenticateToken, canViewLogs, async (req, 
     `;
     values.push(parseInt(limit), offset);
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
     res.json({
       logs: result.rows.map(row => ({
@@ -4589,7 +4650,7 @@ app.get('/api/admin/activity-logs', authenticateToken, canViewLogs, async (req, 
 app.get('/api/admin/activity-logs/:id', authenticateToken, canViewLogs, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT 
         al.id,
         al.user_id,
@@ -4684,8 +4745,8 @@ app.get('/api/admin/activity-logs/stats', authenticateToken, canViewLogs, async 
     `;
 
     const [statsResult, actionTypeResult] = await Promise.all([
-      pool.query(statsQuery, values),
-      pool.query(actionTypeQuery, values)
+      db.query(statsQuery, values),
+      db.query(actionTypeQuery, values)
     ]);
 
     res.json({
@@ -4713,7 +4774,7 @@ app.get('/api/admin/activity-logs/stats', authenticateToken, canViewLogs, async 
 app.delete('/api/admin/activity-logs/cleanup', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { days = 90 } = req.query; // Default to 90 days
-    const result = await pool.query(
+    const result = await db.query(
       `DELETE FROM activity_logs WHERE created_at < NOW() - INTERVAL '${parseInt(days)} days'`
     );
     res.json({
@@ -4736,7 +4797,7 @@ app.patch('/api/admin/users/:id/log-access', authenticateToken, isAdmin, async (
       return res.status(400).json({ error: 'canViewLogs must be a boolean' });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE users 
        SET can_view_logs = $1, updated_at = NOW()
        WHERE id = $2
@@ -4766,7 +4827,7 @@ app.patch('/api/admin/users/:id/log-access', authenticateToken, isAdmin, async (
 // Get users with log viewing access (admin only)
 app.get('/api/admin/users/log-access', authenticateToken, isAdmin, async (req, res) => {
   try {
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT id, email, username, can_view_logs, created_at
        FROM users
        WHERE can_view_logs = true OR is_admin = true
@@ -4802,7 +4863,7 @@ app.get('/api/app/version/check', async (req, res) => {
     // Get the latest active version for the platform
     let result;
     try {
-      result = await pool.query(
+      result = await db.query(
         `SELECT id, version, platform, download_url, release_notes, file_size, created_at
          FROM app_versions 
          WHERE platform = $1 AND is_active = TRUE 
@@ -4914,7 +4975,7 @@ app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('fil
     // Check if version already exists for this platform
     let existingCheck;
     try {
-      existingCheck = await pool.query(
+      existingCheck = await db.query(
         'SELECT id FROM app_versions WHERE version = $1 AND platform = $2',
         [version, platform.toLowerCase()]
       );
@@ -4946,13 +5007,13 @@ app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('fil
     const downloadUrl = uploadResult.Location;
 
     // Deactivate previous versions for this platform
-    await pool.query(
+    await db.query(
       'UPDATE app_versions SET is_active = FALSE WHERE platform = $1 AND is_active = TRUE',
       [platform.toLowerCase()]
     );
 
     // Create new version record
-    const insertResult = await pool.query(
+    const insertResult = await db.query(
       `INSERT INTO app_versions 
        (version, platform, s3_key, download_url, release_notes, is_active, uploaded_by, file_size)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -5005,7 +5066,7 @@ app.get('/api/admin/app/versions', authenticateToken, isAdmin, async (req, res) 
     
     let result;
     try {
-      result = await pool.query(query, params);
+      result = await db.query(query, params);
     } catch (dbError) {
       if (dbError.message && dbError.message.includes('does not exist')) {
         console.error('❌ app_versions table does not exist. Please run migration 024_create_app_versions_table.sql');
@@ -5030,7 +5091,7 @@ app.delete('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req
     const { id } = req.params;
     
     // Get version info before deleting
-    const versionResult = await pool.query(
+    const versionResult = await db.query(
       'SELECT s3_key FROM app_versions WHERE id = $1',
       [id]
     );
@@ -5040,7 +5101,7 @@ app.delete('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req
     }
 
     // Delete from database
-    await pool.query('DELETE FROM app_versions WHERE id = $1', [id]);
+    await db.query('DELETE FROM app_versions WHERE id = $1', [id]);
 
     // Delete from S3
     try {
@@ -5078,12 +5139,12 @@ app.patch('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req,
       
       // If activating this version, deactivate others for the same platform
       if (isActive) {
-        const platformResult = await pool.query(
+        const platformResult = await db.query(
           'SELECT platform FROM app_versions WHERE id = $1',
           [id]
         );
         if (platformResult.rows.length > 0) {
-          await pool.query(
+          await db.query(
             'UPDATE app_versions SET is_active = FALSE WHERE platform = $1 AND id != $2',
             [platformResult.rows[0].platform, id]
           );
@@ -5105,7 +5166,7 @@ app.patch('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req,
       RETURNING id, version, platform, download_url, release_notes, is_active, file_size, created_at, updated_at
     `;
 
-    const result = await pool.query(query, values);
+    const result = await db.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: 'Version not found' });
@@ -5212,7 +5273,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
     const mine = req.query.mine === 'true';
     let result;
     if (mine) {
-      result = await pool.query(
+      result = await db.query(
         `SELECT p.*, u.username as artist_name 
          FROM products p
          JOIN users u ON p.user_id = u.id
@@ -5221,7 +5282,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
         [req.user.userId]
       );
     } else {
-      result = await pool.query(
+      result = await db.query(
         `SELECT p.*, u.username as artist_name 
          FROM products p
          JOIN users u ON p.user_id = u.id
@@ -5255,7 +5316,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
 // Public all-products route (no auth)
 app.get('/api/products/all', async (req, res) => {
   try {
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT p.*, u.username as artist_name 
        FROM products p
        JOIN users u ON p.user_id = u.id
@@ -5291,7 +5352,7 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     console.log('🔍 GET_PRODUCT: Fetching product with ID:', id);
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT p.*, u.username as artist_name 
        FROM products p
        JOIN users u ON p.user_id = u.id
@@ -5346,7 +5407,7 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
 app.patch('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const prodRes = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+    const prodRes = await db.query('SELECT * FROM products WHERE id = $1', [id]);
     
     if (prodRes.rows.length === 0) return res.status(404).json({ error: 'Product not found' });
     const product = prodRes.rows[0];
@@ -5359,7 +5420,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
     const formattedMetadata = newMetadata ? JSON.stringify(newMetadata) : null;
     const formattedPrices = prices ? JSON.stringify(prices) : null;
 
-    await pool.query(
+    await db.query(
       `UPDATE products SET 
         name = COALESCE($1, name), 
         description = COALESCE($2, description),
@@ -5375,7 +5436,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
       [name, description, inStock, formattedMetadata, isSuspended, images, price, formattedPrices, category, id]
     );
 
-    const updated = await pool.query('SELECT * FROM products WHERE id = $1', [id]);
+    const updated = await db.query('SELECT * FROM products WHERE id = $1', [id]);
     res.json({ product: updated.rows[0] });
   } catch (err) {
     console.error('Update product error:', err);
@@ -5386,7 +5447,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const prodRes = await pool.query('SELECT user_id FROM products WHERE id = $1', [id]);
+    const prodRes = await db.query('SELECT user_id FROM products WHERE id = $1', [id]);
 
     if (prodRes.rows.length === 0) {
       return res.status(404).json({ error: 'Product not found' });
@@ -5397,7 +5458,7 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    await pool.query('UPDATE products SET is_deleted = true, updated_at = NOW() WHERE id = $1', [id]);
+    await db.query('UPDATE products SET is_deleted = true, updated_at = NOW() WHERE id = $1', [id]);
     res.status(200).json({ message: 'Product deleted successfully' });
   } catch (err) {
     console.error('Error deleting product:', err);
@@ -5414,11 +5475,11 @@ app.post('/api/products', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Product name and price are required.' });
     }
 
-    const userResult = await pool.query('SELECT subscription_tier, max_products FROM users WHERE id = $1', [userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_products FROM users WHERE id = $1', [userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     let maxProducts;
@@ -5446,7 +5507,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     const formattedMetadata = metadata ? JSON.stringify(metadata) : JSON.stringify({});
     const formattedPrices = prices ? JSON.stringify(prices) : null;
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO products (user_id, name, description, images, metadata, in_stock, price, prices, category)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *`,
@@ -5477,14 +5538,14 @@ const toCsv = (rows) => {
 // Seller scoped
 app.get('/api/sales/user', authenticateToken, async (req,res)=>{
   try{
-    const result = await pool.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
+    const result = await db.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
     res.json({sales: result.rows});
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
 app.get('/api/sales/user/csv', authenticateToken, async (req,res)=>{
   try{
-    const result = await pool.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
+    const result = await db.query('SELECT * FROM sales WHERE user_id=$1 ORDER BY purchased_at DESC',[req.user.userId]);
     const csv = toCsv(result.rows);
     res.setHeader('Content-Type','text/csv');
     res.setHeader('Content-Disposition','attachment; filename="my-sales.csv"');
@@ -5495,14 +5556,14 @@ app.get('/api/sales/user/csv', authenticateToken, async (req,res)=>{
 // Admin
 app.get('/api/sales/all', authenticateToken, isAdmin, async (req,res)=>{
   try{
-    const result = await pool.query('SELECT * FROM sales ORDER BY purchased_at DESC');
+    const result = await db.query('SELECT * FROM sales ORDER BY purchased_at DESC');
     res.json({sales: result.rows});
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
 app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   try{
-    const result = await pool.query('SELECT * FROM sales ORDER BY purchased_at DESC');
+    const result = await db.query('SELECT * FROM sales ORDER BY purchased_at DESC');
     const csv = toCsv(result.rows);
     res.setHeader('Content-Type','text/csv');
     res.setHeader('Content-Disposition','attachment; filename="all-sales.csv"');
@@ -5929,11 +5990,11 @@ app.post('/api/media',
     }
 
     // 🔒 SUBSCRIPTION LIMIT CHECK
-    const userResult = await pool.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [req.user.userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -5967,7 +6028,7 @@ app.post('/api/media',
     console.log(`✅ Media upload allowed: User ${req.user.userId} has ${currentCount}/${maxAudioFiles} audio files`);
     // END SUBSCRIPTION CHECK
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO media (user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, unique_id, s3_key) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING *`,
@@ -5986,7 +6047,7 @@ app.get('/api/media', authenticateToken, async (req, res) => {
     console.log('🔴 MEDIA: Fetching media files for user:', req.user.userId);
     
     // Check if current user is admin
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
     
     console.log('🔴 MEDIA: User is admin:', isAdmin);
@@ -6005,7 +6066,7 @@ app.get('/api/media', authenticateToken, async (req, res) => {
       console.log('🔴 MEDIA: Regular user access - returning only own media files');
     }
     
-    const result = await pool.query(query, params);
+    const result = await db.query(query, params);
     
     console.log('🔴 MEDIA: Found', result.rows.length, 'media files for user');
     
@@ -6047,7 +6108,7 @@ app.get('/api/media/all', authenticateToken, async (req, res) => {
     console.log('🔴 MEDIA_ALL: Fetching all media files for user:', req.user.userId);
     
     // Check if current user is admin
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
     
     console.log('🔴 MEDIA_ALL: User is admin:', isAdmin);
@@ -6066,7 +6127,7 @@ app.get('/api/media/all', authenticateToken, async (req, res) => {
       console.log('🔴 MEDIA_ALL: Regular user access - returning only own media files');
     }
     
-    const result = await pool.query(query, params);
+    const result = await db.query(query, params);
     
     console.log('🔴 MEDIA_ALL: Found', result.rows.length, 'media files for user');
     
@@ -6080,7 +6141,7 @@ app.get('/api/media/all', authenticateToken, async (req, res) => {
 app.get('/api/media/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    const result = await db.query('SELECT * FROM media WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Media file not found' });
@@ -6089,7 +6150,7 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
     const media = result.rows[0];
     
     // Check if user owns this media file or if user is admin
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
     
     // Allow access if: user owns the file OR user is admin
@@ -6157,7 +6218,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
     const { id } = req.params;
     console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
     
-    const result = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    const result = await db.query('SELECT * FROM media WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
       console.log(`📺 MEDIA_STREAM: Media ${id} not found`);
@@ -6349,20 +6410,20 @@ app.delete('/api/media/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     
     // Check if media belongs to user or user is admin
-    const mediaResult = await pool.query('SELECT * FROM media WHERE id = $1', [id]);
+    const mediaResult = await db.query('SELECT * FROM media WHERE id = $1', [id]);
     if (mediaResult.rows.length === 0) {
       return res.status(404).json({ error: 'Media not found' });
     }
     
     const media = mediaResult.rows[0];
-    const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin;
     
     if (media.user_id !== req.user.userId && !isAdmin) {
       return res.status(403).json({ error: 'Forbidden' });
     }
     
-    await pool.query('DELETE FROM media WHERE id = $1', [id]);
+    await db.query('DELETE FROM media WHERE id = $1', [id]);
     res.json({ message: 'Media deleted successfully' });
   } catch (error) {
     console.error('Error deleting media:', error);
@@ -6378,8 +6439,8 @@ app.get('/api/content/:id/type', async (req, res) => {
     
     // Check both tables efficiently with a single query each
     const [playlistCheck, mediaCheck] = await Promise.all([
-      pool.query('SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [id]),
-      pool.query('SELECT id FROM media WHERE id = $1 LIMIT 1', [id])
+      db.query('SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [id]),
+      db.query('SELECT id FROM media WHERE id = $1 LIMIT 1', [id])
     ]);
     
     if (playlistCheck.rows.length > 0) {
@@ -6418,11 +6479,11 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     }
 
     // 🔒 SUBSCRIPTION LIMIT CHECK
-    const userResult = await pool.query('SELECT subscription_tier, max_playlists FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_playlists FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -6456,7 +6517,7 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     console.log(`✅ Playlist creation allowed: User ${req.user.userId} has ${currentCount}/${maxPlaylists} playlists`);
     // END SUBSCRIPTION CHECK
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, times_created) 
        VALUES ($1, $2, $3, $4, $5, 1) RETURNING *`,
       [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false]
@@ -6468,7 +6529,7 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     // Add media files to playlist if provided
     if (mediaFileIds && mediaFileIds.length > 0) {
       for (let i = 0; i < mediaFileIds.length; i++) {
-        await pool.query(
+        await db.query(
           `INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)`,
           [playlist.id, mediaFileIds[i], i + 1]
         );
@@ -6486,7 +6547,7 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
 
 app.get('/api/playlists', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT p.*, u.username 
        FROM playlists p 
        JOIN users u ON p.user_id = u.id 
@@ -6557,7 +6618,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     console.log('🔴 PLAYLIST_PATCH: User ID:', req.user.userId);
 
     // Check if user owns the playlist
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -6575,7 +6636,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     }
 
     console.log('🔴 PLAYLIST_PATCH: About to run UPDATE query...');
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE playlists 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description), 
@@ -6603,7 +6664,7 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
 
     // Check if user owns the playlist
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -6617,7 +6678,7 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
     }
 
     // Soft delete playlist by setting deleted_at timestamp
-    await pool.query(
+    await db.query(
       'UPDATE playlists SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
       [id]
     );
@@ -6633,7 +6694,7 @@ async function getPlaylistWithMedia(playlistId) {
   console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
   console.log('🔴 GET_PLAYLIST: playlistId type:', typeof playlistId);
 
-  const playlistResult = await pool.query(
+  const playlistResult = await db.query(
     `SELECT p.*, u.username 
      FROM playlists p 
      JOIN users u ON p.user_id = u.id 
@@ -6652,7 +6713,7 @@ async function getPlaylistWithMedia(playlistId) {
   }
 
   const playlistData = playlistResult.rows[0];
-  const mediaResult = await pool.query(
+  const mediaResult = await db.query(
     `SELECT m.*, pm.display_order 
      FROM media m 
      JOIN playlist_media pm ON m.id = pm.media_id 
@@ -6665,10 +6726,10 @@ async function getPlaylistWithMedia(playlistId) {
   if (mediaResult.rows.length === 0) {
     console.log('🔴 GET_PLAYLIST: No media files found for playlist', playlistId);
     // Let's check if media files exist but aren't linked
-    const allMediaResult = await pool.query('SELECT COUNT(*) FROM media');
+    const allMediaResult = await db.query('SELECT COUNT(*) FROM media');
     console.log('🔴 GET_PLAYLIST: Total media files in database:', allMediaResult.rows[0].count);
     
-    const playlistMediaResult = await pool.query('SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1', [playlistId]);
+    const playlistMediaResult = await db.query('SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1', [playlistId]);
     console.log('🔴 GET_PLAYLIST: Playlist-media links for playlist', playlistId, ':', playlistMediaResult.rows[0].count);
   }
 
@@ -6723,7 +6784,7 @@ async function getPlaylistWithMedia(playlistId) {
   // Get product links for this playlist
   let productLinks = [];
   try {
-    const productLinksResult = await pool.query(`
+    const productLinksResult = await db.query(`
       SELECT pl.*, p.name as product_name, p.price, p.images as product_images
       FROM product_links pl
       JOIN products p ON pl.product_id = p.id
@@ -6801,7 +6862,7 @@ app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
     const days = Math.min(parseInt(req.query.days) || 30, 365);
 
     // Aggregate totals from normalized orders/order_items tables
-    const totals = await pool.query(
+    const totals = await db.query(
       `WITH filtered_orders AS (
          SELECT * FROM orders
          WHERE user_id = $1 AND purchased_at >= NOW() - ($2 || ' days')::interval
@@ -6816,7 +6877,7 @@ app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
       [userId, days]
     );
 
-    const topProducts = await pool.query(
+    const topProducts = await db.query(
       `SELECT oi.product_name AS product,
               SUM(oi.quantity) AS qty,
               SUM(oi.amount) AS revenue
@@ -6829,7 +6890,7 @@ app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
       [userId, days]
     );
 
-    const recent = await pool.query(
+    const recent = await db.query(
       `SELECT stripe_session_id, total_amount, purchased_at
          FROM orders
         WHERE user_id = $1 AND purchased_at >= NOW() - ($2 || ' days')::interval
@@ -6860,7 +6921,7 @@ app.get('/api/analytics/sales-summary', authenticateToken, async (req, res) => {
 app.get('/api/analytics/debug/recent-scans', authenticateToken, isAdmin, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 200);
-    const rows = await pool.query(
+    const rows = await db.query(
       `SELECT id, qr_code_id, scanned_at, country_code, region, city, device_type, browser_name, operating_system
          FROM qr_scans ORDER BY scanned_at DESC LIMIT $1`,
       [limit]
@@ -6903,7 +6964,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
     }
 
     // Get user info
-    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
     if (userResult.rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -6967,7 +7028,7 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     // Fetch products from DB to build line items
     const ids = items.map((it) => it.productId);
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-    const { rows } = await pool.query(`SELECT * FROM products WHERE id IN (${placeholders})`, ids);
+    const { rows } = await db.query(`SELECT * FROM products WHERE id IN (${placeholders})`, ids);
 
     const productsMap = new Map();
     rows.forEach((p) => productsMap.set(String(p.id), p));
@@ -7088,14 +7149,14 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
         // Track the purchase in both normalized tables and events (idempotent)
         try {
-          const existing = await pool.query(
+          const existing = await db.query(
             'SELECT id FROM orders WHERE stripe_session_id = $1',
             [session.id]
           );
 
           let orderId;
           if (existing.rows.length === 0) {
-            const inserted = await pool.query(
+            const inserted = await db.query(
               `INSERT INTO orders (user_id, stripe_session_id, total_amount, currency, customer_email)
                VALUES ($1, $2, $3, $4, $5)
                ON CONFLICT (stripe_session_id) DO UPDATE SET total_amount = EXCLUDED.total_amount
@@ -7109,7 +7170,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
           // Upsert order items
           for (const it of items) {
-            await pool.query(
+            await db.query(
               `INSERT INTO order_items (order_id, product_name, quantity, amount)
                VALUES ($1, $2, $3, $4)
                ON CONFLICT ON CONSTRAINT uq_order_item_dedupe DO NOTHING`,
@@ -7118,7 +7179,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           }
 
           // Mirror into purchase_events for backward compatibility
-          await pool.query(
+          await db.query(
             `INSERT INTO purchase_events (stripe_session_id, user_id, total_amount, items) 
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (stripe_session_id) DO NOTHING`,
@@ -7128,7 +7189,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
           // Notify merchant via email (best-effort)
           try {
-            const merchant = await pool.query('SELECT email FROM users WHERE id = $1', [userId]);
+            const merchant = await db.query('SELECT email FROM users WHERE id = $1', [userId]);
             const to = merchant.rows[0]?.email;
             if (to) {
               const totalUsd = ((session.amount_total || 0) / 100).toFixed(2);
@@ -7189,7 +7250,7 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
     try {
       // Use deduplication to match analytics approach (unique visitor per minute)
       // This ensures consistency between QR code list and analytics dashboard
-      result = await pool.query(
+      result = await db.query(
         `WITH dedup_scans AS (
           SELECT DISTINCT ON (
             s.qr_code_id,
@@ -7211,7 +7272,7 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
       );
     } catch (scanError) {
       console.log('📱 QR_CODES: qr_scans table not available, using simple query');
-      result = await pool.query(
+      result = await db.query(
         `SELECT qr.*, 0 as scan_count
          FROM qr_codes qr
          WHERE qr.user_id = $1 AND qr.is_active = true
@@ -7245,7 +7306,7 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
     try {
       // Use deduplication to match analytics approach (unique visitor per minute)
       // This ensures consistency between QR code list and analytics dashboard
-      result = await pool.query(
+      result = await db.query(
         `WITH dedup_scans AS (
           SELECT DISTINCT ON (
             s.qr_code_id,
@@ -7267,7 +7328,7 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
       );
     } catch (scanError) {
       console.log('📱 QR_CODES: qr_scans table not available, using simple query');
-      result = await pool.query(
+      result = await db.query(
         `SELECT qr.*, 0 as scan_count
          FROM qr_codes qr
          WHERE qr.user_id = $1 AND qr.is_active = true
@@ -7298,7 +7359,7 @@ app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Fetching QR code:', id);
     
     // Use deduplication to match analytics approach (unique visitor per minute)
-    const result = await pool.query(
+    const result = await db.query(
       `WITH dedup_scans AS (
         SELECT DISTINCT ON (
           s.qr_code_id,
@@ -7343,7 +7404,7 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Fetching QR code:', id);
     
     // Use deduplication to match analytics approach (unique visitor per minute)
-    const result = await pool.query(
+    const result = await db.query(
       `WITH dedup_scans AS (
         SELECT DISTINCT ON (
           s.qr_code_id,
@@ -7389,15 +7450,15 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
     // Try to resolve QR code by id (numeric), then by qr_code_data, then by short_url
     let qr;
     if (/^\d+$/.test(code)) {
-      const r = await pool.query('SELECT id, url FROM qr_codes WHERE id = $1 AND is_active = true', [Number(code)]);
+      const r = await db.query('SELECT id, url FROM qr_codes WHERE id = $1 AND is_active = true', [Number(code)]);
       qr = r.rows[0];
     }
     if (!qr) {
-      const r2 = await pool.query('SELECT id, url FROM qr_codes WHERE qr_code_data = $1 AND is_active = true', [code]);
+      const r2 = await db.query('SELECT id, url FROM qr_codes WHERE qr_code_data = $1 AND is_active = true', [code]);
       qr = r2.rows[0];
     }
     if (!qr) {
-      const r3 = await pool.query('SELECT id, url FROM qr_codes WHERE short_url = $1 AND is_active = true', [code]);
+      const r3 = await db.query('SELECT id, url FROM qr_codes WHERE short_url = $1 AND is_active = true', [code]);
       qr = r3.rows[0];
     }
     if (!qr) {
@@ -7424,7 +7485,7 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
           // As a last resort record a minimal row with ip only
           const ua = req.headers['user-agent'] || '';
           const parsed = parseUserAgent(ua);
-          await pool.query(
+          await db.query(
             `INSERT INTO qr_scans (qr_code_id, scanned_at, location, device, country_name, country_code, device_type, browser_name, operating_system, ip_address)
              VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9)`,
             [qr.id, null, null, null, null, null, parsed.deviceType, parsed.browserName, parsed.operatingSystem, ip]
@@ -7461,11 +7522,11 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Creating QR code:', { name, url, contentType });
     
     // 🔒 SUBSCRIPTION LIMIT CHECK
-    const userResult = await pool.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -7493,7 +7554,7 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     // Generate QR code data (simplified - in production you might want to use a proper QR library)
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description, short_url, playlist_id, slideshow_id) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [
@@ -7514,7 +7575,7 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     const shortUrl = `${publicOrigin.replace(/\/$/, '')}/r/${result.rows[0].id}`;
 
     // Persist short_url for convenience
-    await pool.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
+    await db.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
 
     const qrCode = {
       ...result.rows[0],
@@ -7549,11 +7610,11 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Creating QR code:', { name, url, contentType });
     
     // 🔒 SUBSCRIPTION LIMIT CHECK
-    const userResult = await pool.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_qr_codes FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -7581,7 +7642,7 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     // Generate QR code data (simplified - in production you might want to use a proper QR library)
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
@@ -7610,7 +7671,7 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Updating QR code:', id);
     
     // Check if user owns the QR code
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
       [id]
     );
@@ -7623,7 +7684,7 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE qr_codes 
        SET name = COALESCE($1, name), 
            url = COALESCE($2, url), 
@@ -7637,7 +7698,7 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     // Rebuild short_url when URL changes (id and origin stable)
     const publicOrigin = process.env.PUBLIC_WEB_ORIGIN || process.env.FRONTEND_URL || 'https://www.merchtrader.org';
     const shortUrl = `${publicOrigin.replace(/\/$/, '')}/r/${result.rows[0].id}`;
-    await pool.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
+    await db.query('UPDATE qr_codes SET short_url = $1, updated_at = NOW() WHERE id = $2', [shortUrl, result.rows[0].id]);
 
     const qrCode = {
       ...result.rows[0],
@@ -7663,7 +7724,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Updating QR code:', id);
     
     // Check if user owns the QR code
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
       [id]
     );
@@ -7676,7 +7737,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE qr_codes 
        SET name = COALESCE($1, name), 
            url = COALESCE($2, url), 
@@ -7708,7 +7769,7 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     console.log('📱 QR_CODES: Deleting QR code:', id, 'for user:', req.user.userId);
     
     // Check if user owns the QR code
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
       [id]
     );
@@ -7726,7 +7787,7 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     }
 
     // Soft delete by setting is_active to false
-    const deleteResult = await pool.query(
+    const deleteResult = await db.query(
       'UPDATE qr_codes SET is_active = false, updated_at = NOW() WHERE id = $1 RETURNING *',
       [id]
     );
@@ -7765,7 +7826,7 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
     
     console.log('🔑 ACTIVATION_CODES: Creating new code:', { code, playlistId, slideshowId, maxUses, expiresAt });
     
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO activation_codes (code, playlist_id, slideshow_id, created_by, max_uses, expires_at) 
        VALUES ($1, $2, $3, $4, $5, $6) 
        RETURNING *`,
@@ -7773,7 +7834,7 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
     );
     
     // Get the created activation code with associated content name
-    const codeWithDetails = await pool.query(
+    const codeWithDetails = await db.query(
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
@@ -7803,7 +7864,7 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all activation codes for user:', req.user.userId);
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
@@ -7834,7 +7895,7 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all generated codes for user:', req.user.userId);
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
@@ -7865,7 +7926,7 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching access codes for user:', req.user.userId);
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT ac.*, uac.attached_at,
               p.name as playlist_name,
               s.name as slideshow_name,
@@ -7900,7 +7961,7 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     console.log('🔑 ACTIVATION_CODES: Attaching code to user:', { code, userId: req.user.userId });
     
     // First, verify the code exists and is valid
-    const codeResult = await pool.query(
+    const codeResult = await db.query(
       `SELECT * FROM activation_codes 
        WHERE code = $1 AND is_active = true 
        AND (expires_at IS NULL OR expires_at > NOW())
@@ -7916,7 +7977,7 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     const activationCode = codeResult.rows[0];
     
     // Check if already attached
-    const existingResult = await pool.query(
+    const existingResult = await db.query(
       `SELECT * FROM user_activation_codes 
        WHERE user_id = $1 AND activation_code_id = $2`,
       [req.user.userId, activationCode.id]
@@ -7928,14 +7989,14 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     }
     
     // Attach the code
-    await pool.query(
+    await db.query(
       `INSERT INTO user_activation_codes (user_id, activation_code_id) 
        VALUES ($1, $2)`,
       [req.user.userId, activationCode.id]
     );
     
     // Increment usage count
-    await pool.query(
+    await db.query(
       `UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`,
       [activationCode.id]
     );
@@ -7956,7 +8017,7 @@ app.delete('/api/activation-codes/detach/:codeId', authenticateToken, async (req
     
     console.log('🔑 ACTIVATION_CODES: Detaching code from user:', { codeId, userId: req.user.userId });
     
-    const result = await pool.query(
+    const result = await db.query(
       `DELETE FROM user_activation_codes 
        WHERE user_id = $1 AND activation_code_id = $2 
        RETURNING *`,
@@ -7987,7 +8048,7 @@ app.post('/api/activation-codes/validate', async (req, res) => {
     
     console.log('🔑 ACTIVATION_CODES: Validating code:', { code, playlistId, slideshowId });
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT * FROM activation_codes 
        WHERE code = $1 AND is_active = true 
        AND (expires_at IS NULL OR expires_at > NOW())
@@ -8022,7 +8083,7 @@ app.get('/api/activation-codes/content/:contentType/:contentId', authenticateTok
     console.log('🔑 ACTIVATION_CODES: Fetching codes for content:', { contentType, contentId });
     
     const column = contentType === 'playlist' ? 'playlist_id' : 'slideshow_id';
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT ac.* FROM activation_codes ac
        WHERE ac.${column} = $1 AND ac.created_by = $2
        ORDER BY ac.created_at DESC`,
@@ -8047,7 +8108,7 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
     console.log('🔑 ACTIVATION_CODES: Updating code:', { codeId, maxUses, expiresAt, isActive });
     
     // First verify the user owns this code
-    const ownerResult = await pool.query(
+    const ownerResult = await db.query(
       `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2`,
       [codeId, req.user.userId]
     );
@@ -8096,7 +8157,7 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
     console.log('🔑 ACTIVATION_CODES: Update query:', updateQuery);
     console.log('🔑 ACTIVATION_CODES: Update values:', values);
     
-    const result = await pool.query(updateQuery, values);
+    const result = await db.query(updateQuery, values);
     
     console.log('🔑 ACTIVATION_CODES: Code updated successfully:', result.rows[0]);
     res.json({ activationCode: result.rows[0] });
@@ -8115,7 +8176,7 @@ app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) 
     console.log('🔑 ACTIVATION_CODES: Deleting code:', codeId);
     
     // First verify the user owns this code
-    const result = await pool.query(
+    const result = await db.query(
       `DELETE FROM activation_codes 
        WHERE id = $1 AND created_by = $2 
        RETURNING *`,
@@ -8143,7 +8204,7 @@ app.get('/api/debug/activation-code/:code', authenticateToken, async (req, res) 
     console.log('🔍 DEBUG: Checking activation code:', code);
     
     // Get activation code details
-    const codeResult = await pool.query(
+    const codeResult = await db.query(
       `SELECT ac.*, 
               p.name as playlist_name,
               s.name as slideshow_name,
@@ -8165,7 +8226,7 @@ app.get('/api/debug/activation-code/:code', authenticateToken, async (req, res) 
     // If it's linked to a slideshow, get more details
     let slideshowDetails = null;
     if (codeData.slideshow_id) {
-      const slideshowResult = await pool.query(
+      const slideshowResult = await db.query(
         `SELECT s.*, 
                 (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count,
                 (SELECT array_agg(si.image_url) FROM slideshow_images si WHERE si.slideshow_id = s.id LIMIT 3) as sample_images
@@ -8180,7 +8241,7 @@ app.get('/api/debug/activation-code/:code', authenticateToken, async (req, res) 
     }
     
     // Also search for DJKINGCAKE CHAIN slideshow
-    const djkingcakeResult = await pool.query(
+    const djkingcakeResult = await db.query(
       `SELECT s.*, 
               (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
        FROM slideshows s 
@@ -8214,7 +8275,7 @@ app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, 
     console.log('🔧 FIXING: Activation code linkage for:', code, 'to slideshow:', targetSlideshowId);
     
     // Verify the target slideshow exists and has images
-    const slideshowCheck = await pool.query(
+    const slideshowCheck = await db.query(
       `SELECT s.*, 
               (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
        FROM slideshows s 
@@ -8236,7 +8297,7 @@ app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, 
     }
     
     // Update the activation code linkage
-    const updateResult = await pool.query(
+    const updateResult = await db.query(
       `UPDATE activation_codes 
        SET slideshow_id = $1, playlist_id = NULL
        WHERE code = $2 
@@ -8271,7 +8332,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
   try {
     console.log('🎬 SLIDESHOWS: Fetching slideshows for user:', req.user.userId);
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT s.* FROM slideshows s 
        WHERE s.user_id = $1 AND s.deleted_at IS NULL
        ORDER BY s.created_at DESC`,
@@ -8281,7 +8342,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
     // Get images for each slideshow
     const slideshows = await Promise.all(
       result.rows.map(async (slideshow) => {
-        const imagesResult = await pool.query(
+        const imagesResult = await db.query(
           `SELECT * FROM slideshow_images 
            WHERE slideshow_id = $1 
            ORDER BY display_order`,
@@ -8334,7 +8395,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
     console.log('🎬 SLIDESHOWS: ===== GET SLIDESHOW DEBUG START =====');
     console.log('🎬 SLIDESHOWS: Fetching slideshow ID:', id);
     
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT s.*, u.username 
        FROM slideshows s 
        JOIN users u ON s.user_id = u.id
@@ -8358,7 +8419,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
     console.log('🎬 SLIDESHOWS:   - autoplay_interval:', slideshow.autoplay_interval);
     console.log('🎬 SLIDESHOWS:   - requires_activation_code:', slideshow.requires_activation_code);
     
-    const imagesResult = await pool.query(
+    const imagesResult = await db.query(
       `SELECT * FROM slideshow_images 
        WHERE slideshow_id = $1 
        ORDER BY display_order`,
@@ -8435,7 +8496,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
     // Get product links for this slideshow
     let productLinks = [];
     try {
-      const productLinksResult = await pool.query(`
+      const productLinksResult = await db.query(`
         SELECT pl.*, p.name as product_name, p.price, p.images as product_images
         FROM product_links pl
         JOIN products p ON pl.product_id = p.id
@@ -8521,7 +8582,7 @@ app.get('/api/slideshows/:slideshowId/products', async (req, res) => {
     const { slideshowId } = req.params;
     console.log(`🔗 PRODUCTS: Fetching product links for slideshow ${slideshowId}`);
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT p.*
        FROM products p
        JOIN product_links pl ON p.id = pl.product_id
@@ -8598,7 +8659,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       let qrId = null;
       // Primary: link by playlist_id when available
       try {
-        const qrRes = await pool.query(
+        const qrRes = await db.query(
           'SELECT id FROM qr_codes WHERE playlist_id = $1 ORDER BY created_at DESC LIMIT 1',
           [id]
         );
@@ -8617,7 +8678,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           `${frontend.replace('https://', 'https://www.')}/playlist-access/${id}`,
         ];
         // Search by normalized URL ignoring trailing slash and querystrings
-        const qrByUrl = await pool.query(
+        const qrByUrl = await db.query(
           `SELECT id FROM qr_codes 
            WHERE is_active = true AND (
              regexp_replace(url, '\\?.*$', '') IN ($1, $2, $3)
@@ -8633,7 +8694,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       if (!qrId) {
         try {
           const pathPattern = `/playlist-access/${id}`;
-          const qrByPath = await pool.query(
+          const qrByPath = await db.query(
             `SELECT id FROM qr_codes
              WHERE is_active = true AND (
                POSITION($1 in url) > 0 OR POSITION($2 in url) > 0
@@ -8648,7 +8709,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       if (!qrId) {
         try {
           const normalizedPath = `/playlist-access/${id}`;
-          const qrByNormalizedPath = await pool.query(
+          const qrByNormalizedPath = await db.query(
             `SELECT id FROM qr_codes
              WHERE is_active = true AND 
                regexp_replace(
@@ -8684,7 +8745,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
 app.get('/api/slideshow-access/:id', async (req, res) => {
   const slideshowId = req.params.id;
   const activationCode = req.query.code;
-  const client = await pool.connect();
+  const client = await db.getClient();
 
   try {
     // Fetch the slideshow details first
@@ -8888,7 +8949,7 @@ app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => 
     console.log(`🎵 SLIDESHOW_AUDIO_URL: Fetching audio URL for slideshow ${id}`);
     
     // Fetch the slideshow details
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [id]);
+    const slideshowResult = await db.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found' });
     }
@@ -8935,11 +8996,11 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS: Creating slideshow:', name);
     
     // 🔒 SUBSCRIPTION LIMIT CHECK
-    const userResult = await pool.query('SELECT subscription_tier, max_slideshows FROM users WHERE id = $1', [req.user.userId]);
+    const userResult = await db.query('SELECT subscription_tier, max_slideshows FROM users WHERE id = $1', [req.user.userId]);
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await pool.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
+    const countResult = await db.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [req.user.userId]);
     const currentCount = parseInt(countResult.rows[0].count);
 
     let maxSlideshows;
@@ -8963,7 +9024,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
       });
     }
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, times_created) 
        VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *`,
       [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false]
@@ -9005,7 +9066,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     
     // Check if user owns the slideshow
     console.log('🎬 SLIDESHOWS: Checking slideshow ownership...');
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -9052,7 +9113,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS:   $6 (processedAudioUrl):', processedAudioUrl);
     console.log('🎬 SLIDESHOWS:   $7 (id):', id);
 
-    const result = await pool.query(
+    const result = await db.query(
       `UPDATE slideshows 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description), 
@@ -9127,7 +9188,7 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS: Deleting slideshow:', id);
     
     // Check if user owns the slideshow
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -9141,7 +9202,7 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
     }
 
     // Soft delete slideshow by setting deleted_at timestamp
-    await pool.query(
+    await db.query(
       'UPDATE slideshows SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
       [id]
     );
@@ -9180,7 +9241,7 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     }
     
     // Check if user owns the slideshow
-    const slideshowResult = await pool.query(
+    const slideshowResult = await db.query(
       'SELECT user_id FROM slideshows WHERE id = $1',
       [id]
     );
@@ -9220,7 +9281,7 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     let displayOrder = position;
     if (!displayOrder) {
       console.log('🎬 SLIDESHOW_UPLOAD: Getting next position for slideshow:', id);
-      const maxPositionResult = await pool.query(
+      const maxPositionResult = await db.query(
         'SELECT MAX(display_order) as max_pos FROM slideshow_images WHERE slideshow_id = $1',
         [id]
       );
@@ -9231,7 +9292,7 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     // Save image record to database with S3 URL
     console.log('🎬 SLIDESHOW_UPLOAD: About to save image record with S3 URL:', imageUrl);
     
-    const imageResult = await pool.query(
+    const imageResult = await db.query(
       `INSERT INTO slideshow_images (slideshow_id, image_url, caption, display_order, created_at)
        VALUES ($1, $2, $3, $4, NOW())
        RETURNING *`,
@@ -9274,7 +9335,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     console.log('🎬 SLIDESHOW_DELETE_IMAGE: Deleting image:', { slideshowId, imageId });
     
     // Check if user owns the slideshow
-    const slideshowResult = await pool.query(
+    const slideshowResult = await db.query(
       'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
@@ -9290,7 +9351,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     }
     
     // Get image details for file deletion
-    const imageResult = await pool.query(
+    const imageResult = await db.query(
       'SELECT * FROM slideshow_images WHERE id = $1 AND slideshow_id = $2',
       [imageId, slideshowId]
     );
@@ -9301,7 +9362,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     }
     
     // Delete image record
-    await pool.query(
+    await db.query(
       'DELETE FROM slideshow_images WHERE id = $1',
       [imageId]
     );
@@ -9331,7 +9392,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     }
     
     // Get updated slideshow with remaining images
-    const updatedSlideshowResult = await pool.query(
+    const updatedSlideshowResult = await db.query(
       'SELECT * FROM slideshows WHERE id = $1',
       [slideshowId]
     );
@@ -9343,7 +9404,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     const slideshow = updatedSlideshowResult.rows[0];
     
     // Get remaining images for the slideshow
-    const remainingImagesResult = await pool.query(
+    const remainingImagesResult = await db.query(
       `SELECT * FROM slideshow_images 
        WHERE slideshow_id = $1 
        ORDER BY display_order`,
@@ -9395,7 +9456,7 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     
     // Get image details from database
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT * FROM slideshow_images WHERE id = $1',
       [id]
     );
@@ -9497,11 +9558,11 @@ app.get('/api/slideshow-preview/:id', async (req, res) => {
     console.log('🎬 SLIDESHOW_PREVIEW: ID type:', typeof id);
     
     // First, let's check what slideshows exist
-    const allSlideshowsResult = await pool.query('SELECT id, name FROM slideshows ORDER BY id');
+    const allSlideshowsResult = await db.query('SELECT id, name FROM slideshows ORDER BY id');
     console.log('🎬 SLIDESHOW_PREVIEW: All slideshows in database:', allSlideshowsResult.rows);
     
     // Get slideshow details
-    const slideshowResult = await pool.query(
+    const slideshowResult = await db.query(
       `SELECT s.*, u.username 
        FROM slideshows s 
        LEFT JOIN users u ON s.user_id = u.id 
@@ -9520,7 +9581,7 @@ app.get('/api/slideshow-preview/:id', async (req, res) => {
     console.log('🎬 SLIDESHOW_PREVIEW: Slideshow found:', slideshow.name);
     
     // Get images for the slideshow
-    const imagesResult = await pool.query(
+    const imagesResult = await db.query(
       `SELECT * FROM slideshow_images 
        WHERE slideshow_id = $1 
        ORDER BY display_order`,
@@ -9570,7 +9631,7 @@ app.get('/api/slideshow-preview/:id', async (req, res) => {
     // Get product links
     let productLinks = [];
     try {
-      const productLinksResult = await pool.query(`
+      const productLinksResult = await db.query(`
         SELECT pl.*, p.name as product_name, p.price, p.images as product_images
         FROM product_links pl
         JOIN products p ON pl.product_id = p.id
@@ -9656,7 +9717,7 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
     res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
     
     // Get slideshow details from database
-    const result = await pool.query(
+    const result = await db.query(
       'SELECT * FROM slideshows WHERE id = $1',
       [id]
     );
@@ -9793,7 +9854,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     console.log('🔴 PLAYLIST_MEDIA_ADD: Media file IDs:', mediaFileIds);
     
     // Check if user owns the playlist
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -9807,7 +9868,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     // Get current max display order
-    const maxOrderResult = await pool.query(
+    const maxOrderResult = await db.query(
       'SELECT COALESCE(MAX(display_order), 0) as max_order FROM playlist_media WHERE playlist_id = $1',
       [id]
     );
@@ -9817,7 +9878,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     if (mediaFileIds && mediaFileIds.length > 0) {
       for (const mediaId of mediaFileIds) {
         // Check if media file exists and user can access it (own file or admin)
-        const mediaCheck = await pool.query(
+        const mediaCheck = await db.query(
           'SELECT id, user_id FROM media WHERE id = $1',
           [mediaId]
         );
@@ -9829,7 +9890,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         const mediaFile = mediaCheck.rows[0];
         
         // Check if user is admin
-        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+        const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
         const isAdmin = userResult.rows[0]?.is_admin || false;
         
         // Allow access if: user owns the file OR user is admin
@@ -9838,13 +9899,13 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         }
         
         // Check if already linked
-        const existingLink = await pool.query(
+        const existingLink = await db.query(
           'SELECT id FROM playlist_media WHERE playlist_id = $1 AND media_id = $2',
           [id, mediaId]
         );
         
         if (existingLink.rows.length === 0) {
-          await pool.query(
+          await db.query(
             'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
             [id, mediaId, nextOrder]
           );
@@ -9871,7 +9932,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     console.log('🔴 PLAYLIST_MEDIA_REMOVE: Removing media from playlist:', id, 'media:', mediaId);
     
     // Check if user owns the playlist
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -9885,7 +9946,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     }
     
     // Remove media from playlist
-    const result = await pool.query(
+    const result = await db.query(
       'DELETE FROM playlist_media WHERE playlist_id = $1 AND media_id = $2',
       [id, mediaId]
     );
@@ -9913,7 +9974,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     console.log('🔴 PLAYLIST_MEDIA_UPDATE: New order:', mediaFileIds);
     
     // Check if user owns the playlist
-    const ownerCheck = await pool.query(
+    const ownerCheck = await db.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
@@ -9927,7 +9988,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     // Clear existing media links
-    await pool.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
+    await db.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
     
     // Add media files in new order
     if (mediaFileIds && mediaFileIds.length > 0) {
@@ -9935,7 +9996,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         const mediaId = mediaFileIds[i];
         
         // Check if media file exists and user can access it (own file or admin)
-        const mediaCheck = await pool.query(
+        const mediaCheck = await db.query(
           'SELECT id, user_id FROM media WHERE id = $1',
           [mediaId]
         );
@@ -9947,7 +10008,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         const mediaFile = mediaCheck.rows[0];
         
         // Check if user is admin
-        const userResult = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+        const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
         const isAdmin = userResult.rows[0]?.is_admin || false;
         
         // Allow access if: user owns the file OR user is admin
@@ -9955,7 +10016,7 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
           return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
         }
         
-        await pool.query(
+        await db.query(
           'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
           [id, mediaId, i + 1]
         );
@@ -9981,7 +10042,7 @@ app.get('/api/playlists/:playlistId/chat', async (req, res) => {
     console.log('🔴 CHAT: Fetching messages for playlist:', playlistId);
 
     // Check if playlist exists and is accessible
-    const playlistResult = await pool.query(
+    const playlistResult = await db.query(
       'SELECT id, requires_activation_code, is_public FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [playlistId]
     );
@@ -9995,7 +10056,7 @@ app.get('/api/playlists/:playlistId/chat', async (req, res) => {
     // For now, allow all users to view chat for public playlists
     // TODO: Add activation code check for protected playlists if needed
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT cm.*, u.username 
        FROM chat_messages cm 
        JOIN users u ON cm.user_id = u.id 
@@ -10040,7 +10101,7 @@ app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) 
     console.log('🔴 CHAT: Creating message for playlist:', playlistId, 'by user:', req.user.userId);
 
     // Check if playlist exists
-    const playlistResult = await pool.query(
+    const playlistResult = await db.query(
       'SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [playlistId]
     );
@@ -10050,14 +10111,14 @@ app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) 
     }
 
     // Insert the message
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO chat_messages (playlist_id, user_id, message) 
        VALUES ($1, $2, $3) RETURNING *`,
       [playlistId, req.user.userId, message.trim()]
     );
 
     // Get the message with username
-    const messageResult = await pool.query(
+    const messageResult = await db.query(
       `SELECT cm.*, u.username 
        FROM chat_messages cm 
        JOIN users u ON cm.user_id = u.id 
@@ -10092,7 +10153,7 @@ app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, asyn
     console.log('🔴 CHAT: Deleting message:', messageId, 'from playlist:', playlistId);
 
     // Check if user owns the message or is admin
-    const messageResult = await pool.query(
+    const messageResult = await db.query(
       'SELECT user_id FROM chat_messages WHERE id = $1 AND playlist_id = $2',
       [messageId, playlistId]
     );
@@ -10104,7 +10165,7 @@ app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, asyn
     const messageOwnerId = messageResult.rows[0].user_id;
     
     // Check if user is admin
-    const userResult = await pool.query(
+    const userResult = await db.query(
       'SELECT is_admin FROM users WHERE id = $1',
       [req.user.userId]
     );
@@ -10115,7 +10176,7 @@ app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, asyn
     }
 
     // Soft delete the message
-    await pool.query(
+    await db.query(
       'UPDATE chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
       [messageId]
     );
@@ -10138,7 +10199,7 @@ app.get('/api/slideshows/:slideshowId/chat', async (req, res) => {
     console.log('🎬 SLIDESHOW_CHAT: Fetching messages for slideshow:', slideshowId);
 
     // Check if slideshow exists and is accessible
-    const slideshowResult = await pool.query(
+    const slideshowResult = await db.query(
       'SELECT id, requires_activation_code, is_public FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
@@ -10152,7 +10213,7 @@ app.get('/api/slideshows/:slideshowId/chat', async (req, res) => {
     // For now, allow all users to view chat for public slideshows
     // TODO: Add activation code check for protected slideshows if needed
 
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT cm.*, u.username 
        FROM slideshow_chat_messages cm 
        JOIN users u ON cm.user_id = u.id 
@@ -10197,7 +10258,7 @@ app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res
     console.log('🎬 SLIDESHOW_CHAT: Creating message for slideshow:', slideshowId, 'by user:', req.user.userId);
 
     // Check if slideshow exists
-    const slideshowResult = await pool.query(
+    const slideshowResult = await db.query(
       'SELECT id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [slideshowId]
     );
@@ -10207,14 +10268,14 @@ app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res
     }
 
     // Insert the message
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO slideshow_chat_messages (slideshow_id, user_id, message) 
        VALUES ($1, $2, $3) RETURNING *`,
       [slideshowId, req.user.userId, message.trim()]
     );
 
     // Get the message with username
-    const messageResult = await pool.query(
+    const messageResult = await db.query(
       `SELECT cm.*, u.username 
        FROM slideshow_chat_messages cm 
        JOIN users u ON cm.user_id = u.id 
@@ -10249,7 +10310,7 @@ app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, as
     console.log('🎬 SLIDESHOW_CHAT: Deleting message:', messageId, 'from slideshow:', slideshowId);
 
     // Check if user owns the message or is admin
-    const messageResult = await pool.query(
+    const messageResult = await db.query(
       'SELECT user_id FROM slideshow_chat_messages WHERE id = $1 AND slideshow_id = $2',
       [messageId, slideshowId]
     );
@@ -10261,7 +10322,7 @@ app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, as
     const messageOwnerId = messageResult.rows[0].user_id;
     
     // Check if user is admin
-    const userResult = await pool.query(
+    const userResult = await db.query(
       'SELECT is_admin FROM users WHERE id = $1',
       [req.user.userId]
     );
@@ -10272,7 +10333,7 @@ app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, as
     }
 
     // Soft delete the message
-    await pool.query(
+    await db.query(
       'UPDATE slideshow_chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
       [messageId]
     );
@@ -10328,7 +10389,7 @@ app.get('/api/chat/universal', authenticateToken, async (req, res) => {
     query += ` ORDER BY cm.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     queryParams.push(parseInt(limit), parseInt(offset));
 
-    const result = await pool.query(query, queryParams);
+    const result = await db.query(query, queryParams);
 
     const messages = result.rows.map(msg => ({
       id: msg.id,
@@ -10363,7 +10424,7 @@ app.post('/api/chat/universal', authenticateToken, async (req, res) => {
       userId, message: message.trim(), messageType, productCategory 
     });
 
-    const result = await pool.query(
+    const result = await db.query(
       `INSERT INTO universal_chat_messages (user_id, message, message_type, product_category, created_at, updated_at) 
        VALUES ($1, $2, $3, $4, NOW(), NOW()) 
        RETURNING *`,
@@ -10373,7 +10434,7 @@ app.post('/api/chat/universal', authenticateToken, async (req, res) => {
     const newMessage = result.rows[0];
 
     // Get username for response
-    const userResult = await pool.query('SELECT username FROM users WHERE id = $1', [userId]);
+    const userResult = await db.query('SELECT username FROM users WHERE id = $1', [userId]);
     const username = userResult.rows[0]?.username || 'Unknown';
 
     const responseMessage = {
@@ -10404,7 +10465,7 @@ app.delete('/api/chat/universal/:messageId', authenticateToken, async (req, res)
     console.log('🌍 UNIVERSAL_CHAT: Deleting message:', messageId, 'by user:', userId);
 
     // Check if message exists and belongs to user (or user is admin)
-    const messageResult = await pool.query(
+    const messageResult = await db.query(
       'SELECT user_id FROM universal_chat_messages WHERE id = $1 AND is_deleted = FALSE',
       [messageId]
     );
@@ -10419,7 +10480,7 @@ app.delete('/api/chat/universal/:messageId', authenticateToken, async (req, res)
       return res.status(403).json({ error: 'Not authorized to delete this message' });
     }
 
-    await pool.query(
+    await db.query(
       'UPDATE universal_chat_messages SET is_deleted = TRUE, updated_at = NOW() WHERE id = $1',
       [messageId]
     );
@@ -10438,7 +10499,7 @@ app.get('/api/chat/categories', authenticateToken, async (req, res) => {
     console.log('🌍 CHAT_CATEGORIES: Fetching categories');
     
     // Get distinct categories from universal chat messages
-    const result = await pool.query(
+    const result = await db.query(
       `SELECT DISTINCT product_category 
        FROM universal_chat_messages 
        WHERE product_category IS NOT NULL AND product_category != '' AND is_deleted = FALSE 
@@ -10467,7 +10528,7 @@ app.get('/api/playlists/:id/product-links', authenticateToken, async (req, res) 
   try {
     const { id } = req.params;
     
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT pl.*, p.name as product_name, p.price, p.images as product_images
       FROM product_links pl
       JOIN products p ON pl.product_id = p.id
@@ -10502,13 +10563,13 @@ app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res)
     console.log('🔗 PRODUCT_LINK: Adding product link:', { playlistId: id, productId, userId: req.user.userId });
 
     // Check if playlist exists and user owns it
-    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    const playlistResult = await db.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
     }
 
     // Check if product exists and user owns it
-    const productResult = await pool.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
+    const productResult = await db.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
     if (productResult.rows.length === 0) {
       return res.status(404).json({ error: 'Product not found or access denied' });
     }
@@ -10516,7 +10577,7 @@ app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res)
     const product = productResult.rows[0];
 
     // Add link with product details
-    const result = await pool.query(`
+    const result = await db.query(`
       INSERT INTO product_links (playlist_id, product_id, title, url, description, image_url, display_order)
       VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM product_links WHERE playlist_id = $1))
       ON CONFLICT (playlist_id, product_id) DO UPDATE SET
@@ -10552,13 +10613,13 @@ app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, asy
     console.log('🔗 PRODUCT_LINK: Removing product link:', { playlistId: id, productId, userId: req.user.userId });
 
     // Check if playlist exists and user owns it
-    const playlistResult = await pool.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    const playlistResult = await db.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
     }
 
     // Remove link
-    const result = await pool.query(`
+    const result = await db.query(`
       DELETE FROM product_links 
       WHERE playlist_id = $1 AND product_id = $2 RETURNING *
     `, [id, productId]);
@@ -10584,7 +10645,7 @@ app.get('/api/slideshows/:id/product-links', authenticateToken, async (req, res)
     
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Getting product links for slideshow:', id);
     
-    const result = await pool.query(`
+    const result = await db.query(`
       SELECT pl.*, p.name as product_name, p.price, p.images as product_images
       FROM product_links pl
       JOIN products p ON pl.product_id = p.id
@@ -10620,13 +10681,13 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Adding product link:', { slideshowId: id, productId, userId: req.user.userId });
 
     // Check if slideshow exists and user owns it
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    const slideshowResult = await db.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
     }
 
     // Check if product exists and user owns it
-    const productResult = await pool.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
+    const productResult = await db.query('SELECT * FROM products WHERE id = $1 AND user_id = $2', [productId, req.user.userId]);
     if (productResult.rows.length === 0) {
       return res.status(404).json({ error: 'Product not found or access denied' });
     }
@@ -10634,7 +10695,7 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
     const product = productResult.rows[0];
 
     // Add link with product details
-    const result = await pool.query(`
+    const result = await db.query(`
       INSERT INTO product_links (slideshow_id, product_id, title, url, description, image_url, display_order)
       VALUES ($1, $2, $3, $4, $5, $6, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM product_links WHERE slideshow_id = $1))
       ON CONFLICT (slideshow_id, product_id) DO UPDATE SET
@@ -10670,13 +10731,13 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Removing product link:', { slideshowId: id, productId, userId: req.user.userId });
 
     // Check if slideshow exists and user owns it
-    const slideshowResult = await pool.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    const slideshowResult = await db.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
     }
 
     // Remove link
-    const result = await pool.query(`
+    const result = await db.query(`
       DELETE FROM product_links 
       WHERE slideshow_id = $1 AND product_id = $2 RETURNING *
     `, [id, productId]);
@@ -11238,7 +11299,7 @@ async function fixActivationCodes() {
     console.log('🔧 STARTUP: Checking activation code linkages...');
     
     // Fix EJ1EUFKRFG9H to point to DJKINGCAKE CHAIN
-    const djkingcakeResult = await pool.query(
+    const djkingcakeResult = await db.query(
       `SELECT s.*, 
               (SELECT COUNT(*) FROM slideshow_images WHERE slideshow_id = s.id) as image_count
        FROM slideshows s 
@@ -11250,7 +11311,7 @@ async function fixActivationCodes() {
       console.log(`🎯 Found DJKINGCAKE CHAIN slideshow: ID ${djkingcake.id} with ${djkingcake.image_count} images`);
       
       // Update EJ1EUFKRFG9H to point to DJKINGCAKE CHAIN
-      const updateResult = await pool.query(
+      const updateResult = await db.query(
         `UPDATE activation_codes 
          SET slideshow_id = $1, playlist_id = NULL
          WHERE code = $2 
@@ -11265,7 +11326,7 @@ async function fixActivationCodes() {
       }
       
       // Fix KCCISPOYSQSB to point to DJKINGCAKE CHAIN as well
-      const updateResult2 = await pool.query(
+      const updateResult2 = await db.query(
         `UPDATE activation_codes 
          SET slideshow_id = $1, playlist_id = NULL
          WHERE code = $2 
@@ -11360,3 +11421,58 @@ server.keepAliveTimeout = 10 * 60 * 1000; // 10 minutes keep-alive
 server.headersTimeout = 10 * 60 * 1000; // 10 minutes headers timeout
 
 console.log(`🔧 Server timeouts set to 10 minutes for large uploads`);
+
+// Graceful shutdown handling
+const gracefulShutdown = async (signal) => {
+  logger.info({
+    type: 'server_shutdown',
+    message: `${signal} signal received: starting graceful shutdown`,
+    timestamp: new Date().toISOString()
+  });
+  
+  console.log(`\n🛑 ${signal} signal received: starting graceful shutdown...`);
+  
+  // Stop accepting new connections
+  server.close(async () => {
+    console.log('✅ HTTP server closed');
+    
+    try {
+      // Close database pool gracefully
+      await db.close();
+      console.log('✅ Database pool closed');
+      
+      logger.info({
+        type: 'server_shutdown_complete',
+        message: 'Graceful shutdown completed',
+        timestamp: new Date().toISOString()
+      });
+      
+      process.exit(0);
+    } catch (error) {
+      errorLogger.error({
+        type: 'server_shutdown_error',
+        message: 'Error during graceful shutdown',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      });
+      
+      console.error('❌ Error during graceful shutdown:', error);
+      process.exit(1);
+    }
+  });
+  
+  // Force shutdown after 30 seconds if graceful shutdown doesn't complete
+  setTimeout(() => {
+    console.error('❌ Forced shutdown after 30 seconds');
+    errorLogger.error({
+      type: 'server_shutdown_timeout',
+      message: 'Graceful shutdown timed out, forcing exit',
+      timestamp: new Date().toISOString()
+    });
+    process.exit(1);
+  }, 30000);
+};
+
+// Handle shutdown signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
