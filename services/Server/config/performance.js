@@ -257,10 +257,17 @@ const staticCacheMiddleware = (req, res, next) => {
 const responseTimeMiddleware = (req, res, next) => {
   const start = Date.now();
   
-  res.on('finish', () => {
+  // Override res.end to capture response time before sending
+  const originalEnd = res.end;
+  res.end = function(...args) {
     const duration = Date.now() - start;
-    res.setHeader('X-Response-Time', `${duration}ms`);
-  });
+    // Only set header if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.setHeader('X-Response-Time', `${duration}ms`);
+    }
+    // Call original end method
+    return originalEnd.apply(this, args);
+  };
 
   next();
 };
