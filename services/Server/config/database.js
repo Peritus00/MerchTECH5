@@ -1,5 +1,5 @@
 const { Pool } = require('pg');
-const logger = require('../middleware/logger');
+const { logger } = require('../middleware/logger');
 const errorLogger = require('../middleware/errorHandler').errorLogger;
 
 // Database pool metrics tracking
