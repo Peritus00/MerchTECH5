@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { analyticsService } from '@/services/analyticsService';
@@ -57,6 +58,7 @@ const { width } = Dimensions.get('window');
 export default function DashboardScreen() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
+  const insets = useSafeAreaInsets();
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -412,9 +414,9 @@ export default function DashboardScreen() {
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
         {/* Header Actions - Top Right */}
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, { top: Math.max(insets.top, 20) }]}>
           <CartHeader color="#6b7280" size={28} />
           <TouchableOpacity 
             style={styles.profileButton}

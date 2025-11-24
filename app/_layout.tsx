@@ -8,6 +8,7 @@ import { Platform } from 'react-native';
 import 'react-native-reanimated';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -219,18 +220,20 @@ export default function RootLayout() {
   console.log('Web platform - using standard payment processing');
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ActionSheetProvider>
-        <AuthProvider>
-          <CartProvider>
-            <NotificationProvider>
-              <UploadProvider>
-                <RootLayoutNav />
-              </UploadProvider>
-            </NotificationProvider>
-          </CartProvider>
-        </AuthProvider>
-      </ActionSheetProvider>
-    </QueryClientProvider>
+    <SafeAreaProvider>
+      <QueryClientProvider client={queryClient}>
+        <ActionSheetProvider>
+          <AuthProvider>
+            <CartProvider>
+              <NotificationProvider>
+                <UploadProvider>
+                  <RootLayoutNav />
+                </UploadProvider>
+              </NotificationProvider>
+            </CartProvider>
+          </AuthProvider>
+        </ActionSheetProvider>
+      </QueryClientProvider>
+    </SafeAreaProvider>
   );
 }

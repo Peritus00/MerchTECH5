@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { CartHeader } from '@/components/CartHeader';
 
@@ -22,8 +23,9 @@ export default function HeaderWithLogo({
   showLogo = true,
   logoVariant = 'black',
 }: HeaderWithLogoProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
       {/* Left side - Title and subtitle */}
       <View style={styles.leftSection}>
         <Text style={styles.headerTitle}>{title}</Text>
