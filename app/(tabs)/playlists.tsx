@@ -360,17 +360,10 @@ export default function PlaylistsScreen() {
         </View>
         <View style={styles.headerRight}>
           <CartHeader color="#6b7280" size={24} />
-          <TouchableOpacity 
-            style={styles.addButtonContainer}
-            onPress={() => setShowCreateModal(true)}
-          >
-            <MaterialIconWithFallback name="add" size={24} color="#3b82f6" />
-            <Text style={styles.addButtonText}>CLICK HERE TO ADD NEW PLAYLIST</Text>
-          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Refresh Button */}
+      {/* Refresh Button and Add Playlist Button */}
       <View style={styles.refreshContainer}>
         <TouchableOpacity
           style={styles.refreshButton}
@@ -381,6 +374,13 @@ export default function PlaylistsScreen() {
         >
           <MaterialIconWithFallback name="refresh" size={20} color="#3b82f6" />
           <Text style={styles.refreshText}>Refresh</Text>
+        </TouchableOpacity>
+        <TouchableOpacity 
+          style={styles.addButtonContainer}
+          onPress={() => setShowCreateModal(true)}
+        >
+          <MaterialIconWithFallback name="add" size={20} color="#3b82f6" />
+          <Text style={styles.addButtonText}>CLICK HERE TO ADD NEW PLAYLIST</Text>
         </TouchableOpacity>
       </View>
 
@@ -565,9 +565,26 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#ef4444',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  refreshContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshText: {
+    fontSize: 14,
+    color: '#3b82f6',
+    fontWeight: '500',
   },
   searchContainer: {
     flexDirection: 'row',
