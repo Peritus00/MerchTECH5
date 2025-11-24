@@ -2635,7 +2635,7 @@ app.get('/api/analytics/summary', authenticateToken,
       genderDistRes = { rows: [] }; 
     }
 
-    // Recent scans
+    // Recent scans - prioritize QR code name, but show playlist/slideshow name if QR code name is generic
     let recentRes;
     try { recentRes = await db.query(
       `WITH dedup AS (
@@ -2647,14 +2647,64 @@ app.get('/api/analytics/summary', authenticateToken,
          JOIN qr_codes q ON s.qr_code_id = q.id
          WHERE q.user_id = $1
          ORDER BY s.qr_code_id, date_trunc('minute', s.scanned_at), s.scanned_at ASC
+       ),
+       qr_with_extracted_ids AS (
+         SELECT 
+           q.id,
+           q.name,
+           q.url,
+           q.playlist_id,
+           q.slideshow_id,
+           CASE 
+             WHEN q.url LIKE '%playlist-access/%' THEN 
+               CAST(SUBSTRING(q.url FROM '/playlist-access/([0-9]+)') AS INTEGER)
+             ELSE NULL
+           END AS extracted_playlist_id,
+           CASE 
+             WHEN q.url LIKE '%slideshow-access/%' THEN 
+               CAST(SUBSTRING(q.url FROM '/slideshow-access/([0-9]+)') AS INTEGER)
+             ELSE NULL
+           END AS extracted_slideshow_id
+         FROM qr_codes q
+         WHERE q.user_id = $1
        )
-       SELECT q.id AS qr_code_id,
-              q.name AS qr_name,
-              d.country_code AS country_code,
-              d.city AS city,
-              d.scanned_at AS timestamp
+       SELECT 
+         qwe.id AS qr_code_id,
+         CASE 
+           -- If QR code name is generic ("Test", "Test QR Code", etc.) and has playlist_id, use playlist name
+           WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+             AND qwe.playlist_id IS NOT NULL
+             AND p1.name IS NOT NULL
+           THEN p1.name
+           -- If QR code name is generic and playlist_id not set but URL has playlist ID, try to find playlist
+           WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+             AND qwe.playlist_id IS NULL
+             AND qwe.extracted_playlist_id IS NOT NULL
+             AND p2.name IS NOT NULL
+           THEN p2.name
+           -- If QR code name is generic and has slideshow_id, use slideshow name
+           WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+             AND qwe.slideshow_id IS NOT NULL
+             AND sh1.name IS NOT NULL
+           THEN sh1.name
+           -- If QR code name is generic and slideshow_id not set but URL has slideshow ID, try to find slideshow
+           WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+             AND qwe.slideshow_id IS NULL
+             AND qwe.extracted_slideshow_id IS NOT NULL
+             AND sh2.name IS NOT NULL
+           THEN sh2.name
+           -- Otherwise use QR code name
+           ELSE qwe.name
+         END AS qr_name,
+         d.country_code AS country_code,
+         d.city AS city,
+         d.scanned_at AS timestamp
        FROM dedup d
-       JOIN qr_codes q ON d.qr_code_id = q.id
+       JOIN qr_with_extracted_ids qwe ON d.qr_code_id = qwe.id
+       LEFT JOIN playlists p1 ON qwe.playlist_id = p1.id AND p1.user_id = $1
+       LEFT JOIN playlists p2 ON qwe.extracted_playlist_id = p2.id AND p2.user_id = $1
+       LEFT JOIN slideshows sh1 ON qwe.slideshow_id = sh1.id AND sh1.user_id = $1
+       LEFT JOIN slideshows sh2 ON qwe.extracted_slideshow_id = sh2.id AND sh2.user_id = $1
        ORDER BY d.scanned_at DESC
        LIMIT 10`,
       [userId]
@@ -2662,16 +2712,61 @@ app.get('/api/analytics/summary', authenticateToken,
       console.warn('📊 SUMMARY recentRes dedup failed, falling back to raw scans:', e.message);
       try {
         recentRes = await db.query(
-          `SELECT q.id AS qr_code_id,
-                  q.name AS qr_name,
-                  s.country_code AS country_code,
-                  s.city AS city,
-                  s.scanned_at AS timestamp
-             FROM qr_scans s
-             JOIN qr_codes q ON s.qr_code_id = q.id
-            WHERE q.user_id = $1
-            ORDER BY s.scanned_at DESC
-            LIMIT 10`,
+          `WITH qr_with_extracted_ids AS (
+             SELECT 
+               q.id,
+               q.name,
+               q.url,
+               q.playlist_id,
+               q.slideshow_id,
+               CASE 
+                 WHEN q.url LIKE '%playlist-access/%' THEN 
+                   CAST(SUBSTRING(q.url FROM '/playlist-access/([0-9]+)') AS INTEGER)
+                 ELSE NULL
+               END AS extracted_playlist_id,
+               CASE 
+                 WHEN q.url LIKE '%slideshow-access/%' THEN 
+                   CAST(SUBSTRING(q.url FROM '/slideshow-access/([0-9]+)') AS INTEGER)
+                 ELSE NULL
+               END AS extracted_slideshow_id
+             FROM qr_codes q
+             WHERE q.user_id = $1
+           )
+           SELECT 
+             qwe.id AS qr_code_id,
+             CASE 
+               WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+                 AND qwe.playlist_id IS NOT NULL
+                 AND p1.name IS NOT NULL
+               THEN p1.name
+               WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+                 AND qwe.playlist_id IS NULL
+                 AND qwe.extracted_playlist_id IS NOT NULL
+                 AND p2.name IS NOT NULL
+               THEN p2.name
+               WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+                 AND qwe.slideshow_id IS NOT NULL
+                 AND sh1.name IS NOT NULL
+               THEN sh1.name
+               WHEN (LOWER(qwe.name) IN ('test', 'test qr code', 'qr code') OR LOWER(qwe.name) LIKE 'test%')
+                 AND qwe.slideshow_id IS NULL
+                 AND qwe.extracted_slideshow_id IS NOT NULL
+                 AND sh2.name IS NOT NULL
+               THEN sh2.name
+               ELSE qwe.name
+             END AS qr_name,
+             s.country_code AS country_code,
+             s.city AS city,
+             s.scanned_at AS timestamp
+           FROM qr_scans s
+           JOIN qr_with_extracted_ids qwe ON s.qr_code_id = qwe.id
+           LEFT JOIN playlists p1 ON qwe.playlist_id = p1.id AND p1.user_id = $1
+           LEFT JOIN playlists p2 ON qwe.extracted_playlist_id = p2.id AND p2.user_id = $1
+           LEFT JOIN slideshows sh1 ON qwe.slideshow_id = sh1.id AND sh1.user_id = $1
+           LEFT JOIN slideshows sh2 ON qwe.extracted_slideshow_id = sh2.id AND sh2.user_id = $1
+          WHERE qwe.id IN (SELECT qr_code_id FROM qr_scans WHERE qr_code_id IN (SELECT id FROM qr_codes WHERE user_id = $1))
+          ORDER BY s.scanned_at DESC
+          LIMIT 10`,
           [userId]
         );
       } catch (e2) {
@@ -9134,6 +9229,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       } catch (_) {}
 
       // Fallback 1: robust URL matching for legacy codes (normalize host, slashes, strip query)
+      // Prefer QR codes with non-generic names (not "Test", "test", etc.) over generic ones
       if (!qrId) {
         const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
         const frontend = rawFrontend.replace(/\/$/, '');
@@ -9143,19 +9239,27 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           `${frontend.replace('https://', 'https://www.')}/playlist-access/${id}`,
         ];
         // Search by normalized URL ignoring trailing slash and querystrings
+        // Prioritize QR codes with non-generic names (not starting with "test", "Test", etc.)
         const qrByUrl = await db.query(
           `SELECT id FROM qr_codes 
            WHERE is_active = true AND (
              regexp_replace(url, '\\?.*$', '') IN ($1, $2, $3)
              OR regexp_replace(url, '/+$', '') IN ($1, $2, $3)
            )
-           ORDER BY created_at DESC LIMIT 1`,
+           ORDER BY 
+             CASE 
+               WHEN LOWER(name) NOT LIKE 'test%' AND LOWER(name) NOT IN ('test', 'test qr code', 'qr code') THEN 0
+               ELSE 1
+             END,
+             created_at DESC 
+           LIMIT 1`,
           candidates
         );
         if (qrByUrl.rows.length > 0) qrId = qrByUrl.rows[0].id;
       }
 
       // Fallback 2: match by path only regardless of domain (handles QR pointing to backend host)
+      // Prefer QR codes with non-generic names
       if (!qrId) {
         try {
           const pathPattern = `/playlist-access/${id}`;
@@ -9164,13 +9268,20 @@ app.get('/api/playlist-access/:id', async (req, res) => {
              WHERE is_active = true AND (
                POSITION($1 in url) > 0 OR POSITION($2 in url) > 0
              )
-             ORDER BY created_at DESC LIMIT 1`,
+             ORDER BY 
+               CASE 
+                 WHEN LOWER(name) NOT LIKE 'test%' AND LOWER(name) NOT IN ('test', 'test qr code', 'qr code') THEN 0
+                 ELSE 1
+               END,
+               created_at DESC 
+             LIMIT 1`,
             [pathPattern, `${pathPattern}?`]
           );
           if (qrByPath.rows.length > 0) qrId = qrByPath.rows[0].id;
         } catch (_) {}
       }
       // Fallback 3: strict path equality after stripping domain, query, and trailing slashes
+      // Prefer QR codes with non-generic names
       if (!qrId) {
         try {
           const normalizedPath = `/playlist-access/${id}`;
@@ -9180,7 +9291,14 @@ app.get('/api/playlist-access/:id', async (req, res) => {
                regexp_replace(
                  regexp_replace(url, '^https?://[^/]+', ''),
                  '/+$', ''
-               ) = $1`,
+               ) = $1
+             ORDER BY 
+               CASE 
+                 WHEN LOWER(name) NOT LIKE 'test%' AND LOWER(name) NOT IN ('test', 'test qr code', 'qr code') THEN 0
+                 ELSE 1
+               END,
+               created_at DESC 
+             LIMIT 1`,
             [normalizedPath]
           );
           if (qrByNormalizedPath.rows.length > 0) qrId = qrByNormalizedPath.rows[0].id;
