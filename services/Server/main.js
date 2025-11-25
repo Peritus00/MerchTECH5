@@ -1245,6 +1245,19 @@ app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req,
 // Get deleted activation codes (admin only, last 90 days)
 app.get('/api/admin/deleted/activation-codes', authenticateToken, isAdmin, async (req, res) => {
   try {
+    // First check if deleted_at column exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
+    
+    // If column doesn't exist, return empty array (migration not run yet)
+    if (columnCheck.rows.length === 0) {
+      console.log('⚠️ deleted_at column not found in activation_codes table - migration may not have run yet');
+      return res.json({ deletedActivationCodes: [] });
+    }
+    
     const result = await db.query(`
       SELECT 
         ac.id,
@@ -1278,7 +1291,7 @@ app.get('/api/admin/deleted/activation-codes', authenticateToken, isAdmin, async
     res.json({ deletedActivationCodes: result.rows });
   } catch (error) {
     console.error('Error fetching deleted activation codes:', error);
-    res.status(500).json({ error: 'Failed to fetch deleted activation codes' });
+    res.status(500).json({ error: 'Failed to fetch deleted activation codes', details: error.message });
   }
 });
 
@@ -1625,6 +1638,20 @@ app.post('/api/admin/restore/activation-codes/:id', authenticateToken, isAdmin, 
   try {
     const { id } = req.params;
     
+    // First check if deleted_at column exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
+    
+    // If column doesn't exist, return error (migration not run yet)
+    if (columnCheck.rows.length === 0) {
+      return res.status(400).json({ 
+        error: 'Migration not run yet. Please run migration 028_add_deleted_at_to_activation_codes.sql first.' 
+      });
+    }
+    
     // Check if activation code exists and is deleted
     const checkResult = await db.query(
       'SELECT id, created_by FROM activation_codes WHERE id = $1 AND deleted_at IS NOT NULL',
@@ -1647,7 +1674,7 @@ app.post('/api/admin/restore/activation-codes/:id', authenticateToken, isAdmin, 
     });
   } catch (error) {
     console.error('Error restoring activation code:', error);
-    res.status(500).json({ error: 'Failed to restore activation code' });
+    res.status(500).json({ error: 'Failed to restore activation code', details: error.message });
   }
 });
 
@@ -8495,22 +8522,49 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all activation codes for user:', req.user.userId);
     
-    const result = await db.query(
-      `SELECT ac.*, 
-              p.name as playlist_name,
-              s.name as slideshow_name,
-              CASE 
-                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                ELSE 'unknown'
-              END as content_type
-       FROM activation_codes ac
-       LEFT JOIN playlists p ON ac.playlist_id = p.id
-       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
-       ORDER BY ac.created_at DESC`,
-      [req.user.userId]
-    );
+    let result;
+    try {
+      // Try with deleted_at filter first
+      result = await db.query(
+        `SELECT ac.*, 
+                p.name as playlist_name,
+                s.name as slideshow_name,
+                CASE 
+                  WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                  WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                  ELSE 'unknown'
+                END as content_type
+         FROM activation_codes ac
+         LEFT JOIN playlists p ON ac.playlist_id = p.id
+         LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+         WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
+         ORDER BY ac.created_at DESC`,
+        [req.user.userId]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        console.log('⚠️ deleted_at column not found, querying without filter');
+        result = await db.query(
+          `SELECT ac.*, 
+                  p.name as playlist_name,
+                  s.name as slideshow_name,
+                  CASE 
+                    WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                    WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                    ELSE 'unknown'
+                  END as content_type
+           FROM activation_codes ac
+           LEFT JOIN playlists p ON ac.playlist_id = p.id
+           LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+           WHERE ac.created_by = $1
+           ORDER BY ac.created_at DESC`,
+          [req.user.userId]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'activation codes');
     res.json({ activationCodes: result.rows });
@@ -8526,22 +8580,49 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all generated codes for user:', req.user.userId);
     
-    const result = await db.query(
-      `SELECT ac.*, 
-              p.name as playlist_name,
-              s.name as slideshow_name,
-              CASE 
-                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                ELSE 'unknown'
-              END as content_type
-       FROM activation_codes ac
-       LEFT JOIN playlists p ON ac.playlist_id = p.id
-       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
-       ORDER BY ac.created_at DESC`,
-      [req.user.userId]
-    );
+    let result;
+    try {
+      // Try with deleted_at filter first
+      result = await db.query(
+        `SELECT ac.*, 
+                p.name as playlist_name,
+                s.name as slideshow_name,
+                CASE 
+                  WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                  WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                  ELSE 'unknown'
+                END as content_type
+         FROM activation_codes ac
+         LEFT JOIN playlists p ON ac.playlist_id = p.id
+         LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+         WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
+         ORDER BY ac.created_at DESC`,
+        [req.user.userId]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        console.log('⚠️ deleted_at column not found, querying without filter');
+        result = await db.query(
+          `SELECT ac.*, 
+                  p.name as playlist_name,
+                  s.name as slideshow_name,
+                  CASE 
+                    WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                    WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                    ELSE 'unknown'
+                  END as content_type
+           FROM activation_codes ac
+           LEFT JOIN playlists p ON ac.playlist_id = p.id
+           LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+           WHERE ac.created_by = $1
+           ORDER BY ac.created_at DESC`,
+          [req.user.userId]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'generated codes');
     res.json({ activationCodes: result.rows });
@@ -8557,6 +8638,14 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching access codes for user:', req.user.userId);
     
+    // Check if deleted_at column exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
+    const hasDeletedAtColumn = columnCheck.rows.length > 0;
+    
     const result = await db.query(
       `SELECT ac.*, uac.attached_at,
               p.name as playlist_name,
@@ -8566,7 +8655,7 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
        JOIN activation_codes ac ON uac.activation_code_id = ac.id
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE uac.user_id = $1 AND ac.is_active = true AND ac.deleted_at IS NULL
+       WHERE uac.user_id = $1 AND ac.is_active = true${hasDeletedAtColumn ? ' AND ac.deleted_at IS NULL' : ''}
        ORDER BY uac.attached_at DESC`,
       [req.user.userId]
     );
@@ -8592,13 +8681,29 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     console.log('🔑 ACTIVATION_CODES: Attaching code to user:', { code, userId: req.user.userId });
     
     // First, verify the code exists and is valid
-    const codeResult = await db.query(
-      `SELECT * FROM activation_codes 
-       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
-       AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)`,
-      [code]
-    );
+    let codeResult;
+    try {
+      codeResult = await db.query(
+        `SELECT * FROM activation_codes 
+         WHERE code = $1 AND is_active = true AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)`,
+        [code]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        codeResult = await db.query(
+          `SELECT * FROM activation_codes 
+           WHERE code = $1 AND is_active = true
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND (max_uses IS NULL OR uses_count < max_uses)`,
+          [code]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     if (codeResult.rows.length === 0) {
       console.log('🔑 ACTIVATION_CODES: Invalid or expired code:', code);
@@ -8679,14 +8784,31 @@ app.post('/api/activation-codes/validate', async (req, res) => {
     
     console.log('🔑 ACTIVATION_CODES: Validating code:', { code, playlistId, slideshowId });
     
-    const result = await db.query(
-      `SELECT * FROM activation_codes 
-       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
-       AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)
-       AND (playlist_id = $2 OR slideshow_id = $3)`,
-      [code, playlistId || null, slideshowId || null]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `SELECT * FROM activation_codes 
+         WHERE code = $1 AND is_active = true AND deleted_at IS NULL
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)
+         AND (playlist_id = $2 OR slideshow_id = $3)`,
+        [code, playlistId || null, slideshowId || null]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        result = await db.query(
+          `SELECT * FROM activation_codes 
+           WHERE code = $1 AND is_active = true
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND (max_uses IS NULL OR uses_count < max_uses)
+           AND (playlist_id = $2 OR slideshow_id = $3)`,
+          [code, playlistId || null, slideshowId || null]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     if (result.rows.length === 0) {
       console.log('🔑 ACTIVATION_CODES: Invalid code for content');
@@ -8714,12 +8836,27 @@ app.get('/api/activation-codes/content/:contentType/:contentId', authenticateTok
     console.log('🔑 ACTIVATION_CODES: Fetching codes for content:', { contentType, contentId });
     
     const column = contentType === 'playlist' ? 'playlist_id' : 'slideshow_id';
-    const result = await db.query(
-      `SELECT ac.* FROM activation_codes ac
-       WHERE ac.${column} = $1 AND ac.created_by = $2 AND ac.deleted_at IS NULL
-       ORDER BY ac.created_at DESC`,
-      [contentId, req.user.userId]
-    );
+    let result;
+    try {
+      result = await db.query(
+        `SELECT ac.* FROM activation_codes ac
+         WHERE ac.${column} = $1 AND ac.created_by = $2 AND ac.deleted_at IS NULL
+         ORDER BY ac.created_at DESC`,
+        [contentId, req.user.userId]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        result = await db.query(
+          `SELECT ac.* FROM activation_codes ac
+           WHERE ac.${column} = $1 AND ac.created_by = $2
+           ORDER BY ac.created_at DESC`,
+          [contentId, req.user.userId]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'codes for content');
     res.json({ activationCodes: result.rows });
@@ -8739,10 +8876,23 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
     console.log('🔑 ACTIVATION_CODES: Updating code:', { codeId, maxUses, expiresAt, isActive });
     
     // First verify the user owns this code and it's not deleted
-    const ownerResult = await db.query(
-      `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
-      [codeId, req.user.userId]
-    );
+    let ownerResult;
+    try {
+      ownerResult = await db.query(
+        `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+        [codeId, req.user.userId]
+      );
+    } catch (error) {
+      // If column doesn't exist, retry without deleted_at filter
+      if (error.code === '42703' || error.message?.includes('deleted_at')) {
+        ownerResult = await db.query(
+          `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2`,
+          [codeId, req.user.userId]
+        );
+      } else {
+        throw error;
+      }
+    }
     
     if (ownerResult.rows.length === 0) {
       return res.status(404).json({ error: 'Activation code not found or you do not have permission to edit it' });
@@ -8806,32 +8956,62 @@ app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) 
     
     console.log('🔑 ACTIVATION_CODES: Deleting code:', codeId);
     
-    // First verify the user owns this code and it's not already deleted
-    const checkResult = await db.query(
-      `SELECT id FROM activation_codes 
-       WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
-      [codeId, req.user.userId]
-    );
+    // Check if deleted_at column exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
     
-    if (checkResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Activation code not found or you do not have permission to delete it' });
+    const hasDeletedAtColumn = columnCheck.rows.length > 0;
+    
+    if (hasDeletedAtColumn) {
+      // Soft delete: First verify the user owns this code and it's not already deleted
+      const checkResult = await db.query(
+        `SELECT id FROM activation_codes 
+         WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+        [codeId, req.user.userId]
+      );
+      
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Activation code not found or you do not have permission to delete it' });
+      }
+      
+      // Soft delete by setting deleted_at timestamp
+      const result = await db.query(
+        `UPDATE activation_codes 
+         SET deleted_at = NOW(), updated_at = NOW() 
+         WHERE id = $1 AND created_by = $2 
+         RETURNING *`,
+        [codeId, req.user.userId]
+      );
+    } else {
+      // Fallback to hard delete if column doesn't exist (migration not run yet)
+      console.log('⚠️ deleted_at column not found, using hard delete');
+      const checkResult = await db.query(
+        `SELECT id FROM activation_codes 
+         WHERE id = $1 AND created_by = $2`,
+        [codeId, req.user.userId]
+      );
+      
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Activation code not found or you do not have permission to delete it' });
+      }
+      
+      const result = await db.query(
+        `DELETE FROM activation_codes 
+         WHERE id = $1 AND created_by = $2 
+         RETURNING *`,
+        [codeId, req.user.userId]
+      );
     }
-    
-    // Soft delete by setting deleted_at timestamp
-    const result = await db.query(
-      `UPDATE activation_codes 
-       SET deleted_at = NOW(), updated_at = NOW() 
-       WHERE id = $1 AND created_by = $2 
-       RETURNING *`,
-      [codeId, req.user.userId]
-    );
     
     console.log('🔑 ACTIVATION_CODES: Code deleted successfully');
     res.json({ message: 'Activation code deleted successfully' });
     
   } catch (error) {
     console.error('🔑 ACTIVATION_CODES: Error deleting code:', error);
-    res.status(500).json({ error: 'Failed to delete activation code' });
+    res.status(500).json({ error: 'Failed to delete activation code', details: error.message });
   }
 });
 
@@ -9426,10 +9606,23 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         return res.status(403).json({ message: 'Activation code required' });
       }
 
-      const codeRes = await client.query(
-        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND deleted_at IS NULL AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
-        [activationCode, slideshowId]
-      );
+      let codeRes;
+      try {
+        codeRes = await client.query(
+          'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND deleted_at IS NULL AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
+          [activationCode, slideshowId]
+        );
+      } catch (error) {
+        // If column doesn't exist, retry without deleted_at filter
+        if (error.code === '42703' || error.message?.includes('deleted_at')) {
+          codeRes = await client.query(
+            'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
+            [activationCode, slideshowId]
+          );
+        } else {
+          throw error;
+        }
+      }
 
       if (codeRes.rows.length === 0) {
         return res.status(403).json({ message: 'Invalid or expired activation code' });
