@@ -12,7 +12,9 @@ import {
   Image,
 } from 'react-native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
+import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
@@ -24,6 +26,7 @@ import CustomAlert from '@/components/CustomAlert';
 import EditPlaylistModal from '@/components/EditPlaylistModal';
 
 export default function PlaylistsScreen() {
+  const insets = useSafeAreaInsets();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -347,7 +350,7 @@ export default function PlaylistsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerLeft}>
           <Text style={styles.headerTitle}>Playlists</Text>
         </View>
@@ -360,6 +363,12 @@ export default function PlaylistsScreen() {
         </View>
         <View style={styles.headerRight}>
           <CartHeader color="#6b7280" size={24} />
+          <TouchableOpacity 
+            style={styles.profileButton}
+            onPress={() => router.push('/settings/profile')}
+          >
+            <MaterialIcons name="account-circle" size={28} color="#6b7280" />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -524,7 +533,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
@@ -544,7 +553,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    gap: 8,
+    gap: 12,
+  },
+  profileButton: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: 18,
