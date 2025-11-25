@@ -483,6 +483,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         const imageUri = result.assets[0].uri;
         
         // Compress the image before storing
+        // On iOS, this will return a file URI for immediate display
+        // On Android, this will return a base64 data URI
         const compressedImageUri = await compressImage(imageUri);
         
         setOptions(prev => ({
@@ -561,19 +563,77 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         });
       } else {
         // For React Native, use ImageManipulator
+        // iOS-specific: Use much smaller size and higher compression to reduce base64 length
+        // iOS has stricter limits on data URI length in Image components
+        const maxSize = Platform.OS === 'ios' ? 100 : 200; // Reduced from 150 to 100 for iOS
+        const compression = Platform.OS === 'ios' ? 0.3 : 0.6; // More aggressive compression for iOS
+        
         const manipulatedImage = await ImageManipulator.manipulateAsync(
           uri,
           [
-            { resize: { width: 200, height: 200 } }
+            { resize: { width: maxSize, height: maxSize } }
           ],
           { 
-            compress: 0.6, 
+            compress: compression, 
             format: ImageManipulator.SaveFormat.JPEG,
-            base64: true
+            base64: true // Always get base64 for database storage
           }
         );
         
-        return `data:image/jpeg;base64,${manipulatedImage.base64}`;
+        // Ensure base64 is available and properly formatted
+        if (manipulatedImage.base64) {
+          // iOS can have issues with very long base64 strings, so ensure it's properly formatted
+          const base64Data = manipulatedImage.base64.trim();
+          
+          // Validate base64 string
+          if (!base64Data || base64Data.length === 0) {
+            console.error('❌ Empty base64 data from ImageManipulator');
+            throw new Error('Failed to compress image: empty base64 data');
+          }
+          
+          // Remove any data URI prefix if present (shouldn't be, but just in case)
+          const cleanBase64 = base64Data.startsWith('data:') 
+            ? base64Data.split(',')[1] 
+            : base64Data;
+          
+          // iOS has a practical limit around 50KB for base64 data URIs in Image components
+          // Log base64 length for debugging (especially on iOS)
+          const base64Length = cleanBase64.length;
+          if (Platform.OS === 'ios') {
+            console.log(`📱 iOS Logo Compression: Base64 length: ${base64Length} chars (${(base64Length / 1024).toFixed(2)} KB)`);
+            
+            // If still too large, try even more aggressive compression
+            if (base64Length > 50000) { // ~50KB limit
+              console.warn('⚠️ iOS Logo still too large, applying additional compression...');
+              const furtherCompressed = await ImageManipulator.manipulateAsync(
+                manipulatedImage.uri,
+                [
+                  { resize: { width: 80, height: 80 } } // Even smaller
+                ],
+                { 
+                  compress: 0.2, // Very aggressive compression
+                  format: ImageManipulator.SaveFormat.JPEG,
+                  base64: true
+                }
+              );
+              
+              if (furtherCompressed.base64) {
+                const furtherCleanBase64 = furtherCompressed.base64.trim();
+                console.log(`📱 iOS Logo Final Compression: Base64 length: ${furtherCleanBase64.length} chars (${(furtherCleanBase64.length / 1024).toFixed(2)} KB)`);
+                return `data:image/jpeg;base64,${furtherCleanBase64}`;
+              }
+            }
+          }
+          
+          // Return properly formatted data URI
+          return `data:image/jpeg;base64,${cleanBase64}`;
+        } else {
+          // Fallback: if base64 is not available, log error and return URI
+          // This should not happen, but handle gracefully
+          console.error('❌ Base64 not available from ImageManipulator');
+          console.error('❌ Manipulated image:', manipulatedImage);
+          throw new Error('Failed to compress image: base64 not available');
+        }
       }
     } catch (error) {
       console.error('Error compressing image:', error);

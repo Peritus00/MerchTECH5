@@ -213,6 +213,10 @@ export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = (
                 borderRadius,
               }}
               resizeMode="contain"
+              onError={(error) => {
+                console.error('❌ QR Logo Image Error:', error);
+                console.error('❌ Logo imageData:', logoOptions.imageData?.substring(0, 100));
+              }}
             />
           ) : (
             <ThemedText style={{ fontSize: 12, textAlign: 'center' }}>
