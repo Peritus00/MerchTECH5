@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, Alert, TextInput, Platform, Clipboard } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
@@ -10,12 +11,13 @@ import { productsAPI } from '@/services/api';
 import ShareButton from '@/components/ShareButton';
 
 export default function MasterStoreScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const router = useRouter();
 
   const categories = ['Music', 'Painting', 'Sculpture', 'Literature', 'Architecture', 'Performing', 'Film'];
 
@@ -107,8 +109,12 @@ export default function MasterStoreScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ThemedText style={{ color: '#2563eb' }}>← Back</ThemedText>
         </TouchableOpacity>
         <ThemedText type="title" style={styles.storeTitle}>
@@ -217,7 +223,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },

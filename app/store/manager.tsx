@@ -10,6 +10,7 @@ import {
   Platform,
   Clipboard,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
@@ -35,12 +36,13 @@ const normalizeProduct = (p: any): Product => {
 };
 
 export default function MyStoreManager() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<Product | null>(null);
   const [renderTrigger, setRenderTrigger] = useState(0);
-  const router = useRouter();
   const { user } = useAuth();
   const { canCreate, refresh: refreshLimits, usage, limits, tier, isLoading: limitsLoading } = useSubscriptionLimits();
   
@@ -306,8 +308,12 @@ export default function MyStoreManager() {
 
   return (
     <ThemedView style={{ flex: 1 }}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.replace('/(tabs)/settings')} style={styles.backButton}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.replace('/(tabs)/settings')} 
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ThemedText style={{ color: '#2563eb' }}>← Back to Settings</ThemedText>
         </TouchableOpacity>
       </View>
@@ -377,7 +383,6 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     paddingHorizontal: 16,
-    paddingTop: 16,
     paddingBottom: 8,
   },
   backButton: {
