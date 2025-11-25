@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import CategoryFilter from '@/components/CategoryFilter';
@@ -12,13 +13,14 @@ import { productsAPI } from '@/services/api';
 import { useCart } from '@/contexts/CartContext';
 
 export default function ShopScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
-  const router = useRouter();
   const { getTotalItems } = useCart();
 
   const categories = ['All', 'MUSIC', 'Sculpture', 'Painting', 'Literature', 'Architecture', 'Performing', 'Film'];
@@ -120,11 +122,12 @@ export default function ShopScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedView style={styles.header}>
+      <ThemedView style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <ThemedView style={styles.headerTop}>
           <TouchableOpacity 
             style={styles.backButton} 
             onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <ThemedText style={styles.backButtonText}>← Back</ThemedText>
           </TouchableOpacity>
@@ -199,7 +202,7 @@ const styles = StyleSheet.create({
   },
   header: { 
     paddingHorizontal: 16,
-    paddingVertical: 20,
+    paddingBottom: 20,
     alignItems: 'center',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
