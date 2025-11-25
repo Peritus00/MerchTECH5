@@ -12,24 +12,26 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { adminAPI } from '@/services/api';
-import { DeletedQRCode, DeletedPlaylist, DeletedSlideshow } from '@/types';
+import { DeletedQRCode, DeletedPlaylist, DeletedSlideshow, DeletedActivationCode } from '@/types';
 
-type TabType = 'qr-codes' | 'playlists' | 'slideshows';
+type TabType = 'qr-codes' | 'playlists' | 'slideshows' | 'activation-codes';
 
 interface GroupedItems {
   [userId: number]: {
     owner_username: string;
     owner_email: string;
-    items: (DeletedQRCode | DeletedPlaylist | DeletedSlideshow)[];
+    items: (DeletedQRCode | DeletedPlaylist | DeletedSlideshow | DeletedActivationCode)[];
   };
 }
 
 export default function RestoreDeletedScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('qr-codes');
   const [loading, setLoading] = useState(true);
@@ -39,6 +41,7 @@ export default function RestoreDeletedScreen() {
   const [deletedQRCodes, setDeletedQRCodes] = useState<DeletedQRCode[]>([]);
   const [deletedPlaylists, setDeletedPlaylists] = useState<DeletedPlaylist[]>([]);
   const [deletedSlideshows, setDeletedSlideshows] = useState<DeletedSlideshow[]>([]);
+  const [deletedActivationCodes, setDeletedActivationCodes] = useState<DeletedActivationCode[]>([]);
   
   const [restoringIds, setRestoringIds] = useState<Set<number>>(new Set());
 
@@ -57,15 +60,17 @@ export default function RestoreDeletedScreen() {
   const fetchDeletedItems = async () => {
     try {
       setLoading(true);
-      const [qrCodes, playlists, slideshows] = await Promise.all([
+      const [qrCodes, playlists, slideshows, activationCodes] = await Promise.all([
         adminAPI.getDeletedQRCodes(),
         adminAPI.getDeletedPlaylists(),
         adminAPI.getDeletedSlideshows(),
+        adminAPI.getDeletedActivationCodes(),
       ]);
       
       setDeletedQRCodes(qrCodes);
       setDeletedPlaylists(playlists);
       setDeletedSlideshows(slideshows);
+      setDeletedActivationCodes(activationCodes);
     } catch (error: any) {
       console.error('Error fetching deleted items:', error);
       Alert.alert('Error', error.message || 'Failed to fetch deleted items');
@@ -103,7 +108,7 @@ export default function RestoreDeletedScreen() {
     return grouped;
   };
 
-  const filterItems = <T extends { name?: string; owner_username?: string; owner_email?: string }>(
+  const filterItems = <T extends { name?: string; code?: string; owner_username?: string; owner_email?: string }>(
     items: T[]
   ): T[] => {
     if (!searchQuery.trim()) return items;
@@ -111,6 +116,7 @@ export default function RestoreDeletedScreen() {
     return items.filter(
       (item) =>
         item.name?.toLowerCase().includes(query) ||
+        item.code?.toLowerCase().includes(query) ||
         item.owner_username?.toLowerCase().includes(query) ||
         item.owner_email?.toLowerCase().includes(query)
     );
@@ -143,32 +149,64 @@ export default function RestoreDeletedScreen() {
     type: TabType,
     name: string
   ) => {
+    console.log('🔄 RESTORE: Restore button clicked', { id, type, name });
+    
     Alert.alert(
       'Restore Item',
       `Are you sure you want to restore "${name}"? The item will be immediately visible to the original owner.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('🔄 RESTORE: User cancelled restore');
+          }
+        },
         {
           text: 'Restore',
           style: 'default',
           onPress: async () => {
             try {
+              console.log('🔄 RESTORE: User confirmed restore, starting restore process...', { id, type });
               setRestoringIds((prev) => new Set(prev).add(id));
               
+              let result;
               if (type === 'qr-codes') {
-                await adminAPI.restoreQRCode(id);
+                console.log('🔄 RESTORE: Calling adminAPI.restoreQRCode...', id);
+                result = await adminAPI.restoreQRCode(id);
+                console.log('🔄 RESTORE: restoreQRCode response:', result);
               } else if (type === 'playlists') {
-                await adminAPI.restorePlaylist(id);
+                console.log('🔄 RESTORE: Calling adminAPI.restorePlaylist...', id);
+                result = await adminAPI.restorePlaylist(id);
+                console.log('🔄 RESTORE: restorePlaylist response:', result);
               } else if (type === 'slideshows') {
-                await adminAPI.restoreSlideshow(id);
+                console.log('🔄 RESTORE: Calling adminAPI.restoreSlideshow...', id);
+                result = await adminAPI.restoreSlideshow(id);
+                console.log('🔄 RESTORE: restoreSlideshow response:', result);
+              } else if (type === 'activation-codes') {
+                console.log('🔄 RESTORE: Calling adminAPI.restoreActivationCode...', id);
+                result = await adminAPI.restoreActivationCode(id);
+                console.log('🔄 RESTORE: restoreActivationCode response:', result);
               }
               
+              console.log('🔄 RESTORE: Restore successful, refreshing list...');
               Alert.alert('Success', 'Item restored successfully');
               await fetchDeletedItems();
+              console.log('🔄 RESTORE: List refreshed after restore');
             } catch (error: any) {
-              console.error('Error restoring item:', error);
-              Alert.alert('Error', error.message || 'Failed to restore item');
+              console.error('🔄 RESTORE: Error restoring item:', error);
+              console.error('🔄 RESTORE: Error details:', {
+                message: error.message,
+                response: error.response?.data,
+                status: error.response?.status,
+                statusText: error.response?.statusText,
+              });
+              Alert.alert(
+                'Error', 
+                error.response?.data?.error || error.message || 'Failed to restore item'
+              );
             } finally {
+              console.log('🔄 RESTORE: Clearing restoring state for id:', id);
               setRestoringIds((prev) => {
                 const next = new Set(prev);
                 next.delete(id);
@@ -298,6 +336,48 @@ export default function RestoreDeletedScreen() {
     );
   };
 
+  const renderActivationCodeItem = (item: DeletedActivationCode) => {
+    const daysAgo = formatDaysAgo(item.deleted_at);
+    const daysUntilExpiry = getDaysUntilExpiry(item.deleted_at);
+    const isRestoring = restoringIds.has(item.id);
+    const contentName = item.playlist_name || item.slideshow_name || 'Unknown';
+    
+    return (
+      <View key={item.id} style={styles.itemCard}>
+        <View style={styles.itemHeader}>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.itemName}>{item.code}</ThemedText>
+            <ThemedText style={styles.itemDescription}>
+              {item.content_type === 'playlist' ? 'Playlist' : 'Slideshow'}: {contentName}
+            </ThemedText>
+          </View>
+          <TouchableOpacity
+            style={styles.restoreButton}
+            onPress={() => handleRestore(item.id, 'activation-codes', item.code)}
+            disabled={isRestoring}
+          >
+            {isRestoring ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <>
+                <MaterialIcons name="restore" size={18} color="#fff" />
+                <ThemedText style={styles.restoreButtonText}>Restore</ThemedText>
+              </>
+            )}
+          </TouchableOpacity>
+        </View>
+        <View style={styles.itemMeta}>
+          <ThemedText style={styles.metaText}>Deleted: {daysAgo}</ThemedText>
+          {daysUntilExpiry < 30 && (
+            <ThemedText style={styles.warningText}>
+              Expires in {daysUntilExpiry} days
+            </ThemedText>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -308,13 +388,15 @@ export default function RestoreDeletedScreen() {
       );
     }
 
-    let items: (DeletedQRCode | DeletedPlaylist | DeletedSlideshow)[] = [];
+    let items: (DeletedQRCode | DeletedPlaylist | DeletedSlideshow | DeletedActivationCode)[] = [];
     if (activeTab === 'qr-codes') {
       items = filterItems(deletedQRCodes);
     } else if (activeTab === 'playlists') {
       items = filterItems(deletedPlaylists);
     } else if (activeTab === 'slideshows') {
       items = filterItems(deletedSlideshows);
+    } else if (activeTab === 'activation-codes') {
+      items = filterItems(deletedActivationCodes);
     }
 
     if (items.length === 0) {
@@ -356,9 +438,12 @@ export default function RestoreDeletedScreen() {
                   return renderQRCodeItem(item as DeletedQRCode);
                 } else if (activeTab === 'playlists') {
                   return renderPlaylistItem(item as DeletedPlaylist);
-                } else {
+                } else if (activeTab === 'slideshows') {
                   return renderSlideshowItem(item as DeletedSlideshow);
+                } else if (activeTab === 'activation-codes') {
+                  return renderActivationCodeItem(item as DeletedActivationCode);
                 }
+                return null;
               })}
             </View>
           </View>
@@ -369,8 +454,12 @@ export default function RestoreDeletedScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <MaterialIcons name="arrow-back" size={24} color="#000" />
         </TouchableOpacity>
         <ThemedText style={styles.title}>Restore Deleted Items</ThemedText>
@@ -407,6 +496,16 @@ export default function RestoreDeletedScreen() {
             Slideshows ({deletedSlideshows.length})
           </ThemedText>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'activation-codes' && styles.activeTab]}
+          onPress={() => setActiveTab('activation-codes')}
+        >
+          <ThemedText
+            style={[styles.tabText, activeTab === 'activation-codes' && styles.activeTabText]}
+          >
+            Activation Codes ({deletedActivationCodes.length})
+          </ThemedText>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -438,7 +537,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',

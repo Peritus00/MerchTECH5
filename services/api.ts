@@ -930,6 +930,11 @@ export const adminAPI = {
     return response.data.deletedSlideshows || [];
   },
 
+  async getDeletedActivationCodes() {
+    const response = await api.get('/admin/deleted/activation-codes');
+    return response.data.deletedActivationCodes || [];
+  },
+
   async restoreQRCode(id: number) {
     const response = await api.post(`/admin/restore/qr-codes/${id}`);
     return response.data;
@@ -942,6 +947,11 @@ export const adminAPI = {
 
   async restoreSlideshow(id: number) {
     const response = await api.post(`/admin/restore/slideshows/${id}`);
+    return response.data;
+  },
+
+  async restoreActivationCode(id: number) {
+    const response = await api.post(`/admin/restore/activation-codes/${id}`);
     return response.data;
   },
 

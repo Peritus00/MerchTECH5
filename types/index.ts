@@ -276,6 +276,24 @@ export interface DeletedSlideshow {
   owner_email: string;
 }
 
+export interface DeletedActivationCode {
+  id: number;
+  code: string;
+  playlist_id?: number;
+  slideshow_id?: number;
+  playlist_name?: string;
+  slideshow_name?: string;
+  content_type: 'playlist' | 'slideshow';
+  created_by: number;
+  owner_username: string;
+  owner_email: string;
+  deleted_at: string;
+  created_at: string;
+  max_uses?: number;
+  uses_count: number;
+  expires_at?: string;
+}
+
 // Admin User Tracking Types
 export interface AdminUserStats {
   totalSignedInUsers: number;

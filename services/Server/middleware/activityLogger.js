@@ -193,7 +193,14 @@ async function logActivity(db, userId, actionType, resourceType, resourceId, met
     );
   } catch (error) {
     // Don't let logging errors break the application
-    console.error('Error logging activity:', error);
+    // Silently handle missing table errors (table may not exist in all environments)
+    if (error.code === '42P01') {
+      // Table doesn't exist - this is okay, just skip logging
+      // Don't log this error to avoid spam in logs
+      return;
+    }
+    // For other errors, log them but don't throw
+    console.error('Error logging activity:', error.message || error);
   }
 }
 

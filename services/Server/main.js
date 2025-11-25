@@ -1242,6 +1242,46 @@ app.get('/api/admin/deleted/slideshows', authenticateToken, isAdmin, async (req,
   }
 });
 
+// Get deleted activation codes (admin only, last 90 days)
+app.get('/api/admin/deleted/activation-codes', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await db.query(`
+      SELECT 
+        ac.id,
+        ac.code,
+        ac.playlist_id,
+        ac.slideshow_id,
+        p.name as playlist_name,
+        s.name as slideshow_name,
+        CASE 
+          WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+          WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+          ELSE 'unknown'
+        END as content_type,
+        ac.created_by as owner_id,
+        u.username as owner_username,
+        u.email as owner_email,
+        ac.deleted_at,
+        ac.created_at,
+        ac.max_uses,
+        ac.uses_count,
+        ac.expires_at
+      FROM activation_codes ac
+      JOIN users u ON ac.created_by = u.id
+      LEFT JOIN playlists p ON ac.playlist_id = p.id
+      LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+      WHERE ac.deleted_at IS NOT NULL
+        AND ac.deleted_at >= NOW() - INTERVAL '90 days'
+      ORDER BY ac.deleted_at DESC
+    `);
+    
+    res.json({ deletedActivationCodes: result.rows });
+  } catch (error) {
+    console.error('Error fetching deleted activation codes:', error);
+    res.status(500).json({ error: 'Failed to fetch deleted activation codes' });
+  }
+});
+
 // Get admin user statistics (admin only)
 app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) => {
   try {
@@ -1577,6 +1617,37 @@ app.post('/api/admin/restore/slideshows/:id', authenticateToken, isAdmin, async 
   } catch (error) {
     console.error('Error restoring slideshow:', error);
     res.status(500).json({ error: 'Failed to restore slideshow' });
+  }
+});
+
+// Restore deleted activation code (admin only)
+app.post('/api/admin/restore/activation-codes/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if activation code exists and is deleted
+    const checkResult = await db.query(
+      'SELECT id, created_by FROM activation_codes WHERE id = $1 AND deleted_at IS NOT NULL',
+      [id]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Deleted activation code not found' });
+    }
+    
+    // Restore by setting deleted_at = NULL
+    const restoreResult = await db.query(
+      'UPDATE activation_codes SET deleted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+    
+    res.json({ 
+      message: 'Activation code restored successfully',
+      activationCode: restoreResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Error restoring activation code:', error);
+    res.status(500).json({ error: 'Failed to restore activation code' });
   }
 });
 
@@ -8436,7 +8507,7 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE ac.created_by = $1
+       WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
        ORDER BY ac.created_at DESC`,
       [req.user.userId]
     );
@@ -8467,7 +8538,7 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
        FROM activation_codes ac
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE ac.created_by = $1
+       WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
        ORDER BY ac.created_at DESC`,
       [req.user.userId]
     );
@@ -8495,7 +8566,7 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
        JOIN activation_codes ac ON uac.activation_code_id = ac.id
        LEFT JOIN playlists p ON ac.playlist_id = p.id
        LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-       WHERE uac.user_id = $1 AND ac.is_active = true
+       WHERE uac.user_id = $1 AND ac.is_active = true AND ac.deleted_at IS NULL
        ORDER BY uac.attached_at DESC`,
       [req.user.userId]
     );
@@ -8523,7 +8594,7 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     // First, verify the code exists and is valid
     const codeResult = await db.query(
       `SELECT * FROM activation_codes 
-       WHERE code = $1 AND is_active = true 
+       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
        AND (expires_at IS NULL OR expires_at > NOW())
        AND (max_uses IS NULL OR uses_count < max_uses)`,
       [code]
@@ -8610,7 +8681,7 @@ app.post('/api/activation-codes/validate', async (req, res) => {
     
     const result = await db.query(
       `SELECT * FROM activation_codes 
-       WHERE code = $1 AND is_active = true 
+       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
        AND (expires_at IS NULL OR expires_at > NOW())
        AND (max_uses IS NULL OR uses_count < max_uses)
        AND (playlist_id = $2 OR slideshow_id = $3)`,
@@ -8645,7 +8716,7 @@ app.get('/api/activation-codes/content/:contentType/:contentId', authenticateTok
     const column = contentType === 'playlist' ? 'playlist_id' : 'slideshow_id';
     const result = await db.query(
       `SELECT ac.* FROM activation_codes ac
-       WHERE ac.${column} = $1 AND ac.created_by = $2
+       WHERE ac.${column} = $1 AND ac.created_by = $2 AND ac.deleted_at IS NULL
        ORDER BY ac.created_at DESC`,
       [contentId, req.user.userId]
     );
@@ -8667,9 +8738,9 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
     
     console.log('🔑 ACTIVATION_CODES: Updating code:', { codeId, maxUses, expiresAt, isActive });
     
-    // First verify the user owns this code
+    // First verify the user owns this code and it's not deleted
     const ownerResult = await db.query(
-      `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2`,
+      `SELECT * FROM activation_codes WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
       [codeId, req.user.userId]
     );
     
@@ -8728,24 +8799,32 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
   }
 });
 
-// Delete activation code
+// Delete activation code (soft delete)
 app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) => {
   try {
     const { codeId } = req.params;
     
     console.log('🔑 ACTIVATION_CODES: Deleting code:', codeId);
     
-    // First verify the user owns this code
+    // First verify the user owns this code and it's not already deleted
+    const checkResult = await db.query(
+      `SELECT id FROM activation_codes 
+       WHERE id = $1 AND created_by = $2 AND deleted_at IS NULL`,
+      [codeId, req.user.userId]
+    );
+    
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Activation code not found or you do not have permission to delete it' });
+    }
+    
+    // Soft delete by setting deleted_at timestamp
     const result = await db.query(
-      `DELETE FROM activation_codes 
+      `UPDATE activation_codes 
+       SET deleted_at = NOW(), updated_at = NOW() 
        WHERE id = $1 AND created_by = $2 
        RETURNING *`,
       [codeId, req.user.userId]
     );
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Activation code not found or you do not have permission to delete it' });
-    }
     
     console.log('🔑 ACTIVATION_CODES: Code deleted successfully');
     res.json({ message: 'Activation code deleted successfully' });
@@ -9348,7 +9427,7 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
       }
 
       const codeRes = await client.query(
-        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
+        'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND deleted_at IS NULL AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
         [activationCode, slideshowId]
       );
 
