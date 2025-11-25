@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TextInput,
   Text,
+  Platform,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -151,72 +152,91 @@ export default function RestoreDeletedScreen() {
   ) => {
     console.log('🔄 RESTORE: Restore button clicked', { id, type, name });
     
-    Alert.alert(
-      'Restore Item',
-      `Are you sure you want to restore "${name}"? The item will be immediately visible to the original owner.`,
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => {
-            console.log('🔄 RESTORE: User cancelled restore');
-          }
-        },
-        {
-          text: 'Restore',
-          style: 'default',
-          onPress: async () => {
-            try {
-              console.log('🔄 RESTORE: User confirmed restore, starting restore process...', { id, type });
-              setRestoringIds((prev) => new Set(prev).add(id));
-              
-              let result;
-              if (type === 'qr-codes') {
-                console.log('🔄 RESTORE: Calling adminAPI.restoreQRCode...', id);
-                result = await adminAPI.restoreQRCode(id);
-                console.log('🔄 RESTORE: restoreQRCode response:', result);
-              } else if (type === 'playlists') {
-                console.log('🔄 RESTORE: Calling adminAPI.restorePlaylist...', id);
-                result = await adminAPI.restorePlaylist(id);
-                console.log('🔄 RESTORE: restorePlaylist response:', result);
-              } else if (type === 'slideshows') {
-                console.log('🔄 RESTORE: Calling adminAPI.restoreSlideshow...', id);
-                result = await adminAPI.restoreSlideshow(id);
-                console.log('🔄 RESTORE: restoreSlideshow response:', result);
-              } else if (type === 'activation-codes') {
-                console.log('🔄 RESTORE: Calling adminAPI.restoreActivationCode...', id);
-                result = await adminAPI.restoreActivationCode(id);
-                console.log('🔄 RESTORE: restoreActivationCode response:', result);
-              }
-              
-              console.log('🔄 RESTORE: Restore successful, refreshing list...');
-              Alert.alert('Success', 'Item restored successfully');
-              await fetchDeletedItems();
-              console.log('🔄 RESTORE: List refreshed after restore');
-            } catch (error: any) {
-              console.error('🔄 RESTORE: Error restoring item:', error);
-              console.error('🔄 RESTORE: Error details:', {
-                message: error.message,
-                response: error.response?.data,
-                status: error.response?.status,
-                statusText: error.response?.statusText,
-              });
-              Alert.alert(
-                'Error', 
-                error.response?.data?.error || error.message || 'Failed to restore item'
-              );
-            } finally {
-              console.log('🔄 RESTORE: Clearing restoring state for id:', id);
-              setRestoringIds((prev) => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-              });
+    const performRestore = async () => {
+      try {
+        console.log('🔄 RESTORE: User confirmed restore, starting restore process...', { id, type });
+        setRestoringIds((prev) => new Set(prev).add(id));
+        
+        let result;
+        if (type === 'qr-codes') {
+          console.log('🔄 RESTORE: Calling adminAPI.restoreQRCode...', id);
+          result = await adminAPI.restoreQRCode(id);
+          console.log('🔄 RESTORE: restoreQRCode response:', result);
+        } else if (type === 'playlists') {
+          console.log('🔄 RESTORE: Calling adminAPI.restorePlaylist...', id);
+          result = await adminAPI.restorePlaylist(id);
+          console.log('🔄 RESTORE: restorePlaylist response:', result);
+        } else if (type === 'slideshows') {
+          console.log('🔄 RESTORE: Calling adminAPI.restoreSlideshow...', id);
+          result = await adminAPI.restoreSlideshow(id);
+          console.log('🔄 RESTORE: restoreSlideshow response:', result);
+        } else if (type === 'activation-codes') {
+          console.log('🔄 RESTORE: Calling adminAPI.restoreActivationCode...', id);
+          result = await adminAPI.restoreActivationCode(id);
+          console.log('🔄 RESTORE: restoreActivationCode response:', result);
+        }
+        
+        console.log('🔄 RESTORE: Restore successful, refreshing list...');
+        if (Platform.OS === 'web') {
+          window.alert('Success: Item restored successfully');
+        } else {
+          Alert.alert('Success', 'Item restored successfully');
+        }
+        await fetchDeletedItems();
+        console.log('🔄 RESTORE: List refreshed after restore');
+      } catch (error: any) {
+        console.error('🔄 RESTORE: Error restoring item:', error);
+        console.error('🔄 RESTORE: Error details:', {
+          message: error.message,
+          response: error.response?.data,
+          status: error.response?.status,
+          statusText: error.response?.statusText,
+        });
+        const errorMessage = error.response?.data?.error || error.message || 'Failed to restore item';
+        if (Platform.OS === 'web') {
+          window.alert(`Error: ${errorMessage}`);
+        } else {
+          Alert.alert('Error', errorMessage);
+        }
+      } finally {
+        console.log('🔄 RESTORE: Clearing restoring state for id:', id);
+        setRestoringIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    };
+    
+    if (Platform.OS === 'web') {
+      // Use window.confirm for web
+      const confirmed = window.confirm(`Are you sure you want to restore "${name}"? The item will be immediately visible to the original owner.`);
+      if (confirmed) {
+        await performRestore();
+      } else {
+        console.log('🔄 RESTORE: User cancelled restore (web)');
+      }
+    } else {
+      // Use Alert.alert for mobile
+      Alert.alert(
+        'Restore Item',
+        `Are you sure you want to restore "${name}"? The item will be immediately visible to the original owner.`,
+        [
+          { 
+            text: 'Cancel', 
+            style: 'cancel',
+            onPress: () => {
+              console.log('🔄 RESTORE: User cancelled restore');
             }
           },
-        },
-      ]
-    );
+          {
+            text: 'Restore',
+            style: 'default',
+            onPress: performRestore,
+          },
+        ]
+      );
+    }
   };
 
   const renderQRCodeItem = (item: DeletedQRCode) => {
