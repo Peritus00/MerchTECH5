@@ -305,7 +305,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
                   <Image source={{ 
                     uri: image.imageUrl && image.imageUrl.includes('amazonaws.com') 
                       ? `${process.env.EXPO_PUBLIC_API_URL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/slideshow-images/${image.id}/stream`
-                      : image.imageUrl || 'https://placehold.co/150x150?text=No+Image'
+                      : image.imageUrl || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTUwIiBoZWlnaHQ9IjE1MCIgZmlsbD0iI2YzZjRmNiIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5Y2EzYWYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4='
                   }} style={styles.imagePreview} />
                   
                   <View style={styles.imageActions}>

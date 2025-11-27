@@ -10780,6 +10780,11 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
       s3Url: image.imageUrl
     });
     
+    // Set CORS headers for upload response
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Authorization');
+    
     res.status(201).json({ image });
     
   } catch (error) {
