@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Platform, Image } from 'react-native';
 import QRCodeSVG from 'react-native-qrcode-svg';
 import { ThemedText } from './ThemedText';
@@ -25,6 +25,12 @@ interface GradientOptions {
   angle?: number;
 }
 
+// Interface for ref methods
+export interface QRCodeRef {
+  getSVGString: () => Promise<string | null>;
+  toDataURL: (callback: (dataURL: string) => void) => void;
+}
+
 interface AdvancedQRCodeGeneratorProps {
   value: string;
   size?: number;
@@ -37,9 +43,10 @@ interface AdvancedQRCodeGeneratorProps {
   onPress?: () => void;
   optimizeForScanning?: boolean;
   contrastRatio?: number;
+  getRef?: (ref: QRCodeRef | null) => void;
 }
 
-export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = ({
+export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGeneratorProps>(({
   value,
   size = 240,
   fgColor = '#000000',
@@ -51,8 +58,51 @@ export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = (
   onPress,
   optimizeForScanning = true,
   contrastRatio = 4.5,
-}) => {
+  getRef,
+}, ref) => {
   const [qrData, setQrData] = useState<string>('https://example.com');
+  const qrCodeSvgRef = useRef<any>(null);
+
+  // Expose methods via ref
+  useImperativeHandle(ref, () => ({
+    getSVGString: async (): Promise<string | null> => {
+      if (!qrCodeSvgRef.current) return null;
+      
+      try {
+        // react-native-qrcode-svg has a getString method
+        if (qrCodeSvgRef.current.getString) {
+          return qrCodeSvgRef.current.getString();
+        }
+        // Fallback: try toDataURL and extract SVG
+        return new Promise((resolve) => {
+          qrCodeSvgRef.current.toDataURL((dataURL: string) => {
+            // If it's SVG data URL, extract the SVG content
+            if (dataURL.startsWith('data:image/svg+xml')) {
+              const svgContent = decodeURIComponent(dataURL.split(',')[1]);
+              resolve(svgContent);
+            } else {
+              resolve(null);
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Error getting SVG string:', error);
+        return null;
+      }
+    },
+    toDataURL: (callback: (dataURL: string) => void) => {
+      if (qrCodeSvgRef.current && qrCodeSvgRef.current.toDataURL) {
+        qrCodeSvgRef.current.toDataURL(callback);
+      }
+    },
+  }));
+
+  // Call getRef prop if provided
+  useEffect(() => {
+    if (getRef && ref && typeof ref === 'object' && 'current' in ref) {
+      getRef(ref.current);
+    }
+  }, [getRef, ref]);
 
   useEffect(() => {
     generateQRCode();
@@ -260,6 +310,9 @@ export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = (
     backgroundColor: colors.bg,
     ecl: level,
     enableLinearGradient: !!gradientColors,
+    getRef: (c: any) => {
+      qrCodeSvgRef.current = c;
+    },
     ...(gradientColors && {
       linearGradient: [gradientColors.startColor, gradientColors.endColor],
       gradientDirection: gradientColors.angle ? [
@@ -294,7 +347,7 @@ export const AdvancedQRCodeGenerator: React.FC<AdvancedQRCodeGeneratorProps> = (
       </View>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -340,5 +393,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
   },
 });
+
+AdvancedQRCodeGenerator.displayName = 'AdvancedQRCodeGenerator';
 
 export default AdvancedQRCodeGenerator; 
