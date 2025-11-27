@@ -158,10 +158,14 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     const confirmDelete = async () => {
       console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshowId);
       try {
-        const updated = await slideshowsAPI.deleteImage(slideshowId, imageId);
-        console.log('🗑️ deleteImage API success, fresh images length', updated.images.length);
-        setImages(updated.images);
-        onImagesUpdated(updated);
+        const response = await slideshowsAPI.deleteImage(slideshowId, imageId);
+        // API returns { slideshow: { images: [...] } }
+        const updatedSlideshow = response.slideshow || response;
+        console.log('🗑️ deleteImage API success, fresh images length', updatedSlideshow.images?.length || 0);
+        if (updatedSlideshow.images) {
+          setImages(updatedSlideshow.images);
+          onImagesUpdated(updatedSlideshow);
+        }
       } catch (err) {
         console.error('🗑️ Failed to delete image', err);
         Alert.alert('Error', 'Failed to delete image');

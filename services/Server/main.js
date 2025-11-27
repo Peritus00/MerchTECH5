@@ -10821,9 +10821,42 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
       [imageId, slideshowId]
     );
     
+    // If image doesn't exist, make deletion idempotent - return current slideshow state
     if (imageResult.rows.length === 0) {
-      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image not found:', imageId);
-      return res.status(404).json({ error: 'Image not found' });
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Image not found (already deleted):', imageId);
+      // Return current slideshow state instead of error
+      const remainingImagesResult = await db.query(
+        `SELECT * FROM slideshow_images 
+         WHERE slideshow_id = $1 
+         ORDER BY display_order`,
+        [slideshowId]
+      );
+      
+      const slideshow = slideshowResult.rows[0];
+      const updatedSlideshow = {
+        id: slideshow.id,
+        name: slideshow.name,
+        description: slideshow.description,
+        uniqueId: slideshow.unique_id,
+        userId: slideshow.user_id,
+        autoplayInterval: slideshow.autoplay_interval,
+        transition: slideshow.transition,
+        audioUrl: slideshow.audio_url,
+        requiresActivationCode: slideshow.requires_activation_code,
+        isPublic: slideshow.is_public,
+        createdAt: slideshow.created_at,
+        updatedAt: slideshow.updated_at,
+        images: remainingImagesResult.rows.map(img => ({
+          id: img.id,
+          slideshowId: img.slideshow_id,
+          imageUrl: img.image_url,
+          caption: img.caption,
+          displayOrder: img.display_order,
+          createdAt: img.created_at
+        }))
+      };
+      
+      return res.json({ slideshow: updatedSlideshow });
     }
     
     // Delete image record
