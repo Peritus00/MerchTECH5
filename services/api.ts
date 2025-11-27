@@ -965,6 +965,22 @@ export const adminAPI = {
     const response = await api.get(`/admin/users/history?timeframe=${timeframe}`);
     return response.data;
   },
+
+  // Fallback content management
+  async getFallbackContent() {
+    const response = await api.get('/admin/fallback-content');
+    return response.data;
+  },
+
+  async setFallbackPlaylist(playlistId: number) {
+    const response = await api.post(`/admin/fallback-content/playlist/${playlistId}`);
+    return response.data;
+  },
+
+  async setFallbackSlideshow(slideshowId: number) {
+    const response = await api.post(`/admin/fallback-content/slideshow/${slideshowId}`);
+    return response.data;
+  },
 };
 
 // Activity Logs API

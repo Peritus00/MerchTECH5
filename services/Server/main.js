@@ -525,6 +525,230 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
+// ========== ADMIN FALLBACK CONTENT HELPERS ==========
+
+// Get admin user ID (prefer is_admin = true, fallback to djjetfuel@gmail.com)
+async function getAdminUserId() {
+  try {
+    // First try to find any admin user
+    const adminResult = await db.query(
+      'SELECT id FROM users WHERE is_admin = true ORDER BY id ASC LIMIT 1'
+    );
+    if (adminResult.rows.length > 0) {
+      return adminResult.rows[0].id;
+    }
+    // Fallback to specific admin email
+    const emailResult = await db.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',
+      ['djjetfuel@gmail.com']
+    );
+    if (emailResult.rows.length > 0) {
+      return emailResult.rows[0].id;
+    }
+    console.error('⚠️ FALLBACK: No admin user found');
+    return null;
+  } catch (error) {
+    console.error('❌ FALLBACK: Error getting admin user ID:', error);
+    return null;
+  }
+}
+
+// Ensure system_config table exists
+async function ensureSystemConfigTable() {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS system_config (
+        key VARCHAR(255) PRIMARY KEY,
+        value TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (error) {
+    // Table might already exist, ignore if so
+    if (error.code !== '42P07') {
+      console.error('❌ FALLBACK: Error creating system_config table:', error);
+    }
+  }
+}
+
+// Get fallback playlist ID from config
+async function getFallbackPlaylistId() {
+  try {
+    await ensureSystemConfigTable();
+    const result = await db.query(
+      'SELECT value FROM system_config WHERE key = $1',
+      ['fallback_playlist_id']
+    );
+    if (result.rows.length > 0 && result.rows[0].value) {
+      return parseInt(result.rows[0].value);
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ FALLBACK: Error getting fallback playlist ID:', error);
+    return null;
+  }
+}
+
+// Get fallback slideshow ID from config
+async function getFallbackSlideshowId() {
+  try {
+    await ensureSystemConfigTable();
+    const result = await db.query(
+      'SELECT value FROM system_config WHERE key = $1',
+      ['fallback_slideshow_id']
+    );
+    if (result.rows.length > 0 && result.rows[0].value) {
+      return parseInt(result.rows[0].value);
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ FALLBACK: Error getting fallback slideshow ID:', error);
+    return null;
+  }
+}
+
+// Set fallback playlist ID in config
+async function setFallbackPlaylistId(playlistId) {
+  try {
+    await ensureSystemConfigTable();
+    await db.query(`
+      INSERT INTO system_config (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()
+    `, ['fallback_playlist_id', playlistId.toString()]);
+  } catch (error) {
+    console.error('❌ FALLBACK: Error setting fallback playlist ID:', error);
+    throw error;
+  }
+}
+
+// Set fallback slideshow ID in config
+async function setFallbackSlideshowId(slideshowId) {
+  try {
+    await ensureSystemConfigTable();
+    await db.query(`
+      INSERT INTO system_config (key, value, updated_at)
+      VALUES ($1, $2, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()
+    `, ['fallback_slideshow_id', slideshowId.toString()]);
+  } catch (error) {
+    console.error('❌ FALLBACK: Error setting fallback slideshow ID:', error);
+    throw error;
+  }
+}
+
+// Ensure fallback playlist exists and return its ID
+async function ensureFallbackPlaylist() {
+  try {
+    // Check if config already has a fallback playlist ID
+    let fallbackId = await getFallbackPlaylistId();
+    
+    if (fallbackId) {
+      // Verify the playlist still exists and is not deleted
+      const playlistCheck = await db.query(
+        'SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
+        [fallbackId]
+      );
+      if (playlistCheck.rows.length > 0) {
+        return fallbackId;
+      }
+      // Playlist was deleted, need to create a new one
+      console.log('⚠️ FALLBACK: Fallback playlist was deleted, creating new one');
+    }
+    
+    // Get admin user ID
+    const adminId = await getAdminUserId();
+    if (!adminId) {
+      console.error('❌ FALLBACK: Cannot create fallback playlist - no admin user found');
+      return null;
+    }
+    
+    // Create or find the fallback playlist
+    const playlistResult = await db.query(`
+      SELECT id FROM playlists 
+      WHERE user_id = $1 AND LOWER(name) = LOWER($2) AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1
+    `, [adminId, 'admin user deleted playlist']);
+    
+    if (playlistResult.rows.length > 0) {
+      fallbackId = playlistResult.rows[0].id;
+    } else {
+      // Create new fallback playlist
+      const createResult = await db.query(`
+        INSERT INTO playlists (user_id, name, description, is_public, requires_activation_code)
+        VALUES ($1, $2, $3, true, false)
+        RETURNING id
+      `, [adminId, 'admin user deleted playlist', 'This playlist is shown when a QR code or its owner has been deleted.']);
+      fallbackId = createResult.rows[0].id;
+      console.log('✅ FALLBACK: Created fallback playlist with ID:', fallbackId);
+    }
+    
+    // Store in config
+    await setFallbackPlaylistId(fallbackId);
+    return fallbackId;
+  } catch (error) {
+    console.error('❌ FALLBACK: Error ensuring fallback playlist:', error);
+    return null;
+  }
+}
+
+// Ensure fallback slideshow exists and return its ID
+async function ensureFallbackSlideshow() {
+  try {
+    // Check if config already has a fallback slideshow ID
+    let fallbackId = await getFallbackSlideshowId();
+    
+    if (fallbackId) {
+      // Verify the slideshow still exists and is not deleted
+      const slideshowCheck = await db.query(
+        'SELECT id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
+        [fallbackId]
+      );
+      if (slideshowCheck.rows.length > 0) {
+        return fallbackId;
+      }
+      // Slideshow was deleted, need to create a new one
+      console.log('⚠️ FALLBACK: Fallback slideshow was deleted, creating new one');
+    }
+    
+    // Get admin user ID
+    const adminId = await getAdminUserId();
+    if (!adminId) {
+      console.error('❌ FALLBACK: Cannot create fallback slideshow - no admin user found');
+      return null;
+    }
+    
+    // Create or find the fallback slideshow
+    const slideshowResult = await db.query(`
+      SELECT id FROM slideshows 
+      WHERE user_id = $1 AND LOWER(name) = LOWER($2) AND deleted_at IS NULL
+      ORDER BY created_at ASC LIMIT 1
+    `, [adminId, 'admin user deleted slideshow']);
+    
+    if (slideshowResult.rows.length > 0) {
+      fallbackId = slideshowResult.rows[0].id;
+    } else {
+      // Create new fallback slideshow
+      const createResult = await db.query(`
+        INSERT INTO slideshows (user_id, name, description, is_public, requires_activation_code)
+        VALUES ($1, $2, $3, true, false)
+        RETURNING id
+      `, [adminId, 'admin user deleted slideshow', 'This slideshow is shown when a QR code or its owner has been deleted.']);
+      fallbackId = createResult.rows[0].id;
+      console.log('✅ FALLBACK: Created fallback slideshow with ID:', fallbackId);
+    }
+    
+    // Store in config
+    await setFallbackSlideshowId(fallbackId);
+    return fallbackId;
+  } catch (error) {
+    console.error('❌ FALLBACK: Error ensuring fallback slideshow:', error);
+    return null;
+  }
+}
+
+// ========== END ADMIN FALLBACK CONTENT HELPERS ==========
+
 // Permission middleware: Check if user can view logs (admin or has can_view_logs permission)
 const canViewLogs = async (req, res, next) => {
   try {
@@ -1294,6 +1518,170 @@ app.get('/api/admin/deleted/activation-codes', authenticateToken, isAdmin, async
     res.status(500).json({ error: 'Failed to fetch deleted activation codes', details: error.message });
   }
 });
+
+// ========== ADMIN FALLBACK CONTENT MANAGEMENT ==========
+
+// Get current fallback content configuration
+app.get('/api/admin/fallback-content', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const fallbackPlaylistId = await getFallbackPlaylistId();
+    const fallbackSlideshowId = await getFallbackSlideshowId();
+    
+    let playlistData = null;
+    let slideshowData = null;
+    
+    if (fallbackPlaylistId) {
+      const playlistResult = await db.query(
+        'SELECT id, name, description FROM playlists WHERE id = $1 AND deleted_at IS NULL',
+        [fallbackPlaylistId]
+      );
+      if (playlistResult.rows.length > 0) {
+        playlistData = {
+          id: playlistResult.rows[0].id,
+          name: playlistResult.rows[0].name,
+          description: playlistResult.rows[0].description
+        };
+      }
+    }
+    
+    if (fallbackSlideshowId) {
+      const slideshowResult = await db.query(
+        'SELECT id, name, description FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
+        [fallbackSlideshowId]
+      );
+      if (slideshowResult.rows.length > 0) {
+        slideshowData = {
+          id: slideshowResult.rows[0].id,
+          name: slideshowResult.rows[0].name,
+          description: slideshowResult.rows[0].description
+        };
+      }
+    }
+    
+    // If not configured, ensure defaults exist
+    if (!playlistData) {
+      const defaultId = await ensureFallbackPlaylist();
+      if (defaultId) {
+        const playlistResult = await db.query(
+          'SELECT id, name, description FROM playlists WHERE id = $1',
+          [defaultId]
+        );
+        if (playlistResult.rows.length > 0) {
+          playlistData = {
+            id: playlistResult.rows[0].id,
+            name: playlistResult.rows[0].name,
+            description: playlistResult.rows[0].description
+          };
+        }
+      }
+    }
+    
+    if (!slideshowData) {
+      const defaultId = await ensureFallbackSlideshow();
+      if (defaultId) {
+        const slideshowResult = await db.query(
+          'SELECT id, name, description FROM slideshows WHERE id = $1',
+          [defaultId]
+        );
+        if (slideshowResult.rows.length > 0) {
+          slideshowData = {
+            id: slideshowResult.rows[0].id,
+            name: slideshowResult.rows[0].name,
+            description: slideshowResult.rows[0].description
+          };
+        }
+      }
+    }
+    
+    res.json({
+      fallbackPlaylist: playlistData,
+      fallbackSlideshow: slideshowData
+    });
+  } catch (error) {
+    console.error('Error fetching fallback content:', error);
+    res.status(500).json({ error: 'Failed to fetch fallback content' });
+  }
+});
+
+// Set fallback playlist
+app.post('/api/admin/fallback-content/playlist/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const playlistId = parseInt(id);
+    
+    // Verify playlist exists and admin can manage it (admin can manage any playlist)
+    const playlistResult = await db.query(
+      'SELECT id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
+      [playlistId]
+    );
+    
+    if (playlistResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    
+    // Set as fallback
+    await setFallbackPlaylistId(playlistId);
+    
+    // Get updated playlist data
+    const updatedResult = await db.query(
+      'SELECT id, name, description FROM playlists WHERE id = $1',
+      [playlistId]
+    );
+    
+    res.json({
+      success: true,
+      fallbackPlaylist: {
+        id: updatedResult.rows[0].id,
+        name: updatedResult.rows[0].name,
+        description: updatedResult.rows[0].description
+      }
+    });
+  } catch (error) {
+    console.error('Error setting fallback playlist:', error);
+    res.status(500).json({ error: 'Failed to set fallback playlist' });
+  }
+});
+
+// Set fallback slideshow
+app.post('/api/admin/fallback-content/slideshow/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const slideshowId = parseInt(id);
+    
+    // Verify slideshow exists and admin can manage it (admin can manage any slideshow)
+    const slideshowResult = await db.query(
+      'SELECT id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
+      [slideshowId]
+    );
+    
+    if (slideshowResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Slideshow not found' });
+    }
+    
+    // Set as fallback
+    await setFallbackSlideshowId(slideshowId);
+    
+    // Get updated slideshow data
+    const updatedResult = await db.query(
+      'SELECT id, name, description FROM slideshows WHERE id = $1',
+      [slideshowId]
+    );
+    
+    res.json({
+      success: true,
+      fallbackSlideshow: {
+        id: updatedResult.rows[0].id,
+        name: updatedResult.rows[0].name,
+        description: updatedResult.rows[0].description
+      }
+    });
+  } catch (error) {
+    console.error('Error setting fallback slideshow:', error);
+    res.status(500).json({ error: 'Failed to set fallback slideshow' });
+  }
+});
+
+// ========== END ADMIN FALLBACK CONTENT MANAGEMENT ==========
 
 // Get admin user statistics (admin only)
 app.get('/api/admin/users/stats', authenticateToken, isAdmin, async (req, res) => {
@@ -7349,7 +7737,7 @@ async function getPlaylistWithMedia(playlistId) {
   const playlistResult = await db.query(
     `SELECT p.*, u.username 
      FROM playlists p 
-     JOIN users u ON p.user_id = u.id 
+     LEFT JOIN users u ON p.user_id = u.id 
      WHERE p.id = $1 AND p.deleted_at IS NULL`,
     [playlistId]
   );
@@ -8107,25 +8495,103 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
   try {
     // Try to resolve QR code by id (numeric), then by qr_code_data, then by short_url
     let qr;
+    let isDeleted = false;
+    
+    // First, try active QR codes
     if (/^\d+$/.test(code)) {
-      const r = await db.query('SELECT id, url FROM qr_codes WHERE id = $1 AND is_active = true', [Number(code)]);
+      const r = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE id = $1 AND is_active = true', [Number(code)]);
       qr = r.rows[0];
     }
     if (!qr) {
-      const r2 = await db.query('SELECT id, url FROM qr_codes WHERE qr_code_data = $1 AND is_active = true', [code]);
+      const r2 = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE qr_code_data = $1 AND is_active = true', [code]);
       qr = r2.rows[0];
     }
     if (!qr) {
-      const r3 = await db.query('SELECT id, url FROM qr_codes WHERE short_url = $1 AND is_active = true', [code]);
+      const r3 = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE short_url = $1 AND is_active = true', [code]);
       qr = r3.rows[0];
     }
+    
+    // If not found, try soft-deleted QR codes (without is_active filter)
     if (!qr) {
+      if (/^\d+$/.test(code)) {
+        const r = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE id = $1', [Number(code)]);
+        qr = r.rows[0];
+        if (qr) isDeleted = true;
+      }
+      if (!qr) {
+        const r2 = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE qr_code_data = $1', [code]);
+        qr = r2.rows[0];
+        if (qr) isDeleted = true;
+      }
+      if (!qr) {
+        const r3 = await db.query('SELECT id, url, playlist_id, slideshow_id FROM qr_codes WHERE short_url = $1', [code]);
+        qr = r3.rows[0];
+        if (qr) isDeleted = true;
+      }
+    }
+    
+    // If QR code not found at all (e.g., user was hard-deleted and QR cascaded)
+    if (!qr) {
+      console.log('⚠️ FALLBACK: QR code not found, redirecting to fallback playlist');
+      const fallbackPlaylistId = await ensureFallbackPlaylist();
+      if (fallbackPlaylistId) {
+        const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const frontend = rawFrontend.replace(/\/$/, '');
+        return res.redirect(302, `${frontend}/playlist-access/${fallbackPlaylistId}`);
+      }
       return res.status(404).send('QR not found');
+    }
+
+    // If QR code is soft-deleted or owner is deleted, route to fallback
+    if (isDeleted || !qr.url) {
+      console.log('⚠️ FALLBACK: QR code is deleted or invalid, determining fallback type');
+      
+      // Determine content type from playlist_id, slideshow_id, or URL
+      let fallbackId = null;
+      let fallbackType = 'playlist'; // default
+      
+      if (qr.playlist_id) {
+        fallbackId = await ensureFallbackPlaylist();
+        fallbackType = 'playlist';
+      } else if (qr.slideshow_id) {
+        fallbackId = await ensureFallbackSlideshow();
+        fallbackType = 'slideshow';
+      } else if (qr.url) {
+        // Infer from URL
+        if (qr.url.includes('/slideshow-access/')) {
+          fallbackId = await ensureFallbackSlideshow();
+          fallbackType = 'slideshow';
+        } else {
+          fallbackId = await ensureFallbackPlaylist();
+          fallbackType = 'playlist';
+        }
+      } else {
+        // No way to determine type, default to playlist
+        fallbackId = await ensureFallbackPlaylist();
+        fallbackType = 'playlist';
+      }
+      
+      if (fallbackId) {
+        const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const frontend = rawFrontend.replace(/\/$/, '');
+        const fallbackUrl = `${frontend}/${fallbackType}-access/${fallbackId}`;
+        console.log(`✅ FALLBACK: Redirecting to ${fallbackType} fallback: ${fallbackUrl}`);
+        return res.redirect(302, fallbackUrl);
+      }
     }
 
     // Redirect to target
     const target = qr.url;
-    if (!target) return res.status(500).send('Target URL missing');
+    if (!target) {
+      // If no target URL, use fallback playlist
+      const fallbackPlaylistId = await ensureFallbackPlaylist();
+      if (fallbackPlaylistId) {
+        const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+        const frontend = rawFrontend.replace(/\/$/, '');
+        return res.redirect(302, `${frontend}/playlist-access/${fallbackPlaylistId}`);
+      }
+      return res.status(500).send('Target URL missing');
+    }
     
     // NOTE: Scan tracking is handled by the destination page (playlist-access/slideshow-access)
     // to avoid duplicate tracking. Only track here for external URLs that don't have their own tracking.
@@ -9455,6 +9921,35 @@ app.get('/api/playlist-access/:id', async (req, res) => {
     const playlist = await getPlaylistWithMedia(id);
     
     if (!playlist) {
+      // Playlist not found - use fallback
+      console.log('⚠️ FALLBACK: Playlist not found, using fallback playlist');
+      const fallbackPlaylistId = await ensureFallbackPlaylist();
+      if (fallbackPlaylistId) {
+        const fallbackPlaylist = await getPlaylistWithMedia(fallbackPlaylistId);
+        if (fallbackPlaylist) {
+          console.log(`✅ FALLBACK: Using fallback playlist ID ${fallbackPlaylistId} for requested ID ${id}`);
+          
+          // Convert to access format with isFallback flag
+          const accessData = {
+            id: fallbackPlaylist.id,
+            name: fallbackPlaylist.name,
+            description: fallbackPlaylist.description,
+            requiresActivationCode: fallbackPlaylist.requiresActivationCode,
+            isPublic: fallbackPlaylist.isPublic,
+            createdAt: fallbackPlaylist.createdAt,
+            updatedAt: fallbackPlaylist.updatedAt,
+            mediaFiles: fallbackPlaylist.mediaFiles || [],
+            productLinks: fallbackPlaylist.productLinks || [],
+            accessRestricted: fallbackPlaylist.requiresActivationCode && !fallbackPlaylist.isPublic,
+            isFallback: true,
+            originalRequestedId: parseInt(id)
+          };
+          
+          // Don't try to link QR code for fallback content
+          console.log('🎵 PLAYLIST_ACCESS: Returning fallback playlist:', accessData.name);
+          return res.json(accessData);
+        }
+      }
       return res.status(404).json({ error: 'Playlist not found' });
     }
     
@@ -9470,7 +9965,8 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       mediaFiles: playlist.mediaFiles || [],
       productLinks: playlist.productLinks || [],
       // Add access control flag
-      accessRestricted: playlist.requiresActivationCode && !playlist.isPublic
+      accessRestricted: playlist.requiresActivationCode && !playlist.isPublic,
+      isFallback: false
     };
     
     // Attempt to link a QR code to this playlist and record a scan (public tracking)
@@ -9595,6 +10091,117 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     const slideshowRes = await client.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [slideshowId]);
 
     if (slideshowRes.rows.length === 0) {
+      // Slideshow not found - use fallback
+      console.log('⚠️ FALLBACK: Slideshow not found, using fallback slideshow');
+      const fallbackSlideshowId = await ensureFallbackSlideshow();
+      if (fallbackSlideshowId) {
+        // Fetch fallback slideshow using the same logic below
+        const fallbackSlideshowRes = await client.query('SELECT * FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [fallbackSlideshowId]);
+        if (fallbackSlideshowRes.rows.length > 0) {
+          console.log(`✅ FALLBACK: Using fallback slideshow ID ${fallbackSlideshowId} for requested ID ${slideshowId}`);
+          // Continue with fallback slideshow processing below (will need to modify the rest of the function)
+          // For now, let's handle it by recursively calling the same endpoint logic
+          // Actually, better to duplicate the logic here
+          let fallbackSlideshow = fallbackSlideshowRes.rows[0];
+          
+          // Skip activation code check for fallback
+          const fullFallbackResult = await client.query(
+            `SELECT s.*, u.username 
+             FROM slideshows s 
+             LEFT JOIN users u ON s.user_id = u.id 
+             WHERE s.id = $1`,
+            [fallbackSlideshowId]
+          );
+          
+          if (fullFallbackResult.rows.length === 0) {
+            return res.status(404).json({ message: 'Fallback slideshow could not be retrieved.' });
+          }
+          
+          const fullFallbackSlideshow = fullFallbackResult.rows[0];
+          
+          // Fetch images
+          const fallbackImagesResult = await client.query(
+            `SELECT si.id, si.slideshow_id AS "slideshowId", si.image_url, si.caption, si.display_order AS "displayOrder"
+             FROM slideshow_images si
+             WHERE si.slideshow_id = $1 
+             ORDER BY si.display_order`,
+            [fallbackSlideshowId]
+          );
+          
+          const fallbackImagesWithSignedUrls = await Promise.all(
+            fallbackImagesResult.rows.map(async (image) => {
+              try {
+                if (image.image_url && image.image_url.includes('s3.us-east-2.amazonaws.com/')) {
+                  const s3Key = image.image_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+                  const signedUrl = await s3Service.getSignedUrl(s3Key, 3600);
+                  return { ...image, image_url: signedUrl };
+                }
+                return image;
+              } catch (error) {
+                console.error(`Failed to generate signed URL for image ${image.id}:`, error);
+                return image;
+              }
+            })
+          );
+          
+          fullFallbackSlideshow.images = fallbackImagesWithSignedUrls;
+          
+          // Fetch product links
+          const fallbackProductLinksResult = await client.query(
+            `SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+             FROM product_links pl
+             JOIN products p ON pl.product_id = p.id
+             WHERE pl.slideshow_id = $1 AND pl.is_active = true
+             ORDER BY pl.display_order, pl.created_at`,
+            [fallbackSlideshowId]
+          );
+          
+          fullFallbackSlideshow.productLinks = fallbackProductLinksResult.rows.map(link => {
+            let formattedPrice = null;
+            if (link.price) {
+              let priceInCents = link.price;
+              if (priceInCents > 10000) {
+                priceInCents = priceInCents / 100;
+              }
+              formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+            }
+            
+            return {
+              id: link.product_id.toString(),
+              linkId: link.id.toString(),
+              title: link.title,
+              url: link.url,
+              description: link.description,
+              imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+              images: link.product_images || (link.image_url ? [link.image_url] : []),
+              displayOrder: link.display_order,
+              isActive: link.is_active,
+              price: formattedPrice,
+              productName: link.product_name
+            };
+          });
+          
+          // Generate signed URL for audio if it exists
+          if (fullFallbackSlideshow.audio_url) {
+            try {
+              const audioUrl = fullFallbackSlideshow.audio_url;
+              if (audioUrl.includes('s3.us-east-2.amazonaws.com/')) {
+                const s3Key = audioUrl.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+                const signedUrl = await s3Service.getSignedUrl(s3Key, 3600);
+                fullFallbackSlideshow.audio_url = signedUrl;
+              }
+            } catch (error) {
+              console.error(`Failed to generate signed URL for audio:`, error);
+            }
+          }
+          
+          // Add fallback flags
+          fullFallbackSlideshow.isFallback = true;
+          fullFallbackSlideshow.originalRequestedId = parseInt(slideshowId);
+          
+          return res.json(fullFallbackSlideshow);
+        }
+      }
       return res.status(404).json({ message: 'Slideshow not found' });
     }
 
@@ -9788,6 +10395,9 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
         // Don't fail the whole request, just leave the original URL
       }
     }
+    
+    // Add isFallback flag to normal response
+    fullSlideshow.isFallback = false;
     
     res.json(fullSlideshow);
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +18,7 @@ export default function Settings() {
   const { unreadCount } = useNotifications();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentVersion, versionInfo, checkForUpdates, isChecking } = useAppVersion();
+  const insets = useSafeAreaInsets();
 
   // Check if user is admin (check isAdmin property or specific admin account)
   const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
@@ -349,6 +351,13 @@ export default function Settings() {
         icon: '📱',
         adminOnly: true,
       },
+      {
+        title: 'Fallback Content Management',
+        description: 'Manage fallback playlists and slideshows shown when QR codes or owners are deleted',
+        onPress: () => router.push('/(tabs)/settings/fallback-content'),
+        icon: '🔄',
+        adminOnly: true,
+      },
     ] : []),
     // Logout option at the bottom
     {
@@ -366,7 +375,7 @@ export default function Settings() {
   return (
     <ThemedView style={styles.container}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        <ThemedView style={styles.header}>
+        <ThemedView style={[styles.header, { paddingTop: Math.max(insets.top, 20) }]}>
           <MerchTechLogo size="medium" variant="full" style={styles.logo} />
           <ThemedText type="title">Settings</ThemedText>
           <ThemedText style={styles.subtitle}>
