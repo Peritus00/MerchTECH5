@@ -113,20 +113,26 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
       });
       
       // Upload file directly to slideshow endpoint
-              const newImageFromServer = await slideshowsAPI.addImage(slideshow.id, filePayload, '', displayOrder);
-      console.log('📤 SLIDESHOW uploadImage: Image uploaded successfully', newImageFromServer);
-      console.log('📤 SLIDESHOW uploadImage: Server response keys:', Object.keys(newImageFromServer));
-      console.log('📤 SLIDESHOW uploadImage: imageUrl field:', newImageFromServer.imageUrl);
-      console.log('📤 SLIDESHOW uploadImage: url field:', newImageFromServer.url);
+      const response = await slideshowsAPI.addImage(slideshow.id, filePayload, '', displayOrder);
+      console.log('📤 SLIDESHOW uploadImage: Image uploaded successfully', response);
+      console.log('📤 SLIDESHOW uploadImage: Server response keys:', Object.keys(response));
+      
+      // Backend returns { image: { id, slideshowId, imageUrl, ... } }
+      const newImageFromServer = response.image || response;
+      console.log('📤 SLIDESHOW uploadImage: Extracted image object:', newImageFromServer);
+      console.log('📤 SLIDESHOW uploadImage: imageId:', newImageFromServer.id);
+      console.log('📤 SLIDESHOW uploadImage: imageUrl:', newImageFromServer.imageUrl);
 
       // Map server response to frontend format
       const newImage = {
         id: newImageFromServer.id,
-        slideshowId: newImageFromServer.slideshowId,
+        slideshowId: newImageFromServer.slideshowId || slideshow.id,
         imageUrl: newImageFromServer.imageUrl || newImageFromServer.url,
-        caption: newImageFromServer.caption,
-        displayOrder: newImageFromServer.position
+        caption: newImageFromServer.caption || '',
+        displayOrder: newImageFromServer.displayOrder || newImageFromServer.position || images.length + 1
       };
+      
+      console.log('📤 SLIDESHOW uploadImage: Mapped image object:', newImage);
 
       // Update local state with new image
       const updatedImages = [...images, newImage].sort((a, b) => a.displayOrder - b.displayOrder);
@@ -144,8 +150,23 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     }
   };
 
-  const handleDeleteImage = async (imageId: number) => {
-    console.log('🗑️ handleDeleteImage called for', imageId);
+  const handleDeleteImage = async (imageId: number | string | undefined) => {
+    console.log('🗑️ handleDeleteImage called for', imageId, 'type:', typeof imageId);
+    
+    // Validate imageId
+    if (imageId === undefined || imageId === null || imageId === 'undefined') {
+      console.error('🗑️ Invalid imageId provided:', imageId);
+      Alert.alert('Error', 'Invalid image ID');
+      return;
+    }
+    
+    // Convert to number if it's a string
+    const numericId = typeof imageId === 'string' ? parseInt(imageId, 10) : imageId;
+    if (isNaN(numericId)) {
+      console.error('🗑️ imageId is not a valid number:', imageId);
+      Alert.alert('Error', 'Invalid image ID');
+      return;
+    }
     
     if (!slideshow) {
       console.error('🗑️ No slideshow available for deletion');
@@ -156,9 +177,9 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
     const slideshowId = slideshow.id;
     
     const confirmDelete = async () => {
-      console.log('🗑️ Confirmed delete for', imageId, 'slideshow', slideshowId);
+      console.log('🗑️ Confirmed delete for imageId', numericId, 'slideshow', slideshowId);
       try {
-        const response = await slideshowsAPI.deleteImage(slideshowId, imageId);
+        const response = await slideshowsAPI.deleteImage(slideshowId, numericId);
         // API returns { slideshow: { images: [...] } }
         const updatedSlideshow = response.slideshow || response;
         console.log('🗑️ deleteImage API success, fresh images length', updatedSlideshow.images?.length || 0);
@@ -317,7 +338,12 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
                       style={styles.deleteImageButton}
                       hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       onPress={() => {
-                        console.log('🗑️ Delete button pressed for image', image.id);
+                        console.log('🗑️ Delete button pressed for image', image.id, 'type:', typeof image.id);
+                        if (!image.id) {
+                          console.error('🗑️ Image has no ID:', image);
+                          Alert.alert('Error', 'Image ID is missing');
+                          return;
+                        }
                         handleDeleteImage(image.id);
                       }}
                     >

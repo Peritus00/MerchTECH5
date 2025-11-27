@@ -10802,7 +10802,20 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
   try {
     const { slideshowId, imageId } = req.params;
     
-    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Deleting image:', { slideshowId, imageId });
+    console.log('🎬 SLIDESHOW_DELETE_IMAGE: Deleting image:', { slideshowId, imageId, imageIdType: typeof imageId });
+    
+    // Validate imageId
+    if (!imageId || imageId === 'undefined' || imageId === 'null') {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: Invalid imageId provided:', imageId);
+      return res.status(400).json({ error: 'Invalid image ID' });
+    }
+    
+    // Convert to integer
+    const numericImageId = parseInt(imageId, 10);
+    if (isNaN(numericImageId)) {
+      console.log('🎬 SLIDESHOW_DELETE_IMAGE: imageId is not a valid number:', imageId);
+      return res.status(400).json({ error: 'Invalid image ID format' });
+    }
     
     // Check if user owns the slideshow
     const slideshowResult = await db.query(
@@ -10823,7 +10836,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     // Get image details for file deletion
     const imageResult = await db.query(
       'SELECT * FROM slideshow_images WHERE id = $1 AND slideshow_id = $2',
-      [imageId, slideshowId]
+      [numericImageId, slideshowId]
     );
     
     // If image doesn't exist, make deletion idempotent - return current slideshow state
@@ -10867,7 +10880,7 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     // Delete image record
     await db.query(
       'DELETE FROM slideshow_images WHERE id = $1',
-      [imageId]
+      [numericImageId]
     );
     
     // Delete file from S3 if it's an S3 URL
