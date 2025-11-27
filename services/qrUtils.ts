@@ -4,12 +4,137 @@ import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
 import { captureRef } from 'react-native-view-shot';
 
+// Add PDF import (will be undefined on mobile, that's OK)
+// Use dynamic import to avoid Metro bundler issues with AMD-style requires
+let jsPDF: any;
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  try {
+    // Only require jspdf at runtime on web platform
+    const jspdfModule = require('jspdf');
+    jsPDF = jspdfModule.jsPDF || jspdfModule.default?.jsPDF || jspdfModule;
+  } catch (e) {
+    console.warn('jsPDF not available:', e);
+    jsPDF = null;
+  }
+}
+
 export enum QRCodeFormat {
   PNG = 'png',
   JPG = 'jpg',
   SVG = 'svg',
   PDF = 'pdf'
 }
+
+// New function to extract SVG from QR component ref
+const extractSVGFromQRRef = async (qrRef: any): Promise<string | null> => {
+  try {
+    // Check if ref has getSVGString method (from AdvancedQRCodeGenerator)
+    if (qrRef && typeof qrRef.getSVGString === 'function') {
+      return await qrRef.getSVGString();
+    }
+    
+    // Check if ref has current.getSVGString
+    if (qrRef?.current && typeof qrRef.current.getSVGString === 'function') {
+      return await qrRef.current.getSVGString();
+    }
+    
+    // For web, try to find SVG element in DOM
+    if (Platform.OS === 'web' && qrRef) {
+      const qrElement = qrRef.querySelector ? qrRef : (qrRef.current || qrRef);
+      const svgElement = qrElement?.querySelector?.('svg');
+      if (svgElement) {
+        return new XMLSerializer().serializeToString(svgElement);
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error extracting SVG:', error);
+    return null;
+  }
+};
+
+// New function to generate PDF
+const generatePDF = async (
+  qrData: string | null,
+  filename: string,
+  size: number = 1200
+): Promise<Blob | null> => {
+  if (Platform.OS !== 'web' || !jsPDF) {
+    return null;
+  }
+
+  try {
+    const pdf = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [100, 100], // Square format for QR code
+    });
+
+    // If we have SVG data, convert it to image
+    if (qrData) {
+      // Create an image from SVG
+      const img = new Image();
+      const svgBlob = new Blob([qrData], { type: 'image/svg+xml;charset=utf-8' });
+      const svgUrl = URL.createObjectURL(svgBlob);
+      
+      return new Promise((resolve, reject) => {
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = size;
+          canvas.height = size;
+          const ctx = canvas.getContext('2d');
+          
+          if (!ctx) {
+            reject(new Error('Could not get canvas context'));
+            return;
+          }
+          
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, size, size);
+          ctx.drawImage(img, 0, 0, size, size);
+          
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Could not create blob'));
+              return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = () => {
+              const imgData = reader.result as string;
+              const pdfWidth = pdf.internal.pageSize.getWidth();
+              const pdfHeight = pdf.internal.pageSize.getHeight();
+              
+              // Center the QR code
+              const imgWidth = pdfWidth * 0.8;
+              const imgHeight = imgWidth; // Square
+              const x = (pdfWidth - imgWidth) / 2;
+              const y = (pdfHeight - imgHeight) / 2;
+              
+              pdf.addImage(imgData, 'PNG', x, y, imgWidth, imgHeight);
+              
+              // Generate PDF blob
+              const pdfBlob = pdf.output('blob');
+              URL.revokeObjectURL(svgUrl);
+              resolve(pdfBlob);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          }, 'image/png', 0.95);
+        };
+        
+        img.onerror = reject;
+        img.src = svgUrl;
+      });
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error generating PDF:', error);
+    return null;
+  }
+};
 
 // Web-specific download function
 const downloadForWeb = async (
@@ -480,6 +605,45 @@ export const downloadQRCode = async (
 
     // Handle web platform differently
     if (Platform.OS === 'web') {
+      // For SVG format on web, extract SVG directly
+      if (format === QRCodeFormat.SVG) {
+        const svgString = await extractSVGFromQRRef(qrRef);
+        if (svgString) {
+          const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(svgBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `QRCode_${filename}_${Date.now()}.svg`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          Alert.alert('Success', `QR code downloaded as ${a.download}`);
+          return;
+        }
+        // Fallback to existing web download if SVG extraction fails
+      }
+      
+      // For PDF format on web, generate actual PDF
+      if (format === QRCodeFormat.PDF) {
+        const svgString = await extractSVGFromQRRef(qrRef);
+        const pdfBlob = await generatePDF(svgString, filename);
+        if (pdfBlob) {
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `QRCode_${filename}_${Date.now()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          Alert.alert('Success', `QR code downloaded as ${a.download}`);
+          return;
+        }
+        // Fallback to existing web download if PDF generation fails
+      }
+      
+      // Fall back to existing web download for PNG/JPG or if SVG/PDF extraction fails
       await downloadForWeb(qrRef, filename, format);
       return;
     }
@@ -494,18 +658,45 @@ export const downloadQRCode = async (
       return;
     }
 
-    let uri: string;
-    let finalFilename: string;
-
+    // For SVG on mobile, extract SVG string and save as file
     if (format === QRCodeFormat.SVG) {
-      console.log('🎨 Converting SVG to PNG for compatibility');
-      Alert.alert('SVG Export', 'SVG export will be saved as high-quality PNG for compatibility');
+      const svgString = await extractSVGFromQRRef(qrRef);
+      if (svgString) {
+        const filename_sanitized = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const fileUri = `${FileSystem.documentDirectory}QRCode_${filename_sanitized}_${Date.now()}.svg`;
+        
+        await FileSystem.writeAsStringAsync(fileUri, svgString, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        // Share the SVG file
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'image/svg+xml',
+            dialogTitle: 'Share QR Code SVG',
+          });
+        } else {
+          Alert.alert('Success', `QR code SVG saved to ${fileUri}`);
+        }
+        return;
+      } else {
+        Alert.alert('Error', 'Could not extract SVG data from QR code');
+        return;
+      }
+    }
+
+    // For PDF on mobile, we'll need to use a different approach
+    // For now, convert to PNG and share (you can enhance this later with react-native-html-to-pdf)
+    if (format === QRCodeFormat.PDF) {
+      console.log('📄 PDF format on mobile - using high-quality PNG');
+      Alert.alert('PDF Export', 'PDF export on mobile will be saved as high-quality PNG. Full PDF support coming soon.');
       format = QRCodeFormat.PNG;
     }
 
     console.log('📸 Capturing QR code image...');
     // Capture the QR code as image
-    uri = await captureRef(qrRef, {
+    const uri = await captureRef(qrRef, {
       format: format === QRCodeFormat.PDF ? 'png' : format,
       quality: 1.0,
       width: 1200, // High resolution
@@ -513,29 +704,22 @@ export const downloadQRCode = async (
     });
 
     console.log('✅ QR code captured successfully, URI:', uri);
-    finalFilename = `QRCode_${filename}_${Date.now()}.${format}`;
+    const finalFilename = `QRCode_${filename}_${Date.now()}.${format}`;
 
-    if (format === QRCodeFormat.PDF) {
-      console.log('📄 Handling PDF export via sharing...');
-      // For PDF, we'll share the high-quality PNG with PDF extension
-      await shareQRCode(uri, `${filename}.pdf`);
-      Alert.alert('PDF Export', 'QR code exported as high-quality image for PDF compatibility');
-    } else {
-      console.log('💾 Saving to media library...');
-      // Save to media library
-      const asset = await MediaLibrary.createAssetAsync(uri);
-      console.log('✅ Asset created:', asset.id);
-      
-      // Try to create album, but don't fail if it doesn't work
-      try {
-        await MediaLibrary.createAlbumAsync('QR Codes', asset, false);
-        console.log('📁 Album created/updated successfully');
-      } catch (albumError) {
-        console.log('⚠️ Album creation failed, but file saved:', albumError);
-      }
-      
-      Alert.alert('Success', `QR code saved to Photos as ${finalFilename}`);
+    console.log('💾 Saving to media library...');
+    // Save to media library
+    const asset = await MediaLibrary.createAssetAsync(uri);
+    console.log('✅ Asset created:', asset.id);
+    
+    // Try to create album, but don't fail if it doesn't work
+    try {
+      await MediaLibrary.createAlbumAsync('QR Codes', asset, false);
+      console.log('📁 Album created/updated successfully');
+    } catch (albumError) {
+      console.log('⚠️ Album creation failed, but file saved:', albumError);
     }
+    
+    Alert.alert('Success', `QR code saved to Photos as ${finalFilename}`);
     
     console.log('🎉 Download completed successfully');
   } catch (error) {
