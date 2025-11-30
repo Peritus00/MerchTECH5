@@ -1,0 +1,49 @@
+# =============================================================================
+# ENVIRONMENT VARIABLES FOR PRODUCTION
+# =============================================================================
+# Copy these to your .env file and Railway/Vercel environment variables
+# =============================================================================
+
+# =============================================================================
+# BACKEND ENVIRONMENT VARIABLES (Railway/Vercel)
+# =============================================================================
+
+# Google OAuth - Desktop/Web Client ID (for backend token verification)
+# NOTE: You need the Desktop client ID, not the Android one
+# Current value is Android client - get Desktop client from Google Cloud Console
+GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
+
+# Apple OAuth Configuration
+APPLE_CLIENT_ID=your-apple-service-id-here
+APPLE_SERVICE_ID=your-apple-service-id-here
+APPLE_TEAM_ID=4F996CU4LJ
+
+# =============================================================================
+# MOBILE APP ENVIRONMENT VARIABLES (.env file in project root)
+# =============================================================================
+
+# Google OAuth - Android Client ID (for mobile OAuth flow)
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
+
+# =============================================================================
+# APPLE DEVELOPER INFORMATION (for reference)
+# =============================================================================
+# Apple Developer ID: 05c36637-50a9-4ead-9af1-bb6e93b35e13
+# Apple ID: y6755938373
+# Apple Team ID: 4F996CU4LJ (already configured in app.json)
+
+# =============================================================================
+# IMPORTANT NOTES
+# =============================================================================
+# 1. The GOOGLE_CLIENT_ID above is the Android client ID
+#    You may need a separate Desktop/Web client ID for backend verification
+#    Check Google Cloud Console for the Desktop client ID
+#
+# 2. APPLE_CLIENT_ID and APPLE_SERVICE_ID need to be set after creating
+#    a Service ID in Apple Developer Portal for Sign in with Apple
+#
+# 3. For Railway: Add these variables in the Railway dashboard under
+#    your project's "Variables" tab
+#
+# 4. For local development: Add to .env file in project root
+

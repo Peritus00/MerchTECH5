@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,6 +22,7 @@ import { ActivityLog, ActivityLogFilters, ActivityLogStats } from '@/types';
 
 const ActivityLogsScreen = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [stats, setStats] = useState<ActivityLogStats | null>(null);
@@ -171,8 +173,12 @@ const ActivityLogsScreen = () => {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backButton}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.push('/(tabs)/settings')} 
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <MaterialIcons name="arrow-back" size={24} color="#3b82f6" />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Activity Logs</ThemedText>
@@ -451,7 +457,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },

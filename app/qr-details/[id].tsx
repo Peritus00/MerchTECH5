@@ -10,6 +10,7 @@ import {
   Switch,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { AdvancedQRCodeGenerator } from '@/components/AdvancedQRCodeGenerator';
@@ -21,7 +22,9 @@ import { QRCode } from '@/types';
 export default function QRCodeDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const qrRef = useRef(null);
+  const insets = useSafeAreaInsets();
+  const qrRef = useRef<any>(null);
+  const qrGeneratorRef = useRef<any>(null);
   
   const [qrCode, setQrCode] = useState<QRCode | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,7 +120,12 @@ export default function QRCodeDetailsScreen() {
     if (!qrCode || !qrRef.current) return;
     
     try {
-      await downloadQRCode(qrRef.current, qrCode.name, format);
+      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
+      const combinedRef = {
+        ...qrRef.current,
+        ...(qrGeneratorRef.current || {}),
+      };
+      await downloadQRCode(combinedRef, qrCode.name, format);
     } catch (error) {
       Alert.alert('Error', 'Failed to download QR code');
     }
@@ -160,11 +168,12 @@ export default function QRCodeDetailsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      <ThemedView style={styles.header}>
+      <ThemedView style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerButtons}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <ThemedText style={styles.backButtonText}>← Back</ThemedText>
           </TouchableOpacity>
@@ -201,6 +210,7 @@ export default function QRCodeDetailsScreen() {
         <View style={styles.qrSection}>
           <View ref={qrRef} style={styles.qrContainer}>
             <AdvancedQRCodeGenerator
+              ref={qrGeneratorRef}
               value={(currentQRCode?.shortUrl || currentQRCode?.short_url || currentQRCode?.url) || ''}
               size={280}
               fgColor={currentQRCode?.options?.foregroundColor || '#000000'}
@@ -333,7 +343,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },

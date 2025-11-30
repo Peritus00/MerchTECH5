@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StyleSheet, ScrollView, View, TouchableOpacity, TextInput, Alert, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,6 +12,7 @@ import { logStorage, type LogEntry } from '@/utils/debugLogger';
 export default function DebugLogsScreen() {
   const { user } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState('');
   const [filterLevel, setFilterLevel] = useState<'all' | 'log' | 'warn' | 'error' | 'info'>('all');
@@ -128,9 +130,13 @@ export default function DebugLogsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <View style={styles.headerTop}>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/settings')} style={styles.backButton}>
+          <TouchableOpacity 
+            onPress={() => router.push('/(tabs)/settings')} 
+            style={styles.backButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <MaterialIcons name="arrow-back" size={24} color="#2563eb" />
             <ThemedText style={styles.backButtonText}>Back</ThemedText>
           </TouchableOpacity>

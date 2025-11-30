@@ -201,27 +201,41 @@ export default function PlaylistsScreen() {
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            console.log('🔴 PLAYLISTS: User confirmed delete, removing from state...');
-            setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-            console.log('🔴 PLAYLISTS: Playlist removed from state, showing success alert...');
-            
-            // Show success message
-            setTimeout(() => {
-              setAlertConfig({
-                visible: true,
-                title: 'Success',
-                message: 'Playlist deleted successfully',
-                buttons: [
-                  {
-                    text: 'OK',
-                    onPress: () => {
-                      console.log('🔴 PLAYLISTS: Delete operation completed');
+          onPress: async () => {
+            try {
+              console.log('🔴 PLAYLISTS: User confirmed delete, calling API...');
+              
+              // Import API service
+              const { playlistsAPI } = await import('@/services/api');
+              
+              // Call API to delete playlist from database
+              await playlistsAPI.delete(playlistId);
+              console.log('🔴 PLAYLISTS: API delete successful, removing from state...');
+              
+              // Remove from local state only after successful API call
+              setPlaylists(prev => prev.filter(p => p.id !== playlistId));
+              console.log('🔴 PLAYLISTS: Playlist removed from state, showing success alert...');
+              
+              // Show success message
+              setTimeout(() => {
+                setAlertConfig({
+                  visible: true,
+                  title: 'Success',
+                  message: 'Playlist deleted successfully',
+                  buttons: [
+                    {
+                      text: 'OK',
+                      onPress: () => {
+                        console.log('🔴 PLAYLISTS: Delete operation completed');
+                      },
                     },
-                  },
-                ],
-              });
-            }, 100);
+                  ],
+                });
+              }, 100);
+            } catch (error: any) {
+              console.error('🔴 PLAYLISTS: Error deleting playlist:', error);
+              Alert.alert('Error', `Failed to delete playlist: ${error.message || 'Unknown error'}`);
+            }
           },
         },
       ],
@@ -313,10 +327,6 @@ export default function PlaylistsScreen() {
       console.error('🔴 PLAYLISTS: Error details:', error.response?.data || error.message);
       Alert.alert('Error', `Failed to update playlist protection: ${error.message || 'Unknown error'}`);
     }
-  };
-
-  const handleAccessSettings = (playlist: Playlist) => {
-    router.push(`/playlist-access/${playlist.id}`);
   };
 
   const filteredPlaylists = playlists.filter(playlist => {
@@ -475,7 +485,6 @@ export default function PlaylistsScreen() {
               onEdit={() => handleEditPlaylist(playlist)}
               onDelete={() => handleDeletePlaylist(playlist.id)}
               onToggleProtection={() => handleToggleProtection(playlist)}
-              onAccessSettings={() => handleAccessSettings(playlist)}
               showActions={selectedTab === 'my-playlists'}
             />
           ))

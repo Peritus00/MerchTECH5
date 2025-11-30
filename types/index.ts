@@ -30,6 +30,8 @@ export interface User {
   maxProducts: number;
   maxQrCodes: number;
   maxSlideshows: number;
+  googleId?: string | null;
+  appleId?: string | null;
 }
 
 export interface QRCode {

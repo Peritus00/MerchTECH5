@@ -138,7 +138,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   ] as const;
 
   // Download functionality
-  const qrRef = useRef(null);
+  const qrRef = useRef<any>(null);
+  const qrGeneratorRef = useRef<any>(null);
   const [downloadDropdownVisible, setDownloadDropdownVisible] = useState(false);
   const [downloadLoading, setDownloadLoading] = useState(false);
 
@@ -663,7 +664,13 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         options,
       };
 
-      await downloadAdvancedQRCode(qrRef.current, qrData, format);
+      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
+      const combinedRef = {
+        ...qrRef.current,
+        ...(qrGeneratorRef.current || {}),
+      };
+
+      await downloadAdvancedQRCode(combinedRef, qrData, format);
     } catch (error) {
       console.error('Download error:', error);
       Alert.alert('Error', 'Failed to download QR code');
@@ -1644,6 +1651,7 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
             <View style={styles.previewContainer}>
               <View ref={qrRef} style={styles.qrWrapper}>
                 <AdvancedQRCodeGenerator
+                  ref={qrGeneratorRef}
                   value={(() => {
                     // Normalize to always use www.merchtrader.org (which has valid SSL certificate)
                     let baseUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';

@@ -8,6 +8,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MediaPlayer from '@/components/MediaPlayer';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -25,6 +26,7 @@ interface ContentData {
 export default function DynamicMediaPlayerPage() {
   const { id, type: contentType } = useLocalSearchParams<{ id: string; type?: ContentType }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [content, setContent] = useState<ContentData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -193,8 +195,12 @@ export default function DynamicMediaPlayerPage() {
           ),
         }}
       />
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ThemedText style={styles.backButtonText}>{'< Back'}</ThemedText>
         </TouchableOpacity>
       </View>
@@ -220,7 +226,8 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    padding: 10,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   backButton: {},
   backButtonText: {

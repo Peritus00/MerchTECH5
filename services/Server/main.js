@@ -17,6 +17,7 @@ const s3Service = require('./s3Service');
 const axios = require('axios');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
+const socialAuthService = require('./socialAuthService');
 
 // Add console logging immediately for startup debugging
 console.log('🚀 Server startup initiated...');
@@ -5300,40 +5301,18 @@ app.post('/api/auth/login',
     const result = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
     const dbUser = result.rows[0];
+    
+    // Check if user has a password (social login users may not have one)
+    if (!dbUser.password_hash) {
+      // Return generic error to prevent account enumeration and information disclosure
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
     if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
     
     // Transform user object to camelCase for frontend
-    const user = {
-      id: dbUser.id,
-      email: dbUser.email,
-      username: dbUser.username,
-      firstName: dbUser.first_name,
-      lastName: dbUser.last_name,
-      isAdmin: dbUser.is_admin || false,
-      subscriptionTier: dbUser.subscription_tier || 'free',
-      isEmailVerified: dbUser.is_email_verified || false,
-      isSuspended: dbUser.is_suspended || false,
-      createdAt: dbUser.created_at,
-      lastActive: dbUser.updated_at || dbUser.created_at,
-      canViewLogs: dbUser.can_view_logs || false,
-      // Set default permissions based on subscription tier
-      canViewAnalytics: dbUser.subscription_tier === 'premium',
-      canManagePlaylists: true,
-      canEditPlaylists: dbUser.subscription_tier !== 'free',
-      canUploadMedia: true,
-      canGenerateCodes: dbUser.subscription_tier !== 'free',
-      canAccessStore: true,
-      canViewFanmail: dbUser.subscription_tier === 'premium',
-      canManageQRCodes: true,
-      maxPlaylists: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
-      maxVideos: dbUser.max_videos || 0,
-      maxAudioFiles: dbUser.max_audio_files || 0,
-      maxActivationCodes: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
-      maxProducts: dbUser.max_products || 0,
-      maxQrCodes: dbUser.max_qr_codes || 0,
-      maxSlideshows: dbUser.max_slideshows || 0,
-    };
+    const user = transformUser(dbUser);
     
     // **FIX**: Ensure isAdmin is included in the token payload
     const token = jwt.sign(
@@ -5352,6 +5331,43 @@ app.post('/api/auth/login',
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Helper function to transform database user to frontend format
+function transformUser(dbUser) {
+  return {
+    id: dbUser.id,
+    email: dbUser.email,
+    username: dbUser.username,
+    firstName: dbUser.first_name,
+    lastName: dbUser.last_name,
+    isAdmin: dbUser.is_admin || false,
+    subscriptionTier: dbUser.subscription_tier || 'free',
+    isEmailVerified: dbUser.is_email_verified || false,
+    isSuspended: dbUser.is_suspended || false,
+    createdAt: dbUser.created_at,
+    lastActive: dbUser.updated_at || dbUser.created_at,
+    canViewLogs: dbUser.can_view_logs || false,
+    // Set default permissions based on subscription tier
+    canViewAnalytics: dbUser.subscription_tier === 'premium',
+    canManagePlaylists: true,
+    canEditPlaylists: dbUser.subscription_tier !== 'free',
+    canUploadMedia: true,
+    canGenerateCodes: dbUser.subscription_tier !== 'free',
+    canAccessStore: true,
+    canViewFanmail: dbUser.subscription_tier === 'premium',
+    canManageQRCodes: true,
+    maxPlaylists: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
+    maxVideos: dbUser.max_videos || 0,
+    maxAudioFiles: dbUser.max_audio_files || 0,
+    maxActivationCodes: dbUser.subscription_tier === 'premium' ? 50 : dbUser.subscription_tier === 'basic' ? 25 : 10,
+    maxProducts: dbUser.max_products || 0,
+    maxQrCodes: dbUser.max_qr_codes || 0,
+    maxSlideshows: dbUser.max_slideshows || 0,
+    // Social login fields
+    googleId: dbUser.google_id || null,
+    appleId: dbUser.apple_id || null,
+  };
+}
 
 app.post('/api/auth/register',
   validators.email,
@@ -5390,6 +5406,208 @@ app.post('/api/auth/register',
   } catch (error) {
     console.error('🔴 REGISTRATION ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Google Sign-In endpoint
+app.post('/api/auth/google', authLimiter, async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    
+    if (!idToken) {
+      return res.status(400).json({ error: 'Google ID token is required' });
+    }
+
+    // Verify Google token
+    const googleUser = await socialAuthService.verifyGoogleToken(idToken);
+    
+    // Find or create user
+    const dbUser = await socialAuthService.findOrCreateSocialUser(
+      db,
+      'google',
+      googleUser.googleId,
+      googleUser.email,
+      {
+        name: googleUser.name,
+        picture: googleUser.picture,
+        givenName: googleUser.givenName,
+        familyName: googleUser.familyName,
+        emailVerified: googleUser.emailVerified,
+      }
+    );
+
+    // Transform user object to camelCase for frontend
+    const user = transformUser(dbUser);
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        isAdmin: user.isAdmin
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ user, token, provider: 'google' });
+  } catch (error) {
+    console.error('🔴 GOOGLE AUTH ERROR:', error);
+    res.status(401).json({ error: error.message || 'Google authentication failed' });
+  }
+});
+
+// Apple Sign-In endpoint
+app.post('/api/auth/apple', authLimiter, async (req, res) => {
+  try {
+    const { identityToken, nonce } = req.body;
+    
+    if (!identityToken) {
+      return res.status(400).json({ error: 'Apple identity token is required' });
+    }
+
+    // Verify Apple token
+    const appleUser = await socialAuthService.verifyAppleToken(identityToken, nonce);
+    
+    // Find or create user
+    const dbUser = await socialAuthService.findOrCreateSocialUser(
+      db,
+      'apple',
+      appleUser.appleId,
+      appleUser.email, // May be null on subsequent sign-ins
+      {
+        emailVerified: appleUser.emailVerified,
+      }
+    );
+
+    // Transform user object to camelCase for frontend
+    const user = transformUser(dbUser);
+    
+    // Generate JWT token
+    const token = jwt.sign(
+      { 
+        userId: user.id, 
+        email: user.email, 
+        isAdmin: user.isAdmin
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '24h' }
+    );
+    
+    res.json({ user, token, provider: 'apple' });
+  } catch (error) {
+    console.error('🔴 APPLE AUTH ERROR:', error);
+    res.status(401).json({ error: error.message || 'Apple authentication failed' });
+  }
+});
+
+// Link Google account to existing user
+app.post('/api/profile/link-google', authenticateToken, async (req, res) => {
+  try {
+    const { idToken } = req.body;
+    const userId = req.user.userId;
+    
+    if (!idToken) {
+      return res.status(400).json({ error: 'Google ID token is required' });
+    }
+
+    // Verify Google token
+    const googleUser = await socialAuthService.verifyGoogleToken(idToken);
+    
+    // Link provider to existing account
+    await socialAuthService.linkSocialProvider(
+      db,
+      userId,
+      'google',
+      googleUser.googleId,
+      {
+        name: googleUser.name,
+        picture: googleUser.picture,
+        givenName: googleUser.givenName,
+        familyName: googleUser.familyName,
+        emailVerified: googleUser.emailVerified,
+      }
+    );
+
+    // Fetch updated user
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(result.rows[0]);
+    
+    res.json({ user, message: 'Google account linked successfully' });
+  } catch (error) {
+    console.error('🔴 LINK GOOGLE ERROR:', error);
+    res.status(400).json({ error: error.message || 'Failed to link Google account' });
+  }
+});
+
+// Link Apple account to existing user
+app.post('/api/profile/link-apple', authenticateToken, async (req, res) => {
+  try {
+    const { identityToken, nonce } = req.body;
+    const userId = req.user.userId;
+    
+    if (!identityToken) {
+      return res.status(400).json({ error: 'Apple identity token is required' });
+    }
+
+    // Verify Apple token
+    const appleUser = await socialAuthService.verifyAppleToken(identityToken, nonce);
+    
+    // Link provider to existing account
+    await socialAuthService.linkSocialProvider(
+      db,
+      userId,
+      'apple',
+      appleUser.appleId,
+      {
+        emailVerified: appleUser.emailVerified,
+      }
+    );
+
+    // Fetch updated user
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(result.rows[0]);
+    
+    res.json({ user, message: 'Apple account linked successfully' });
+  } catch (error) {
+    console.error('🔴 LINK APPLE ERROR:', error);
+    res.status(400).json({ error: error.message || 'Failed to link Apple account' });
+  }
+});
+
+// Unlink Google account
+app.post('/api/profile/unlink-google', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    await socialAuthService.unlinkSocialProvider(db, userId, 'google');
+
+    // Fetch updated user
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(result.rows[0]);
+    
+    res.json({ user, message: 'Google account unlinked successfully' });
+  } catch (error) {
+    console.error('🔴 UNLINK GOOGLE ERROR:', error);
+    res.status(400).json({ error: error.message || 'Failed to unlink Google account' });
+  }
+});
+
+// Unlink Apple account
+app.post('/api/profile/unlink-apple', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    await socialAuthService.unlinkSocialProvider(db, userId, 'apple');
+
+    // Fetch updated user
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(result.rows[0]);
+    
+    res.json({ user, message: 'Apple account unlinked successfully' });
+  } catch (error) {
+    console.error('🔴 UNLINK APPLE ERROR:', error);
+    res.status(400).json({ error: error.message || 'Failed to unlink Apple account' });
   }
 });
 
@@ -5444,6 +5662,115 @@ app.get('/api/auth/verify-email/:token', async (req, res) => {
   } catch (error) {
     console.error('🔴 VERIFY EMAIL ERROR:', error);
     res.status(400).json({ error: 'Invalid or expired verification token.' });
+  }
+});
+
+// Forgot Password endpoint
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    const result = await db.query('SELECT id, email, username, password_hash FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    if (result.rows.length === 0) {
+      // Don't reveal if email exists or not for security
+      return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    }
+    
+    const user = result.rows[0];
+    
+    // Check if user has a password (social login users can't reset password)
+    if (!user.password_hash) {
+      // Don't reveal this is a social login account for security
+      return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    }
+    
+    const resetToken = jwt.sign({ userId: user.id, email: user.email, type: 'password-reset' }, JWT_SECRET, { expiresIn: '1h' });
+    
+    // Store reset token in database (assuming reset_token and reset_token_expires columns exist)
+    await db.query(
+      `UPDATE users SET reset_token = $1, reset_token_expires = NOW() + INTERVAL '1 hour' WHERE id = $2`,
+      [resetToken, user.id]
+    );
+    
+    // Send email
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/reset-password?token=${resetToken}`;
+    
+    try {
+      await transporter.sendMail({
+        from: '"MerchTrader QR" <help@merchtrader.org>',
+        to: email,
+        subject: 'Reset Your MerchTech Password',
+        html: `<p>Click the link below to reset your password:</p><a href="${resetUrl}">Reset Password</a><p>This link will expire in 1 hour.</p>`,
+      });
+      console.log(`Password reset email sent to ${email}`);
+    } catch (emailError) {
+      console.error(`🔴 Failed to send password reset email to ${email}:`, emailError);
+      // Still return success for security
+    }
+    
+    res.json({ message: 'If the email exists, a password reset link has been sent.' });
+  } catch (error) {
+    console.error('🔴 FORGOT PASSWORD ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Reset Password endpoint
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return res.status(400).json({ error: 'Token and new password are required' });
+    }
+    
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+      if (decoded.type !== 'password-reset') {
+        return res.status(400).json({ error: 'Invalid token type' });
+      }
+    } catch (error) {
+      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    }
+    
+    // Check if token exists in database and hasn't expired
+    const userResult = await db.query(
+      `SELECT id, reset_token, reset_token_expires FROM users WHERE id = $1`,
+      [decoded.userId]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+    
+    const user = userResult.rows[0];
+    if (!user.reset_token || user.reset_token !== token) {
+      return res.status(400).json({ error: 'Invalid reset token' });
+    }
+    
+    if (new Date(user.reset_token_expires) < new Date()) {
+      return res.status(400).json({ error: 'Reset token has expired' });
+    }
+    
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password and clear reset token
+    await db.query(
+      `UPDATE users SET password_hash = $1, reset_token = NULL, reset_token_expires = NULL WHERE id = $2`,
+      [hashedPassword, decoded.userId]
+    );
+    
+    res.json({ message: 'Password reset successfully. You can now login with your new password.' });
+  } catch (error) {
+    console.error('🔴 RESET PASSWORD ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

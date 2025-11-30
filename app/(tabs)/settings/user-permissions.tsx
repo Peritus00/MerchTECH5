@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -164,6 +165,7 @@ type FilterType = 'all' | 'active' | 'admins' | 'pending' | 'suspended';
 export default function UserPermissionsScreen() {
   const { user: currentUser } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { users, isLoading, refreshUsers, updateUserPermissions, deleteUser } = useUserPermissions();
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -308,10 +310,11 @@ export default function UserPermissionsScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={() => router.push('/(tabs)/settings')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
@@ -406,7 +409,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',

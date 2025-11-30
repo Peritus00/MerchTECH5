@@ -16,7 +16,6 @@ interface PlaylistCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onToggleProtection?: () => void;
-  onAccessSettings?: () => void;
   showActions?: boolean;
 }
 
@@ -26,7 +25,6 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   onEdit,
   onDelete,
   onToggleProtection,
-  onAccessSettings,
   showActions = true,
 }) => {
   const formatDate = (dateString: string) => {
@@ -153,16 +151,6 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                   size={20} 
                   color={(playlist.requiresActivationCode ?? false) ? "#f59e0b" : "#9ca3af"} 
                 />
-              </TouchableOpacity>
-            )}
-            {onAccessSettings && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  onAccessSettings();
-                }}
-              >
-                <MaterialIcons name="settings" size={20} color="#9ca3af" />
               </TouchableOpacity>
             )}
             <TouchableOpacity

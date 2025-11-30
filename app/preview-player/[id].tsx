@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -39,6 +40,7 @@ interface Slideshow {
 export default function PreviewPlayerScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   
   const [slideshow, setSlideshow] = useState<Slideshow | null>(null);
@@ -187,11 +189,12 @@ export default function PreviewPlayerScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header with Back Button */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
         <TouchableOpacity 
           style={styles.headerBackButton}
           onPress={handleBackPress}
           activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color="#007AFF" />
           <ThemedText style={styles.backText}>Back</ThemedText>
@@ -280,7 +283,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 60,
     paddingBottom: 20,
     backgroundColor: '#fff',
     borderBottomWidth: 1,

@@ -12,6 +12,7 @@ import {
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { Product } from '@/shared/product-schema';
@@ -21,6 +22,7 @@ import ProductCard from '@/components/ProductCard';
 export default function ProductLinkManagerScreen() {
   const { id, type } = useLocalSearchParams<{ id: string; type?: string }>();
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   
   const [playlistName, setPlaylistName] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
@@ -131,8 +133,12 @@ export default function ProductLinkManagerScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Product Links</Text>
@@ -252,10 +258,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingBottom: 12,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
+  },
+  backButton: {
+    padding: 8,
+    marginLeft: -8,
   },
   headerTitle: {
     fontSize: 18,

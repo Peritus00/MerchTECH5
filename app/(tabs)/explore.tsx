@@ -100,6 +100,7 @@ export default function QRCodesScreen() {
   const [downloadDropdownVisible, setDownloadDropdownVisible] = useState<{[key: number]: boolean}>({});
   const [downloadLoading, setDownloadLoading] = useState<{[key: number]: boolean}>({});
   const qrRefs = useRef<{[key: number]: any}>({});
+  const qrGeneratorRefs = useRef<{[key: number]: any}>({});
 
   // Screensaver functionality
   const [currentScreensaverQRCode, setCurrentScreensaverQRCode] = useState<number | null>(null);
@@ -354,7 +355,8 @@ export default function QRCodesScreen() {
     console.log('🔽 QR Code details:', { name: qrCode.name, url: qrCode.url });
     
     const qrRef = qrRefs.current[qrCode.id];
-    console.log('📍 QR Ref found:', !!qrRef, 'Ref details:', qrRef);
+    const qrGeneratorRef = qrGeneratorRefs.current[qrCode.id];
+    console.log('📍 QR Ref found:', !!qrRef, 'QR Generator Ref found:', !!qrGeneratorRef);
     
     if (!qrRef) {
       console.error('❌ QR ref is null or undefined');
@@ -379,7 +381,13 @@ export default function QRCodesScreen() {
       console.log('📦 QR Data prepared:', qrData);
       console.log('🚀 Calling downloadAdvancedQRCode...');
       
-      await downloadAdvancedQRCode(qrRef, qrData, format);
+      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
+      const combinedRef = {
+        ...qrRef,
+        ...(qrGeneratorRef || {}),
+      };
+      
+      await downloadAdvancedQRCode(combinedRef, qrData, format);
       
       console.log('✅ Download function completed');
     } catch (error) {
@@ -677,6 +685,7 @@ export default function QRCodesScreen() {
                 collapsable={false}
               >
                 <AdvancedQRCodeGenerator
+                  ref={(ref) => { qrGeneratorRefs.current[qrCode.id] = ref; }}
                   value={qrCode.url}
                   size={150}
                   fgColor={qrCode.options?.foregroundColor || '#000000'}

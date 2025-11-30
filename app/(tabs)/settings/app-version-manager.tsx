@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -37,6 +38,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://merchtech5-productio
 export default function AppVersionManagerScreen() {
   const { user: currentUser } = useAuth();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [versions, setVersions] = useState<AppVersion[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
@@ -348,8 +350,11 @@ export default function AppVersionManagerScreen() {
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/settings')}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+          <TouchableOpacity 
+            onPress={() => router.push('/(tabs)/settings')}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <ThemedText style={styles.backButton}>← Back</ThemedText>
           </TouchableOpacity>
           <ThemedText type="title">App Version Manager</ThemedText>
@@ -363,8 +368,11 @@ export default function AppVersionManagerScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/(tabs)/settings')}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.push('/(tabs)/settings')}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ThemedText style={styles.backButton}>← Back</ThemedText>
         </TouchableOpacity>
         <ThemedText type="title">App Version Manager</ThemedText>
@@ -535,7 +543,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',

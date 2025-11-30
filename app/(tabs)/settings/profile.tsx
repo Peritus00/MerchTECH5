@@ -11,13 +11,19 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNotifications } from '@/contexts/NotificationContext';
-import { adminAPI } from '@/services/api';
+import { adminAPI, profileAPI } from '@/services/api';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
+import { useAppleSignIn } from '@/hooks/useAppleSignIn';
+import { Platform } from 'react-native';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as Crypto from 'expo-crypto';
 
 interface SearchUser {
   id: number;
@@ -28,7 +34,8 @@ interface SearchUser {
 }
 
 export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+  const insets = useSafeAreaInsets();
+  const { user, logout, refreshUser } = useAuth();
   const { 
     pushNotificationsEnabled, 
     togglePushNotifications, 
@@ -52,6 +59,11 @@ export default function ProfileScreen() {
   const [loadingScans, setLoadingScans] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [resettingScans, setResettingScans] = useState(false);
+  
+  // Social account linking state
+  const [linkingProvider, setLinkingProvider] = useState<'google' | 'apple' | null>(null);
+  const { signIn: googleSignIn, loading: googleLoading } = useGoogleSignIn();
+  const { signIn: appleSignIn, loading: appleLoading } = useAppleSignIn();
 
   const handleSave = async () => {
     setLoading(true);
@@ -219,11 +231,113 @@ export default function ProfileScreen() {
     }
   };
 
+  // Social account linking handlers
+  const handleLinkGoogle = async () => {
+    setLinkingProvider('google');
+    try {
+      const result = await googleSignIn();
+      if (result.success) {
+        // Refresh user data
+        const { refreshUser } = useAuth();
+        await refreshUser();
+        Alert.alert('Success', 'Google account linked successfully');
+      } else {
+        Alert.alert('Error', result.error || 'Failed to link Google account');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to link Google account');
+    } finally {
+      setLinkingProvider(null);
+    }
+  };
+
+  const handleUnlinkGoogle = async () => {
+    setLinkingProvider('google');
+    try {
+      await profileAPI.unlinkGoogle();
+      // Refresh user data
+      await refreshUser();
+      Alert.alert('Success', 'Google account unlinked successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to unlink Google account');
+    } finally {
+      setLinkingProvider(null);
+    }
+  };
+
+  const handleLinkApple = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert('Error', 'Apple Sign-In is only available on iOS');
+      return;
+    }
+
+    setLinkingProvider('apple');
+    try {
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      if (!isAvailable) {
+        Alert.alert('Error', 'Apple Sign-In is not available on this device');
+        return;
+      }
+
+      // Generate nonce
+      const nonce = await Crypto.digestStringAsync(
+        Crypto.CryptoDigestAlgorithm.SHA256,
+        Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+      );
+
+      // Request Apple authentication
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+        nonce,
+      });
+
+      if (!credential.identityToken) {
+        Alert.alert('Error', 'No identity token received from Apple');
+        return;
+      }
+
+      // Link account
+      await profileAPI.linkApple(credential.identityToken, nonce);
+      
+      // Refresh user data
+      await refreshUser();
+      Alert.alert('Success', 'Apple account linked successfully');
+    } catch (error: any) {
+      if (error.code === 'ERR_REQUEST_CANCELED') {
+        // User cancelled, don't show error
+        return;
+      }
+      Alert.alert('Error', error.message || 'Failed to link Apple account');
+    } finally {
+      setLinkingProvider(null);
+    }
+  };
+
+  const handleUnlinkApple = async () => {
+    setLinkingProvider('apple');
+    try {
+      await profileAPI.unlinkApple();
+      // Refresh user data
+      await refreshUser();
+      Alert.alert('Success', 'Apple account unlinked successfully');
+    } catch (error: any) {
+      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to unlink Apple account');
+    } finally {
+      setLinkingProvider(null);
+    }
+  };
+
   return (
     <ScrollView style={styles.container}>
       <ThemedView style={styles.content}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+          <TouchableOpacity 
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <ThemedText style={styles.backButton}>← Back</ThemedText>
           </TouchableOpacity>
           <ThemedText type="title">Profile Settings</ThemedText>
@@ -849,5 +963,62 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     fontWeight: '500',
+  },
+  // Connected accounts styles
+  accountRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  accountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  accountDetails: {
+    marginLeft: 12,
+  },
+  accountLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+    marginBottom: 4,
+  },
+  accountStatus: {
+    fontSize: 14,
+    color: '#666',
+  },
+  linkButton: {
+    backgroundColor: '#007BFF',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  linkButtonText: {
+    color: '#fff',
+    fontWeight: '500',
+    fontSize: 14,
+  },
+  unlinkButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d9534f',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  unlinkButtonText: {
+    color: '#d9534f',
+    fontWeight: '500',
+    fontSize: 14,
   },
 }); 

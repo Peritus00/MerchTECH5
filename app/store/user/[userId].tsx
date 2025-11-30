@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
@@ -10,10 +11,11 @@ import ShareButton from '@/components/ShareButton';
 
 export default function UserStoreScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState<{ username?: string; email?: string } | null>(null);
-  const router = useRouter();
 
   useEffect(() => {
     if (userId) {
@@ -89,8 +91,12 @@ export default function UserStoreScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={styles.backButton}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <ThemedText style={{ color: '#2563eb' }}>← Back</ThemedText>
         </TouchableOpacity>
         <View style={styles.titleRow}>
@@ -144,7 +150,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },

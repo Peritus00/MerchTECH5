@@ -233,6 +233,39 @@ export const authAPI = {
     const response = await api.post('/auth/reset-password', { token, newPassword });
     return response.data;
   },
+
+  async googleSignIn(idToken: string) {
+    const response = await api.post('/auth/google', { idToken });
+    return response.data;
+  },
+
+  async appleSignIn(identityToken: string, nonce?: string) {
+    const response = await api.post('/auth/apple', { identityToken, nonce });
+    return response.data;
+  },
+};
+
+// Profile API for social account linking
+export const profileAPI = {
+  async linkGoogle(idToken: string) {
+    const response = await api.post('/profile/link-google', { idToken });
+    return response.data;
+  },
+
+  async linkApple(identityToken: string, nonce?: string) {
+    const response = await api.post('/profile/link-apple', { identityToken, nonce });
+    return response.data;
+  },
+
+  async unlinkGoogle() {
+    const response = await api.post('/profile/unlink-google');
+    return response.data;
+  },
+
+  async unlinkApple() {
+    const response = await api.post('/profile/unlink-apple');
+    return response.data;
+  },
 };
 
 // Users API

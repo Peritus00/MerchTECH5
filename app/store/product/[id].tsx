@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInp
 import { PanGestureHandler, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { Product, ProductRating } from '@/shared/product-schema';
@@ -18,6 +19,7 @@ const { width } = Dimensions.get('window');
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { id, product: productParam } = useLocalSearchParams<{ id: string; product?: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -365,8 +367,12 @@ export default function ProductDetailsScreen() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+        <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) }]}>
+          <TouchableOpacity 
+            style={styles.backBtn} 
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="arrow-back" size={24} color="#000" />
           </TouchableOpacity>
           <View style={styles.headerActions}>
@@ -617,7 +623,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 50,
     paddingBottom: 10,
     backgroundColor: '#fff',
   },

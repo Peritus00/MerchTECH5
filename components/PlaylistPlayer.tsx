@@ -1409,6 +1409,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-playlist-player="true">
       {!isFullscreen && (
       <View style={styles.slideshowHeader}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => router.back()}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+        </TouchableOpacity>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
         <TouchableOpacity style={styles.cartButton} onPress={() => {
           console.log('Navigate to cart');
@@ -1717,6 +1724,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+    },
+    backButton: {
+        padding: 8,
+        borderRadius: 8,
+        backgroundColor: '#f3f4f6',
+        marginRight: 12,
     },
     slideshowTitle: {
         fontSize: 24,
