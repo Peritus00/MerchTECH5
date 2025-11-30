@@ -8,14 +8,13 @@
 # BACKEND ENVIRONMENT VARIABLES (Railway/Vercel)
 # =============================================================================
 
-# Google OAuth - Desktop/Web Client ID (for backend token verification)
-# NOTE: You need the Desktop client ID, not the Android one
-# Current value is Android client - get Desktop client from Google Cloud Console
+# Google OAuth - Android Client ID (for backend token verification)
+# Using Android client ID for both backend and mobile
 GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
 
 # Apple OAuth Configuration
-APPLE_CLIENT_ID=your-apple-service-id-here
-APPLE_SERVICE_ID=your-apple-service-id-here
+APPLE_CLIENT_ID=com.peritus00.merchtech.signin
+APPLE_SERVICE_ID=com.peritus00.merchtech.signin
 APPLE_TEAM_ID=4F996CU4LJ
 
 # =============================================================================
@@ -35,15 +34,21 @@ EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.
 # =============================================================================
 # IMPORTANT NOTES
 # =============================================================================
-# 1. The GOOGLE_CLIENT_ID above is the Android client ID
-#    You may need a separate Desktop/Web client ID for backend verification
-#    Check Google Cloud Console for the Desktop client ID
+# 1. GOOGLE_CLIENT_ID: Using Android client ID for both backend and mobile
+#    This works because Google tokens can be verified with any client ID from
+#    the same OAuth project
 #
-# 2. APPLE_CLIENT_ID and APPLE_SERVICE_ID need to be set after creating
-#    a Service ID in Apple Developer Portal for Sign in with Apple
+# 2. APPLE_CLIENT_ID and APPLE_SERVICE_ID: Set to Service ID created in
+#    Apple Developer Portal (com.peritus00.merchtech.signin)
 #
 # 3. For Railway: Add these variables in the Railway dashboard under
-#    your project's "Variables" tab
+#    your project's "Variables" tab:
+#    - GOOGLE_CLIENT_ID
+#    - APPLE_CLIENT_ID
+#    - APPLE_SERVICE_ID
+#    - APPLE_TEAM_ID
 #
 # 4. For local development: Add to .env file in project root
+#    - All backend variables listed above
+#    - EXPO_PUBLIC_GOOGLE_CLIENT_ID (for mobile app)
 
