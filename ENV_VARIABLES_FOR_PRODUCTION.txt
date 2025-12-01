@@ -17,6 +17,12 @@ APPLE_CLIENT_ID=com.peritus00.merchtech.signin
 APPLE_SERVICE_ID=com.peritus00.merchtech.signin
 APPLE_TEAM_ID=4F996CU4LJ
 
+# Brevo Email Service (for password reset and verification emails)
+# Get your SMTP key from: https://app.brevo.com/settings/keys/api
+# IMPORTANT: This is REQUIRED for password reset emails to work
+# NOTE: Add the actual key value in Railway environment variables (not committed to git for security)
+BREVO_SMTP_KEY=your_brevo_smtp_key_here
+
 # =============================================================================
 # MOBILE APP ENVIRONMENT VARIABLES (.env file in project root)
 # =============================================================================
@@ -47,6 +53,7 @@ EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.
 #    - APPLE_CLIENT_ID
 #    - APPLE_SERVICE_ID
 #    - APPLE_TEAM_ID
+#    - BREVO_SMTP_KEY (REQUIRED for password reset emails)
 #
 # 4. For local development: Add to .env file in project root
 #    - All backend variables listed above
