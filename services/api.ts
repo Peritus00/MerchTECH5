@@ -179,9 +179,14 @@ export const authAPI = {
   async login(email: string, password: string) {
     console.log('🔐 AuthAPI: Starting login request');
     console.log('🔐 Email:', email);
+    console.log('🔐 Password length:', password.length);
     console.log('🔐 API Base URL:', API_BASE_URL);
     console.log('🔐 Full URL will be:', `${API_BASE_URL}/auth/login`);
     console.log('🔐 Environment variable EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    console.log('🔐 NODE_ENV:', process.env.NODE_ENV);
+    console.log('🔐 EXPO_PUBLIC_NODE_ENV:', process.env.EXPO_PUBLIC_NODE_ENV);
+    console.log('🔐 Platform:', Platform.OS);
+    console.log('🔐 Is Production:', env.isProduction);
     
     try {
       const response = await api.post('/auth/login', { email, password });
@@ -197,16 +202,65 @@ export const authAPI = {
         config: {
           url: error.config?.url,
           baseURL: error.config?.baseURL,
-          method: error.config?.method
+          method: error.config?.method,
+          fullURL: `${error.config?.baseURL}${error.config?.url}`
+        },
+        request: {
+          email: email,
+          passwordLength: password.length
         }
       });
+      
+      // Provide more specific error messages
+      if (error.response?.status === 401) {
+        const errorData = error.response?.data;
+        const errorMessage = errorData?.error || 'Invalid credentials';
+        console.error('❌ AuthAPI: 401 Unauthorized -', errorMessage);
+        
+        // Create a more descriptive error
+        const enhancedError = new Error(errorMessage);
+        (enhancedError as any).status = 401;
+        (enhancedError as any).response = error.response;
+        throw enhancedError;
+      }
+      
       throw error;
     }
   },
 
   async register(email: string, password: string, username: string) {
-    const response = await api.post('/auth/register', { email, password, username });
-    return response.data;
+    console.log('🔐 AuthAPI: Starting registration request');
+    console.log('🔐 Email:', email);
+    console.log('🔐 Username:', username);
+    console.log('🔐 API Base URL:', API_BASE_URL);
+    console.log('🔐 Full URL will be:', `${API_BASE_URL}/auth/register`);
+    console.log('🔐 Environment variable EXPO_PUBLIC_API_URL:', process.env.EXPO_PUBLIC_API_URL);
+    
+    try {
+      const response = await api.post('/auth/register', { email, password, username });
+      console.log('✅ AuthAPI: Registration successful:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ AuthAPI: Registration failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          baseURL: error.config?.baseURL,
+          method: error.config?.method,
+          timeout: error.config?.timeout
+        },
+        request: {
+          url: error.request?.responseURL,
+          status: error.request?.status
+        }
+      });
+      throw error;
+    }
   },
 
   async sendVerification(email: string) {

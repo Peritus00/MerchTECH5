@@ -45,9 +45,26 @@ class AuthService {
       return response;
     } catch (error: any) {
       console.error('🔴 AuthService: Login error:', error);
+      console.error('🔴 AuthService: Error status:', error.response?.status || error.status);
+      console.error('🔴 AuthService: Error data:', error.response?.data);
 
-      if (error.response && error.response.status === 401) {
-        throw new Error('Invalid username or password. Please try again.');
+      if (error.response?.status === 401 || error.status === 401) {
+        const serverMessage = error.response?.data?.error || error.message;
+        // Provide more helpful error message
+        if (serverMessage && serverMessage !== 'Invalid credentials') {
+          throw new Error(serverMessage);
+        }
+        throw new Error('Invalid email or password. Please check your credentials and try again.');
+      }
+      
+      // Network errors
+      if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
+      }
+      
+      // Timeout errors
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+        throw new Error('Request timed out. Please try again.');
       }
       
       throw new Error(error.message || 'Login failed. Please check your credentials.');
@@ -143,6 +160,19 @@ class AuthService {
       console.error('🔴 AuthService: ============ AUTH SERVICE ERROR DEBUG END ============');
       
       // Provide more specific error messages based on the actual error
+      // First, check if it's a validation error (thrown before API call)
+      if (error.message && (
+        error.message.includes('Password must') ||
+        error.message.includes('Username must') ||
+        error.message.includes('Please enter a valid email') ||
+        error.message.includes('must be at least') ||
+        error.message.includes('must contain')
+      )) {
+        // This is a validation error from validateRegistrationData - pass it through
+        throw error;
+      }
+      
+      // Then check HTTP response errors
       if (error.response?.status === 404) {
         throw new Error('Registration service not found. Please try again later.');
       } else if (error.response?.status === 400) {
@@ -156,8 +186,33 @@ class AuthService {
         }
       } else if (error.response?.status === 500) {
         throw new Error('Server error occurred during registration. Please try again in a few moments.');
-      } else if (error.message.includes('network') || error.message.includes('Network') || !error.response) {
-        throw new Error('Network connection error. Please check your internet connection and try again.');
+      } else if (error.message.includes('network') || error.message.includes('Network') || (error.code && ['ECONNREFUSED', 'ERR_NETWORK', 'ETIMEDOUT', 'ECONNABORTED'].includes(error.code))) {
+        // Provide more specific error information
+        const errorCode = error.code || 'UNKNOWN';
+        const errorMessage = error.message || 'Unknown network error';
+        const apiUrl = error.config?.baseURL || 'unknown';
+        const requestUrl = error.config?.url || 'unknown';
+        
+        console.error('🔴 AuthService: Network error details:', {
+          code: errorCode,
+          message: errorMessage,
+          apiUrl,
+          requestUrl,
+          fullUrl: `${apiUrl}${requestUrl}`,
+          hasResponse: !!error.response,
+          timeout: error.config?.timeout
+        });
+        
+        // Provide more helpful error message based on error code
+        if (errorCode === 'ECONNREFUSED' || errorCode === 'ERR_NETWORK') {
+          throw new Error('Cannot connect to server. Please check your internet connection and try again.');
+        } else if (errorCode === 'ETIMEDOUT' || errorCode === 'ECONNABORTED') {
+          throw new Error('Request timed out. The server may be busy. Please try again.');
+        } else if (errorMessage.includes('CORS') || errorMessage.includes('cors')) {
+          throw new Error('CORS error: The request was blocked by browser security. Please contact support.');
+        } else {
+          throw new Error(`Network connection error: ${errorMessage}. Please check your internet connection and try again.`);
+        }
       } else if (error.response?.status === 422) {
         throw new Error('Invalid registration data. Please check all fields and try again.');
       }
