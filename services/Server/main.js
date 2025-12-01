@@ -5425,34 +5425,28 @@ app.post('/api/auth/login',
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    // IMPORTANT: The validator normalizes email (removes dots from Gmail), but we need to search
-    // for the original email format. For Gmail addresses, dots don't matter, so we need to
-    // normalize the email for lookup but preserve the original for logging.
-    // The validator already normalized it, so email here is already normalized.
-    // But we need to handle both normalized and non-normalized emails in the database.
+    // IMPORTANT: The validator normalizes email (removes dots from Gmail addresses).
+    // So if user enters "perrie.benton@gmail.com", validator converts it to "perriebenton@gmail.com".
+    // But the database may have "Perrie.Benton@gmail.com" (with dots).
+    // For Gmail, dots don't matter - we need to compare normalized versions.
     
     // Try exact match first (case-insensitive)
     let result = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    console.log(`🔐 Exact match result: ${result.rows.length} rows`);
     
-    // If not found and it's a Gmail address, try with dots removed/added
-    if (result.rows.length === 0 && email.includes('@gmail.com')) {
-      // Gmail addresses are the same with or without dots
-      // Try searching with dots removed from the stored email
-      const emailWithoutDots = email.replace(/\./g, '');
-      console.log(`🔐 Trying Gmail normalization: ${emailWithoutDots}`);
+    // If not found and it's a Gmail address, compare normalized versions (dots removed)
+    // This handles cases where database has dots but validator removed them
+    if (result.rows.length === 0 && email.toLowerCase().includes('@gmail.com')) {
+      console.log(`🔐 Trying Gmail dot-normalized comparison for: ${email}`);
+      // Compare by removing dots from both stored email and input email
+      // This will match "perrie.benton@gmail.com" in DB with "perriebenton@gmail.com" from validator
       result = await db.query(
-        `SELECT * FROM users WHERE LOWER(REPLACE(email, '.', '')) = LOWER($1) AND email LIKE '%@gmail.com'`,
-        [emailWithoutDots]
-      );
-    }
-    
-    // If still not found, try the reverse - search for emails that normalize to this one
-    if (result.rows.length === 0 && email.includes('@gmail.com')) {
-      console.log(`🔐 Trying reverse Gmail normalization for: ${email}`);
-      result = await db.query(
-        `SELECT * FROM users WHERE LOWER(REPLACE(email, '.', '')) = LOWER(REPLACE($1, '.', '')) AND email LIKE '%@gmail.com'`,
+        `SELECT * FROM users 
+         WHERE LOWER(REPLACE(email, '.', '')) = LOWER(REPLACE($1, '.', '')) 
+         AND LOWER(email) LIKE '%@gmail.com'`,
         [email]
       );
+      console.log(`🔐 Normalized match result: ${result.rows.length} rows`);
     }
     if (result.rows.length === 0) {
       console.log(`❌ LOGIN FAILED: User not found for ${email} (after normalization attempts)`);
