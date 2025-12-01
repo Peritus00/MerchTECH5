@@ -3,6 +3,7 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
+import { frontendUrl } from '@/config/environment';
 
 // Complete the auth session for better UX
 WebBrowser.maybeCompleteAuthSession();
@@ -143,8 +144,12 @@ export function useGoogleSignIn() {
           sessionStorage.setItem('google_oauth_nonce', nonce);
         }
         
-        // Build OAuth URL with ID token response type
-        const redirectUri = `${window.location.origin}/auth/google`;
+        // Use configured frontend URL instead of window.location.origin
+        // This ensures we always use the correct domain (www.merchtrader.org)
+        // that matches what's configured in Google Cloud Console
+        const redirectUri = `${frontendUrl}/auth/google`;
+        console.log('🔄 Using redirect URI:', redirectUri);
+        
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${encodeURIComponent(googleClientId)}` +
           `&redirect_uri=${encodeURIComponent(redirectUri)}` +
