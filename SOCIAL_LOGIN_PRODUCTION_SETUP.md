@@ -4,13 +4,19 @@
 
 From Google Cloud Console, copy the Client IDs for each platform:
 
-1. **Desktop/Web Client** (for backend verification):
+1. **Desktop/Web Client** (for web OAuth and backend verification):
    - Client ID: `587879962618-kqr0...` (copy full ID)
-   - Use this for: `GOOGLE_CLIENT_ID` (backend environment variable)
+   - Use this for: `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (web frontend) and `GOOGLE_CLIENT_ID` (backend)
+   - **IMPORTANT**: Must have these Authorized JavaScript origins:
+     - `https://www.merchtrader.org` (production)
+     - `http://localhost:8081` (local development)
+   - **IMPORTANT**: Must have these Authorized redirect URIs:
+     - `https://www.merchtrader.org/auth/google` (production callback)
+     - `http://localhost:8081/auth/google` (local development)
 
 2. **Android Client**:
    - Client ID: `587879962618-t2oo...` (copy full ID)
-   - Use this for: `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (mobile app environment variable)
+   - Use this for: `EXPO_PUBLIC_GOOGLE_CLIENT_ID` (mobile app only)
    - **IMPORTANT**: Make sure you've added the SHA1 fingerprint:
      - SHA1: `E3:8A:D0:C7:72:D3:64:01:AB:37:5F:6C:A7:8F:2E:F7:71:43:56:ED`
    - Package name: `com.peritus00.merchtech` ✅ (already configured)
@@ -18,6 +24,8 @@ From Google Cloud Console, copy the Client IDs for each platform:
 3. **iOS Client**:
    - Client ID: `587879962618-blge...` (copy full ID)
    - Bundle ID: `com.peritus00.merchtech` ✅ (already configured)
+
+**Note**: For web applications, you MUST use the Desktop/Web Client ID. The Android client ID will not work properly for web OAuth flows.
 
 ## ✅ Step 2: Update Backend Environment Variables
 
@@ -36,13 +44,17 @@ APPLE_TEAM_ID=your-apple-team-id-here
 **For Railway/Vercel deployment:**
 - Add these as environment variables in your hosting platform's dashboard
 
-## ✅ Step 3: Update Mobile App Environment Variables
+## ✅ Step 3: Update Frontend Environment Variables
 
 Create or update `.env` file in project root:
 
 ```bash
-# Google OAuth (use Android Client ID for mobile)
-EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo...your-full-android-client-id-here
+# Google OAuth - Use Desktop/Web Client ID for web, Android Client ID for mobile
+# For web deployments (Vercel, etc.), use Desktop/Web Client ID
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-kqr0...your-full-web-client-id-here
+
+# For mobile builds, you can override with Android Client ID if needed
+# But Desktop/Web Client ID works for both web and mobile
 ```
 
 **Note**: For Expo, you may need to rebuild the app after adding environment variables:

@@ -142,14 +142,19 @@ export default function LoginScreen() {
   }, [router]);
 
   const handleGoogleSignIn = useCallback(async () => {
+    console.log('🔄 Login Screen: Google sign-in button clicked');
     try {
       const result = await googleSignIn();
+      console.log('🔄 Login Screen: Google sign-in result:', result);
       if (result.success) {
+        console.log('✅ Login Screen: Google sign-in successful, navigating to tabs');
         router.replace('/(tabs)');
       } else {
+        console.error('❌ Login Screen: Google sign-in failed:', result.error);
         Alert.alert('Sign In Failed', result.error || 'Google sign-in failed');
       }
     } catch (error: any) {
+      console.error('❌ Login Screen: Google sign-in error:', error);
       Alert.alert('Sign In Failed', error.message || 'Google sign-in failed');
     }
   }, [googleSignIn, router]);

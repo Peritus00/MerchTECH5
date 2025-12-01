@@ -22,6 +22,7 @@ APPLE_TEAM_ID=4F996CU4LJ
 # IMPORTANT: This is REQUIRED for password reset emails to work
 # NOTE: Add the actual key value in Railway environment variables (not committed to git for security)
 BREVO_SMTP_KEY=your_brevo_smtp_key_here
+BREVO_API_KEY=your_brevo_api_key_here
 
 # =============================================================================
 # MOBILE APP ENVIRONMENT VARIABLES (.env file in project root)
@@ -54,6 +55,7 @@ EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.
 #    - APPLE_SERVICE_ID
 #    - APPLE_TEAM_ID
 #    - BREVO_SMTP_KEY (REQUIRED for password reset emails)
+#    - BREVO_API_KEY (for Brevo API integration)
 #
 # 4. For local development: Add to .env file in project root
 #    - All backend variables listed above
