@@ -173,6 +173,9 @@ app.use(helmet({
         "https://api.brevo.com", // For email service
         "https://app.termly.io", // For Termly privacy/cookie compliance
         "https://us.consent.api.termly.io", // Added for Termly consent API
+        "https://accounts.google.com", // For Google Sign-In
+        "https://*.googleapis.com", // For Google APIs
+        "https://appleid.apple.com", // For Apple Sign-In
       ],
       scriptSrc: [
         "'self'",
@@ -180,6 +183,9 @@ app.use(helmet({
         "https://js.stripe.com",
         "https://app.termly.io",
         "https://*.termly.io", // Added for broader Termly compatibility
+        "https://accounts.google.com", // For Google Sign-In script
+        "https://*.googleapis.com", // For Google API scripts
+        "https://appleid.apple.com", // For Apple Sign-In script
       ],
       styleSrc: [
         "'self'",
@@ -193,6 +199,9 @@ app.use(helmet({
         "https://merchtech5-production.up.railway.app", // For image proxy
         "https://www.merchtrader.org",
         "https://merchtrader.org",
+        "https://*.googleapis.com", // For Google API images
+        "https://*.gstatic.com", // For Google static resources (icons, etc.)
+        "https://appleid.apple.com", // For Apple Sign-In images/icons
       ],
       mediaSrc: [
         "'self'",
@@ -204,6 +213,11 @@ app.use(helmet({
       fontSrc: [
         "'self'",
         "data:",
+      ],
+      frameSrc: [
+        "'self'",
+        "https://accounts.google.com", // For Google Sign-In popup/iframe
+        "https://appleid.apple.com", // For Apple Sign-In popup/iframe
       ],
     },
   },
