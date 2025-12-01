@@ -3,11 +3,11 @@ const rateLimit = require('express-rate-limit');
 // Rate limiter for authentication endpoints (brute force protection)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: 15, // Limit each IP to 15 failed attempts per windowMs (increased from 5)
   message: { error: 'Too many login attempts, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: false, // Count all requests, including successful ones
+  skipSuccessfulRequests: true, // Don't count successful logins - only failed attempts count
 });
 
 // Rate limiter for presigned URL generation (upload initiation)
