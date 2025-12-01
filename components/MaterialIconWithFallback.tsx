@@ -59,6 +59,8 @@ const WEB_MATERIAL_ICON_MAP: Record<string, string> = {
   'edit': '✏️',
   'vpn-key': '🔑',
   'info': 'ℹ️',
+  'google': '🔵',
+  'apple': '🍎',
 };
 
 interface MaterialIconWithFallbackProps extends IconProps<ComponentProps<typeof MaterialIcons>['name']> {

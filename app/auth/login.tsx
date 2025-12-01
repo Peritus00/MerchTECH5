@@ -17,6 +17,8 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
+import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
+import { useAppleSignIn } from '@/hooks/useAppleSignIn';
 
 interface FormErrors {
   email?: string;
@@ -36,6 +38,8 @@ export default function LoginScreen() {
 
   const { login, isLoading } = useAuth();
   const router = useRouter();
+  const { signIn: googleSignIn, loading: googleLoading } = useGoogleSignIn();
+  const { signIn: appleSignIn, loading: appleLoading } = useAppleSignIn();
 
   // Performance monitoring
   useEffect(() => {
@@ -136,6 +140,32 @@ export default function LoginScreen() {
   const handleRegisterPress = useCallback(() => {
     router.push('/auth/register');
   }, [router]);
+
+  const handleGoogleSignIn = useCallback(async () => {
+    try {
+      const result = await googleSignIn();
+      if (result.success) {
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Sign In Failed', result.error || 'Google sign-in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Sign In Failed', error.message || 'Google sign-in failed');
+    }
+  }, [googleSignIn, router]);
+
+  const handleAppleSignIn = useCallback(async () => {
+    try {
+      const result = await appleSignIn();
+      if (result.success) {
+        router.replace('/(tabs)');
+      } else {
+        Alert.alert('Sign In Failed', result.error || 'Apple sign-in failed');
+      }
+    } catch (error: any) {
+      Alert.alert('Sign In Failed', error.message || 'Apple sign-in failed');
+    }
+  }, [appleSignIn, router]);
 
   // Memoize computed values to prevent unnecessary re-renders
   const loading = useMemo(() => isLoading || isSubmitting, [isLoading, isSubmitting]);
@@ -253,6 +283,48 @@ export default function LoginScreen() {
                 <ThemedText style={styles.loginButtonText}>Sign In</ThemedText>
               )}
             </TouchableOpacity>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <ThemedText style={styles.dividerText}>or</ThemedText>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Google Sign In Button */}
+            <TouchableOpacity
+              style={[styles.socialButton, styles.googleButton, (googleLoading || loading) && styles.disabled]}
+              onPress={handleGoogleSignIn}
+              disabled={googleLoading || loading}
+              activeOpacity={0.8}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <>
+                  <Text style={styles.socialIcon}>🔵</Text>
+                  <ThemedText style={styles.socialButtonText}>Continue with Google</ThemedText>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Apple Sign In Button - Only show on iOS */}
+            {Platform.OS === 'ios' && (
+              <TouchableOpacity
+                style={[styles.socialButton, styles.appleButton, (appleLoading || loading) && styles.disabled]}
+                onPress={handleAppleSignIn}
+                disabled={appleLoading || loading}
+                activeOpacity={0.8}
+              >
+                {appleLoading ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <>
+                    <Text style={styles.socialIcon}>🍎</Text>
+                    <ThemedText style={styles.socialButtonText}>Continue with Apple</ThemedText>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -402,5 +474,28 @@ const styles = StyleSheet.create({
   linkBold: {
     color: '#3b82f6',
     fontWeight: '600',
+  },
+  socialButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+    gap: 12,
+  },
+  googleButton: {
+    backgroundColor: '#4285f4',
+  },
+  appleButton: {
+    backgroundColor: '#000',
+  },
+  socialButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  socialIcon: {
+    fontSize: 20,
   },
 });

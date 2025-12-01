@@ -397,15 +397,37 @@ const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // --- Brevo Email Transporter ---
 // Forcing a clean redeployment to fix email issue - 2025-09-07
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: '8e773a002@smtp-brevo.com',
-    pass: process.env.BREVO_SMTP_KEY,
-  },
-});
+let transporter;
+if (process.env.BREVO_SMTP_KEY) {
+  transporter = nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: '8e773a002@smtp-brevo.com',
+      pass: process.env.BREVO_SMTP_KEY,
+    },
+  });
+  
+  // Verify transporter connection on startup
+  transporter.verify().then(() => {
+    console.log('✅ Brevo SMTP transporter verified and ready');
+  }).catch((error) => {
+    console.error('❌ Brevo SMTP transporter verification failed:', error.message);
+  });
+} else {
+  console.error('❌ BREVO_SMTP_KEY not configured - email sending will fail');
+  // Create a dummy transporter that will fail gracefully
+  transporter = nodemailer.createTransport({
+    host: 'smtp-relay.brevo.com',
+    port: 587,
+    secure: false,
+    auth: {
+      user: '8e773a002@smtp-brevo.com',
+      pass: 'NOT_CONFIGURED',
+    },
+  });
+}
 
 // Rate limiting middleware (apply before routes)
 app.use('/api/auth/', authLimiter);
@@ -5711,19 +5733,52 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     );
     
     // Send email
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:8081'}/auth/reset-password?token=${resetToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://app.merchtrader.org';
+    const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
+    
+    // Check if email is configured
+    if (!process.env.BREVO_SMTP_KEY) {
+      console.error(`🔴 BREVO_SMTP_KEY not configured - cannot send password reset email to ${email}`);
+      console.error(`🔴 Reset token for ${email}: ${resetToken}`);
+      console.error(`🔴 Reset URL: ${resetUrl}`);
+      // Still return success for security, but log the issue
+      return res.json({ message: 'If the email exists, a password reset link has been sent.' });
+    }
     
     try {
-      await transporter.sendMail({
+      const mailOptions = {
         from: '"MerchTrader QR" <help@merchtrader.org>',
         to: email,
         subject: 'Reset Your MerchTech Password',
-        html: `<p>Click the link below to reset your password:</p><a href="${resetUrl}">Reset Password</a><p>This link will expire in 1 hour.</p>`,
-      });
-      console.log(`Password reset email sent to ${email}`);
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Password Reset Request</h2>
+            <p>You requested to reset your password for your MerchTrader account.</p>
+            <p>Click the button below to reset your password:</p>
+            <a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">Reset Password</a>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you didn't request this password reset, please ignore this email.</p>
+          </div>
+        `,
+      };
+      
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`✅ Password reset email sent to ${email}`);
+      console.log(`📧 Message ID: ${info.messageId}`);
+      console.log(`📧 Response: ${info.response}`);
     } catch (emailError) {
-      console.error(`🔴 Failed to send password reset email to ${email}:`, emailError);
-      // Still return success for security
+      console.error(`🔴 Failed to send password reset email to ${email}:`, emailError.message);
+      console.error(`🔴 Error details:`, {
+        code: emailError.code,
+        command: emailError.command,
+        response: emailError.response,
+        responseCode: emailError.responseCode,
+      });
+      console.error(`🔴 Reset token for ${email} (manual reset): ${resetToken}`);
+      console.error(`🔴 Reset URL: ${resetUrl}`);
+      // Still return success for security, but log detailed error
     }
     
     res.json({ message: 'If the email exists, a password reset link has been sent.' });
