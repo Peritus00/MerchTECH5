@@ -28,7 +28,10 @@ async function verifyGoogleToken(idToken) {
 
   try {
     const audience = process.env.GOOGLE_CLIENT_ID;
-    console.log('🔍 Verifying Google token with audience:', audience ? `${audience.substring(0, 30)}...` : 'NOT SET');
+    // Only log verification in development to reduce log noise
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Verifying Google token with audience:', audience ? `${audience.substring(0, 30)}...` : 'NOT SET');
+    }
     const ticket = await googleClient.verifyIdToken({
       idToken,
       audience: audience,

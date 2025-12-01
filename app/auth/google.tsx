@@ -17,10 +17,18 @@ export default function GoogleAuthCallback() {
   const { socialLogin } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
+  const [processed, setProcessed] = useState(false);
 
   useEffect(() => {
+    // Prevent multiple executions (React StrictMode or re-renders)
+    if (processed) {
+      return;
+    }
+
     const processCallback = async () => {
       try {
+        setProcessed(true);
+        
         // Check for ID token in URL params (from expo-auth-session redirect)
         const idToken = params.id_token as string | undefined;
         const error = params.error as string | undefined;
@@ -72,7 +80,7 @@ export default function GoogleAuthCallback() {
     };
 
     processCallback();
-  }, [params, socialLogin, router]);
+  }, [params, socialLogin, router, processed]);
 
   return (
     <ThemedView style={styles.container}>

@@ -251,16 +251,23 @@ const query = async (text, params = [], options = {}) => {
         timestamp: new Date().toISOString()
       });
     } else {
-      errorLogger.error({
-        type: 'db_query_error',
-        message: 'Database query error',
-        queryName,
-        error: error.message,
-        code: error.code,
-        query: text.substring(0, 200),
-        requestId,
-        timestamp: new Date().toISOString()
-      });
+      // Suppress logging for missing activity_logs table (42P01) - this is expected if table doesn't exist
+      // The activityLogger middleware handles this gracefully
+      if (error.code === '42P01' && queryName === 'activity_log_insert') {
+        // Silently skip - table doesn't exist, which is okay
+        // Don't log to avoid spam in logs
+      } else {
+        errorLogger.error({
+          type: 'db_query_error',
+          message: 'Database query error',
+          queryName,
+          error: error.message,
+          code: error.code,
+          query: text.substring(0, 200),
+          requestId,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
     
     throw error;
