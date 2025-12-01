@@ -5290,6 +5290,23 @@ app.put('/api/user/demographics', authenticateToken, async (req, res) => {
   }
 });
 
+// Get current user profile endpoint
+app.get('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = transformUser(result.rows[0]);
+    res.json({ user });
+  } catch (error) {
+    console.error('🔴 GET PROFILE ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/auth/login', 
   validators.email,
   validators.password,

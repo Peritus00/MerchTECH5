@@ -196,6 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const refreshUser = async () => {
     try {
+      // getCurrentUser now fetches fresh data from server
       const currentUser = await authService.getCurrentUser();
       globalAuthState.user = currentUser;
       setUser(currentUser);

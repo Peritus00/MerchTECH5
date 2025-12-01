@@ -248,21 +248,36 @@ class AuthService {
     try {
       console.log('🔐 AuthService: Getting current user...');
       
-      const [token, userJson] = await Promise.all([
-        AsyncStorage.getItem(AuthService.TOKEN_KEY),
-        AsyncStorage.getItem(AuthService.USER_KEY),
-      ]);
+      const token = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
+      
+      if (!token) {
+        console.log('🔐 AuthService: No token found');
+        return null;
+      }
 
-      console.log('🔐 AuthService: Token exists:', !!token);
-      console.log('🔐 AuthService: User data exists:', !!userJson);
+      // Try to fetch fresh user data from server first
+      try {
+        const response = await authAPI.getProfile();
+        if (response && response.user) {
+          console.log('🔐 AuthService: Fetched fresh user from server:', response.user.username);
+          // Update stored user data
+          await AsyncStorage.setItem(AuthService.USER_KEY, JSON.stringify(response.user));
+          return response.user;
+        }
+      } catch (apiError: any) {
+        console.log('🔐 AuthService: Failed to fetch from server, using cached data:', apiError.message);
+        // Fall back to stored user data if API call fails
+      }
 
-      if (!token || !userJson) {
-        console.log('🔐 AuthService: Missing token or user data');
+      // Fallback to stored user data
+      const userJson = await AsyncStorage.getItem(AuthService.USER_KEY);
+      if (!userJson) {
+        console.log('🔐 AuthService: No stored user data');
         return null;
       }
 
       const user = JSON.parse(userJson);
-      console.log('🔐 AuthService: Parsed user:', user.username);
+      console.log('🔐 AuthService: Using cached user:', user.username);
       
       // Validate token is still valid
       if (await this.isTokenValid(token)) {

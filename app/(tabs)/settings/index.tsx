@@ -14,11 +14,18 @@ import { useAppVersion } from '@/hooks/useAppVersion';
 
 export default function Settings() {
   const router = useRouter();
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, refreshUser } = useAuth();
   const { unreadCount } = useNotifications();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentVersion, versionInfo, checkForUpdates, isChecking } = useAppVersion();
   const insets = useSafeAreaInsets();
+
+  // Refresh user data on mount to ensure admin status is up to date
+  React.useEffect(() => {
+    if (isAuthenticated) {
+      refreshUser();
+    }
+  }, [isAuthenticated]);
 
   // Check if user is admin (check isAdmin property or specific admin account)
   const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');

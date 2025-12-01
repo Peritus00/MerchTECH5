@@ -243,6 +243,11 @@ export const authAPI = {
     const response = await api.post('/auth/apple', { identityToken, nonce });
     return response.data;
   },
+
+  async getProfile() {
+    const response = await api.get('/auth/profile');
+    return response.data;
+  },
 };
 
 // Profile API for social account linking
