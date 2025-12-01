@@ -3,8 +3,10 @@ const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
 // Google OAuth2 client
-const googleClient = process.env.GOOGLE_CLIENT_ID 
-  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+console.log('🔧 Google OAuth Client ID configured:', googleClientId ? `${googleClientId.substring(0, 30)}...` : 'NOT SET');
+const googleClient = googleClientId 
+  ? new OAuth2Client(googleClientId)
   : null;
 
 // Apple JWKS client for verifying tokens
@@ -25,9 +27,11 @@ async function verifyGoogleToken(idToken) {
   }
 
   try {
+    const audience = process.env.GOOGLE_CLIENT_ID;
+    console.log('🔍 Verifying Google token with audience:', audience ? `${audience.substring(0, 30)}...` : 'NOT SET');
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: audience,
     });
 
     const payload = ticket.getPayload();
