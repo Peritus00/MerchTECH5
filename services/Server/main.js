@@ -190,6 +190,8 @@ app.use(helmet({
       styleSrc: [
         "'self'",
         "'unsafe-inline'", // Needed for Expo/React styles
+        "https://accounts.google.com", // For Google Identity Services stylesheet
+        "https://*.googleapis.com", // For Google API stylesheets
       ],
       imgSrc: [
         "'self'",
