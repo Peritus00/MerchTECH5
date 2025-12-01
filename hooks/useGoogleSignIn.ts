@@ -144,10 +144,16 @@ export function useGoogleSignIn() {
           sessionStorage.setItem('google_oauth_nonce', nonce);
         }
         
-        // Use configured frontend URL instead of window.location.origin
-        // This ensures we always use the correct domain (www.merchtrader.org)
-        // that matches what's configured in Google Cloud Console
-        const redirectUri = `${frontendUrl}/auth/google`;
+        // Determine the correct redirect URI
+        // Use window.location.origin to match the current domain
+        // Normalize merchtrader.org domains to www.merchtrader.org for consistency
+        let currentOrigin = window.location.origin;
+        if (currentOrigin.includes('merchtrader.org')) {
+          // Normalize to www.merchtrader.org for all merchtrader.org subdomains
+          currentOrigin = 'https://www.merchtrader.org';
+        }
+        const redirectUri = `${currentOrigin}/auth/google`;
+        console.log('🔄 Current origin:', window.location.origin);
         console.log('🔄 Using redirect URI:', redirectUri);
         
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
