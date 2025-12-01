@@ -5275,6 +5275,64 @@ app.get('/api/debug/database-info', async (req, res) => {
   }
 });
 
+// Diagnostic endpoint for password issues (admin only, temporary)
+app.post('/api/debug/test-password', authenticateToken, async (req, res) => {
+  try {
+    // Only allow admin users
+    const adminCheck = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    if (!adminCheck.rows[0]?.is_admin) {
+      return res.status(403).json({ error: 'Admin only' });
+    }
+    
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+    
+    // Get user
+    const userResult = await db.query(
+      'SELECT id, email, password_hash FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+    
+    if (userResult.rows.length === 0) {
+      return res.json({ 
+        found: false,
+        message: 'User not found'
+      });
+    }
+    
+    const user = userResult.rows[0];
+    const result = {
+      found: true,
+      userId: user.id,
+      email: user.email,
+      hasPasswordHash: !!user.password_hash,
+      passwordHashLength: user.password_hash ? user.password_hash.length : 0,
+      passwordHashPrefix: user.password_hash ? user.password_hash.substring(0, 20) : null,
+      passwordMatch: false,
+      passwordReceived: {
+        length: password.length,
+        type: typeof password,
+        containsSpecialChars: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+      },
+      databaseHost: process.env.DATABASE_URL ? process.env.DATABASE_URL.split('@')[1]?.split('/')[0] : 'unknown'
+    };
+    
+    if (user.password_hash) {
+      result.passwordMatch = await bcrypt.compare(password, user.password_hash);
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error('🔴 DEBUG PASSWORD ERROR:', error);
+    res.status(500).json({ 
+      error: 'Failed to test password',
+      details: error.message
+    });
+  }
+});
+
 // Debug endpoint to check demographics in qr_scans table (public for testing)
 app.get('/api/debug/demographics-data', async (req, res) => {
   try {
@@ -5352,19 +5410,62 @@ app.post('/api/auth/login',
   async (req, res) => {
   try {
     const { email, password } = req.body;
+    
+    // Enhanced debug logging for password issues
+    console.log(`🔐 LOGIN ATTEMPT: ${email}`);
+    console.log(`🔐 Password received: ${password ? `[${password.length} chars]` : 'MISSING'}`);
+    console.log(`🔐 Password type: ${typeof password}`);
+    console.log(`🔐 Password contains special chars: ${password ? /[!@#$%^&*(),.?":{}|<>]/.test(password) : false}`);
+    console.log(`🔐 Password JSON: ${JSON.stringify(password)}`);
+    console.log(`🔐 Request body keys: ${Object.keys(req.body).join(', ')}`);
+    
+    // Validate password is present
+    if (!password || typeof password !== 'string') {
+      console.log(`❌ LOGIN FAILED: Invalid password format`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
     // Case-insensitive email lookup using LOWER()
     const result = await db.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-    if (result.rows.length === 0) return res.status(401).json({ error: 'Invalid credentials' });
+    if (result.rows.length === 0) {
+      console.log(`❌ LOGIN FAILED: User not found for ${email}`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
     const dbUser = result.rows[0];
     
     // Check if user has a password (social login users may not have one)
     if (!dbUser.password_hash) {
+      console.log(`❌ LOGIN FAILED: No password hash for ${email}`);
       // Return generic error to prevent account enumeration and information disclosure
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
+    // Log user info for debugging
+    console.log(`🔐 User found: ID=${dbUser.id}, email=${dbUser.email}`);
+    console.log(`🔐 Password hash exists: ${!!dbUser.password_hash}`);
+    console.log(`🔐 Password hash length: ${dbUser.password_hash ? dbUser.password_hash.length : 0}`);
+    console.log(`🔐 Password hash prefix: ${dbUser.password_hash ? dbUser.password_hash.substring(0, 20) : 'N/A'}...`);
+    
     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
-    if (!isValidPassword) return res.status(401).json({ error: 'Invalid credentials' });
+    console.log(`🔐 bcrypt.compare result: ${isValidPassword}`);
+    
+    if (!isValidPassword) {
+      console.log(`❌ LOGIN FAILED: Password mismatch for ${email}`);
+      console.log(`🔐 Attempted password: [${password.length} chars] ${password.substring(0, 5)}...`);
+      console.log(`🔐 Stored hash prefix: ${dbUser.password_hash.substring(0, 20)}...`);
+      
+      // Try comparing with trimmed password in case of whitespace issues
+      const trimmedPassword = password.trim();
+      if (trimmedPassword !== password) {
+        console.log(`🔐 Trying trimmed password...`);
+        const trimmedMatch = await bcrypt.compare(trimmedPassword, dbUser.password_hash);
+        console.log(`🔐 Trimmed password match: ${trimmedMatch}`);
+      }
+      
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+    
+    console.log(`✅ LOGIN SUCCESS: ${email}`);
     
     // Transform user object to camelCase for frontend
     const user = transformUser(dbUser);
@@ -5814,6 +5915,12 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
 app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
   try {
     const { token, newPassword } = req.body;
+    
+    console.log(`🔐 RESET PASSWORD ATTEMPT`);
+    console.log(`🔐 Token received: ${token ? `[${token.length} chars]` : 'MISSING'}`);
+    console.log(`🔐 New password received: ${newPassword ? `[${newPassword.length} chars]` : 'MISSING'}`);
+    console.log(`🔐 New password type: ${typeof newPassword}`);
+    
     if (!token || !newPassword) {
       return res.status(400).json({ error: 'Token and new password are required' });
     }
@@ -5829,31 +5936,40 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
       if (decoded.type !== 'password-reset') {
         return res.status(400).json({ error: 'Invalid token type' });
       }
+      console.log(`🔐 Token decoded: userId=${decoded.userId}, email=${decoded.email}`);
     } catch (error) {
+      console.log(`❌ Token verification failed: ${error.message}`);
       return res.status(400).json({ error: 'Invalid or expired reset token' });
     }
     
     // Check if token exists in database and hasn't expired
     const userResult = await db.query(
-      `SELECT id, reset_token, reset_token_expires FROM users WHERE id = $1`,
+      `SELECT id, email, reset_token, reset_token_expires FROM users WHERE id = $1`,
       [decoded.userId]
     );
     
     if (userResult.rows.length === 0) {
+      console.log(`❌ User not found for userId: ${decoded.userId}`);
       return res.status(400).json({ error: 'Invalid reset token' });
     }
     
     const user = userResult.rows[0];
+    console.log(`🔐 User found: ID=${user.id}, email=${user.email}`);
+    
     if (!user.reset_token || user.reset_token !== token) {
+      console.log(`❌ Token mismatch for user ${user.id}`);
       return res.status(400).json({ error: 'Invalid reset token' });
     }
     
     if (new Date(user.reset_token_expires) < new Date()) {
+      console.log(`❌ Token expired for user ${user.id}`);
       return res.status(400).json({ error: 'Reset token has expired' });
     }
     
     // Hash new password
+    console.log(`🔐 Hashing new password for user ${user.id}...`);
     const hashedPassword = await bcrypt.hash(newPassword, 12);
+    console.log(`🔐 Password hashed: length=${hashedPassword.length}, prefix=${hashedPassword.substring(0, 20)}...`);
     
     // Update password and clear reset token
     await db.query(
@@ -5861,9 +5977,65 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
       [hashedPassword, decoded.userId]
     );
     
+    console.log(`✅ Password reset successfully for user ${user.id} (${user.email})`);
+    
+    // Verify the password was set correctly
+    const verifyResult = await db.query('SELECT password_hash FROM users WHERE id = $1', [decoded.userId]);
+    const storedHash = verifyResult.rows[0].password_hash;
+    const verifyMatch = await bcrypt.compare(newPassword, storedHash);
+    console.log(`🔐 Password verification after reset: ${verifyMatch ? 'SUCCESS' : 'FAILED'}`);
+    
     res.json({ message: 'Password reset successfully. You can now login with your new password.' });
   } catch (error) {
     console.error('🔴 RESET PASSWORD ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Change Password endpoint (for authenticated users)
+app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+    
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Current password and new password are required' });
+    }
+    
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    // Get user's current password hash
+    const userResult = await db.query('SELECT password_hash FROM users WHERE id = $1', [userId]);
+    
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const user = userResult.rows[0];
+    
+    // Check if user has a password (social login users may not have one)
+    if (!user.password_hash) {
+      return res.status(400).json({ error: 'This account does not have a password set. Please use password reset instead.' });
+    }
+    
+    // Verify current password
+    const isValidPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({ error: 'Current password is incorrect' });
+    }
+    
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    
+    // Update password
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hashedPassword, userId]);
+    
+    console.log(`✅ Password changed successfully for user ${userId}`);
+    res.json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error('🔴 CHANGE PASSWORD ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

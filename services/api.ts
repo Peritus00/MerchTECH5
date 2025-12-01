@@ -234,6 +234,18 @@ export const authAPI = {
     return response.data;
   },
 
+  async changePassword(currentPassword: string, newPassword: string, token: string) {
+    const response = await api.post('/auth/change-password', { 
+      currentPassword, 
+      newPassword 
+    }, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return response.data;
+  },
+
   async googleSignIn(idToken: string) {
     const response = await api.post('/auth/google', { idToken });
     return response.data;
