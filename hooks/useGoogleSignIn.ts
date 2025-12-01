@@ -131,97 +131,35 @@ export function useGoogleSignIn() {
           }
         }
 
-        return new Promise((resolve) => {
-          try {
-            // Initialize Google Identity Services with FedCM disabled
-            // This forces it to use the traditional OAuth popup flow
-            window.google!.accounts.id.initialize({
-              client_id: googleClientId,
-              use_fedcm_for_prompt: false, // Disable FedCM to avoid CORS issues
-              auto_select: false,
-              cancel_on_tap_outside: true,
-              callback: async (response: { credential: string }) => {
-                console.log('✅ Google sign-in callback received');
-                try {
-                  // The credential is the ID token
-                  const idToken = response.credential;
-                  
-                  if (!idToken) {
-                    console.error('❌ No ID token in Google response');
-                    resolve({ success: false, error: 'No ID token received from Google' });
-                    return;
-                  }
-
-                  console.log('🔄 Sending ID token to backend...');
-                  await socialLogin('google', idToken);
-                  console.log('✅ Google sign-in successful');
-                  resolve({ success: true });
-                } catch (error: any) {
-                  console.error('❌ Error during social login:', error);
-                  resolve({ 
-                    success: false, 
-                    error: error.message || 'Failed to complete sign-in' 
-                  });
-                } finally {
-                  setLoading(false);
-                }
-              },
-            });
-
-            // Use prompt with FedCM disabled - this will fall back to popup flow
-            console.log('🔄 Prompting Google sign-in (popup flow)...');
-            window.google!.accounts.id.prompt((notification: any) => {
-              if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-                console.warn('⚠️ Google sign-in prompt not displayed, trying alternative method...', notification);
-                
-                // Fallback: Use OAuth2 token client for popup flow
-                try {
-                  const tokenClient = window.google!.accounts.oauth2.initTokenClient({
-                    client_id: googleClientId,
-                    scope: 'openid profile email',
-                    callback: async (tokenResponse: { access_token: string }) => {
-                      // For OAuth2 token flow, we need to get user info and create ID token
-                      // But this is more complex. Let's try a different approach:
-                      // Use a redirect-based flow as fallback
-                      console.log('🔄 Falling back to redirect flow...');
-                      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(googleClientId)}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/google')}&response_type=id_token&scope=openid profile email&nonce=${Math.random().toString(36).substring(2, 15)}`;
-                      window.location.href = authUrl;
-                      resolve({ success: false, error: 'Redirecting to Google...' });
-                    },
-                  });
-                  
-                  // This won't work for ID tokens, so let's use redirect instead
-                  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${encodeURIComponent(googleClientId)}&redirect_uri=${encodeURIComponent(window.location.origin + '/auth/google')}&response_type=id_token&scope=openid profile email&nonce=${Math.random().toString(36).substring(2, 15)}`;
-                  window.location.href = authUrl;
-                  resolve({ success: false, error: 'Redirecting to Google...' });
-                } catch (fallbackError: any) {
-                  console.error('❌ Fallback method failed:', fallbackError);
-                  resolve({ 
-                    success: false, 
-                    error: 'Google sign-in prompt was blocked. Please try again or check your browser settings.' 
-                  });
-                  setLoading(false);
-                }
-              } else if (notification.isDismissedMoment()) {
-                console.log('ℹ️ Google sign-in dismissed by user');
-                resolve({ 
-                  success: false, 
-                  error: 'Google sign-in was cancelled' 
-                });
-                setLoading(false);
-              }
-              // If notification.isDisplayed() or notification.isDisplayedMoment(), 
-              // the callback will handle the result
-            });
-          } catch (error: any) {
-            console.error('❌ Google Identity Services error:', error);
-            resolve({ 
-              success: false, 
-              error: error.message || 'Google sign-in failed' 
-            });
-            setLoading(false);
-          }
-        });
+        // Use direct OAuth redirect flow instead of FedCM/prompt API
+        // This is more reliable and doesn't require server-side FedCM configuration
+        console.log('🔄 Initiating Google OAuth redirect flow...');
+        
+        // Generate a random nonce for security
+        const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        
+        // Store nonce in sessionStorage to verify on callback
+        if (typeof window !== 'undefined' && window.sessionStorage) {
+          sessionStorage.setItem('google_oauth_nonce', nonce);
+        }
+        
+        // Build OAuth URL with ID token response type
+        const redirectUri = `${window.location.origin}/auth/google`;
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${encodeURIComponent(googleClientId)}` +
+          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+          `&response_type=id_token` +
+          `&scope=${encodeURIComponent('openid profile email')}` +
+          `&nonce=${encodeURIComponent(nonce)}` +
+          `&prompt=select_account`;
+        
+        console.log('🔄 Redirecting to Google OAuth...');
+        
+        // Redirect to Google
+        window.location.href = authUrl;
+        
+        // Return immediately - the callback handler will process the result
+        return { success: false, error: 'Redirecting to Google...' };
       } else {
         // For mobile platforms (iOS/Android), use expo-auth-session
         console.log('📱 Using expo-auth-session for mobile sign-in');
