@@ -5443,11 +5443,13 @@ app.post('/api/auth/register',
 
     // Automatically send verification email
     try {
+      // Use FRONTEND_URL from environment, default to production domain
+      const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
       await transporter.sendMail({
         from: '"MerchTrader QR" <help@merchtrader.org>',
         to: email,
         subject: 'Verify Your MerchTech Account',
-        html: `Thank you for registering! Please verify your email by clicking this link: <a href="${process.env.FRONTEND_URL}/auth/verify-email?token=${token}">Verify Email</a>`,
+        html: `Thank you for registering! Please verify your email by clicking this link: <a href="${frontendUrl}/auth/verify-email?token=${token}">Verify Email</a>`,
       });
       console.log(`Verification email sent to ${email}`);
     } catch (emailError) {
@@ -5679,7 +5681,9 @@ app.post('/api/auth/send-verification', async (req, res) => {
 
     await db.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, user.id]);
 
-    const verificationUrl = `http://localhost:8081/auth/verify?token=${verificationToken}`;
+    // Use FRONTEND_URL from environment, default to production domain
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const verificationUrl = `${frontendUrl}/auth/verify-email?token=${verificationToken}`;
 
     await transporter.sendMail({
       from: '"MerchTrader QR" <help@merchtrader.org>',
@@ -5747,7 +5751,9 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
     );
     
     // Send email
-    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://app.merchtrader.org';
+    // IMPORTANT: FRONTEND_URL must be set in production to match the actual deployed domain
+    // Default to www.merchtrader.org which is the production domain per vercel.json
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
     const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
     
     // Check if email is configured

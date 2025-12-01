@@ -41,7 +41,7 @@ async function testPasswordResetEmail() {
   // Test password reset email
   console.log('\n📧 Testing password reset email...');
   const testEmail = 'perrie.benton@gmail.com';
-  const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://app.merchtrader.org';
+  const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
   const resetToken = 'test-token-' + Date.now();
   const resetUrl = `${frontendUrl}/auth/reset-password?token=${resetToken}`;
   
