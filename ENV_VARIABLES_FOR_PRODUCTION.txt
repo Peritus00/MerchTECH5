@@ -8,9 +8,9 @@
 # BACKEND ENVIRONMENT VARIABLES (Railway/Vercel)
 # =============================================================================
 
-# Google OAuth - Android Client ID (for backend token verification)
-# Using Android client ID for both backend and mobile
-GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
+# Google OAuth - Web Client ID (for backend token verification and web OAuth)
+# Use Web Client ID for both backend and web frontend
+GOOGLE_CLIENT_ID=587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com
 
 # Apple OAuth Configuration
 APPLE_CLIENT_ID=com.peritus00.merchtech.signin
@@ -28,8 +28,9 @@ BREVO_API_KEY=your_brevo_api_key_here
 # MOBILE APP ENVIRONMENT VARIABLES (.env file in project root)
 # =============================================================================
 
-# Google OAuth - Android Client ID (for mobile OAuth flow)
-EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
+# Google OAuth - Web Client ID (for web OAuth flow)
+# For mobile apps, use Android Client ID: 587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com
 
 # =============================================================================
 # APPLE DEVELOPER INFORMATION (for reference)
@@ -41,9 +42,9 @@ EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.
 # =============================================================================
 # IMPORTANT NOTES
 # =============================================================================
-# 1. GOOGLE_CLIENT_ID: Using Android client ID for both backend and mobile
-#    This works because Google tokens can be verified with any client ID from
-#    the same OAuth project
+# 1. GOOGLE_CLIENT_ID: Using Web Client ID for backend and web frontend
+#    Web Client ID: 587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com
+#    Android Client ID (for mobile only): 587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
 #
 # 2. APPLE_CLIENT_ID and APPLE_SERVICE_ID: Set to Service ID created in
 #    Apple Developer Portal (com.peritus00.merchtech.signin)
