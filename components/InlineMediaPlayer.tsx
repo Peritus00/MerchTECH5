@@ -64,19 +64,87 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
         const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)]();
         webAudioRef.current = audio;
         
-        audio.addEventListener('loadeddata', () => setWebAudioLoaded(true));
-        audio.addEventListener('canplaythrough', () => setWebAudioLoaded(true));
+        audio.addEventListener('loadeddata', () => {
+          console.log('🔴 INLINE_PLAYER: Audio loaded data:', {
+            fileId: file.id,
+            readyState: audio.readyState,
+            duration: audio.duration
+          });
+          setWebAudioLoaded(true);
+        });
+        audio.addEventListener('canplaythrough', () => {
+          console.log('🔴 INLINE_PLAYER: Audio can play through:', {
+            fileId: file.id,
+            readyState: audio.readyState
+          });
+          setWebAudioLoaded(true);
+        });
         audio.addEventListener('play', () => setWebAudioPlaying(true));
         audio.addEventListener('pause', () => setWebAudioPlaying(false));
         audio.addEventListener('ended', () => setWebAudioPlaying(false));
         audio.addEventListener('error', (e) => {
-          console.error('🔴 INLINE_PLAYER: Web audio error:', e);
-          Alert.alert('Playback Error', 'Failed to load audio file');
+          const audioElement = e.target as HTMLAudioElement;
+          const error = audioElement.error;
+          let errorMessage = 'Unknown error';
+          
+          if (error) {
+            // MediaError codes: 1=ABORTED, 2=NETWORK, 3=DECODE, 4=SRC_NOT_SUPPORTED
+            switch (error.code) {
+              case 1: // MEDIA_ERR_ABORTED
+                errorMessage = 'Media loading aborted';
+                break;
+              case 2: // MEDIA_ERR_NETWORK
+                errorMessage = 'Network error while loading media';
+                break;
+              case 3: // MEDIA_ERR_DECODE
+                errorMessage = 'Media decoding error - file may be corrupted or unsupported format';
+                break;
+              case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
+                errorMessage = 'Media format not supported or source not found';
+                break;
+              default:
+                errorMessage = `Media error code: ${error.code}`;
+            }
+          }
+          
+          const errorCodeMeaning = error?.code === 1 ? 'MEDIA_ERR_ABORTED' :
+                                   error?.code === 2 ? 'MEDIA_ERR_NETWORK' :
+                                   error?.code === 3 ? 'MEDIA_ERR_DECODE' :
+                                   error?.code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN';
+          
+          console.error('🔴 INLINE_PLAYER: Web audio error:', {
+            error,
+            errorCode: error?.code,
+            errorCodeMeaning,
+            errorMessage,
+            readyState: audioElement.readyState,
+            networkState: audioElement.networkState,
+            src: streamingUrl,
+            fileId: file.id,
+            fileName: file.filename || file.title,
+            fileType: file.type || file.fileType,
+            contentType: file.contentType
+          });
+          
+          // Only show alert for non-abort errors (abort is usually user-initiated)
+          if (error && error.code !== 1) {
+            Alert.alert('Playback Error', `Failed to load audio file: ${errorMessage}`);
+          }
         });
         
         audio.crossOrigin = 'anonymous';
         audio.preload = 'metadata';
         audio.src = streamingUrl;
+        
+        // Log initialization for debugging
+        console.log('🔴 INLINE_PLAYER: Initializing audio:', {
+          fileId: file.id,
+          fileName: file.filename || file.title,
+          streamingUrl,
+          fileType: file.type || file.fileType,
+          contentType: file.contentType
+        });
+        
         audio.load();
       } else {
         await player.replace(streamingUrl);
