@@ -127,24 +127,27 @@ export function useAppleSignIn() {
         }
 
         // Determine the correct redirect URI
+        // For form_post, we need a backend endpoint that can receive POST data
         let currentOrigin = window.location.origin;
         if (currentOrigin.includes('merchtrader.org')) {
           currentOrigin = 'https://www.merchtrader.org';
         }
-        const redirectURI = `${currentOrigin}/auth/apple`;
+        // Use backend endpoint for form_post callback
+        const redirectURI = `${currentOrigin}/api/auth/apple/callback`;
         console.log('🔄 Current origin:', window.location.origin);
         console.log('🔄 Using redirect URI:', redirectURI);
         console.log('🔄 Apple Client ID:', appleClientId);
 
         // Use Apple's redirect flow with authorization code
         // For web OAuth with Service IDs, Apple requires response_type=code
+        // When requesting 'name' or 'email' scope, Apple requires response_mode=form_post
         // The code will be exchanged for an id_token on the backend
         const appleAuthUrl = `https://appleid.apple.com/auth/authorize?` +
           `client_id=${encodeURIComponent(appleClientId)}` +
           `&redirect_uri=${encodeURIComponent(redirectURI)}` +
           `&response_type=code` +
           `&scope=name email` +
-          `&response_mode=query` +
+          `&response_mode=form_post` +
           `&state=${encodeURIComponent(nonce)}`;
 
         console.log('🔄 Apple Auth URL:', appleAuthUrl);

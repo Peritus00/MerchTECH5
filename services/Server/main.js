@@ -5729,7 +5729,8 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
     }
 
     const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
-    const redirectUri = 'https://www.merchtrader.org/auth/apple';
+    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const redirectUri = `${frontendUrl}/api/auth/apple/callback`;
 
     // Exchange authorization code for tokens
     try {
@@ -5795,6 +5796,37 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
   } catch (error) {
     console.error('🔴 APPLE WEB AUTH ERROR:', error);
     res.status(500).json({ error: error.message || 'Apple authentication failed' });
+  }
+});
+
+// Apple Sign-In callback endpoint (receives form_post from Apple and redirects to frontend)
+app.post('/api/auth/apple/callback', async (req, res) => {
+  try {
+    console.log('🍎 Apple form_post callback received');
+    const { code, state, error, error_description } = req.body;
+    
+    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const callbackUrl = `${frontendUrl}/auth/apple`;
+    
+    if (error) {
+      console.error('❌ Apple OAuth error:', error, error_description);
+      // Redirect to frontend with error
+      return res.redirect(`${callbackUrl}?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(error_description || '')}`);
+    }
+    
+    if (!code) {
+      console.error('❌ No authorization code received from Apple');
+      return res.redirect(`${callbackUrl}?error=no_code&error_description=No authorization code received`);
+    }
+    
+    console.log('✅ Apple authorization code received, redirecting to frontend');
+    // Redirect to frontend callback page with code and state as query parameters
+    res.redirect(`${callbackUrl}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || '')}`);
+  } catch (error) {
+    console.error('🔴 APPLE CALLBACK ERROR:', error);
+    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const callbackUrl = `${frontendUrl}/auth/apple`;
+    res.redirect(`${callbackUrl}?error=callback_error&error_description=${encodeURIComponent(error.message || 'Callback processing failed')}`);
   }
 });
 
