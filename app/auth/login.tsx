@@ -179,6 +179,13 @@ export default function LoginScreen() {
       const result = await appleSignIn();
       console.log('🍎 Apple Sign-In result:', result);
       if (result.success) {
+        // Check if we're redirecting (web OAuth flow)
+        if ((result as any).redirecting) {
+          console.log('🔄 Redirecting to Apple Sign-In (this is expected)');
+          // The redirect happens immediately via window.location.href
+          // No need to do anything else - browser will navigate away
+          return;
+        }
         console.log('✅ Apple Sign-In successful, navigating to tabs');
         router.replace('/(tabs)');
       } else {

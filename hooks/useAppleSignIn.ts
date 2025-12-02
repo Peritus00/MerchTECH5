@@ -152,11 +152,12 @@ export function useAppleSignIn() {
         console.log('🔄 Redirecting to Apple Sign-In...');
         
         // Redirect to Apple - this will navigate away from the page
+        // Set location immediately - browser will navigate away
         window.location.href = appleAuthUrl;
         
-        // Return immediately - the callback handler will process the result
-        // Note: This return value won't be seen since we're redirecting
-        return { success: false, error: 'Redirecting to Apple...' };
+        // Return a special value indicating redirect is in progress
+        // The handler should not treat this as an error
+        return { success: true, redirecting: true };
       } else if (Platform.OS === 'ios') {
         // For iOS, use native Apple Authentication
         console.log('📱 Using native Apple Authentication for iOS');
