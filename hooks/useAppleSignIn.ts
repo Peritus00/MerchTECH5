@@ -46,50 +46,16 @@ export function useAppleSignIn() {
   const { socialLogin } = useAuth();
   const [appleReady, setAppleReady] = useState(false);
 
-  // Load Apple Sign-In script for web
+  // Note: We're using manual OAuth redirect flow, not the Apple SDK
+  // So we don't need to load the Apple Sign-In JavaScript SDK
+  // This prevents CSP violations and simplifies the implementation
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // Check if script is already loaded
-      const existingScript = document.querySelector('script[src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"]');
-      if (existingScript) {
-        // Script already exists, check if AppleID is ready
-        if (window.AppleID?.auth) {
-          setAppleReady(true);
-          return;
-        }
-        // Wait for script to load
-        existingScript.addEventListener('load', () => {
-          if (window.AppleID?.auth) {
-            initializeAppleAuth();
-          }
-        });
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => {
-        console.log('✅ Apple Sign-In script loaded');
-        // Wait a bit for AppleID to be fully initialized
-        setTimeout(() => {
-          if (window.AppleID?.auth) {
-            initializeAppleAuth();
-          }
-        }, 100);
-      };
-      script.onerror = () => {
-        console.error('❌ Failed to load Apple Sign-In script');
-      };
-      document.head.appendChild(script);
-
-      return () => {
-        // Don't remove script on unmount as it might be used by other components
-      };
-    } else {
-      // For mobile platforms, Apple Sign-In is ready if on iOS
-      setAppleReady(Platform.OS === 'ios');
+    // For mobile platforms, Apple Sign-In is ready if on iOS
+    if (Platform.OS === 'ios') {
+      setAppleReady(true);
+    } else if (Platform.OS === 'web') {
+      // For web, we use manual redirect, so we're always "ready"
+      setAppleReady(true);
     }
   }, []);
 
@@ -171,7 +137,8 @@ export function useAppleSignIn() {
         console.log('🔄 Apple Client ID:', appleClientId);
 
         // Use Apple's redirect flow
-        // Use query response mode so we can handle it via URL parameters (like Google)
+        // For web OAuth, try id_token with query mode
+        // Note: Apple may require specific Service ID configuration for id_token to work
         const appleAuthUrl = `https://appleid.apple.com/auth/authorize?` +
           `client_id=${encodeURIComponent(appleClientId)}` +
           `&redirect_uri=${encodeURIComponent(redirectURI)}` +
