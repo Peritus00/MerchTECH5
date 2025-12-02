@@ -142,13 +142,15 @@ export function useAppleSignIn() {
         // For web OAuth with Service IDs, Apple requires response_type=code
         // When requesting 'name' or 'email' scope, Apple requires response_mode=form_post
         // The code will be exchanged for an id_token on the backend
+        // Note: Both 'state' (for CSRF) and 'nonce' (for token verification) are required
         const appleAuthUrl = `https://appleid.apple.com/auth/authorize?` +
           `client_id=${encodeURIComponent(appleClientId)}` +
           `&redirect_uri=${encodeURIComponent(redirectURI)}` +
           `&response_type=code` +
           `&scope=name email` +
           `&response_mode=form_post` +
-          `&state=${encodeURIComponent(nonce)}`;
+          `&state=${encodeURIComponent(nonce)}` +
+          `&nonce=${encodeURIComponent(nonce)}`;
 
         console.log('🔄 Apple Auth URL:', appleAuthUrl);
         console.log('🔄 Redirecting to Apple Sign-In...');
