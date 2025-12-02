@@ -151,7 +151,7 @@ export default function AppleAuthCallback() {
     };
 
     processCallback();
-  }, [params, socialLogin, router, processed]);
+  }, [params, socialLogin, socialLoginWithCode, router, processed]);
 
   return (
     <ThemedView style={styles.container}>
