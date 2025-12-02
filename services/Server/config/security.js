@@ -281,23 +281,27 @@ const apiSecurityMiddleware = (req, res, next) => {
   }
 
   // Check for excessive request size
-  const contentLength = parseInt(req.get('Content-Length') || '0', 10);
-  const maxRequestSize = 10 * 1024 * 1024; // 10MB
-  if (contentLength > maxRequestSize) {
-    securityAuditLogger.log({
-      type: 'security_request_too_large',
-      severity: 'medium',
-      ip: req.ip,
-      action: 'Request blocked',
-      resource: req.path,
-      success: false,
-      details: { contentLength, maxRequestSize }
-    });
+  // Exclude upload endpoints - they handle their own size validation via multer (500MB limit)
+  const isUploadEndpoint = req.path === '/api/upload' || req.path.startsWith('/api/upload/');
+  if (!isUploadEndpoint) {
+    const contentLength = parseInt(req.get('Content-Length') || '0', 10);
+    const maxRequestSize = 10 * 1024 * 1024; // 10MB for non-upload endpoints
+    if (contentLength > maxRequestSize) {
+      securityAuditLogger.log({
+        type: 'security_request_too_large',
+        severity: 'medium',
+        ip: req.ip,
+        action: 'Request blocked',
+        resource: req.path,
+        success: false,
+        details: { contentLength, maxRequestSize }
+      });
 
-    return res.status(413).json({
-      error: 'Payload Too Large',
-      message: 'Request size exceeds maximum allowed'
-    });
+      return res.status(413).json({
+        error: 'Payload Too Large',
+        message: 'Request size exceeds maximum allowed'
+      });
+    }
   }
 
   // Check for suspicious query parameters
