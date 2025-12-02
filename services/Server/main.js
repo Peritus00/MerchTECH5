@@ -167,6 +167,8 @@ app.use(helmet({
       defaultSrc: ["'self'"],
       connectSrc: [
         "'self'",
+        "data:", // For data URI connections (video/audio uploads)
+        "blob:", // For blob URI connections (media uploads)
         "https://merchtech5-production.up.railway.app",
         "https://www.merchtrader.org",
         "https://merchtrader.org",
