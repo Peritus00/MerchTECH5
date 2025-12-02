@@ -231,10 +231,12 @@ app.use(helmet({
 
 // Admin-only debug endpoint is defined later, after auth middleware declarations
 
-// 🔒 SECURITY: Reduced request size limits (files upload directly to S3 via presigned URLs)
-// Only metadata and small JSON payloads come through the server
-app.use(express.json({ limit: '10mb' })); // Reduced from 1gb to 10mb for JSON payloads
-app.use(express.urlencoded({ limit: '10mb', extended: true })); // Reduced from 1gb to 10mb
+// 🔒 SECURITY: Request size limits configured for file uploads
+// Note: While express.json/urlencoded don't parse multipart/form-data (multer handles that),
+// we set these limits high enough to ensure no middleware rejects large file uploads
+// Multer has its own 500MB limit, so we match that here
+app.use(express.json({ limit: '500mb' })); // Increased to support video uploads via /api/upload
+app.use(express.urlencoded({ limit: '500mb', extended: true })); // Increased to support video uploads
 
 // Phase 3: Performance Optimization Middleware (after body parsing, before routes)
 // Re-enabled with proper error handling and CORS compatibility
