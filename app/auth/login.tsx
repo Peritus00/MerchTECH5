@@ -173,15 +173,36 @@ export default function LoginScreen() {
   }, [googleSignIn, router]);
 
   const handleAppleSignIn = useCallback(async () => {
+    console.log('🍎 Apple Sign-In button clicked');
     try {
+      console.log('🍎 Calling appleSignIn()...');
       const result = await appleSignIn();
+      console.log('🍎 Apple Sign-In result:', result);
       if (result.success) {
+        console.log('✅ Apple Sign-In successful, navigating to tabs');
         router.replace('/(tabs)');
       } else {
-        Alert.alert('Sign In Failed', result.error || 'Apple sign-in failed');
+        console.error('❌ Apple Sign-In failed:', result.error);
+        const errorMessage = result.error || 'Apple sign-in failed';
+        if (Platform.OS === 'web') {
+          window.alert(`Sign In Failed: ${errorMessage}`);
+        } else {
+          Alert.alert('Sign In Failed', errorMessage);
+        }
       }
     } catch (error: any) {
-      Alert.alert('Sign In Failed', error.message || 'Apple sign-in failed');
+      console.error('❌ Apple Sign-In error caught:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
+      const errorMessage = error.message || 'Apple sign-in failed';
+      if (Platform.OS === 'web') {
+        window.alert(`Sign In Failed: ${errorMessage}`);
+      } else {
+        Alert.alert('Sign In Failed', errorMessage);
+      }
     }
   }, [appleSignIn, router]);
 
