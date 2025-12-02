@@ -13,7 +13,7 @@ import { Platform } from 'react-native';
 export default function AppleAuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { socialLogin } = useAuth();
+  const { socialLogin, socialLoginWithCode } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
   const [processed, setProcessed] = useState(false);
@@ -32,14 +32,11 @@ export default function AppleAuthCallback() {
         console.log('🍎 URL params:', params);
         console.log('🍎 Current URL:', typeof window !== 'undefined' ? window.location.href : 'N/A');
         
-        // Apple Sign-In with form_post response mode sends data via POST
-        // But since we're using a client-side route, Apple will redirect with the data
-        // Check for identity token in URL params (form_post redirects with data in URL)
-        const idToken = params.id_token as string | undefined;
-        const code = params.code as string | undefined;
+        // Check for OAuth response parameters
+        const idToken = params.id_token as string | undefined; // For iOS native flow
+        const code = params.code as string | undefined; // For web OAuth code flow
         const error = params.error as string | undefined;
         const state = params.state as string | undefined;
-        const user = params.user as string | undefined; // JSON string with user info
 
         if (error) {
           console.error('❌ Apple OAuth error:', error);
@@ -50,10 +47,39 @@ export default function AppleAuthCallback() {
           return;
         }
 
-        // Apple Sign-In with form_post: Check URL params first (form_post may redirect)
-        // If we have an id_token, use it directly
+        // Web OAuth code flow (primary for web)
+        if (code && Platform.OS === 'web') {
+          console.log('✅ Processing Apple OAuth callback with authorization code');
+          
+          // Verify state matches stored nonce (CSRF protection)
+          let nonce: string | undefined;
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            nonce = sessionStorage.getItem('apple_oauth_nonce') || undefined;
+            sessionStorage.removeItem('apple_oauth_nonce');
+          }
+          
+          // Verify state matches nonce if both are present
+          if (state && nonce && state !== nonce) {
+            console.error('❌ State mismatch - possible CSRF attack');
+            setStatus('error');
+            setErrorMessage('Security validation failed. Please try again.');
+            return;
+          }
+          
+          // Exchange code for tokens via backend
+          await socialLoginWithCode('apple', code, nonce);
+          setStatus('success');
+          
+          // Redirect to main app after short delay
+          setTimeout(() => {
+            router.replace('/(tabs)');
+          }, 1000);
+          return;
+        }
+
+        // iOS native flow (id_token directly)
         if (idToken) {
-          console.log('✅ Processing Apple OAuth callback with ID token from params');
+          console.log('✅ Processing Apple OAuth callback with ID token (iOS native)');
           
           // Verify nonce from sessionStorage
           let nonce: string | undefined;
@@ -72,14 +98,32 @@ export default function AppleAuthCallback() {
           return;
         }
 
-        // Try to extract from hash fragment (fallback for query mode)
+        // Try to extract from hash fragment (fallback)
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           const hashToken = hashParams.get('id_token');
+          const hashCode = hashParams.get('code');
+          
+          if (hashCode) {
+            console.log('✅ Found authorization code in hash fragment');
+            
+            let nonce: string | undefined;
+            if (window.sessionStorage) {
+              nonce = sessionStorage.getItem('apple_oauth_nonce') || undefined;
+              sessionStorage.removeItem('apple_oauth_nonce');
+            }
+            
+            await socialLoginWithCode('apple', hashCode, nonce);
+            setStatus('success');
+            setTimeout(() => {
+              router.replace('/(tabs)');
+            }, 1000);
+            return;
+          }
+          
           if (hashToken) {
             console.log('✅ Found ID token in hash fragment');
             
-            // Verify nonce from sessionStorage
             let nonce: string | undefined;
             if (window.sessionStorage) {
               nonce = sessionStorage.getItem('apple_oauth_nonce') || undefined;
@@ -95,30 +139,7 @@ export default function AppleAuthCallback() {
           }
         }
 
-        // For form_post, Apple may POST data - check if we need to handle POST
-        // Since this is a client-side route, form_post will redirect back with data
-        // If we still don't have a token, check the document body for a form
-        if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
-          // Check if there's a form in the body (form_post creates a form that auto-submits)
-          const forms = document.querySelectorAll('form');
-          if (forms.length > 0) {
-            console.log('🍎 Found form in document (form_post response)');
-            // The form will auto-submit, so we need to wait for it
-            // But actually, form_post should redirect, so this shouldn't happen
-          }
-        }
-
-        // If we have a code, Apple requires server-side exchange
-        // For now, show helpful error message
-        if (code) {
-          console.error('❌ Received authorization code instead of ID token');
-          console.error('❌ Code exchange requires server-side handling');
-          setStatus('error');
-          setErrorMessage('Apple Sign-In returned an authorization code. Please contact support or try again.');
-          return;
-        }
-
-        console.error('❌ No ID token found in callback');
+        console.error('❌ No authorization code or ID token found in callback');
         console.error('❌ Available params:', Object.keys(params));
         setStatus('error');
         setErrorMessage('No authentication token received from Apple. Please try again.');

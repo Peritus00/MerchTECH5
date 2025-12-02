@@ -5636,7 +5636,35 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
   }
 });
 
-// Apple Sign-In endpoint
+// Helper function to generate Apple client secret JWT for OAuth code exchange
+function generateAppleClientSecret() {
+  const teamId = process.env.APPLE_TEAM_ID;
+  const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
+  const keyId = process.env.APPLE_KEY_ID;
+  const privateKey = process.env.APPLE_PRIVATE_KEY;
+
+  if (!teamId || !clientId || !keyId || !privateKey) {
+    throw new Error('Apple OAuth configuration incomplete. Required: APPLE_TEAM_ID, APPLE_CLIENT_ID/APPLE_SERVICE_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY');
+  }
+
+  // Apple client secret is a JWT signed with the private key
+  // Expires in 6 months (maximum allowed by Apple)
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    iss: teamId,
+    iat: now,
+    exp: now + (6 * 30 * 24 * 60 * 60), // 6 months
+    aud: 'https://appleid.apple.com',
+    sub: clientId,
+  };
+
+  return jwt.sign(payload, privateKey, {
+    algorithm: 'ES256',
+    keyid: keyId,
+  });
+}
+
+// Apple Sign-In endpoint (for iOS native - uses identity token directly)
 app.post('/api/auth/apple', authLimiter, async (req, res) => {
   try {
     const { identityToken, nonce } = req.body;
@@ -5677,6 +5705,96 @@ app.post('/api/auth/apple', authLimiter, async (req, res) => {
   } catch (error) {
     console.error('🔴 APPLE AUTH ERROR:', error);
     res.status(401).json({ error: error.message || 'Apple authentication failed' });
+  }
+});
+
+// Apple Sign-In web endpoint (for web OAuth - exchanges authorization code for tokens)
+app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
+  try {
+    const { code, nonce } = req.body;
+    
+    if (!code) {
+      return res.status(400).json({ error: 'Apple authorization code is required' });
+    }
+
+    console.log('🍎 Apple web OAuth: Exchanging authorization code for tokens');
+
+    // Generate client secret JWT
+    let clientSecret;
+    try {
+      clientSecret = generateAppleClientSecret();
+    } catch (error) {
+      console.error('🔴 APPLE WEB AUTH ERROR: Failed to generate client secret:', error.message);
+      return res.status(500).json({ error: 'Apple OAuth configuration error. Please contact support.' });
+    }
+
+    const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
+    const redirectUri = 'https://www.merchtrader.org/auth/apple';
+
+    // Exchange authorization code for tokens
+    try {
+      const tokenResponse = await axios.post('https://appleid.apple.com/auth/token', 
+        new URLSearchParams({
+          grant_type: 'authorization_code',
+          code: code,
+          redirect_uri: redirectUri,
+          client_id: clientId,
+          client_secret: clientSecret,
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }
+      );
+
+      const { id_token } = tokenResponse.data;
+      
+      if (!id_token) {
+        console.error('🔴 APPLE WEB AUTH ERROR: No id_token in Apple response');
+        return res.status(401).json({ error: 'Apple authentication failed: No identity token received' });
+      }
+
+      console.log('✅ Apple web OAuth: Successfully exchanged code for id_token');
+
+      // Verify Apple token (same as iOS flow)
+      const appleUser = await socialAuthService.verifyAppleToken(id_token, nonce);
+      
+      // Find or create user
+      const dbUser = await socialAuthService.findOrCreateSocialUser(
+        db,
+        'apple',
+        appleUser.appleId,
+        appleUser.email, // May be null on subsequent sign-ins
+        {
+          emailVerified: appleUser.emailVerified,
+        }
+      );
+
+      // Transform user object to camelCase for frontend
+      const user = transformUser(dbUser);
+      
+      // Generate JWT token
+      const token = jwt.sign(
+        { 
+          userId: user.id, 
+          email: user.email, 
+          isAdmin: user.isAdmin
+        }, 
+        JWT_SECRET, 
+        { expiresIn: '24h' }
+      );
+      
+      console.log('✅ Apple web OAuth: User authenticated successfully');
+      res.json({ user, token, provider: 'apple' });
+    } catch (tokenError) {
+      console.error('🔴 APPLE WEB AUTH ERROR: Token exchange failed:', tokenError.response?.data || tokenError.message);
+      const errorMessage = tokenError.response?.data?.error_description || tokenError.message || 'Failed to exchange authorization code';
+      return res.status(401).json({ error: `Apple authentication failed: ${errorMessage}` });
+    }
+  } catch (error) {
+    console.error('🔴 APPLE WEB AUTH ERROR:', error);
+    res.status(500).json({ error: error.message || 'Apple authentication failed' });
   }
 });
 

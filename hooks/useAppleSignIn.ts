@@ -136,17 +136,16 @@ export function useAppleSignIn() {
         console.log('🔄 Using redirect URI:', redirectURI);
         console.log('🔄 Apple Client ID:', appleClientId);
 
-        // Use Apple's redirect flow
-        // For web OAuth, try id_token with query mode
-        // Note: Apple may require specific Service ID configuration for id_token to work
+        // Use Apple's redirect flow with authorization code
+        // For web OAuth with Service IDs, Apple requires response_type=code
+        // The code will be exchanged for an id_token on the backend
         const appleAuthUrl = `https://appleid.apple.com/auth/authorize?` +
           `client_id=${encodeURIComponent(appleClientId)}` +
           `&redirect_uri=${encodeURIComponent(redirectURI)}` +
-          `&response_type=id_token` +
+          `&response_type=code` +
           `&scope=name email` +
           `&response_mode=query` +
-          `&state=${encodeURIComponent(nonce)}` +
-          `&nonce=${encodeURIComponent(nonce)}`;
+          `&state=${encodeURIComponent(nonce)}`;
 
         console.log('🔄 Apple Auth URL:', appleAuthUrl);
         console.log('🔄 Redirecting to Apple Sign-In...');

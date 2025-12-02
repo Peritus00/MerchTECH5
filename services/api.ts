@@ -310,6 +310,11 @@ export const authAPI = {
     return response.data;
   },
 
+  async appleSignInWeb(code: string, nonce?: string) {
+    const response = await api.post('/auth/apple/web', { code, nonce });
+    return response.data;
+  },
+
   async getProfile() {
     const response = await api.get('/auth/profile');
     return response.data;

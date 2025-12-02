@@ -16,6 +16,13 @@ GOOGLE_CLIENT_ID=587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleuserco
 APPLE_CLIENT_ID=com.peritus00.merchtech.signin
 APPLE_SERVICE_ID=com.peritus00.merchtech.signin
 APPLE_TEAM_ID=4F996CU4LJ
+# Apple Private Key for OAuth code exchange (web only)
+# REQUIRED for web Apple Sign-In - Get from Apple Developer Portal > Keys > Sign in with Apple key
+# APPLE_KEY_ID: The Key ID from your Apple Sign-In key
+# APPLE_PRIVATE_KEY: The private key (.p8 file content) - Store securely in Railway, NOT in git
+# Format: Multi-line PEM key (-----BEGIN PRIVATE KEY----- ... -----END PRIVATE KEY-----)
+APPLE_KEY_ID=your_apple_key_id_here
+APPLE_PRIVATE_KEY=your_apple_private_key_here
 
 # Brevo Email Service (for password reset and verification emails)
 # Get your SMTP key from: https://app.brevo.com/settings/keys/api
@@ -31,6 +38,11 @@ BREVO_API_KEY=your_brevo_api_key_here
 # Google OAuth - Web Client ID (for web OAuth flow)
 # For mobile apps, use Android Client ID: 587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com
 EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com
+
+# Apple Sign-In - Service ID for web and mobile
+# Same as APPLE_CLIENT_ID/APPLE_SERVICE_ID (com.peritus00.merchtech.signin)
+EXPO_PUBLIC_APPLE_CLIENT_ID=com.peritus00.merchtech.signin
+EXPO_PUBLIC_APPLE_SERVICE_ID=com.peritus00.merchtech.signin
 
 # =============================================================================
 # APPLE DEVELOPER INFORMATION (for reference)
@@ -58,7 +70,20 @@ EXPO_PUBLIC_GOOGLE_CLIENT_ID=587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.
 #    - BREVO_SMTP_KEY (REQUIRED for password reset emails)
 #    - BREVO_API_KEY (for Brevo API integration)
 #
-# 4. For local development: Add to .env file in project root
+# 4. For Vercel (Frontend): Add these variables in the Vercel dashboard under
+#    your project's "Settings" > "Environment Variables":
+#    - EXPO_PUBLIC_APPLE_CLIENT_ID=com.peritus00.merchtech.signin
+#    - EXPO_PUBLIC_APPLE_SERVICE_ID=com.peritus00.merchtech.signin
+#    - EXPO_PUBLIC_GOOGLE_CLIENT_ID (already configured)
+#    - EXPO_PUBLIC_API_URL (already configured)
+#    - EXPO_PUBLIC_FRONTEND_URL (already configured)
+#
+#    NOTE: These are also set in vercel.json for reference, but should be
+#    configured in Vercel dashboard for production deployments.
+#
+# 5. For local development: Add to .env file in project root
 #    - All backend variables listed above
-#    - EXPO_PUBLIC_GOOGLE_CLIENT_ID (for mobile app)
+#    - EXPO_PUBLIC_GOOGLE_CLIENT_ID (for mobile app and web)
+#    - EXPO_PUBLIC_APPLE_CLIENT_ID=com.peritus00.merchtech.signin
+#    - EXPO_PUBLIC_APPLE_SERVICE_ID=com.peritus00.merchtech.signin
 

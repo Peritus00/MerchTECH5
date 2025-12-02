@@ -11,6 +11,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   socialLogin: (provider: 'google' | 'apple', token: string, nonce?: string) => Promise<void>;
+  socialLoginWithCode: (provider: 'apple', code: string, nonce?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
@@ -99,6 +100,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(response.user);
     } catch (error: any) {
       console.error(`🔴 AuthContext: ${provider} login error:`, error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const socialLoginWithCode = async (provider: 'apple', code: string, nonce?: string) => {
+    try {
+      setIsLoading(true);
+      const response = await authService.socialLoginWithCode(provider, code, nonce);
+      globalAuthState.user = response.user;
+      setUser(response.user);
+    } catch (error: any) {
+      console.error(`🔴 AuthContext: ${provider} web login error:`, error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -228,6 +243,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       socialLogin,
+      socialLoginWithCode,
       logout,
       refreshUser,
       updateProfile,

@@ -534,6 +534,28 @@ class AuthService {
     }
   }
 
+  async socialLoginWithCode(provider: 'apple', code: string, nonce?: string): Promise<AuthResponse> {
+    try {
+      if (provider !== 'apple') {
+        throw new Error('Code flow is only supported for Apple');
+      }
+
+      const response = await authAPI.appleSignInWeb(code, nonce);
+
+      if (!response.token || !response.user) {
+        throw new Error('Invalid response from server');
+      }
+
+      // Store authentication data
+      await this.storeAuthData(response);
+
+      return response;
+    } catch (error: any) {
+      console.error(`🔴 AuthService: ${provider} web login error:`, error);
+      throw new Error(error.message || `${provider} web login failed`);
+    }
+  }
+
   async updateProfile(updates: Partial<User>): Promise<User> {
     try {
       const token = await this.getStoredToken();
