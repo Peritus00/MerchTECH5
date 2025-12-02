@@ -458,8 +458,10 @@ export default function RegisterScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Apple Sign In Button - Only show on iOS */}
-            {Platform.OS === 'ios' && (
+            {/* Apple Sign In Button - Show on iOS and Web */}
+            {/* Show on iOS, or on web if Apple Client ID is configured */}
+            {((Platform.OS === 'ios' || Platform.OS === 'web') && 
+              (Platform.OS === 'ios' || process.env.EXPO_PUBLIC_APPLE_CLIENT_ID || process.env.EXPO_PUBLIC_APPLE_SERVICE_ID)) && (
               <TouchableOpacity
                 style={[styles.socialButton, styles.appleButton, (appleLoading || loading) && styles.disabled]}
                 onPress={handleAppleSignIn}
