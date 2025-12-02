@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -17,6 +17,7 @@ export default function AppleAuthCallback() {
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
   const [processed, setProcessed] = useState(false);
+  const redirectTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     // Prevent multiple executions (React StrictMode or re-renders)
@@ -71,8 +72,18 @@ export default function AppleAuthCallback() {
           setStatus('success');
           
           // Redirect to main app after short delay
-          setTimeout(() => {
-            router.replace('/(tabs)');
+          redirectTimerRef.current = setTimeout(() => {
+            try {
+              if (router && typeof router.replace === 'function') {
+                router.replace('/(tabs)');
+              } else {
+                console.warn('⚠️ Router not available, using window.location');
+                window.location.href = '/';
+              }
+            } catch (error) {
+              console.error('❌ Error during redirect:', error);
+              window.location.href = '/';
+            }
           }, 1000);
           return;
         }
@@ -92,8 +103,18 @@ export default function AppleAuthCallback() {
           setStatus('success');
           
           // Redirect to main app after short delay
-          setTimeout(() => {
-            router.replace('/(tabs)');
+          redirectTimerRef.current = setTimeout(() => {
+            try {
+              if (router && typeof router.replace === 'function') {
+                router.replace('/(tabs)');
+              } else {
+                console.warn('⚠️ Router not available, using window.location');
+                window.location.href = '/';
+              }
+            } catch (error) {
+              console.error('❌ Error during redirect:', error);
+              window.location.href = '/';
+            }
           }, 1000);
           return;
         }
@@ -115,8 +136,17 @@ export default function AppleAuthCallback() {
             
             await socialLoginWithCode('apple', hashCode, nonce);
             setStatus('success');
-            setTimeout(() => {
-              router.replace('/(tabs)');
+            redirectTimerRef.current = setTimeout(() => {
+              try {
+                if (router && typeof router.replace === 'function') {
+                  router.replace('/(tabs)');
+                } else {
+                  window.location.href = '/';
+                }
+              } catch (error) {
+                console.error('❌ Error during redirect:', error);
+                window.location.href = '/';
+              }
             }, 1000);
             return;
           }
@@ -132,8 +162,17 @@ export default function AppleAuthCallback() {
             
             await socialLogin('apple', hashToken, nonce);
             setStatus('success');
-            setTimeout(() => {
-              router.replace('/(tabs)');
+            redirectTimerRef.current = setTimeout(() => {
+              try {
+                if (router && typeof router.replace === 'function') {
+                  router.replace('/(tabs)');
+                } else {
+                  window.location.href = '/';
+                }
+              } catch (error) {
+                console.error('❌ Error during redirect:', error);
+                window.location.href = '/';
+              }
             }, 1000);
             return;
           }
@@ -151,6 +190,14 @@ export default function AppleAuthCallback() {
     };
 
     processCallback();
+    
+    // Cleanup function to clear timeout if component unmounts
+    return () => {
+      if (redirectTimerRef.current) {
+        clearTimeout(redirectTimerRef.current);
+        redirectTimerRef.current = null;
+      }
+    };
   }, [params, socialLogin, socialLoginWithCode, router, processed]);
 
   return (
