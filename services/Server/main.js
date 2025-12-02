@@ -5720,19 +5720,37 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
     }
 
     console.log('🍎 Apple web OAuth: Exchanging authorization code for tokens');
+    console.log('🍎 Environment check:', {
+      hasTeamId: !!process.env.APPLE_TEAM_ID,
+      hasClientId: !!process.env.APPLE_CLIENT_ID,
+      hasServiceId: !!process.env.APPLE_SERVICE_ID,
+      hasKeyId: !!process.env.APPLE_KEY_ID,
+      hasPrivateKey: !!process.env.APPLE_PRIVATE_KEY,
+      privateKeyLength: process.env.APPLE_PRIVATE_KEY?.length || 0,
+      privateKeyStartsWith: process.env.APPLE_PRIVATE_KEY?.substring(0, 30) || 'N/A',
+    });
 
     // Generate client secret JWT
     let clientSecret;
     try {
       clientSecret = generateAppleClientSecret();
+      console.log('✅ Apple client secret generated successfully');
     } catch (error) {
       console.error('🔴 APPLE WEB AUTH ERROR: Failed to generate client secret:', error.message);
+      console.error('🔴 Error stack:', error.stack);
       return res.status(500).json({ error: 'Apple OAuth configuration error. Please contact support.' });
     }
 
     const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
     const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
     const redirectUri = `${frontendUrl}/api/auth/apple/callback`;
+
+    console.log('🍎 Apple token exchange params:', {
+      clientId,
+      redirectUri,
+      hasClientSecret: !!clientSecret,
+      codeLength: code?.length,
+    });
 
     // Exchange authorization code for tokens
     try {
@@ -5791,8 +5809,16 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
       console.log('✅ Apple web OAuth: User authenticated successfully');
       res.json({ user, token, provider: 'apple' });
     } catch (tokenError) {
-      console.error('🔴 APPLE WEB AUTH ERROR: Token exchange failed:', tokenError.response?.data || tokenError.message);
-      const errorMessage = tokenError.response?.data?.error_description || tokenError.message || 'Failed to exchange authorization code';
+      console.error('🔴 APPLE WEB AUTH ERROR: Token exchange failed');
+      console.error('🔴 Error details:', {
+        message: tokenError.message,
+        status: tokenError.response?.status,
+        statusText: tokenError.response?.statusText,
+        data: tokenError.response?.data,
+        requestUrl: tokenError.config?.url,
+        requestData: tokenError.config?.data,
+      });
+      const errorMessage = tokenError.response?.data?.error_description || tokenError.response?.data?.error || tokenError.message || 'Failed to exchange authorization code';
       return res.status(401).json({ error: `Apple authentication failed: ${errorMessage}` });
     }
   } catch (error) {
