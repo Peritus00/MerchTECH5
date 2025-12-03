@@ -8458,6 +8458,17 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper function to process items in batches to prevent connection pool exhaustion
+async function processInBatches(items, batchSize, processor) {
+  const results = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(batch.map(processor));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 app.get('/api/playlists', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
@@ -8469,12 +8480,20 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
       [req.user.userId]
     );
 
-    const playlists = await Promise.all(
-      result.rows.map(async (playlist) => {
+    // Process playlists in batches of 5 to prevent database connection pool exhaustion
+    // This prevents creating 26+ concurrent connections when fetching many playlists
+    const BATCH_SIZE = 5;
+    console.log(`🔴 PLAYLISTS: Fetching ${result.rows.length} playlists in batches of ${BATCH_SIZE}`);
+    
+    const playlists = await processInBatches(
+      result.rows,
+      BATCH_SIZE,
+      async (playlist) => {
         return await getPlaylistWithMedia(playlist.id);
-      })
+      }
     );
 
+    console.log(`🔴 PLAYLISTS: Successfully fetched ${playlists.length} playlists`);
     res.json({ playlists });
   } catch (error) {
     console.error('❌ Error fetching playlists:', error);

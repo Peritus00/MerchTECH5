@@ -1,0 +1,89 @@
+# SSL Certificate and Database Pool Exhaustion Fixes
+
+## Issues Identified
+
+### 1. SSL Certificate Mismatch (Android Error)
+**Problem**: Android reports "server could not prove that the url is merchtrader.org - the security certificate is from up.railway.app"
+
+**Root Cause**: Railway provides SSL certificates for `*.up.railway.app` domains by default. When using a custom domain like `merchtrader.org`, Railway needs to be configured to provision an SSL certificate for that custom domain.
+
+**Impact**: 
+- Android devices reject connections due to certificate mismatch
+- Users cannot access the app on Android
+- Security warnings on all platforms
+
+### 2. Database Connection Pool Exhaustion (Playlist Freezing)
+**Problem**: Playlist freezes when watching, system becomes unresponsive
+
+**Root Cause**: 
+- The `/api/playlists` endpoint uses `Promise.all()` to fetch ALL playlists concurrently (line 8472-8476)
+- Each playlist calls `getPlaylistWithMedia()` which makes multiple database queries
+- When there are 26 playlists, this creates 27+ concurrent database connections
+- Database pool max is 30, so this exhausts the pool and causes:
+  - Connection wait times
+  - Query timeouts
+  - System freezing
+
+**Evidence from Logs**:
+```
+Lines 694-716: 27 database connections created simultaneously
+Lines 630-730: 26 playlists being fetched concurrently
+Pool max: 30 connections
+```
+
+## Solutions
+
+### Solution 1: Configure Railway SSL Certificate for Custom Domain
+
+**Steps**:
+1. Go to Railway dashboard → Your project → Settings → Domains
+2. Add custom domain `merchtrader.org` (if not already added)
+3. Railway will automatically provision an SSL certificate via Let's Encrypt
+4. Wait for certificate provisioning (usually 5-10 minutes)
+5. Verify certificate is active:
+   ```bash
+   openssl s_client -connect merchtrader.org:443 -servername merchtrader.org
+   ```
+
+**Alternative**: If Railway doesn't support custom domain SSL:
+- Use a reverse proxy (Cloudflare, Nginx) in front of Railway
+- Configure SSL at the proxy level
+- Point `merchtrader.org` to the proxy
+
+### Solution 2: Optimize Playlist Fetching to Prevent Pool Exhaustion
+
+**Option A: Batch Playlist Fetching (Recommended)**
+- Limit concurrent playlist fetches to 5-10 at a time
+- Use a concurrency limiter or batch processing
+
+**Option B: Optimize Database Queries**
+- Rewrite `getPlaylistWithMedia()` to use JOINs instead of multiple queries
+- Fetch all playlists with media in a single query
+
+**Option C: Increase Database Pool Size**
+- Increase `DB_POOL_MAX` environment variable
+- Monitor database connection usage
+- Note: This is a temporary fix, not a solution
+
+## Implementation Plan
+
+### Priority 1: Fix Database Pool Exhaustion (Immediate)
+1. Implement batch processing for playlist fetching
+2. Add connection pool monitoring
+3. Test with 26+ playlists
+
+### Priority 2: Fix SSL Certificate (Critical for Android)
+1. Configure Railway custom domain SSL
+2. Verify certificate is valid
+3. Test on Android device
+4. Update Android network security config if needed
+
+## Testing Checklist
+
+- [ ] Playlist fetching doesn't freeze with 26+ playlists
+- [ ] Database pool connections stay under max limit
+- [ ] SSL certificate validates correctly for merchtrader.org
+- [ ] Android app can connect without certificate errors
+- [ ] No connection timeout errors in logs
+- [ ] System remains responsive under load
+
