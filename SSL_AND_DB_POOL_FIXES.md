@@ -35,20 +35,29 @@ Pool max: 30 connections
 
 ### Solution 1: Configure Railway SSL Certificate for Custom Domain
 
-**Steps**:
-1. Go to Railway dashboard → Your project → Settings → Domains
-2. Add custom domain `merchtrader.org` (if not already added)
-3. Railway will automatically provision an SSL certificate via Let's Encrypt
-4. Wait for certificate provisioning (usually 5-10 minutes)
-5. Verify certificate is active:
-   ```bash
-   openssl s_client -connect merchtrader.org:443 -servername merchtrader.org
-   ```
+**Current Status** (as of Railway dashboard):
+- ✅ `www.merchtrader.org` - **Setup complete** (SSL certificate active)
+- ⏳ `merchtrader.org` - **Issuing TLS certificate** (pending, ~5-10 minutes)
 
-**Alternative**: If Railway doesn't support custom domain SSL:
-- Use a reverse proxy (Cloudflare, Nginx) in front of Railway
-- Configure SSL at the proxy level
-- Point `merchtrader.org` to the proxy
+**Root Cause**: Android is trying to connect to `merchtrader.org` (without www) which doesn't have a valid SSL certificate yet.
+
+**Immediate Solution**:
+1. **Use `www.merchtrader.org`** - This domain already has SSL and is working
+2. The codebase already normalizes URLs to use `www.merchtrader.org` (see `config/environment.ts`)
+3. Wait for Railway to finish issuing the certificate for `merchtrader.org` (should complete automatically)
+
+**After Certificate Issues**:
+- Both `merchtrader.org` and `www.merchtrader.org` will work
+- Consider setting up a redirect from `merchtrader.org` → `www.merchtrader.org` for consistency
+
+**Verification**:
+```bash
+# Check www.merchtrader.org (should work now)
+openssl s_client -connect www.merchtrader.org:443 -servername www.merchtrader.org
+
+# Check merchtrader.org (will work after certificate issues)
+openssl s_client -connect merchtrader.org:443 -servername merchtrader.org
+```
 
 ### Solution 2: Optimize Playlist Fetching to Prevent Pool Exhaustion
 
