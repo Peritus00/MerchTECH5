@@ -57,25 +57,47 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
 
   const initializeAudio = async () => {
     try {
-      const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+      // Construct streaming URL more reliably
+      let baseUrl: string;
+      if (api.defaults.baseURL) {
+        // Remove trailing /api if present
+        baseUrl = api.defaults.baseURL.replace(/\/api\/?$/, '');
+      } else {
+        // Fallback to production URL
+        baseUrl = 'https://merchtech5-production.up.railway.app';
+      }
+      
       const streamingUrl = `${baseUrl}/api/media/${file.id}/stream`;
       
       if (Platform.OS === 'web') {
         const audio = new (window as any)[String.fromCharCode(65, 117, 100, 105, 111)]();
         webAudioRef.current = audio;
         
+        // Log initialization for debugging
+        console.log('🔴 INLINE_PLAYER: Initializing audio:', {
+          fileId: file.id,
+          fileName: file.filename || file.title,
+          streamingUrl,
+          fileType: file.type || file.fileType,
+          contentType: file.contentType,
+          apiBaseURL: api.defaults.baseURL,
+          constructedBaseUrl: baseUrl
+        });
+        
         audio.addEventListener('loadeddata', () => {
           console.log('🔴 INLINE_PLAYER: Audio loaded data:', {
             fileId: file.id,
             readyState: audio.readyState,
-            duration: audio.duration
+            duration: audio.duration,
+            src: audio.src
           });
           setWebAudioLoaded(true);
         });
         audio.addEventListener('canplaythrough', () => {
           console.log('🔴 INLINE_PLAYER: Audio can play through:', {
             fileId: file.id,
-            readyState: audio.readyState
+            readyState: audio.readyState,
+            src: audio.src
           });
           setWebAudioLoaded(true);
         });
@@ -100,7 +122,7 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
                 errorMessage = 'Media decoding error - file may be corrupted or unsupported format';
                 break;
               case 4: // MEDIA_ERR_SRC_NOT_SUPPORTED
-                errorMessage = 'Media format not supported or source not found';
+                errorMessage = 'Media format not supported or source not found - check URL and CORS';
                 break;
               default:
                 errorMessage = `Media error code: ${error.code}`;
@@ -119,7 +141,9 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
             errorMessage,
             readyState: audioElement.readyState,
             networkState: audioElement.networkState,
-            src: streamingUrl,
+            src: audioElement.src,
+            currentSrc: audioElement.currentSrc,
+            streamingUrl,
             fileId: file.id,
             fileName: file.filename || file.title,
             fileType: file.type || file.fileType,
@@ -128,24 +152,56 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
           
           // Only show alert for non-abort errors (abort is usually user-initiated)
           if (error && error.code !== 1) {
-            Alert.alert('Playback Error', `Failed to load audio file: ${errorMessage}`);
+            Alert.alert('Playback Error', `Failed to load audio file: ${errorMessage}\n\nURL: ${streamingUrl}`);
           }
         });
         
+        // Set crossOrigin for CORS support
+        // Note: 'anonymous' works with Access-Control-Allow-Origin: *
         audio.crossOrigin = 'anonymous';
         audio.preload = 'metadata';
         audio.src = streamingUrl;
         
-        // Log initialization for debugging
-        console.log('🔴 INLINE_PLAYER: Initializing audio:', {
-          fileId: file.id,
-          fileName: file.filename || file.title,
-          streamingUrl,
-          fileType: file.type || file.fileType,
-          contentType: file.contentType
-        });
-        
+        // Try to load the audio
         audio.load();
+        
+        // Verify the URL is accessible after a short delay
+        const verifyTimeout = setTimeout(() => {
+          if (audio.readyState === 0 && audio.networkState === 3 && !audio.error) {
+            console.warn('🔴 INLINE_PLAYER: Audio may have failed to load - verifying URL...');
+            
+            // Try a fetch to see if the URL is accessible
+            fetch(streamingUrl, { 
+              method: 'HEAD', 
+              mode: 'cors',
+              credentials: 'omit' // Match crossOrigin='anonymous'
+            })
+              .then(response => {
+                console.log('🔴 INLINE_PLAYER: URL accessibility check:', {
+                  status: response.status,
+                  statusText: response.statusText,
+                  ok: response.ok,
+                  headers: {
+                    'content-type': response.headers.get('content-type'),
+                    'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
+                    'content-length': response.headers.get('content-length')
+                  }
+                });
+                
+                if (!response.ok) {
+                  console.error('🔴 INLINE_PLAYER: URL returned non-OK status:', response.status);
+                }
+              })
+              .catch(fetchError => {
+                console.error('🔴 INLINE_PLAYER: URL accessibility check failed:', fetchError);
+              });
+          }
+        }, 2000);
+        
+        // Clear timeout if audio loads successfully
+        audio.addEventListener('loadeddata', () => {
+          clearTimeout(verifyTimeout);
+        }, { once: true });
       } else {
         await player.replace(streamingUrl);
       }
