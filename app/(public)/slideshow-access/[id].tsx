@@ -203,6 +203,19 @@ export default function SlideshowAccessScreen() {
         if (!qrId) return;
         if (!('geolocation' in navigator)) return;
         
+        // Check if geolocation is allowed via Permissions API (avoids Permissions-Policy violation logs)
+        try {
+          if ('permissions' in navigator) {
+            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
+            if (permissionStatus.state === 'denied') {
+              // Permission explicitly denied, don't attempt geolocation
+              return;
+            }
+          }
+        } catch (permError) {
+          // Permissions API not available or blocked, continue to try geolocation anyway
+        }
+        
         // Check if geolocation is allowed (may be blocked by Permissions-Policy)
         const getPos = () => new Promise<GeolocationPosition>((resolve, reject) => {
           // Set a timeout to prevent hanging
