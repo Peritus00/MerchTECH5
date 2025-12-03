@@ -8,6 +8,7 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful logins - only failed attempts count
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
 // Rate limiter for presigned URL generation (upload initiation)
@@ -17,6 +18,7 @@ const uploadLimiter = rateLimit({
   message: { error: 'Too many upload requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
 // Rate limiter for general API endpoints
@@ -27,6 +29,7 @@ const generalApiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
 // Rate limiter for media creation/confirmation endpoints (POST/PUT/PATCH/DELETE only)
@@ -36,6 +39,7 @@ const mediaCreationLimiter = rateLimit({
   message: { error: 'Too many media creation requests, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
   skip: (req) => {
     // Only apply to write operations (POST, PUT, PATCH, DELETE)
     return !['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method);
@@ -50,6 +54,7 @@ const mediaReadLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
 // Rate limiter for media stream endpoints (very lenient - streaming is expected to be frequent)
@@ -60,6 +65,7 @@ const mediaStreamLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true, // Don't count successful requests
+  validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
 module.exports = {
