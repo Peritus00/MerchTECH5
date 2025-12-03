@@ -82,11 +82,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [zoomLevel, setZoomLevel] = useState(0.5); // 1 = normal, 0.5 = zoomed out, 2 = zoomed in
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExitButton, setShowExitButton] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxRetriesRef = useRef<number>(3);
 
   // Analytics tracking state
   const playDurationRef = useRef<number>(0); // Duration in seconds
@@ -511,6 +515,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     stopPlayTracking();
   }, [currentIndex, stopPlayTracking]);
 
+  // Cleanup retry timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // For playlists, we don't use background audio - each track plays individually
   // This is different from slideshows where we want continuous background music
   const backgroundAudioUrl = null;
@@ -546,7 +560,49 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
     console.log('🎵 VIDEO_ERROR: Current media item:', currentMediaItem);
     
-    // Show error message and provide skip option
+    // Clear any existing retry timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    // Check if we should retry automatically
+    if (retryAttempt < maxRetriesRef.current) {
+      const nextAttempt = retryAttempt + 1;
+      const backoffDelay = Math.min(1000 * Math.pow(2, retryAttempt), 10000); // Exponential backoff, max 10s
+      
+      console.log(`🔄 RETRY: Attempting retry ${nextAttempt}/${maxRetriesRef.current} after ${backoffDelay}ms`);
+      setIsReconnecting(true);
+      setRetryAttempt(nextAttempt);
+      
+      // Log retry attempt to analytics (fire and forget)
+      getSessionId().then(sessionId => {
+        analyticsService.trackMediaPlay(
+          typeof currentMediaItem?.id === 'string' ? parseInt(currentMediaItem.id, 10) : Number(currentMediaItem?.id) || 0,
+          0, // Duration 0 for retry events
+          sessionId,
+          user?.id,
+          undefined,
+          undefined,
+          undefined,
+          'retry_attempt'
+        ).catch(() => {}); // Don't let analytics errors break retry logic
+      }).catch(() => {}); // Ignore session ID errors
+      
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log(`🔄 RETRY: Retrying playback (attempt ${nextAttempt})`);
+        setIsReconnecting(false);
+        // Force re-render by updating currentIndex (triggers video reload)
+        setCurrentIndex(currentIndex);
+      }, backoffDelay);
+      
+      return; // Don't show alert yet, let retry happen
+    }
+    
+    // Max retries reached, show error dialog
+    setIsReconnecting(false);
+    setRetryAttempt(0); // Reset for next media item
+    
     Alert.alert(
       'Media Error',
       `Unable to play "${currentMediaItem?.title || 'this media file'}". This file may be corrupted or unavailable.`,
@@ -555,20 +611,22 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           text: 'Skip',
           onPress: () => {
             console.log('🎵 VIDEO_ERROR: User chose to skip to next track');
+            setRetryAttempt(0);
             goToNextVideo();
           },
         },
         {
           text: 'Try Again',
           onPress: () => {
-            console.log('🎵 VIDEO_ERROR: User chose to retry');
+            console.log('🎵 VIDEO_ERROR: User chose to retry manually');
+            setRetryAttempt(0);
             // Force re-render by changing the key
             setCurrentIndex(currentIndex);
           },
         },
       ]
     );
-  }, [currentMediaItem, goToNextVideo, currentIndex]);
+  }, [currentMediaItem, goToNextVideo, currentIndex, retryAttempt, user]);
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (status.isLoaded) {
@@ -613,6 +671,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       setVideoDimensions(null); // Reset dimensions for new video
       setZoomLevel(1); // Reset zoom level for new video
       setIsFullscreen(false); // Reset fullscreen state for new video
+    }
+    // Reset retry state when media changes
+    setRetryAttempt(0);
+    setIsReconnecting(false);
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
     }
   }, [currentIndex]);
 
@@ -1455,6 +1520,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               !isFullscreen && { minHeight: estimatedVideoHeight }
             ]}>
                 {renderCurrentMedia()}
+                {/* Reconnecting Overlay */}
+                {isReconnecting && (
+                  <View style={styles.reconnectingOverlay}>
+                    <ActivityIndicator size="large" color="#3b82f6" />
+                    <Text style={styles.reconnectingText}>Reconnecting...</Text>
+                    <Text style={styles.reconnectingSubtext}>Attempt {retryAttempt} of {maxRetriesRef.current}</Text>
+                  </View>
+                )}
             </View>
             
             {/* Current Track Display - Hidden in fullscreen */}
@@ -2265,6 +2338,31 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
+  },
+  // Reconnecting overlay styles
+  reconnectingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  reconnectingText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  reconnectingSubtext: {
+    color: '#9ca3af',
+    fontSize: 14,
+    marginTop: 8,
     textAlign: 'center',
   },
 });

@@ -2618,39 +2618,77 @@ function inferGeo(req) {
   return { countryCode: cc, region, city };
 }
 
+// In-memory cache for geo lookups (5 minute TTL)
+const geoCache = new Map();
+const GEO_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Cleanup expired cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, { expiresAt }] of geoCache.entries()) {
+    if (expiresAt < now) {
+      geoCache.delete(ip);
+    }
+  }
+}, 60000); // Run cleanup every minute
+
 // Resolve geo with graceful IP fallback (uses geoip-lite if available)
 async function resolveGeo(req) {
   const fromHeaders = inferGeo(req);
-  console.log('🌍 resolveGeo: Headers provided:', fromHeaders);
+  const verboseLogging = process.env.VERBOSE_GEO_LOGGING === 'true';
+  
+  if (verboseLogging) {
+    console.log('🌍 resolveGeo: Headers provided:', fromHeaders);
+  }
   
   // CRITICAL FIX: Only use headers for country, still try to get city/region from IP
   // Previously, this would return early if country was in headers, skipping city lookup
   if (fromHeaders.city && fromHeaders.region) {
-    console.log('🌍 resolveGeo: Headers have complete city/region data, using headers');
+    if (verboseLogging) {
+      console.log('🌍 resolveGeo: Headers have complete city/region data, using headers');
+    }
     return fromHeaders;
   }
   
   try {
     const ip = getClientIp(req);
-    console.log('🌍 resolveGeo: Client IP:', ip);
+    if (verboseLogging) {
+      console.log('🌍 resolveGeo: Client IP:', ip);
+    }
     if (!ip) {
-      console.log('🌍 resolveGeo: No IP found, returning headers only');
+      if (verboseLogging) {
+        console.log('🌍 resolveGeo: No IP found, returning headers only');
+      }
       return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
     }
     
+    // Check cache first
+    const cached = geoCache.get(ip);
+    if (cached && cached.expiresAt > Date.now()) {
+      if (verboseLogging) {
+        console.log(`🌍 resolveGeo: Cache hit for IP ${ip}`);
+      }
+      return cached.data;
+    }
+    
     // Optional external provider
+    let geoResult = null;
     if (process.env.GEO_PROVIDER && process.env.GEO_API_KEY) {
       try {
         const provider = String(process.env.GEO_PROVIDER).toLowerCase();
-        console.log(`🌍 resolveGeo: Calling external provider: ${provider} for IP: ${ip}`);
+        if (verboseLogging) {
+          console.log(`🌍 resolveGeo: Calling external provider: ${provider} for IP: ${ip}`);
+        }
         
         if (provider === 'ipinfo') {
           // ipinfo.io JSON: { country, region, city }
           const url = `https://ipinfo.io/${encodeURIComponent(ip)}?token=${process.env.GEO_API_KEY}`;
           const resp = await axios.get(url, { timeout: 2000 });
           const data = resp?.data || {};
-          console.log(`🌍 resolveGeo: ipinfo response for ${ip}:`, { country: data.country, region: data.region, city: data.city });
-          return {
+          if (verboseLogging) {
+            console.log(`🌍 resolveGeo: ipinfo response for ${ip}:`, { country: data.country, region: data.region, city: data.city });
+          }
+          geoResult = {
             countryCode: data.country || fromHeaders.countryCode || null,
             region: data.region || null,
             city: data.city || null,
@@ -2659,8 +2697,10 @@ async function resolveGeo(req) {
           const url = `https://api.ipdata.co/${encodeURIComponent(ip)}?api-key=${process.env.GEO_API_KEY}`;
           const resp = await axios.get(url, { timeout: 2000 });
           const data = resp?.data || {};
-          console.log(`🌍 resolveGeo: ipdata response for ${ip}:`, { country: data.country_code, region: data.region, city: data.city });
-          return {
+          if (verboseLogging) {
+            console.log(`🌍 resolveGeo: ipdata response for ${ip}:`, { country: data.country_code, region: data.region, city: data.city });
+          }
+          geoResult = {
             countryCode: data.country_code || fromHeaders.countryCode || null,
             region: data.region || data.region_code || null,
             city: data.city || null,
@@ -2671,27 +2711,52 @@ async function resolveGeo(req) {
         // fall through to local db
       }
     } else {
-      console.log('🌍 resolveGeo: No external provider configured');
+      if (verboseLogging) {
+        console.log('🌍 resolveGeo: No external provider configured');
+      }
     }
+    
     // Local fallback: geoip-lite (if installed)
-    console.log('🌍 resolveGeo: Trying geoip-lite fallback');
-    let geoip;
-    try { geoip = require('geoip-lite'); } catch (_e) { geoip = null; }
-    if (!geoip || !geoip.lookup) {
-      console.log('🌍 resolveGeo: geoip-lite not available, using country from headers only');
-      return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+    if (!geoResult) {
+      if (verboseLogging) {
+        console.log('🌍 resolveGeo: Trying geoip-lite fallback');
+      }
+      let geoip;
+      try { geoip = require('geoip-lite'); } catch (_e) { geoip = null; }
+      if (!geoip || !geoip.lookup) {
+        if (verboseLogging) {
+          console.log('🌍 resolveGeo: geoip-lite not available, using country from headers only');
+        }
+        geoResult = { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+      } else {
+        const r = geoip.lookup(ip);
+        if (!r) {
+          if (verboseLogging) {
+            console.log('🌍 resolveGeo: geoip-lite returned no results');
+          }
+          geoResult = { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+        } else {
+          if (verboseLogging) {
+            console.log(`🌍 resolveGeo: geoip-lite result:`, { country: r.country, region: r.region, city: r.city });
+          }
+          geoResult = { 
+            countryCode: r.country || fromHeaders.countryCode || null, 
+            region: r.region || null, 
+            city: r.city || null 
+          };
+        }
+      }
     }
-    const r = geoip.lookup(ip);
-    if (!r) {
-      console.log('🌍 resolveGeo: geoip-lite returned no results');
-      return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
+    
+    // Cache the result
+    if (geoResult) {
+      geoCache.set(ip, {
+        data: geoResult,
+        expiresAt: Date.now() + GEO_CACHE_TTL
+      });
     }
-    console.log(`🌍 resolveGeo: geoip-lite result:`, { country: r.country, region: r.region, city: r.city });
-    return { 
-      countryCode: r.country || fromHeaders.countryCode || null, 
-      region: r.region || null, 
-      city: r.city || null 
-    };
+    
+    return geoResult || { countryCode: fromHeaders.countryCode || null, region: null, city: null };
   } catch (_e) {
     console.warn('🌍 resolveGeo: Exception:', _e.message);
     return { countryCode: fromHeaders.countryCode || null, region: null, city: null };
@@ -8082,7 +8147,13 @@ app.options('/api/media/:id/stream', (req, res) => {
 
 // Stream media file (supports both base64 data and S3 files) - PUBLIC endpoint for browser media compatibility
 app.get('/api/media/:id/stream', async (req, res) => {
-  console.log(`📺 MEDIA_STREAM: Route handler called for media ${req.params.id}`);
+  // Generate correlation ID for this request (only log if verbose mode enabled)
+  const correlationId = uuidv4().substring(0, 8);
+  const verboseLogging = process.env.VERBOSE_MEDIA_STREAM_LOGGING === 'true';
+  
+  if (verboseLogging) {
+    console.log(`📺 MEDIA_STREAM[${correlationId}]: Route handler called for media ${req.params.id}`);
+  }
   
   // 🚀 Set CORS headers directly for this route to ensure video/audio streaming works
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -8096,14 +8167,38 @@ app.get('/api/media/:id/stream', async (req, res) => {
   // This instructs the browser to display the file, not download it
   res.setHeader('Content-Disposition', 'inline');
 
+  // Track stream state for cleanup
+  let streamStarted = false;
+  let streamEnded = false;
+  
+  // Cleanup handler to prevent hanging connections
+  const cleanup = () => {
+    if (!streamEnded) {
+      streamEnded = true;
+      if (verboseLogging) {
+        console.log(`📺 MEDIA_STREAM[${correlationId}]: Stream cleanup`);
+      }
+    }
+  };
+  
+  res.on('close', cleanup);
+  res.on('finish', cleanup);
+  res.on('error', (err) => {
+    if (!streamEnded) {
+      streamEnded = true;
+      console.error(`❌ MEDIA_STREAM[${correlationId}]: Response error:`, err.message);
+    }
+  });
+
   try {
     const { id } = req.params;
-    console.log(`📺 MEDIA_STREAM: Public streaming request for media ${id}`);
     
     const result = await db.query('SELECT * FROM media WHERE id = $1', [id]);
     
     if (result.rows.length === 0) {
-      console.log(`📺 MEDIA_STREAM: Media ${id} not found`);
+      if (verboseLogging) {
+        console.log(`📺 MEDIA_STREAM[${correlationId}]: Media ${id} not found`);
+      }
       return res.status(404).json({ error: 'Media file not found' });
     }
     
@@ -8120,14 +8215,14 @@ app.get('/api/media/:id/stream', async (req, res) => {
       const urlMatch = media.url.match(/merchtechbucket\.s3\.[^/]+\/(.+)$/);
       if (urlMatch) {
         s3Key = urlMatch[1];
-        console.log(`📺 MEDIA_STREAM: Extracted S3 key from URL for media ${id}: ${s3Key}`);
+        if (verboseLogging) {
+          console.log(`📺 MEDIA_STREAM[${correlationId}]: Extracted S3 key from URL for media ${id}: ${s3Key}`);
+        }
       }
     }
     
     if (s3Key && s3Service) {
       try {
-        console.log(`📺 MEDIA_STREAM: Streaming S3 file for media ${id}: ${s3Key}`);
-        
         // Get file metadata from S3
         const metadata = await s3Service.getMetadata(s3Key);
         const fileSize = metadata.ContentLength;
@@ -8138,7 +8233,6 @@ app.get('/api/media/:id/stream', async (req, res) => {
         // If content type is missing or generic, determine from file extension
         if (!contentType || contentType === 'application/octet-stream') {
           const extension = path.extname(media.title || media.filename || s3Key).toLowerCase();
-          console.log(`📺 MEDIA_STREAM: Determining content type from extension: ${extension}`);
           
           switch (extension) {
             case '.mp3':
@@ -8173,19 +8267,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
                            media.file_type === 'video' ? 'video/mp4' : 
                            'application/octet-stream';
           }
-          
-          console.log(`📺 MEDIA_STREAM: Content type determined as: ${contentType}`);
         }
-        
-        console.log(`📺 MEDIA_STREAM: S3 metadata for media ${id}:`, {
-          ContentLength: metadata.ContentLength,
-          ContentType: metadata.ContentType,
-          determinedContentType: contentType,
-          s3Key: s3Key,
-          mediaType: media.file_type,
-          title: media.title,
-          filename: media.filename
-        });
         
         res.setHeader('Content-Type', contentType);
         res.setHeader('Accept-Ranges', 'bytes');
@@ -8206,33 +8288,65 @@ app.get('/api/media/:id/stream', async (req, res) => {
           
           // Stream the range from S3
           const streamResponse = await s3Service.getStream(s3Key, { start, end });
+          streamStarted = true;
+          
+          // Handle stream errors
+          streamResponse.stream.on('error', (streamErr) => {
+            if (!streamEnded) {
+              streamEnded = true;
+              console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}, range ${start}-${end}:`, streamErr.message);
+              if (!res.headersSent) {
+                res.status(500).json({ error: 'Stream error' });
+              }
+            }
+          });
+          
           streamResponse.stream.pipe(res);
           
-          console.log(`📺 MEDIA_STREAM: Successfully streaming S3 range for media ${id}`);
-        console.log(`📺 MEDIA_STREAM: Range response headers sent:`, res.getHeaders());
-        console.log(`📺 MEDIA_STREAM: Range response finished:`, res.finished);
+          // Only log summary if verbose mode enabled
+          if (verboseLogging) {
+            console.log(`📺 MEDIA_STREAM[${correlationId}]: Streaming range ${start}-${end}/${fileSize} for media ${id}`);
+          }
           return; // Important: return after starting the stream
         } else {
           // Stream the entire file
           res.setHeader('Content-Length', fileSize);
           
           const streamResponse = await s3Service.getStream(s3Key);
+          streamStarted = true;
+          
+          // Handle stream errors
+          streamResponse.stream.on('error', (streamErr) => {
+            if (!streamEnded) {
+              streamEnded = true;
+              console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}:`, streamErr.message);
+              if (!res.headersSent) {
+                res.status(500).json({ error: 'Stream error' });
+              }
+            }
+          });
+          
           streamResponse.stream.pipe(res);
           
-          console.log(`📺 MEDIA_STREAM: Successfully streaming S3 file for media ${id}`);
-        console.log(`📺 MEDIA_STREAM: Response headers sent:`, res.getHeaders());
-        console.log(`📺 MEDIA_STREAM: Response finished:`, res.finished);
+          if (verboseLogging) {
+            console.log(`📺 MEDIA_STREAM[${correlationId}]: Streaming full file (${fileSize} bytes) for media ${id}`);
+          }
           return; // Important: return after starting the stream
         }
       } catch (error) {
-        console.error(`❌ MEDIA_STREAM: Failed to stream S3 file ${s3Key}:`, error);
-        return res.status(500).json({ error: 'Failed to stream S3 file' });
+        console.error(`❌ MEDIA_STREAM[${correlationId}]: Failed to stream S3 file ${s3Key}:`, error.message);
+        if (!res.headersSent) {
+          return res.status(500).json({ error: 'Failed to stream S3 file' });
+        }
+        return;
       }
     }
     
     // Handle base64 data files
     if (media.url && media.url.startsWith('data:')) {
-      console.log(`📺 MEDIA_STREAM: Streaming base64 data for media ${id}`);
+      if (verboseLogging) {
+        console.log(`📺 MEDIA_STREAM[${correlationId}]: Streaming base64 data for media ${id}`);
+      }
       
       // Parse the data URL
       const dataUrlMatch = media.url.match(/^data:([^;]+);base64,(.+)$/);
@@ -8256,7 +8370,9 @@ app.get('/api/media/:id/stream', async (req, res) => {
     
     // Handle local files (fallback)
     if (media.filename) {
-      console.log(`📺 MEDIA_STREAM: Attempting to stream local file for media ${id}: ${media.filename}`);
+      if (verboseLogging) {
+        console.log(`📺 MEDIA_STREAM[${correlationId}]: Attempting to stream local file for media ${id}: ${media.filename}`);
+      }
       const filePath = path.join(__dirname, 'uploads', media.filename);
       
       if (fs.existsSync(filePath)) {
@@ -8269,6 +8385,12 @@ app.get('/api/media/:id/stream', async (req, res) => {
         res.setHeader('Cache-Control', 'public, max-age=3600');
         
         const fileStream = fs.createReadStream(filePath);
+        fileStream.on('error', (err) => {
+          console.error(`❌ MEDIA_STREAM[${correlationId}]: File stream error:`, err.message);
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'File stream error' });
+          }
+        });
         fileStream.pipe(res);
         return;
       }
@@ -8278,9 +8400,10 @@ app.get('/api/media/:id/stream', async (req, res) => {
     return res.status(400).json({ error: 'No streamable media source found' });
     
   } catch (error) {
-    console.error('❌ MEDIA_STREAM: Error streaming media:', error);
-    console.error('❌ MEDIA_STREAM: Error stack:', error.stack);
-    console.log(`📺 MEDIA_STREAM: Response finished before error:`, res.finished);
+    console.error(`❌ MEDIA_STREAM[${correlationId}]: Error streaming media:`, error.message);
+    if (verboseLogging) {
+      console.error(`❌ MEDIA_STREAM[${correlationId}]: Error stack:`, error.stack);
+    }
     if (!res.headersSent) {
       res.status(500).json({ error: 'Failed to stream media file' });
     }
