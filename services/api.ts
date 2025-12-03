@@ -84,8 +84,14 @@ api.interceptors.response.use(
     
     // Handle specific error cases
     if (error.response?.status === 401) {
-      console.error('🔐 Authentication failed - token may be expired');
-      // Don't automatically logout here as it can cause loops
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Authentication failed';
+      console.error('🔐 Authentication failed:', errorMessage);
+      // Enhance error with authentication failure info
+      error.authFailure = {
+        message: errorMessage,
+        isAuthFailure: true
+      };
+      // Don't automatically logout here as it can cause loops - let the calling code handle it
     } else if (error.response?.status === 403) {
       console.error('🔐 Access forbidden - insufficient permissions');
     } else if (error.response?.status === 404) {

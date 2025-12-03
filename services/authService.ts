@@ -320,8 +320,14 @@ class AuthService {
           return response.user;
         }
       } catch (apiError: any) {
+        // If we get a 401 (Unauthorized), the token is invalid/expired - clear auth data
+        if (apiError.response?.status === 401 || apiError.status === 401) {
+          console.log('🔐 AuthService: Token invalid/expired (401), clearing auth data');
+          await this.logout();
+          return null;
+        }
         console.log('🔐 AuthService: Failed to fetch from server, using cached data:', apiError.message);
-        // Fall back to stored user data if API call fails
+        // Fall back to stored user data if API call fails (non-auth errors)
       }
 
       // Fallback to stored user data

@@ -529,7 +529,9 @@ const authenticateToken = (req, res, next) => {
       } catch (err) {
         // Security module not available, continue
       }
-      return res.sendStatus(403);
+      // Return 401 (Unauthorized) for authentication failures, not 403 (Forbidden)
+      // 401 = authentication failed (token invalid/expired), 403 = authenticated but no permission
+      return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired token' });
     }
     req.user = user;
     next();
