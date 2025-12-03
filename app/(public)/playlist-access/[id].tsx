@@ -91,15 +91,37 @@ export default function PlaylistAccessScreen() {
         const qrId = (playlist as any)?.qr_code_id || (playlist as any)?.qrCodeId;
         if (!qrId) return;
         if (!('geolocation' in navigator)) return;
-        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) =>
-          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 60000, timeout: 4000 })
-        );
+        
+        // Check if geolocation is allowed (may be blocked by Permissions-Policy)
+        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) => {
+          // Set a timeout to prevent hanging
+          const timeoutId = setTimeout(() => {
+            reject(new Error('Geolocation timeout'));
+          }, 3000);
+          
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              clearTimeout(timeoutId);
+              resolve(pos);
+            },
+            (err) => {
+              clearTimeout(timeoutId);
+              reject(err);
+            },
+            { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
+          );
+        });
+        
         const pos = await getPos();
         await (await import('@/services/analyticsService')).analyticsService.submitBrowserGeo(
           Number(qrId), pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
         );
-      } catch (_e) {
-        // ignore failures
+      } catch (error: any) {
+        // Silently ignore geolocation errors (permissions policy, user denial, timeout, etc.)
+        // Don't log or throw - geolocation is optional
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Geolocation not available:', error?.message || 'unknown error');
+        }
       }
     };
     if (playlist && !isLoading) {
