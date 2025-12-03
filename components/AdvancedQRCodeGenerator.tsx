@@ -83,9 +83,10 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           return;
         }
         
-        // Check for suspicious truncation (exactly 10000 chars suggests database limit)
-        if (base64Data.length === 10000) {
-          console.warn('Base64 string appears truncated at 10000 characters, skipping blob conversion');
+        // Check for suspicious truncation (exactly 10000 chars total or base64 part ~9977 suggests database limit)
+        // "data:image/jpeg;base64," prefix is ~23 chars, so base64 part would be ~9977 if total is 10000
+        if (base64Data.length === 10000 || base64Data.length >= 9970) {
+          console.warn(`Base64 string appears truncated (length: ${base64Data.length}), skipping blob conversion`);
           setLogoBlobUrl(null);
           return;
         }
@@ -352,9 +353,9 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                                     logoOptions.imageData.includes(',') &&
                                     logoOptions.imageData.split(',')[1]?.length > 0;
               
-              // Check for truncated base64 (exactly 10000 chars suggests database limit)
+              // Check for truncated base64 (exactly 10000 chars total or base64 part ~9977 suggests database limit)
               const base64Part = logoOptions.imageData.split(',')[1] || '';
-              const isTruncated = base64Part.length === 10000;
+              const isTruncated = logoOptions.imageData.length === 10000 || base64Part.length >= 9970;
               
               // Use blob URL if available, otherwise use data URI if valid and not truncated
               const imageUri = Platform.OS === 'web' && logoBlobUrl 
