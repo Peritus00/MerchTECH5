@@ -8284,25 +8284,62 @@ app.get('/api/media/:id/stream', async (req, res) => {
 app.delete('/api/media/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`🗑️ MEDIA_DELETE: Starting deletion for media ID: ${id}, user: ${req.user.userId}`);
     
     // Check if media belongs to user or user is admin
     const mediaResult = await db.query('SELECT * FROM media WHERE id = $1', [id]);
     if (mediaResult.rows.length === 0) {
+      console.log(`🗑️ MEDIA_DELETE: Media ${id} not found`);
       return res.status(404).json({ error: 'Media not found' });
     }
     
     const media = mediaResult.rows[0];
+    console.log(`🗑️ MEDIA_DELETE: Found media - title: ${media.title}, s3_key: ${media.s3_key || 'none'}, url: ${media.url ? media.url.substring(0, 50) + '...' : 'none'}`);
+    
     const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin;
     
     if (media.user_id !== req.user.userId && !isAdmin) {
+      console.log(`🗑️ MEDIA_DELETE: Forbidden - user ${req.user.userId} does not own media ${id} and is not admin`);
       return res.status(403).json({ error: 'Forbidden' });
     }
     
-    await db.query('DELETE FROM media WHERE id = $1', [id]);
+    // Delete from S3 if the file is stored there
+    let s3Key = media.s3_key;
+    
+    // If s3_key is null but we have an S3 URL, extract the key from the URL
+    if (!s3Key && media.url && media.url.includes('amazonaws.com')) {
+      s3Key = s3Service.extractKeyFromUrl(media.url);
+      console.log(`🗑️ MEDIA_DELETE: Extracted S3 key from URL: ${s3Key}`);
+    }
+    
+    if (s3Key && s3Service && s3Service.isConfigured()) {
+      try {
+        console.log(`🗑️ MEDIA_DELETE: Deleting S3 file with key: ${s3Key}`);
+        await s3Service.deleteFile(s3Key);
+        console.log(`🗑️ MEDIA_DELETE: Successfully deleted S3 file: ${s3Key}`);
+      } catch (s3Error) {
+        console.error(`🗑️ MEDIA_DELETE: Failed to delete S3 file ${s3Key}:`, s3Error);
+        // Continue with database deletion even if S3 deletion fails
+        // The file might already be deleted or not exist
+      }
+    } else {
+      console.log(`🗑️ MEDIA_DELETE: No S3 deletion needed (s3_key: ${s3Key || 'none'}, s3Service configured: ${s3Service && s3Service.isConfigured()})`);
+    }
+    
+    // Delete from database
+    console.log(`🗑️ MEDIA_DELETE: Deleting database record for media ${id}`);
+    const deleteResult = await db.query('DELETE FROM media WHERE id = $1', [id]);
+    
+    if (deleteResult.rowCount === 0) {
+      console.log(`🗑️ MEDIA_DELETE: Database deletion returned 0 rows affected for media ${id}`);
+      return res.status(404).json({ error: 'Media not found or already deleted' });
+    }
+    
+    console.log(`🗑️ MEDIA_DELETE: Successfully deleted media ${id} from database`);
     res.json({ message: 'Media deleted successfully' });
   } catch (error) {
-    console.error('Error deleting media:', error);
+    console.error(`🗑️ MEDIA_DELETE: Error deleting media ${req.params.id}:`, error);
     res.status(500).json({ error: 'Failed to delete media' });
   }
 });

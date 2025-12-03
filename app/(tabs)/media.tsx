@@ -120,8 +120,8 @@ export default function MediaScreen() {
       console.log('🔴 MEDIA: Starting delete for file:', fileToDelete);
       
       // Call the delete API
-      const response = await mediaAPI.delete(fileToDelete.id);
-      console.log('🔴 MEDIA: Delete API response:', response);
+      await mediaAPI.delete(fileToDelete.id);
+      console.log('🔴 MEDIA: Delete API call completed successfully');
       
       // Remove from local state immediately for better UX
       setMediaFiles(prev => {
@@ -133,13 +133,20 @@ export default function MediaScreen() {
       
       Alert.alert('Success', `"${fileToDelete.name}" has been deleted successfully`);
       
-      // Optionally refresh the media list to ensure consistency
+      // Refresh the media list after a short delay to ensure consistency
+      // Only refresh if deletion was successful (no error thrown)
       setTimeout(() => {
+        console.log('🔴 MEDIA: Refreshing media list after successful deletion');
         fetchMediaFiles();
-      }, 1000);
+      }, 500);
       
     } catch (error: any) {
       console.error('🔴 MEDIA: Delete error:', error);
+      
+      // If deletion failed, restore the file in the UI by refreshing
+      // This ensures the UI matches the server state
+      console.log('🔴 MEDIA: Delete failed, refreshing to restore file in UI');
+      fetchMediaFiles();
       
       let errorMessage = 'Failed to delete file';
       if (error.response?.status === 404) {
