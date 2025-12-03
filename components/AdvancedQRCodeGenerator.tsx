@@ -69,20 +69,47 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
     if (Platform.OS === 'web' && logoOptions?.imageData?.startsWith('data:')) {
       // Convert base64 data URI to blob URL for better web compatibility
       try {
-        const base64Data = logoOptions.imageData.split(',')[1];
-        if (base64Data) {
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const blob = new Blob([byteArray], { type: 'image/jpeg' });
-          blobUrl = URL.createObjectURL(blob);
-          setLogoBlobUrl(blobUrl);
+        const parts = logoOptions.imageData.split(',');
+        if (parts.length !== 2) {
+          // Invalid data URI format, use original
+          setLogoBlobUrl(null);
+          return;
         }
+        
+        const base64Data = parts[1];
+        if (!base64Data || base64Data.length === 0) {
+          // Empty base64 data, use original
+          setLogoBlobUrl(null);
+          return;
+        }
+        
+        // Validate base64 string (remove whitespace and check format)
+        const cleanBase64 = base64Data.replace(/\s/g, '');
+        if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
+          // Invalid base64 characters, use original
+          console.warn('Invalid base64 characters detected, using data URI directly');
+          setLogoBlobUrl(null);
+          return;
+        }
+        
+        // Try to decode base64
+        const byteCharacters = atob(cleanBase64);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        
+        // Determine MIME type from data URI
+        const mimeMatch = parts[0].match(/data:([^;]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        
+        const blob = new Blob([byteArray], { type: mimeType });
+        blobUrl = URL.createObjectURL(blob);
+        setLogoBlobUrl(blobUrl);
       } catch (error) {
-        console.error('Failed to create blob URL from base64:', error);
+        // If blob URL creation fails, fall back to using data URI directly
+        console.warn('Failed to create blob URL from base64, using data URI directly:', error);
         setLogoBlobUrl(null);
       }
     } else {
@@ -291,19 +318,43 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           ]}
         >
           {logoOptions.imageData ? (
-            <Image
-              source={{ uri: Platform.OS === 'web' && logoBlobUrl ? logoBlobUrl : logoOptions.imageData }}
-              style={{
-                width: optimalLogoSize,
-                height: optimalLogoSize,
-                borderRadius,
-              }}
-              resizeMode="contain"
-              onError={(error) => {
-                console.error('❌ QR Logo Image Error:', error);
-                console.error('❌ Logo imageData:', logoOptions.imageData?.substring(0, 100));
-              }}
-            />
+            (() => {
+              // Validate data URI format before using
+              const isValidDataUri = logoOptions.imageData.startsWith('data:') && 
+                                    logoOptions.imageData.includes(',') &&
+                                    logoOptions.imageData.split(',')[1]?.length > 0;
+              
+              // Use blob URL if available, otherwise use data URI if valid
+              const imageUri = Platform.OS === 'web' && logoBlobUrl 
+                ? logoBlobUrl 
+                : (isValidDataUri ? logoOptions.imageData : null);
+              
+              if (!imageUri) {
+                // Invalid or missing image data, show fallback
+                return (
+                  <ThemedText style={{ fontSize: 12, textAlign: 'center' }}>
+                    LOGO
+                  </ThemedText>
+                );
+              }
+              
+              return (
+                <Image
+                  source={{ uri: imageUri }}
+                  style={{
+                    width: optimalLogoSize,
+                    height: optimalLogoSize,
+                    borderRadius,
+                  }}
+                  resizeMode="contain"
+                  onError={(error) => {
+                    console.error('❌ QR Logo Image Error:', error);
+                    console.error('❌ Logo imageData length:', logoOptions.imageData?.length);
+                    console.error('❌ Logo imageData preview:', logoOptions.imageData?.substring(0, 100));
+                  }}
+                />
+              );
+            })()
           ) : (
             <ThemedText style={{ fontSize: 12, textAlign: 'center' }}>
               LOGO
