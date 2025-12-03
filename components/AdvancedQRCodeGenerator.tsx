@@ -60,6 +60,42 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
   contrastRatio = 4.5,
   getRef,
 }, ref) => {
+  // Convert base64 data URI to blob URL for web to avoid ERR_INVALID_URL errors
+  const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
+  
+  useEffect(() => {
+    let blobUrl: string | null = null;
+    
+    if (Platform.OS === 'web' && logoOptions?.imageData?.startsWith('data:')) {
+      // Convert base64 data URI to blob URL for better web compatibility
+      try {
+        const base64Data = logoOptions.imageData.split(',')[1];
+        if (base64Data) {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'image/jpeg' });
+          blobUrl = URL.createObjectURL(blob);
+          setLogoBlobUrl(blobUrl);
+        }
+      } catch (error) {
+        console.error('Failed to create blob URL from base64:', error);
+        setLogoBlobUrl(null);
+      }
+    } else {
+      setLogoBlobUrl(null);
+    }
+    
+    // Cleanup blob URL on unmount or when imageData changes
+    return () => {
+      if (blobUrl) {
+        URL.revokeObjectURL(blobUrl);
+      }
+    };
+  }, [logoOptions?.imageData]);
   const [qrData, setQrData] = useState<string>('https://example.com');
   const qrCodeSvgRef = useRef<any>(null);
 
@@ -256,7 +292,7 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
         >
           {logoOptions.imageData ? (
             <Image
-              source={{ uri: logoOptions.imageData }}
+              source={{ uri: Platform.OS === 'web' && logoBlobUrl ? logoBlobUrl : logoOptions.imageData }}
               style={{
                 width: optimalLogoSize,
                 height: optimalLogoSize,
