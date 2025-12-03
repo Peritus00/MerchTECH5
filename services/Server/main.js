@@ -495,6 +495,12 @@ app.use((req, res, next) => {
     console.log(`🔀 REDIRECT: Redirecting from ${host} to merchtech5-production.up.railway.app`);
     return res.redirect(301, `https://merchtech5-production.up.railway.app${req.originalUrl}`);
   }
+  // Redirect merchtrader.org to www.merchtrader.org (ensures SSL works)
+  // www.merchtrader.org has SSL certificate, merchtrader.org certificate is pending
+  if (host === 'merchtrader.org' && !host.startsWith('www.')) {
+    console.log(`🔀 REDIRECT: Redirecting ${host}${req.originalUrl} to www.merchtrader.org (SSL certificate active)`);
+    return res.redirect(301, `https://www.merchtrader.org${req.originalUrl}`);
+  }
   next();
 });
 
