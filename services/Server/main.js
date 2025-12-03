@@ -7922,13 +7922,33 @@ app.get('/api/media', authenticateToken, async (req, res) => {
         properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/uploads/${media.filename}`;
       }
       
+      // Map content_type to media type (video, audio, or image)
+      let mediaType = 'audio'; // default
+      if (media.content_type) {
+        if (media.content_type.startsWith('video/')) {
+          mediaType = 'video';
+        } else if (media.content_type.startsWith('audio/')) {
+          mediaType = 'audio';
+        } else if (media.content_type.startsWith('image/')) {
+          mediaType = 'image';
+        }
+      } else if (media.file_type) {
+        // Fallback: try to infer from file_type
+        const fileTypeUpper = media.file_type.toUpperCase();
+        if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
+          mediaType = 'video';
+        } else if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
+          mediaType = 'image';
+        }
+      }
+      
       return {
         ...media,
         url: properUrl,
         title: media.title,
         fileType: media.file_type,
         contentType: media.content_type,
-        type: media.file_type // Add this field for MediaPlayer component
+        type: mediaType // Map content_type to 'video', 'audio', or 'image'
       };
     }));
     
@@ -8008,6 +8028,26 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
       properUrl = `${baseUrl}/uploads/${media.filename}`;
     }
     
+    // Map content_type to media type (video, audio, or image)
+    let mediaType = 'audio'; // default
+    if (media.content_type) {
+      if (media.content_type.startsWith('video/')) {
+        mediaType = 'video';
+      } else if (media.content_type.startsWith('audio/')) {
+        mediaType = 'audio';
+      } else if (media.content_type.startsWith('image/')) {
+        mediaType = 'image';
+      }
+    } else if (media.file_type) {
+      // Fallback: try to infer from file_type
+      const fileTypeUpper = media.file_type.toUpperCase();
+      if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
+        mediaType = 'video';
+      } else if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
+        mediaType = 'image';
+      }
+    }
+    
     // Return media with the proper URL structure expected by the frontend
     const mediaResponse = {
       ...media,
@@ -8015,7 +8055,7 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
       title: media.title,
       fileType: media.file_type,
       contentType: media.content_type,
-      type: media.file_type // Add type property for MediaPlayer compatibility
+      type: mediaType // Map content_type to 'video', 'audio', or 'image'
     };
     
     res.json({ media: mediaResponse });
@@ -8602,6 +8642,27 @@ async function getPlaylistWithMedia(playlistId) {
     return {
     id: media.id,
     userId: media.user_id,
+    // Map content_type to media type (video, audio, or image)
+    let mediaType = 'audio'; // default
+    if (media.content_type) {
+      if (media.content_type.startsWith('video/')) {
+        mediaType = 'video';
+      } else if (media.content_type.startsWith('audio/')) {
+        mediaType = 'audio';
+      } else if (media.content_type.startsWith('image/')) {
+        mediaType = 'image';
+      }
+    } else if (media.file_type) {
+      // Fallback: try to infer from file_type
+      const fileTypeUpper = media.file_type.toUpperCase();
+      if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
+        mediaType = 'video';
+      } else if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
+        mediaType = 'image';
+      }
+    }
+    
+    return {
     title: media.title,
     description: media.description,
     filename: media.filename,
@@ -8611,7 +8672,7 @@ async function getPlaylistWithMedia(playlistId) {
     displayOrder: media.display_order,
     createdAt: media.created_at,
     updatedAt: media.updated_at,
-    type: media.file_type,
+    type: mediaType, // Map content_type to 'video', 'audio', or 'image'
     s3_key: media.s3_key, // Include s3_key for frontend debugging
       url: properUrl, // Use direct S3 signed URLs for better compatibility
     };
@@ -13099,13 +13160,27 @@ app.get('/media-player/:id', (req, res) => {
 // Generate HTML media player page
 function generateMediaPlayerHTML(playlist) {
   const mediaFiles = playlist.mediaFiles || [];  // Fixed: use mediaFiles not media_files
-  const mediaList = mediaFiles.map(file => ({
-    id: file.id,
-    title: file.title,
-    url: `${process.env.BASE_URL || 'https://merchtech5-production.up.railway.app'}/api/media/${file.id}/stream`,
-    type: file.fileType,  // Fixed: use fileType not file_type
-    contentType: file.contentType  // Fixed: use contentType not content_type
-  }));
+  const mediaList = mediaFiles.map(file => {
+    // Map content_type to media type (video, audio, or image)
+    let mediaType = file.type || 'audio'; // Use type if available, default to audio
+    if (!mediaType && file.contentType) {
+      if (file.contentType.startsWith('video/')) {
+        mediaType = 'video';
+      } else if (file.contentType.startsWith('audio/')) {
+        mediaType = 'audio';
+      } else if (file.contentType.startsWith('image/')) {
+        mediaType = 'image';
+      }
+    }
+    
+    return {
+      id: file.id,
+      title: file.title,
+      url: `${process.env.BASE_URL || 'https://merchtech5-production.up.railway.app'}/api/media/${file.id}/stream`,
+      type: mediaType,  // Use mapped type ('video', 'audio', or 'image')
+      contentType: file.contentType  // Fixed: use contentType not content_type
+    };
+  });
 
   return `
     <!DOCTYPE html>
