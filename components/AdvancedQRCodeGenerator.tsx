@@ -83,6 +83,13 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           return;
         }
         
+        // Check for suspicious truncation (exactly 10000 chars suggests database limit)
+        if (base64Data.length === 10000) {
+          console.warn('Base64 string appears truncated at 10000 characters, skipping blob conversion');
+          setLogoBlobUrl(null);
+          return;
+        }
+        
         // Validate base64 string (remove whitespace and check format)
         const cleanBase64 = base64Data.replace(/\s/g, '');
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
@@ -92,8 +99,29 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           return;
         }
         
+        // Check if base64 string appears complete (should end with padding or valid chars)
+        // Truncated base64 often ends mid-character or without proper padding
+        const lastChar = cleanBase64[cleanBase64.length - 1];
+        const secondLastChar = cleanBase64[cleanBase64.length - 2];
+        // Base64 padding should be '=' at the end, or valid base64 chars
+        // If it ends with incomplete padding or suspicious patterns, it might be truncated
+        if (cleanBase64.length > 0 && !['=', 'A', 'Q', 'g', 'w'].includes(lastChar) && 
+            cleanBase64.length % 4 !== 0 && !cleanBase64.endsWith('==') && !cleanBase64.endsWith('=')) {
+          // Suspicious ending, might be truncated
+          console.warn('Base64 string appears incomplete (suspicious ending), skipping blob conversion');
+          setLogoBlobUrl(null);
+          return;
+        }
+        
         // Try to decode base64
-        const byteCharacters = atob(cleanBase64);
+        let byteCharacters;
+        try {
+          byteCharacters = atob(cleanBase64);
+        } catch (decodeError) {
+          console.warn('Failed to decode base64 string, likely truncated or invalid:', decodeError);
+          setLogoBlobUrl(null);
+          return;
+        }
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
@@ -324,13 +352,20 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                                     logoOptions.imageData.includes(',') &&
                                     logoOptions.imageData.split(',')[1]?.length > 0;
               
-              // Use blob URL if available, otherwise use data URI if valid
+              // Check for truncated base64 (exactly 10000 chars suggests database limit)
+              const base64Part = logoOptions.imageData.split(',')[1] || '';
+              const isTruncated = base64Part.length === 10000;
+              
+              // Use blob URL if available, otherwise use data URI if valid and not truncated
               const imageUri = Platform.OS === 'web' && logoBlobUrl 
                 ? logoBlobUrl 
-                : (isValidDataUri ? logoOptions.imageData : null);
+                : (isValidDataUri && !isTruncated ? logoOptions.imageData : null);
               
               if (!imageUri) {
-                // Invalid or missing image data, show fallback
+                // Invalid, missing, or truncated image data, show fallback
+                if (isTruncated) {
+                  console.warn('QR Logo image data appears truncated, showing fallback');
+                }
                 return (
                   <ThemedText style={{ fontSize: 12, textAlign: 'center' }}>
                     LOGO
