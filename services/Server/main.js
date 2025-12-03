@@ -8639,9 +8639,6 @@ async function getPlaylistWithMedia(playlistId) {
       properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
     }
 
-    return {
-    id: media.id,
-    userId: media.user_id,
     // Map content_type to media type (video, audio, or image)
     let mediaType = 'audio'; // default
     if (media.content_type) {
@@ -8663,6 +8660,8 @@ async function getPlaylistWithMedia(playlistId) {
     }
     
     return {
+    id: media.id,
+    userId: media.user_id,
     title: media.title,
     description: media.description,
     filename: media.filename,
