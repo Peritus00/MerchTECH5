@@ -73,21 +73,18 @@ export default function SlideshowChat({ slideshowId, slideshowName }: SlideshowC
 
   const refreshMessages = async () => {
     try {
-      setIsRefreshing(true);
+      // Don't set loading state to avoid UI flickering
       const response = await slideshowChatAPI.getMessages(slideshowId);
       const fetchedMessages = response.messages || [];
       
       // Only update if we have new messages
-      if (fetchedMessages.length !== messages.length) {
+      if (fetchedMessages.length !== messages.length || 
+          (fetchedMessages.length > 0 && messages.length > 0 && 
+           fetchedMessages[fetchedMessages.length - 1].id !== messages[messages.length - 1].id)) {
         setMessages(fetchedMessages);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
       }
     } catch (error) {
-      console.error('Error refreshing slideshow messages:', error);
-    } finally {
-      setIsRefreshing(false);
+      // Silent fail for polling
     }
   };
 
@@ -211,9 +208,6 @@ export default function SlideshowChat({ slideshowId, slideshowName }: SlideshowC
       <View style={styles.header}>
         <MaterialIcons name="chat" size={20} color="#3b82f6" />
         <Text style={styles.headerTitle}>Slideshow Discussion</Text>
-        {isRefreshing && (
-          <ActivityIndicator size="small" color="#3b82f6" />
-        )}
       </View>
 
       {/* Messages */}

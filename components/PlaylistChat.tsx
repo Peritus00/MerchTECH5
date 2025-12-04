@@ -73,21 +73,21 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
 
   const refreshMessages = async () => {
     try {
-      setIsRefreshing(true);
+      // Don't set loading state to avoid UI flickering
       const response = await chatAPI.getMessages(playlistId);
       const fetchedMessages = response.messages || [];
       
-      // Only update if we have new messages
-      if (fetchedMessages.length !== messages.length) {
+      // Only update if we have new messages by checking length or last message ID
+      if (fetchedMessages.length !== messages.length || 
+          (fetchedMessages.length > 0 && messages.length > 0 && 
+           fetchedMessages[fetchedMessages.length - 1].id !== messages[messages.length - 1].id)) {
         setMessages(fetchedMessages);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        // Only scroll if we were already at bottom or it's a small update
+        // Omitted automatic scrolling to avoid disrupting user reading
       }
     } catch (error) {
-      console.error('Error refreshing messages:', error);
-    } finally {
-      setIsRefreshing(false);
+      // Silent error for polling
+      // console.error('Error refreshing messages:', error);
     }
   };
 
@@ -237,9 +237,6 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
       <View style={styles.header}>
         <MaterialIcons name="chat" size={20} color="#3b82f6" />
         <Text style={styles.headerTitle}>Playlist Discussion</Text>
-        {isRefreshing && (
-          <ActivityIndicator size="small" color="#3b82f6" />
-        )}
       </View>
 
       {/* Messages */}
