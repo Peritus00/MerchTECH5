@@ -74,13 +74,9 @@ class AIColorService {
         const errorText = await response.text();
         console.error('🚫 API Error Response:', errorText);
         
-        // Handle specific quota exceeded error
-        if (response.status === 429) {
-          console.warn('⏰ API quota exceeded, using enhanced fallback colors');
-          return this.getEnhancedFallbackColors(request.contentType, request.style);
-        }
-        
-        throw new Error(`API request failed: ${response.status} - ${errorText}`);
+        // Handle API errors (404, 429, etc.) by using fallback colors
+        console.warn(`⏰ API error (${response.status}), using enhanced fallback colors`);
+        return this.getEnhancedFallbackColors(request.contentType, request.style);
       }
 
       const data = await response.json();
