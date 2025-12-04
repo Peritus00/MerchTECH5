@@ -15,7 +15,7 @@ interface ColorSuggestionRequest {
 
 class AIColorService {
   private apiKey: string;
-  private baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent';
+  private baseUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent';
 
   constructor() {
     // Fix the API key retrieval to handle both possible environment variable names
