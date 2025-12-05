@@ -345,13 +345,13 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                 (logoOptions.imageData.length === 10000 || 
                  (logoOptions.imageData.includes(',') && logoOptions.imageData.split(',')[1]?.length === 10000));
               
-              // Prefer S3 / remote URL if provided, unless we've had an error
-              // Also prefer S3 URL if imageData is truncated
-              let imageUri: string | null = (!logoLoadError && logoOptions.imageUrl && !isImageDataTruncated) 
+              // ALWAYS prefer S3 / remote URL if provided (unless it already failed)
+              // S3 URLs are more reliable than base64 data URIs
+              let imageUri: string | null = (!logoLoadError && logoOptions.imageUrl) 
                 ? logoOptions.imageUrl 
                 : null;
 
-              // Only use imageData if:
+              // Only use imageData as fallback if:
               // 1. We don't have a remote URL (or it failed)
               // 2. imageData is not truncated
               // 3. imageData is valid
@@ -372,10 +372,12 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                   imageUri = Platform.OS === 'web' && logoBlobUrl 
                     ? logoBlobUrl 
                     : logoOptions.imageData;
-                } else if (isImageDataTruncated || !isBase64Complete) {
-                  // If truncated or incomplete, try S3 URL as fallback
-                  console.warn('⚠️ QR Logo imageData appears truncated or invalid, preferring S3 URL');
-                  imageUri = logoOptions.imageUrl || null;
+                } else {
+                  // Invalid base64, skip imageData
+                  if (logoOptions.imageUrl) {
+                    console.warn('⚠️ QR Logo imageData invalid, using S3 URL instead');
+                    imageUri = logoOptions.imageUrl;
+                  }
                 }
               } else if (isImageDataTruncated && logoOptions.imageUrl) {
                 // If imageData is truncated but we have S3 URL, use that
@@ -402,19 +404,23 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                   }}
                   resizeMode="contain"
                   onError={(error) => {
-                    if (!logoLoadError && logoOptions.imageUrl && imageUri !== logoOptions.imageUrl) {
-                      console.warn('⚠️ QR Logo remote load failed, falling back to local data');
+                    // If S3 URL failed and we have imageData, try that as fallback (silently)
+                    if (!logoLoadError && logoOptions.imageUrl && imageUri === logoOptions.imageUrl && logoOptions.imageData) {
                       setLogoLoadError(true);
+                      return; // Will trigger re-render with imageData
+                    }
+                    // If imageData failed and we have S3 URL, try that as fallback (silently)
+                    if (!logoLoadError && logoOptions.imageData && imageUri !== logoOptions.imageUrl && logoOptions.imageUrl) {
+                      setLogoLoadError(true);
+                      return; // Will trigger re-render with S3 URL
+                    }
+                    // Only log error if we've exhausted all options (both failed)
+                    // This prevents spam when component is trying alternatives
+                    if (logoLoadError) {
+                      // Both sources failed, but only log once per component instance
                       return;
                     }
-                    // If both failed, log error but don't spam console
-                    if (!logoLoadError) {
-                      console.error('❌ QR Logo Image Error:', error);
-                      if (logoOptions.imageData) {
-                        console.error('❌ Logo imageData length:', logoOptions.imageData.length);
-                        console.error('❌ Logo imageData appears truncated:', isImageDataTruncated);
-                      }
-                    }
+                    // First failure - set error state but don't log yet (might recover)
                     setLogoLoadError(true);
                   }}
                 />
