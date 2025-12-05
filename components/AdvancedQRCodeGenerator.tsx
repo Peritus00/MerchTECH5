@@ -4,7 +4,12 @@ import QRCodeSVG from 'react-native-qrcode-svg';
 import { ThemedText } from './ThemedText';
 
 interface LogoOptions {
+  // Existing base64 data URI (kept for backward compatibility)
   imageData?: string;
+  // New S3 / remote URL for the logo image
+  imageUrl?: string;
+  // Optional S3 key for internal tracking
+  s3Key?: string;
   size: number;
   borderRadius: number;
   borderSize: number;
@@ -62,9 +67,17 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
 }, ref) => {
   // Convert base64 data URI to blob URL for web to avoid ERR_INVALID_URL errors
   const [logoBlobUrl, setLogoBlobUrl] = useState<string | null>(null);
+  const [logoLoadError, setLogoLoadError] = useState(false);
   
   useEffect(() => {
     let blobUrl: string | null = null;
+    setLogoLoadError(false);
+    
+    // Prefer remote logo URLs if provided (S3-backed or CDN)
+    if (logoOptions?.imageUrl) {
+      setLogoBlobUrl(null);
+      return;
+    }
     
     if (Platform.OS === 'web' && logoOptions?.imageData?.startsWith('data:')) {
       // Convert base64 data URI to blob URL for better web compatibility
@@ -83,14 +96,6 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           return;
         }
         
-        // Check for suspicious truncation (exactly 10000 chars total or base64 part ~9977 suggests database limit)
-        // "data:image/jpeg;base64," prefix is ~23 chars, so base64 part would be ~9977 if total is 10000
-        if (base64Data.length === 10000 || base64Data.length >= 9970) {
-          console.warn(`Base64 string appears truncated (length: ${base64Data.length}), skipping blob conversion`);
-          setLogoBlobUrl(null);
-          return;
-        }
-        
         // Validate base64 string (remove whitespace and check format)
         const cleanBase64 = base64Data.replace(/\s/g, '');
         if (!/^[A-Za-z0-9+/]*={0,2}$/.test(cleanBase64)) {
@@ -100,26 +105,12 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           return;
         }
         
-        // Check if base64 string appears complete (should end with padding or valid chars)
-        // Truncated base64 often ends mid-character or without proper padding
-        const lastChar = cleanBase64[cleanBase64.length - 1];
-        const secondLastChar = cleanBase64[cleanBase64.length - 2];
-        // Base64 padding should be '=' at the end, or valid base64 chars
-        // If it ends with incomplete padding or suspicious patterns, it might be truncated
-        if (cleanBase64.length > 0 && !['=', 'A', 'Q', 'g', 'w'].includes(lastChar) && 
-            cleanBase64.length % 4 !== 0 && !cleanBase64.endsWith('==') && !cleanBase64.endsWith('=')) {
-          // Suspicious ending, might be truncated
-          console.warn('Base64 string appears incomplete (suspicious ending), skipping blob conversion');
-          setLogoBlobUrl(null);
-          return;
-        }
-        
-        // Try to decode base64
+        // Try to decode base64; if this fails we'll fall back to using the original data URI
         let byteCharacters;
         try {
           byteCharacters = atob(cleanBase64);
         } catch (decodeError) {
-          console.warn('Failed to decode base64 string, likely truncated or invalid:', decodeError);
+          console.warn('Failed to decode base64 string, using data URI directly:', decodeError);
           setLogoBlobUrl(null);
           return;
         }
@@ -151,7 +142,7 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
         URL.revokeObjectURL(blobUrl);
       }
     };
-  }, [logoOptions?.imageData]);
+  }, [logoOptions?.imageData, logoOptions?.imageUrl]);
   const [qrData, setQrData] = useState<string>('https://example.com');
   const qrCodeSvgRef = useRef<any>(null);
 
@@ -260,7 +251,8 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
   };
 
   const renderLogo = () => {
-    if (!logoOptions?.imageData) return null;
+    // Render logo if we have either imageData (database) or imageUrl (S3)
+    if (!logoOptions?.imageData && !logoOptions?.imageUrl) return null;
 
     const optimalLogoSize = calculateOptimalLogoSize();
     const borderSize = logoOptions.borderSize || 8;
@@ -346,27 +338,25 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
             },
           ]}
         >
-          {logoOptions.imageData ? (
+          {logoOptions.imageData || logoOptions.imageUrl ? (
             (() => {
-              // Validate data URI format before using
-              const isValidDataUri = logoOptions.imageData.startsWith('data:') && 
-                                    logoOptions.imageData.includes(',') &&
-                                    logoOptions.imageData.split(',')[1]?.length > 0;
-              
-              // Check for truncated base64 (exactly 10000 chars total or base64 part ~9977 suggests database limit)
-              const base64Part = logoOptions.imageData.split(',')[1] || '';
-              const isTruncated = logoOptions.imageData.length === 10000 || base64Part.length >= 9970;
-              
-              // Use blob URL if available, otherwise use data URI if valid and not truncated
-              const imageUri = Platform.OS === 'web' && logoBlobUrl 
-                ? logoBlobUrl 
-                : (isValidDataUri && !isTruncated ? logoOptions.imageData : null);
+              // Prefer S3 / remote URL if provided, unless we've had an error
+              let imageUri: string | null = (!logoLoadError && logoOptions.imageUrl) ? logoOptions.imageUrl : null;
+
+              // Fallback to data URI if we don't have a remote URL or if it failed
+              if (!imageUri && logoOptions.imageData) {
+                const isValidDataUri = logoOptions.imageData.startsWith('data:') && 
+                  logoOptions.imageData.includes(',') &&
+                  logoOptions.imageData.split(',')[1]?.length > 0;
+                
+                // Use blob URL if available, otherwise use data URI directly when valid
+                imageUri = Platform.OS === 'web' && logoBlobUrl 
+                  ? logoBlobUrl 
+                  : (isValidDataUri ? logoOptions.imageData : null);
+              }
               
               if (!imageUri) {
-                // Invalid, missing, or truncated image data, show fallback
-                if (isTruncated) {
-                  console.warn('QR Logo image data appears truncated, showing fallback');
-                }
+                // Invalid or missing image data, show fallback
                 return (
                   <ThemedText style={{ fontSize: 12, textAlign: 'center' }}>
                     LOGO
@@ -384,6 +374,11 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                   }}
                   resizeMode="contain"
                   onError={(error) => {
+                    if (!logoLoadError && logoOptions.imageUrl) {
+                      console.warn('⚠️ QR Logo remote load failed, falling back to local data');
+                      setLogoLoadError(true);
+                      return;
+                    }
                     console.error('❌ QR Logo Image Error:', error);
                     console.error('❌ Logo imageData length:', logoOptions.imageData?.length);
                     console.error('❌ Logo imageData preview:', logoOptions.imageData?.substring(0, 100));
