@@ -46,7 +46,12 @@ interface QROptions {
     angle?: number;
   };
   logo?: {
+    // Existing base64 data URI (kept for backward compatibility)
     imageData?: string;
+    // New S3 / remote URL for the logo image
+    imageUrl?: string;
+    // Optional S3 key for internal tracking
+    s3Key?: string;
     size: number;
     borderRadius: number;
     borderSize: number;
@@ -664,13 +669,28 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
         options,
       };
 
-      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
-      const combinedRef = {
-        ...qrRef.current,
-        ...(qrGeneratorRef.current || {}),
-      };
+      // On web, attach AdvancedQRCodeGenerator helper methods directly to the DOM element
+      // so the download utilities can use getSVGString / toDataURL without losing DOM APIs.
+      if (Platform.OS === 'web' && qrGeneratorRef.current && qrRef.current) {
+        try {
+          const container: any = qrRef.current;
+          const generator = qrGeneratorRef.current;
 
-      await downloadAdvancedQRCode(combinedRef, qrData, format);
+          if (typeof generator.getSVGString === 'function') {
+            container.getSVGString = generator.getSVGString.bind(generator);
+          }
+
+          if (typeof generator.toDataURL === 'function') {
+            container.toDataURL = generator.toDataURL.bind(generator);
+          }
+        } catch (attachError) {
+          console.warn('⚠️ Failed to attach advanced QR methods to container element:', attachError);
+        }
+      }
+
+      // Always pass the actual rendered container ref so web can walk the DOM
+      // and native can capture the view correctly.
+      await downloadAdvancedQRCode(qrRef.current, qrData, format);
     } catch (error) {
       console.error('Download error:', error);
       Alert.alert('Error', 'Failed to download QR code');

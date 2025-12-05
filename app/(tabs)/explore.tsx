@@ -380,14 +380,28 @@ export default function QRCodesScreen() {
       
       console.log('📦 QR Data prepared:', qrData);
       console.log('🚀 Calling downloadAdvancedQRCode...');
+
+      // On web, attach AdvancedQRCodeGenerator helper methods directly to the container element
+      // so the download utilities can use getSVGString / toDataURL while still treating it as a DOM node.
+      if (Platform.OS === 'web' && qrRef && qrGeneratorRef) {
+        try {
+          const container: any = qrRef;
+          const generator = qrGeneratorRef;
+
+          if (typeof generator.getSVGString === 'function') {
+            container.getSVGString = generator.getSVGString.bind(generator);
+          }
+
+          if (typeof generator.toDataURL === 'function') {
+            container.toDataURL = generator.toDataURL.bind(generator);
+          }
+        } catch (attachError) {
+          console.warn('⚠️ Failed to attach advanced QR methods to container element:', attachError);
+        }
+      }
       
-      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
-      const combinedRef = {
-        ...qrRef,
-        ...(qrGeneratorRef || {}),
-      };
-      
-      await downloadAdvancedQRCode(combinedRef, qrData, format);
+      // Pass the actual rendered container so web can querySelector() and native can captureRef()
+      await downloadAdvancedQRCode(qrRef, qrData, format);
       
       console.log('✅ Download function completed');
     } catch (error) {
