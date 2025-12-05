@@ -108,7 +108,8 @@ export function useGoogleSignIn() {
   const signIn = async (): Promise<GoogleSignInResult> => {
     setLoading(true);
     try {
-      const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
+      // Use environment variable or fallback to hardcoded production ID
+      const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
       
       if (!googleClientId) {
         console.error('❌ Google OAuth not configured');
