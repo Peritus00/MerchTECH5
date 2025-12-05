@@ -340,19 +340,47 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
         >
           {logoOptions.imageData || logoOptions.imageUrl ? (
             (() => {
+              // Check if imageData is truncated (common issue: exactly 10000 chars suggests truncation)
+              const isImageDataTruncated = logoOptions.imageData && 
+                (logoOptions.imageData.length === 10000 || 
+                 (logoOptions.imageData.includes(',') && logoOptions.imageData.split(',')[1]?.length === 10000));
+              
               // Prefer S3 / remote URL if provided, unless we've had an error
-              let imageUri: string | null = (!logoLoadError && logoOptions.imageUrl) ? logoOptions.imageUrl : null;
+              // Also prefer S3 URL if imageData is truncated
+              let imageUri: string | null = (!logoLoadError && logoOptions.imageUrl && !isImageDataTruncated) 
+                ? logoOptions.imageUrl 
+                : null;
 
-              // Fallback to data URI if we don't have a remote URL or if it failed
-              if (!imageUri && logoOptions.imageData) {
+              // Only use imageData if:
+              // 1. We don't have a remote URL (or it failed)
+              // 2. imageData is not truncated
+              // 3. imageData is valid
+              if (!imageUri && logoOptions.imageData && !isImageDataTruncated) {
                 const isValidDataUri = logoOptions.imageData.startsWith('data:') && 
                   logoOptions.imageData.includes(',') &&
                   logoOptions.imageData.split(',')[1]?.length > 0;
                 
-                // Use blob URL if available, otherwise use data URI directly when valid
-                imageUri = Platform.OS === 'web' && logoBlobUrl 
-                  ? logoBlobUrl 
-                  : (isValidDataUri ? logoOptions.imageData : null);
+                // Validate base64 completeness - check if it ends properly (base64 padding)
+                const base64Part = logoOptions.imageData.split(',')[1];
+                const isBase64Complete = base64Part && (
+                  base64Part.length % 4 === 0 || // Base64 should be multiple of 4
+                  base64Part.match(/^[A-Za-z0-9+/]*={0,2}$/) // Valid base64 with proper padding
+                );
+                
+                // Use blob URL if available, otherwise use data URI directly when valid and complete
+                if (isValidDataUri && isBase64Complete) {
+                  imageUri = Platform.OS === 'web' && logoBlobUrl 
+                    ? logoBlobUrl 
+                    : logoOptions.imageData;
+                } else if (isImageDataTruncated || !isBase64Complete) {
+                  // If truncated or incomplete, try S3 URL as fallback
+                  console.warn('⚠️ QR Logo imageData appears truncated or invalid, preferring S3 URL');
+                  imageUri = logoOptions.imageUrl || null;
+                }
+              } else if (isImageDataTruncated && logoOptions.imageUrl) {
+                // If imageData is truncated but we have S3 URL, use that
+                console.warn('⚠️ QR Logo imageData truncated, using S3 URL instead');
+                imageUri = logoOptions.imageUrl;
               }
               
               if (!imageUri) {
@@ -374,14 +402,20 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
                   }}
                   resizeMode="contain"
                   onError={(error) => {
-                    if (!logoLoadError && logoOptions.imageUrl) {
+                    if (!logoLoadError && logoOptions.imageUrl && imageUri !== logoOptions.imageUrl) {
                       console.warn('⚠️ QR Logo remote load failed, falling back to local data');
                       setLogoLoadError(true);
                       return;
                     }
-                    console.error('❌ QR Logo Image Error:', error);
-                    console.error('❌ Logo imageData length:', logoOptions.imageData?.length);
-                    console.error('❌ Logo imageData preview:', logoOptions.imageData?.substring(0, 100));
+                    // If both failed, log error but don't spam console
+                    if (!logoLoadError) {
+                      console.error('❌ QR Logo Image Error:', error);
+                      if (logoOptions.imageData) {
+                        console.error('❌ Logo imageData length:', logoOptions.imageData.length);
+                        console.error('❌ Logo imageData appears truncated:', isImageDataTruncated);
+                      }
+                    }
+                    setLogoLoadError(true);
                   }}
                 />
               );
