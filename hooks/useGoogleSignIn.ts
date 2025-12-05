@@ -109,12 +109,18 @@ export function useGoogleSignIn() {
     setLoading(true);
     try {
       // Use environment variable or fallback to hardcoded production ID
-      const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
+      // Handle empty strings by trimming and checking length
+      const envClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+      const googleClientId = (envClientId && envClientId.length > 0) 
+        ? envClientId 
+        : '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
       
-      if (!googleClientId) {
+      if (!googleClientId || googleClientId.length === 0) {
         console.error('❌ Google OAuth not configured');
         return { success: false, error: 'Google OAuth not configured. Please set EXPO_PUBLIC_GOOGLE_CLIENT_ID' };
       }
+      
+      console.log('🔧 Using Google Client ID:', googleClientId.substring(0, 20) + '...');
 
       // For web, use Google Identity Services SDK directly (more reliable)
       if (Platform.OS === 'web' && typeof window !== 'undefined') {

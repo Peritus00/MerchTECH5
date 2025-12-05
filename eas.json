@@ -6,7 +6,11 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -16,10 +20,18 @@
       "ios": {
         "simulator": false,
         "buildConfiguration": "Release"
+      },
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID": "587879962618-t2oo5ltqmelojee6gotjku4l8sin495p.apps.googleusercontent.com"
+      }
     }
   },
   "submit": {
