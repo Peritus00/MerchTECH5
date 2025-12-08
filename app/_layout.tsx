@@ -94,7 +94,6 @@ function RootLayoutNav() {
       segments[0] === 'playlist-player' || // Public playlist players
       segments[0] === 'slideshow-player' || // Public slideshow players
       segments[0] === 'preview-player' || // Public preview players
-      segments[0] === 'slideshow-preview' || // Public slideshow preview
       segments[0] === 'shop' || // Public master shop page
       (
         segments[0] === 'store' && // Allow public access to specific store pages
@@ -166,7 +165,6 @@ function RootLayoutNav() {
         <Stack.Screen name="settings" options={{ headerShown: false }} />
         <Stack.Screen name="qr-details/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="preview-player/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="slideshow-preview/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="slideshow-player/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="playlist-player/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />

@@ -9672,6 +9672,80 @@ app.get(['/r/:code', '/qr/:code'], async (req, res) => {
   }
 });
 
+/**
+ * Normalize and upload QR logo imageData to S3 when available.
+ * - Accepts options as stored on the QR code (may contain logo.imageData)
+ * - If AWS/S3 isn't configured or no imageData is present, returns options unchanged
+ * - On success, adds logo.imageUrl and logo.s3Key while preserving imageData for backup
+ */
+async function processQrLogoOptions(options, userId, qrCodeIdForKey = null) {
+  try {
+    if (!options || !options.logo || !options.logo.imageData) {
+      return options;
+    }
+
+    // Don't re-upload if we already have a remote URL
+    if (options.logo.imageUrl) {
+      return options;
+    }
+
+    if (!s3Service || typeof s3Service.isConfigured !== 'function' || !s3Service.isConfigured()) {
+      console.warn('⚠️ QR_CODES: S3 not configured, skipping logo upload');
+      return options;
+    }
+
+    const imageData = options.logo.imageData;
+    if (typeof imageData !== 'string' || !imageData.startsWith('data:') || !imageData.includes(',')) {
+      return options;
+    }
+
+    const [meta, base64] = imageData.split(',');
+    if (!base64) {
+      return options;
+    }
+
+    // Determine MIME type & extension
+    const mimeMatch = meta.match(/data:([^;]+)/);
+    const mimeType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+    const extension = mimeType.split('/')[1] || 'jpg';
+
+    // Decode base64 into a buffer
+    let buffer;
+    try {
+      buffer = Buffer.from(base64, 'base64');
+    } catch (error) {
+      console.warn('⚠️ QR_CODES: Failed to decode logo base64, skipping S3 upload:', error.message);
+      return options;
+    }
+
+    const safeUserId = userId || 'unknown-user';
+    const key = `users/${safeUserId}/qr-logos/${qrCodeIdForKey || 'qr-logo'}-${Date.now()}.${extension}`;
+
+    try {
+      const uploadResult = await s3Service.uploadFile(buffer, key, mimeType);
+      const imageUrl = uploadResult.Location;
+
+      console.log('✅ QR_CODES: Logo uploaded to S3 for QR code', qrCodeIdForKey, '->', key);
+
+      return {
+        ...options,
+        logo: {
+          ...options.logo,
+          imageUrl,
+          s3Key: key,
+          // Keep imageData for now as an extra backup; we can clean this later if needed
+        },
+      };
+    } catch (uploadError) {
+      console.error('❌ QR_CODES: Failed to upload logo to S3:', uploadError.message);
+      return options;
+    }
+  } catch (outerError) {
+    console.error('❌ QR_CODES: Unexpected error in processQrLogoOptions:', outerError.message);
+    return options;
+  }
+}
+
 // Create a new QR code (alias for backward compatibility)
 app.post('/api/qrcodes', authenticateToken, async (req, res) => {
   try {
@@ -9720,7 +9794,10 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
 
     // Generate QR code data (simplified - in production you might want to use a proper QR library)
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
+    // Normalize / upload logo image to S3 if provided
+    const processedOptions = await processQrLogoOptions(options || {}, req.user.userId);
+
     const result = await db.query(
       `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description, short_url, playlist_id, slideshow_id) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
@@ -9729,7 +9806,7 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
         name,
         url,
         qrCodeData,
-        JSON.stringify(options || {}),
+        JSON.stringify(processedOptions || {}),
         description,
         null,
         playlist_id || null,
@@ -9808,11 +9885,14 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
 
     // Generate QR code data (simplified - in production you might want to use a proper QR library)
     const qrCodeData = `qr-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
+
+    // Normalize / upload logo image to S3 if provided
+    const processedOptions = await processQrLogoOptions(options || {}, req.user.userId);
+
     const result = await db.query(
       `INSERT INTO qr_codes (user_id, name, url, qr_code_data, options, description) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [req.user.userId, name, url, qrCodeData, JSON.stringify(options || {}), description]
+      [req.user.userId, name, url, qrCodeData, JSON.stringify(processedOptions || {}), description]
     );
     
     const qrCode = {
@@ -9851,6 +9931,8 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
+    const processedOptions = await processQrLogoOptions(options || {}, req.user.userId, id);
+
     const result = await db.query(
       `UPDATE qr_codes 
        SET name = COALESCE($1, name), 
@@ -9859,7 +9941,7 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
            options = COALESCE($4, options),
            updated_at = NOW()
        WHERE id = $5 RETURNING *`,
-      [name, url, description, options ? JSON.stringify(options) : null, id]
+      [name, url, description, processedOptions ? JSON.stringify(processedOptions) : null, id]
     );
 
     // Rebuild short_url when URL changes (id and origin stable)
@@ -9904,6 +9986,8 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
+    const processedOptions = await processQrLogoOptions(options || {}, req.user.userId, id);
+
     const result = await db.query(
       `UPDATE qr_codes 
        SET name = COALESCE($1, name), 
@@ -9912,7 +9996,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
            options = COALESCE($4, options),
            updated_at = NOW()
        WHERE id = $5 RETURNING *`,
-      [name, url, description, options ? JSON.stringify(options) : null, id]
+      [name, url, description, processedOptions ? JSON.stringify(processedOptions) : null, id]
     );
 
     const qrCode = {
@@ -10031,49 +10115,30 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all activation codes for user:', req.user.userId);
     
-    let result;
-    try {
-      // Try with deleted_at filter first
-      result = await db.query(
-        `SELECT ac.*, 
-                p.name as playlist_name,
-                s.name as slideshow_name,
-                CASE 
-                  WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                  WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                  ELSE 'unknown'
-                END as content_type
-         FROM activation_codes ac
-         LEFT JOIN playlists p ON ac.playlist_id = p.id
-         LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-         WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
-         ORDER BY ac.created_at DESC`,
-        [req.user.userId]
-      );
-    } catch (error) {
-      // If column doesn't exist, retry without deleted_at filter
-      if (error.code === '42703' || error.message?.includes('deleted_at')) {
-        console.log('⚠️ deleted_at column not found, querying without filter');
-        result = await db.query(
-          `SELECT ac.*, 
-                  p.name as playlist_name,
-                  s.name as slideshow_name,
-                  CASE 
-                    WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                    WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                    ELSE 'unknown'
-                  END as content_type
-           FROM activation_codes ac
-           LEFT JOIN playlists p ON ac.playlist_id = p.id
-           LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-           WHERE ac.created_by = $1
-           ORDER BY ac.created_at DESC`,
-          [req.user.userId]
-        );
-      } else {
-        throw error;
-      }
-    }
+    // Check if deleted_at column exists first
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
+    const hasDeletedAtColumn = columnCheck.rows.length > 0;
+
+    const result = await db.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name,
+              CASE 
+                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                ELSE 'unknown'
+              END as content_type
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.created_by = $1${hasDeletedAtColumn ? ' AND ac.deleted_at IS NULL' : ''}
+       ORDER BY ac.created_at DESC`,
+      [req.user.userId]
+    );
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'activation codes');
     res.json({ activationCodes: result.rows });
@@ -10089,49 +10154,30 @@ app.get('/api/activation-codes/generated', authenticateToken, async (req, res) =
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all generated codes for user:', req.user.userId);
     
-    let result;
-    try {
-      // Try with deleted_at filter first
-      result = await db.query(
-        `SELECT ac.*, 
-                p.name as playlist_name,
-                s.name as slideshow_name,
-                CASE 
-                  WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                  WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                  ELSE 'unknown'
-                END as content_type
-         FROM activation_codes ac
-         LEFT JOIN playlists p ON ac.playlist_id = p.id
-         LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-         WHERE ac.created_by = $1 AND ac.deleted_at IS NULL
-         ORDER BY ac.created_at DESC`,
-        [req.user.userId]
-      );
-    } catch (error) {
-      // If column doesn't exist, retry without deleted_at filter
-      if (error.code === '42703' || error.message?.includes('deleted_at')) {
-        console.log('⚠️ deleted_at column not found, querying without filter');
-        result = await db.query(
-          `SELECT ac.*, 
-                  p.name as playlist_name,
-                  s.name as slideshow_name,
-                  CASE 
-                    WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
-                    WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
-                    ELSE 'unknown'
-                  END as content_type
-           FROM activation_codes ac
-           LEFT JOIN playlists p ON ac.playlist_id = p.id
-           LEFT JOIN slideshows s ON ac.slideshow_id = s.id
-           WHERE ac.created_by = $1
-           ORDER BY ac.created_at DESC`,
-          [req.user.userId]
-        );
-      } else {
-        throw error;
-      }
-    }
+    // Check if deleted_at column exists
+    const columnCheck = await db.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'activation_codes' AND column_name = 'deleted_at'
+    `);
+    const hasDeletedAtColumn = columnCheck.rows.length > 0;
+
+    const result = await db.query(
+      `SELECT ac.*, 
+              p.name as playlist_name,
+              s.name as slideshow_name,
+              CASE 
+                WHEN ac.playlist_id IS NOT NULL THEN 'playlist'
+                WHEN ac.slideshow_id IS NOT NULL THEN 'slideshow'
+                ELSE 'unknown'
+              END as content_type
+       FROM activation_codes ac
+       LEFT JOIN playlists p ON ac.playlist_id = p.id
+       LEFT JOIN slideshows s ON ac.slideshow_id = s.id
+       WHERE ac.created_by = $1${hasDeletedAtColumn ? ' AND ac.deleted_at IS NULL' : ''}
+       ORDER BY ac.created_at DESC`,
+      [req.user.userId]
+    );
     
     console.log('🔑 ACTIVATION_CODES: Found', result.rows.length, 'generated codes');
     res.json({ activationCodes: result.rows });
