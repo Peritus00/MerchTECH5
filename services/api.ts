@@ -372,6 +372,10 @@ export const usersAPI = {
     const response = await api.get('/admin/users/log-access');
     return response.data;
   },
+  async getUsage() {
+    const response = await api.get('/api/user/usage');
+    return response.data;
+  },
 };
 
 // Universal Chat API

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
-import { api } from '@/services/api';
+import { api, usersAPI } from '@/services/api';
 
 export interface UsageStats {
   products: number;
@@ -59,22 +59,31 @@ export const useSubscriptionLimits = (): SubscriptionLimitsData => {
     
     setIsLoading(true);
     try {
-      // Fetch user's current usage from various endpoints
-      const [productsRes, mediaRes, playlistsRes] = await Promise.all([
-        api.get('/products?mine=true'),
-        api.get('/media?mine=true'),
-        api.get('/playlists')
-      ]);
-
-      setUsage({
-        products: productsRes.data?.products?.length || productsRes.data?.length || 0,
-        media: mediaRes.data?.media?.length || mediaRes.data?.length || 0,
-        playlists: playlistsRes.data?.playlists?.length || playlistsRes.data?.length || 0,
-        qrCodes: 0, // TODO: Add QR codes endpoint
-        slideshows: 0 // TODO: Add slideshows endpoint
-      });
-    } catch (error) {
+      // Fetch user's current usage from centralized endpoint
+      const usageData = await usersAPI.getUsage();
+      setUsage(usageData);
+    } catch (error: any) {
       console.error('Error fetching usage stats:', error);
+      // Fallback for older server versions or errors
+      try {
+        // Only fallback if endpoint doesn't exist yet (404)
+        if (error.response?.status === 404) {
+          const [productsRes, mediaRes, playlistsRes] = await Promise.all([
+            api.get('/products?mine=true'),
+            api.get('/media?mine=true'),
+            api.get('/playlists')
+          ]);
+          setUsage({
+            products: productsRes.data?.products?.length || productsRes.data?.length || 0,
+            media: mediaRes.data?.media?.length || mediaRes.data?.length || 0,
+            playlists: playlistsRes.data?.playlists?.length || playlistsRes.data?.length || 0,
+            qrCodes: 0,
+            slideshows: 0
+          });
+        }
+      } catch (fallbackError) {
+        console.error('Fallback usage fetch also failed:', fallbackError);
+      }
     } finally {
       setIsLoading(false);
     }

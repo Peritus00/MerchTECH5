@@ -5208,6 +5208,34 @@ app.get('/api/analytics/media-plays/gender-demographics', async (req, res) => {
   }
 });
 
+// Get current user's usage stats (products, media, playlists, etc.)
+app.get('/api/user/usage', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    const [productsRes, mediaRes, playlistsRes, qrRes, slideshowsRes] = await Promise.all([
+      db.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [userId]),
+      db.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [userId]),
+      db.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [userId]),
+      db.query('SELECT COUNT(*) FROM qr_codes WHERE owner_id = $1 AND is_active = true', [userId]),
+      db.query('SELECT COUNT(*) FROM slideshows WHERE owner_id = $1 AND is_active = true', [userId])
+    ]);
+    
+    const usage = {
+      products: parseInt(productsRes.rows[0]?.count || 0),
+      media: parseInt(mediaRes.rows[0]?.count || 0),
+      playlists: parseInt(playlistsRes.rows[0]?.count || 0),
+      qrCodes: parseInt(qrRes.rows[0]?.count || 0),
+      slideshows: parseInt(slideshowsRes.rows[0]?.count || 0)
+    };
+    
+    res.json(usage);
+  } catch (error) {
+    console.error('Error fetching usage stats:', error);
+    res.status(500).json({ error: 'Failed to fetch usage stats' });
+  }
+});
+
 app.get('/api/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
