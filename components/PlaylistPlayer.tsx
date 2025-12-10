@@ -596,36 +596,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         setCurrentIndex(currentIndex);
       }, backoffDelay);
       
-      return; // Don't show alert yet, let retry happen
+      return; // Don't skip yet, let retry happen
     }
     
-    // Max retries reached, show error dialog
+    // Max retries reached - auto-skip to next track (non-blocking)
+    console.warn(`🎵 VIDEO_ERROR: Max retries reached for "${currentMediaItem?.title || 'media file'}". Auto-skipping to next track.`);
     setIsReconnecting(false);
     setRetryAttempt(0); // Reset for next media item
     
-    Alert.alert(
-      'Media Error',
-      `Unable to play "${currentMediaItem?.title || 'this media file'}". This file may be corrupted or unavailable.`,
-      [
-        {
-          text: 'Skip',
-          onPress: () => {
-            console.log('🎵 VIDEO_ERROR: User chose to skip to next track');
-            setRetryAttempt(0);
-            goToNextVideo();
-          },
-        },
-        {
-          text: 'Try Again',
-          onPress: () => {
-            console.log('🎵 VIDEO_ERROR: User chose to retry manually');
-            setRetryAttempt(0);
-            // Force re-render by changing the key
-            setCurrentIndex(currentIndex);
-          },
-        },
-      ]
-    );
+    // Automatically skip to next track without blocking UI
+    goToNextVideo();
   }, [currentMediaItem, goToNextVideo, currentIndex, retryAttempt, user]);
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
@@ -1060,36 +1040,32 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             autoPlay={isPlaying}
             onError={(e) => {
               const video = e.target as HTMLVideoElement;
+              const errorCode = video.error?.code;
+              const errorCodeMeaning = errorCode === 1 ? 'MEDIA_ERR_ABORTED' :
+                                       errorCode === 2 ? 'MEDIA_ERR_NETWORK' :
+                                       errorCode === 3 ? 'MEDIA_ERR_DECODE' :
+                                       errorCode === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN';
+              
               console.error('🎵 HTML5_VIDEO_ERROR:', {
                 error: video.error,
                 networkState: video.networkState,
                 readyState: video.readyState,
                 src: video.src,
                 currentSrc: video.currentSrc,
-                errorCode: video.error?.code,
+                errorCode: errorCode,
                 errorMessage: video.error?.message,
-                errorCodeMeaning: video.error?.code === 1 ? 'MEDIA_ERR_ABORTED' :
-                                 video.error?.code === 2 ? 'MEDIA_ERR_NETWORK' :
-                                 video.error?.code === 3 ? 'MEDIA_ERR_DECODE' :
-                                 video.error?.code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN'
+                errorCodeMeaning: errorCodeMeaning
               });
               
-              // Test if the URL is actually accessible
-              fetch(itemUri, { method: 'HEAD' })
-                .then(response => {
-                  console.log('🎵 HTML5_VIDEO_URL_TEST:', {
-                    url: itemUri,
-                    status: response.status,
-                    statusText: response.statusText,
-                    headers: Object.fromEntries(response.headers.entries()),
-                    contentType: response.headers.get('content-type'),
-                    contentLength: response.headers.get('content-length'),
-                    acceptRanges: response.headers.get('accept-ranges')
-                  });
-                })
-                .catch(error => {
-                  console.error('🎵 HTML5_VIDEO_URL_TEST_ERROR:', error);
-                });
+              // For MEDIA_ERR_SRC_NOT_SUPPORTED (code 4), skip immediately without retries
+              // This error indicates format incompatibility that won't be fixed by retrying
+              if (errorCode === 4) {
+                console.warn('🎵 VIDEO_ERROR: Format not supported (MEDIA_ERR_SRC_NOT_SUPPORTED). Skipping immediately.');
+                setRetryAttempt(maxRetriesRef.current); // Set to max to bypass retry logic
+                resumeOnAdvanceRef.current = true;
+                goToNextVideo();
+                return;
+              }
               
               handleVideoError(e);
             }}
@@ -1315,36 +1291,32 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               autoPlay={isPlaying}
               onError={(e) => {
                 const audio = e.target as HTMLAudioElement;
+                const errorCode = audio.error?.code;
+                const errorCodeMeaning = errorCode === 1 ? 'MEDIA_ERR_ABORTED' :
+                                         errorCode === 2 ? 'MEDIA_ERR_NETWORK' :
+                                         errorCode === 3 ? 'MEDIA_ERR_DECODE' :
+                                         errorCode === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN';
+                
                 console.error('🎵 HTML5_AUDIO_ERROR:', {
                   error: audio.error,
                   networkState: audio.networkState,
                   readyState: audio.readyState,
                   src: audio.src,
                   currentSrc: audio.currentSrc,
-                  errorCode: audio.error?.code,
+                  errorCode: errorCode,
                   errorMessage: audio.error?.message,
-                  errorCodeMeaning: audio.error?.code === 1 ? 'MEDIA_ERR_ABORTED' :
-                                   audio.error?.code === 2 ? 'MEDIA_ERR_NETWORK' :
-                                   audio.error?.code === 3 ? 'MEDIA_ERR_DECODE' :
-                                   audio.error?.code === 4 ? 'MEDIA_ERR_SRC_NOT_SUPPORTED' : 'UNKNOWN'
+                  errorCodeMeaning: errorCodeMeaning
                 });
                 
-                // Test if the URL is actually accessible
-                fetch(itemUri, { method: 'HEAD' })
-                  .then(response => {
-                    console.log('🎵 HTML5_AUDIO_URL_TEST:', {
-                      url: itemUri,
-                      status: response.status,
-                      statusText: response.statusText,
-                      headers: Object.fromEntries(response.headers.entries()),
-                      contentType: response.headers.get('content-type'),
-                      contentLength: response.headers.get('content-length'),
-                      acceptRanges: response.headers.get('accept-ranges')
-                    });
-                  })
-                  .catch(error => {
-                    console.error('🎵 HTML5_AUDIO_URL_TEST_ERROR:', error);
-                  });
+                // For MEDIA_ERR_SRC_NOT_SUPPORTED (code 4), skip immediately without retries
+                // This error indicates format incompatibility that won't be fixed by retrying
+                if (errorCode === 4) {
+                  console.warn('🎵 AUDIO_ERROR: Format not supported (MEDIA_ERR_SRC_NOT_SUPPORTED). Skipping immediately.');
+                  setRetryAttempt(maxRetriesRef.current); // Set to max to bypass retry logic
+                  resumeOnAdvanceRef.current = true;
+                  goToNextVideo();
+                  return;
+                }
                 
                 handleVideoError(e);
               }}
