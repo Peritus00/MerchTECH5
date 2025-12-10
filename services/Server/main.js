@@ -7578,17 +7578,29 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
                 });
             }
             
-            // 🔍 ADDITIONAL CHECK: Warn if file size is suspiciously small for video files
-            if (req.file.mimetype && req.file.mimetype.startsWith('video/') && req.file.size < 100000) {
-                console.warn(`⚠️ SUSPICIOUS FILE SIZE [${requestId}]: Video file is only ${req.file.size} bytes (${(req.file.size / 1024).toFixed(2)} KB). This may indicate truncation.`);
+            // 🔍 CRITICAL CHECK: Reject suspiciously small video files (likely truncated)
+            if (req.file.mimetype && req.file.mimetype.startsWith('video/')) {
+                const minVideoSize = 100 * 1024; // 100KB minimum for videos
+                if (req.file.size < minVideoSize) {
+                    console.error(`🚨 SUSPICIOUS VIDEO SIZE [${requestId}]: Video file is only ${req.file.size} bytes (${(req.file.size / 1024).toFixed(2)} KB). Rejecting upload.`);
+                    return res.status(400).json({
+                        error: 'Video file appears to be corrupted or truncated. Please try uploading again.',
+                        code: 'VIDEO_TOO_SMALL',
+                        details: {
+                            receivedSize: req.file.size,
+                            minimumExpected: minVideoSize,
+                            filename: req.file.originalname
+                        }
+                    });
+                }
+                
+                // Additional check: Warn if video is smaller than 1MB (might be legitimate but unusual)
+                if (req.file.size < 1024 * 1024) {
+                    console.warn(`⚠️ SMALL VIDEO FILE [${requestId}]: Video file is only ${(req.file.size / 1024 / 1024).toFixed(2)}MB. This may be legitimate but is unusual.`);
+                }
             }
             
             console.log(`✅ UPLOAD [${requestId}]: Buffer integrity verified - no truncation detected`);
-            
-            // 🔍 ADDITIONAL CHECK: Warn if file size is suspiciously small for video files
-            if (req.file.mimetype && req.file.mimetype.startsWith('video/') && req.file.size < 100000) {
-                console.warn(`⚠️ SUSPICIOUS FILE SIZE [${requestId}]: Video file is only ${req.file.size} bytes (${(req.file.size / 1024).toFixed(2)} KB). This may indicate truncation.`);
-            }
             
             // Generate a unique key for the file
             const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;

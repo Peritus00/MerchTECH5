@@ -94,23 +94,35 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       let fileToUpload: File;
       
       if (Platform.OS === 'web') {
-        // Web platform - handle file conversion more robustly
-        // Check if asset.uri is already a File object (some DocumentPicker implementations return this)
-        if (asset.uri instanceof File) {
+        // Web platform - prioritize native File object to avoid blob URL truncation issues
+        // Check if asset.file exists (native File object exposed by Expo DocumentPicker on web)
+        if ((asset as any).file instanceof File) {
+          console.log('✅ UPLOAD: Using native File object directly (bypasses blob URL conversion)');
+          fileToUpload = (asset as any).file;
+        } else if (asset.uri instanceof File) {
+          // Fallback: Check if asset.uri is already a File object
+          console.log('✅ UPLOAD: Using File object from asset.uri');
           fileToUpload = asset.uri;
         } else {
-          // Try to fetch the file from the URI
-          // Note: For blob URLs, we need to handle them carefully as they may have size limitations
+          // Last resort: Fetch from blob URL with strict validation
+          console.warn('⚠️ UPLOAD: Native File object not available, using blob URL fetch (may truncate large files)');
           const response = await fetch(asset.uri);
           
           if (!response.ok) {
             throw new Error(`Failed to fetch file: ${response.statusText}`);
           }
           
-          const blob = await response.blob();
+          // Use arrayBuffer for better large file handling than blob()
+          const arrayBuffer = await response.arrayBuffer();
+          const blob = new Blob([arrayBuffer], { type: asset.mimeType });
           
-          // Log size mismatch for debugging, but don't fail the upload
-          // The backend will validate the actual uploaded file size
+          // CRITICAL VALIDATION: Fail immediately if blob is significantly smaller than expected
+          if (asset.size && blob.size < asset.size * 0.99) {
+            const missingMB = ((asset.size - blob.size) / 1024 / 1024).toFixed(2);
+            throw new Error(`File appears to be truncated during blob conversion. Expected ${(asset.size / 1024 / 1024).toFixed(2)}MB but only got ${(blob.size / 1024 / 1024).toFixed(2)}MB (missing ${missingMB}MB). This is a browser limitation with blob URLs. Please try: 1) Using a different browser, 2) Uploading from a different device, or 3) Compressing the video file first.`);
+          }
+          
+          // Warn if there's any size mismatch (even small ones)
           if (asset.size && blob.size !== asset.size) {
             const sizeDiffPercent = ((asset.size - blob.size) / asset.size * 100).toFixed(2);
             console.warn('⚠️ UPLOAD: Blob size differs from expected file size', {
@@ -120,12 +132,6 @@ export const useMediaUpload = (): UseMediaUploadResult => {
               differencePercent: `${sizeDiffPercent}%`,
               filename: asset.name
             });
-            
-            // Only warn if there's a significant difference (>5%), but continue anyway
-            // The backend will handle validation of the actual uploaded file
-            if (Math.abs(asset.size - blob.size) / asset.size > 0.05) {
-              console.warn('⚠️ UPLOAD: Significant size difference detected. Backend will validate actual uploaded size.');
-            }
           }
           
           fileToUpload = new File([blob], asset.name, { type: asset.mimeType });
