@@ -81,6 +81,12 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   
+  // Video error handling state
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const maxRetriesRef = useRef<number>(3);
+  
   // Slideshow-specific state
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
@@ -536,6 +542,10 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
       if (slideshowIntervalRef.current) {
         clearInterval(slideshowIntervalRef.current);
       }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -621,6 +631,13 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const onIndexChanged = (index: number) => {
     setCurrentIndex(index);
     setImageLoadError(false); // Reset image load error when changing images
+    // Reset retry state when media changes
+    setRetryAttempt(0);
+    setIsReconnecting(false);
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
     // If we swipe to a new slide that has a video, we might want to automatically
     // seek the video to the beginning.
     if (media[index]?.media_type === 'video') {
@@ -635,6 +652,77 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const handleMuteToggle = () => {
     setIsMuted((prev) => !prev);
   };
+
+  const goToNextVideo = useCallback(() => {
+    if (currentIndex < media.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+    } else {
+      // Loop back to first video
+      setCurrentIndex(0);
+    }
+  }, [currentIndex, media.length]);
+
+  const handleVideoError = useCallback((error: any) => {
+    const currentMediaItem = media[currentIndex];
+    console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
+    console.log('🎵 VIDEO_ERROR: Current media item:', currentMediaItem);
+    
+    // Clear any existing retry timeout
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    
+    // Check for MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) - skip immediately
+    if (error?.code === 4 || error?.nativeEvent?.code === 4) {
+      console.warn('🎵 VIDEO_ERROR: Format not supported (MEDIA_ERR_SRC_NOT_SUPPORTED). Skipping immediately.');
+      setIsReconnecting(false);
+      setRetryAttempt(0);
+      goToNextVideo();
+      return;
+    }
+    
+    // Check if we should retry automatically
+    if (retryAttempt < maxRetriesRef.current) {
+      const nextAttempt = retryAttempt + 1;
+      const backoffDelay = Math.min(1000 * Math.pow(2, retryAttempt), 10000); // Exponential backoff, max 10s
+      
+      console.log(`🔄 RETRY: Attempting retry ${nextAttempt}/${maxRetriesRef.current} after ${backoffDelay}ms`);
+      setIsReconnecting(true);
+      setRetryAttempt(nextAttempt);
+      
+      // Log retry attempt to analytics (fire and forget)
+      getSessionId().then(sessionId => {
+        analyticsService.trackMediaPlay(
+          typeof currentMediaItem?.id === 'string' ? parseInt(currentMediaItem.id, 10) : Number(currentMediaItem?.id) || 0,
+          0, // Duration 0 for retry events
+          sessionId,
+          user?.id,
+          undefined,
+          undefined,
+          undefined,
+          'retry_attempt'
+        ).catch(() => {}); // Don't let analytics errors break retry logic
+      }).catch(() => {}); // Ignore session ID errors
+      
+      retryTimeoutRef.current = setTimeout(() => {
+        console.log(`🔄 RETRY: Retrying playback (attempt ${nextAttempt})`);
+        setIsReconnecting(false);
+        // Force re-render by updating currentIndex (triggers video reload)
+        setCurrentIndex(currentIndex);
+      }, backoffDelay);
+      
+      return; // Don't skip yet, let retry happen
+    }
+    
+    // Max retries reached - auto-skip to next track (non-blocking)
+    console.warn(`🎵 VIDEO_ERROR: Max retries reached for "${currentMediaItem?.title || 'media file'}". Auto-skipping to next track.`);
+    setIsReconnecting(false);
+    setRetryAttempt(0); // Reset for next media item
+    
+    // Automatically skip to next track without blocking UI
+    goToNextVideo();
+  }, [media, currentIndex, goToNextVideo, retryAttempt, user]);
 
   const renderMediaItem = (item: MediaItem, index: number) => {
     const isActive = index === currentIndex;
@@ -654,6 +742,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           resizeMode={ResizeMode.CONTAIN}
           style={styles.media}
           useNativeControls={false}
+          onError={handleVideoError}
         />
       );
     } else {
@@ -1006,8 +1095,16 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         onIndexChanged={onIndexChanged}
       >
         {media.map((item, index) => (
-          <View key={`media-${item.id}-${index}`}>
+          <View key={`media-${item.id}-${index}`} style={{ flex: 1, position: 'relative' }}>
             {renderMediaItem(item, index)}
+            {/* Reconnecting Overlay */}
+            {isReconnecting && index === currentIndex && (
+              <View style={styles.reconnectingOverlay}>
+                <ActivityIndicator size="large" color="#3b82f6" />
+                <Text style={styles.reconnectingText}>Reconnecting...</Text>
+                <Text style={styles.reconnectingSubtext}>Attempt {retryAttempt} of {maxRetriesRef.current}</Text>
+              </View>
+            )}
           </View>
         ))}
       </Swiper>
@@ -1519,6 +1616,28 @@ const styles = StyleSheet.create({
   },
   productsListContent: {
     paddingBottom: 20, // Add some padding at the bottom for the last item
+  },
+  reconnectingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  reconnectingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  reconnectingSubtext: {
+    color: '#ccc',
+    fontSize: 14,
+    marginTop: 8,
   },
 });
 

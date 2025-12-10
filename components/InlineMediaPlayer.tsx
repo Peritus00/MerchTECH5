@@ -150,9 +150,9 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
             contentType: file.contentType
           });
           
-          // Only show alert for non-abort errors (abort is usually user-initiated)
+          // Log error but don't block UI with alert
           if (error && error.code !== 1) {
-            Alert.alert('Playback Error', `Failed to load audio file: ${errorMessage}\n\nURL: ${streamingUrl}`);
+            console.warn(`🎵 INLINE_PLAYER: Playback error for ${streamingUrl}:`, errorMessage);
           }
         });
         
@@ -165,38 +165,7 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
         // Try to load the audio
         audio.load();
         
-        // Verify the URL is accessible after a short delay
-        const verifyTimeout = setTimeout(() => {
-          if (audio.readyState === 0 && audio.networkState === 3 && !audio.error) {
-            console.warn('🔴 INLINE_PLAYER: Audio may have failed to load - verifying URL...');
-            
-            // Try a fetch to see if the URL is accessible
-            fetch(streamingUrl, { 
-              method: 'HEAD', 
-              mode: 'cors',
-              credentials: 'omit' // Match crossOrigin='anonymous'
-            })
-              .then(response => {
-                console.log('🔴 INLINE_PLAYER: URL accessibility check:', {
-                  status: response.status,
-                  statusText: response.statusText,
-                  ok: response.ok,
-                  headers: {
-                    'content-type': response.headers.get('content-type'),
-                    'access-control-allow-origin': response.headers.get('access-control-allow-origin'),
-                    'content-length': response.headers.get('content-length')
-                  }
-                });
-                
-                if (!response.ok) {
-                  console.error('🔴 INLINE_PLAYER: URL returned non-OK status:', response.status);
-                }
-              })
-              .catch(fetchError => {
-                console.error('🔴 INLINE_PLAYER: URL accessibility check failed:', fetchError);
-              });
-          }
-        }, 2000);
+        // Audio loading is handled by the audio element's error handlers
         
         // Clear timeout if audio loads successfully
         audio.addEventListener('loadeddata', () => {
@@ -207,7 +176,7 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
       }
     } catch (error) {
       console.error('🔴 INLINE_PLAYER: Error initializing audio:', error);
-      Alert.alert('Error', 'Failed to initialize audio player');
+      // Fail silently to user but log error
     }
   };
 
@@ -220,18 +189,17 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
         } else if (audio.readyState >= 3) {
           await audio.play();
         } else {
-          Alert.alert('Loading...', 'Audio is still loading. Please wait a moment.');
+          console.log('⏳ INLINE_PLAYER: Audio is still loading...');
         }
       } else if (player) {
         if (!status.isLoaded) {
-          Alert.alert('Loading...', 'Audio is still loading. Please wait a moment.');
+          console.log('⏳ INLINE_PLAYER: Audio is still loading...');
           return;
         }
         status.playing ? await player.pause() : await player.play();
       }
     } catch (error) {
       console.error('🔴 INLINE_PLAYER: Error toggling playback:', error);
-      Alert.alert('Playback Error', 'Failed to control audio playback');
     }
   };
 

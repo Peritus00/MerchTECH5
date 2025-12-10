@@ -377,22 +377,7 @@ export default function SlideshowAccessScreen() {
       if (slideshowData.images) {
         console.log('🎬 SLIDESHOW_ACCESS: Images from server:', slideshowData.images);
         
-        // Test first image URL if available
-        if (slideshowData.images.length > 0) {
-          const firstImage = slideshowData.images[0];
-          console.log('🎬 SLIDESHOW_ACCESS: Testing first image URL:', firstImage.url);
-          fetch(firstImage.url, { method: 'HEAD' })
-            .then(response => {
-              console.log('🎬 SLIDESHOW_ACCESS: First image URL test response:', {
-                status: response.status,
-                statusText: response.statusText,
-                url: firstImage.url
-              });
-            })
-            .catch(error => {
-              console.error('🎬 SLIDESHOW_ACCESS: First image URL test failed:', error);
-            });
-        }
+        // Images are ready for use
       }
 
     } catch (error: any) {

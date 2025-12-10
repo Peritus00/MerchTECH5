@@ -211,22 +211,7 @@ export default function PlaylistAccessScreen() {
       if (playlistData.mediaFiles) {
         console.log('🔴 PLAYLIST_ACCESS: Media files from server:', playlistData.mediaFiles);
         
-        // Test first media file URL
-        if (playlistData.mediaFiles.length > 0) {
-          const firstFile = playlistData.mediaFiles[0];
-          console.log('🔴 PLAYLIST_ACCESS: Testing first media file URL:', firstFile.url);
-          fetch(firstFile.url, { method: 'HEAD' })
-            .then(response => {
-              console.log('🔴 PLAYLIST_ACCESS: First file URL test response:', {
-                status: response.status,
-                statusText: response.statusText,
-                url: firstFile.url
-              });
-            })
-            .catch(error => {
-              console.error('🔴 PLAYLIST_ACCESS: First file URL test failed:', error);
-            });
-        }
+        // Media files are ready for use
       }
 
       setPlaylist(mappedPlaylist);

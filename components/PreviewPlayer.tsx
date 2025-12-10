@@ -373,24 +373,6 @@ function PreviewPlayer({
               webAudioRef.current.removeEventListener('load', () => {});
             }
             
-            // Test the audio URL first
-            console.log('🔴 PREVIEW_PLAYER: Testing audio URL accessibility...');
-            
-            fetch(currentMedia.url, { method: 'HEAD' })
-              .then(testResponse => {
-                console.log('🔴 PREVIEW_PLAYER: Audio URL test response:', {
-                  status: testResponse.status,
-                  statusText: testResponse.statusText,
-                  contentType: testResponse.headers.get('content-type'),
-                  contentLength: testResponse.headers.get('content-length'),
-                  acceptRanges: testResponse.headers.get('accept-ranges'),
-                  url: currentMedia.url
-                });
-              })
-              .catch(error => {
-                console.error('🔴 PREVIEW_PLAYER: Audio URL test failed:', error);
-              });
-            
             // Create and configure new audio element
             const audio = new Audio();
             
@@ -723,7 +705,7 @@ function PreviewPlayer({
               })
               .catch((error) => {
                 console.error('🔴 PREVIEW_PLAYER: HTML5 video play failed:', error);
-                Alert.alert('Playback Error', `Failed to start video playback: ${error.message}`);
+                // Fail gracefully without alert
               });
           }
         } else {
@@ -733,7 +715,6 @@ function PreviewPlayer({
             setIsPlaying(true);
           } else {
             console.error('🔴 PREVIEW_PLAYER: Video player not available');
-            Alert.alert('Error', 'Video player not initialized');
           }
         }
       } else if (isAudio) {
@@ -745,7 +726,6 @@ function PreviewPlayer({
           // Check if audio element exists and is loaded
           if (!webAudioRef.current) {
             console.error('🔴 PREVIEW_PLAYER: No audio element found');
-            Alert.alert('Audio Error', 'Audio player not initialized');
             return;
           }
           
@@ -789,7 +769,6 @@ function PreviewPlayer({
               console.log('🔴 PREVIEW_PLAYER: Audio is now ready to play');
             } catch (error) {
               console.error('🔴 PREVIEW_PLAYER: Audio failed to become ready:', error);
-              Alert.alert('Audio Error', 'Audio failed to load properly');
               return;
             }
           }
@@ -797,7 +776,6 @@ function PreviewPlayer({
           // Verify the source is still valid
           if (!audio.src || audio.src === '') {
             console.error('🔴 PREVIEW_PLAYER: Audio element has no source');
-            Alert.alert('Audio Error', 'Audio source is missing');
             return;
           }
           
@@ -826,12 +804,10 @@ function PreviewPlayer({
                   console.log('🔴 PREVIEW_PLAYER: Audio recovery successful');
                 } catch (recoveryError) {
                   console.error('🔴 PREVIEW_PLAYER: Audio recovery failed:', recoveryError);
-                  Alert.alert('Playback Error', `Failed to start audio playback: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`);
                 }
               }, 1000);
             } catch (recoveryError) {
               console.error('🔴 PREVIEW_PLAYER: Audio recovery attempt failed:', recoveryError);
-              Alert.alert('Playback Error', `Failed to start audio playback: ${error instanceof Error ? error.message : String(error)}`);
             }
           }
         } else {
@@ -842,13 +818,11 @@ function PreviewPlayer({
             console.log('🔴 PREVIEW_PLAYER: Mobile audio playbook started');
           } catch (error) {
             console.error('🔴 PREVIEW_PLAYER: Mobile audio play failed:', error);
-            Alert.alert('Playbook Error', `Failed to start audio playback: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
       }
     } catch (error) {
       console.error('🔴 PREVIEW_PLAYER: General play error:', error);
-      Alert.alert('Playback Error', `Failed to start playback: ${error instanceof Error ? error.message : String(error)}`);
     }
   };
 

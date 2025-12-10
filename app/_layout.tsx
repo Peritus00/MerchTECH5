@@ -188,6 +188,8 @@ function RootLayoutNav() {
   );
 }
 
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   
@@ -218,20 +220,22 @@ export default function RootLayout() {
   console.log('Web platform - using standard payment processing');
 
   return (
-    <SafeAreaProvider>
-      <QueryClientProvider client={queryClient}>
-        <ActionSheetProvider>
-          <AuthProvider>
-            <CartProvider>
-              <NotificationProvider>
-                <UploadProvider>
-                  <RootLayoutNav />
-                </UploadProvider>
-              </NotificationProvider>
-            </CartProvider>
-          </AuthProvider>
-        </ActionSheetProvider>
-      </QueryClientProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <QueryClientProvider client={queryClient}>
+          <ActionSheetProvider>
+            <AuthProvider>
+              <CartProvider>
+                <NotificationProvider>
+                  <UploadProvider>
+                    <RootLayoutNav />
+                  </UploadProvider>
+                </NotificationProvider>
+              </CartProvider>
+            </AuthProvider>
+          </ActionSheetProvider>
+        </QueryClientProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
