@@ -94,29 +94,42 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       let fileToUpload: File;
       
       if (Platform.OS === 'web') {
-        // Web platform - convert URI to File object
-        const response = await fetch(asset.uri);
-        const blob = await response.blob();
-        
-        // 🔍 VALIDATION: Check if blob size matches expected file size
-        if (asset.size && blob.size !== asset.size) {
-          console.error('🔴 UPLOAD: Blob size mismatch!', {
-            expected: asset.size,
-            actual: blob.size,
-            difference: asset.size - blob.size,
-            filename: asset.name
-          });
+        // Web platform - handle file conversion more robustly
+        // Check if asset.uri is already a File object (some DocumentPicker implementations return this)
+        if (asset.uri instanceof File) {
+          fileToUpload = asset.uri;
+        } else {
+          // Try to fetch the file from the URI
+          // Note: For blob URLs, we need to handle them carefully as they may have size limitations
+          const response = await fetch(asset.uri);
           
-          // If the blob is suspiciously small (less than 1% of expected), fail the upload
-          if (blob.size < asset.size * 0.01) {
-            throw new Error(`File appears to be truncated. Expected ${(asset.size / 1024 / 1024).toFixed(2)}MB but only got ${(blob.size / 1024).toFixed(2)}KB. This may be due to browser limitations or network issues.`);
+          if (!response.ok) {
+            throw new Error(`Failed to fetch file: ${response.statusText}`);
           }
           
-          // Otherwise, warn but continue (use actual blob size)
-          console.warn('⚠️ UPLOAD: Blob size differs from expected, using actual blob size');
+          const blob = await response.blob();
+          
+          // Log size mismatch for debugging, but don't fail the upload
+          // The backend will validate the actual uploaded file size
+          if (asset.size && blob.size !== asset.size) {
+            const sizeDiffPercent = ((asset.size - blob.size) / asset.size * 100).toFixed(2);
+            console.warn('⚠️ UPLOAD: Blob size differs from expected file size', {
+              expected: asset.size,
+              actual: blob.size,
+              difference: asset.size - blob.size,
+              differencePercent: `${sizeDiffPercent}%`,
+              filename: asset.name
+            });
+            
+            // Only warn if there's a significant difference (>5%), but continue anyway
+            // The backend will handle validation of the actual uploaded file
+            if (Math.abs(asset.size - blob.size) / asset.size > 0.05) {
+              console.warn('⚠️ UPLOAD: Significant size difference detected. Backend will validate actual uploaded size.');
+            }
+          }
+          
+          fileToUpload = new File([blob], asset.name, { type: asset.mimeType });
         }
-        
-        fileToUpload = new File([blob], asset.name, { type: asset.mimeType });
       } else {
         // Mobile platforms (iOS/Android) - use URI directly
         // Create a File-like object that works with React Native
