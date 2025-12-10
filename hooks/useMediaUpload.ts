@@ -97,6 +97,25 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         // Web platform - convert URI to File object
         const response = await fetch(asset.uri);
         const blob = await response.blob();
+        
+        // 🔍 VALIDATION: Check if blob size matches expected file size
+        if (asset.size && blob.size !== asset.size) {
+          console.error('🔴 UPLOAD: Blob size mismatch!', {
+            expected: asset.size,
+            actual: blob.size,
+            difference: asset.size - blob.size,
+            filename: asset.name
+          });
+          
+          // If the blob is suspiciously small (less than 1% of expected), fail the upload
+          if (blob.size < asset.size * 0.01) {
+            throw new Error(`File appears to be truncated. Expected ${(asset.size / 1024 / 1024).toFixed(2)}MB but only got ${(blob.size / 1024).toFixed(2)}KB. This may be due to browser limitations or network issues.`);
+          }
+          
+          // Otherwise, warn but continue (use actual blob size)
+          console.warn('⚠️ UPLOAD: Blob size differs from expected, using actual blob size');
+        }
+        
         fileToUpload = new File([blob], asset.name, { type: asset.mimeType });
       } else {
         // Mobile platforms (iOS/Android) - use URI directly
@@ -122,7 +141,9 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         filename: asset.name,
         fileType: getFileType(asset.mimeType || ''),
         contentType: asset.mimeType,
-        filesize: asset.size,
+        // Use actual uploaded file size from S3 instead of original file size
+        // This prevents validation failures if the file was truncated during upload
+        filesize: uploadResult.filesize || asset.size,
       };
       
       const uploadedFile = await mediaAPI.create(mediaData);

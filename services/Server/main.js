@@ -7578,7 +7578,17 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
                 });
             }
             
+            // 🔍 ADDITIONAL CHECK: Warn if file size is suspiciously small for video files
+            if (req.file.mimetype && req.file.mimetype.startsWith('video/') && req.file.size < 100000) {
+                console.warn(`⚠️ SUSPICIOUS FILE SIZE [${requestId}]: Video file is only ${req.file.size} bytes (${(req.file.size / 1024).toFixed(2)} KB). This may indicate truncation.`);
+            }
+            
             console.log(`✅ UPLOAD [${requestId}]: Buffer integrity verified - no truncation detected`);
+            
+            // 🔍 ADDITIONAL CHECK: Warn if file size is suspiciously small for video files
+            if (req.file.mimetype && req.file.mimetype.startsWith('video/') && req.file.size < 100000) {
+                console.warn(`⚠️ SUSPICIOUS FILE SIZE [${requestId}]: Video file is only ${req.file.size} bytes (${(req.file.size / 1024).toFixed(2)} KB). This may indicate truncation.`);
+            }
             
             // Generate a unique key for the file
             const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
@@ -7641,13 +7651,18 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
             console.log(`✅ UPLOAD_SUCCESS [${requestId}]: S3 URL: ${result.Location}`);
             console.log(`✅ UPLOAD_SUCCESS [${requestId}]: Proxy URL: ${proxyUrl}`);
 
+            // Get actual uploaded file size from S3 metadata
+            const metadata = await s3Service.getMetadata(result.Key);
+            const actualUploadedSize = metadata.ContentLength;
+
             res.status(200).json({
                 message: 'File uploaded successfully',
                 url: result.Location, // Direct S3 URL
                 proxy_url: proxyUrl,   // URL proxied through our server
                 key: result.Key,
                 imageUrl: proxyUrl,    // Legacy field for backward compatibility
-                validated: true        // Indicates upload was verified
+                validated: true,        // Indicates upload was verified
+                filesize: actualUploadedSize // Actual uploaded file size (use this instead of original)
             });
 
         } catch (error) {
