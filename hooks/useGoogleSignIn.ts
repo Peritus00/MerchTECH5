@@ -1,17 +1,7 @@
 import { useState, useEffect } from 'react';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/contexts/AuthContext';
-import { frontendUrl } from '@/config/environment';
-
-// Complete the auth session for better UX
-WebBrowser.maybeCompleteAuthSession();
-
-interface GoogleSignInResult {
-  success: boolean;
-  error?: string;
-}
 
 // Declare Google Identity Services types for web
 declare global {
@@ -52,23 +42,33 @@ declare global {
   }
 }
 
+interface GoogleSignInResult {
+  success: boolean;
+  error?: string;
+}
+
 export function useGoogleSignIn() {
   const [loading, setLoading] = useState(false);
   const { socialLogin } = useAuth();
   const [gisReady, setGisReady] = useState(false);
 
-  // Load Google Identity Services script for web
+  // Initialize Google Sign-In
   useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      // Check if script is already loaded
+    if (Platform.OS !== 'web') {
+      GoogleSignin.configure({
+        webClientId: '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com', // Web Client ID for backend verification
+        iosClientId: '587879962618-blge4b7msal6lokld99n82hl9f9tpifs.apps.googleusercontent.com', // iOS Client ID
+        scopes: ['profile', 'email', 'openid'],
+        offlineAccess: true,
+      });
+    } else if (typeof window !== 'undefined') {
+      // Web implementation
       const existingScript = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
       if (existingScript) {
-        // Script already exists, check if GIS is ready
         if (window.google?.accounts?.id) {
           setGisReady(true);
           return;
         }
-        // Wait for script to load
         existingScript.addEventListener('load', () => {
           if (window.google?.accounts?.id) {
             setGisReady(true);
@@ -83,7 +83,6 @@ export function useGoogleSignIn() {
       script.defer = true;
       script.onload = () => {
         console.log('✅ Google Identity Services script loaded');
-        // Wait a bit for GIS to be fully initialized
         setTimeout(() => {
           if (window.google?.accounts?.id) {
             setGisReady(true);
@@ -95,13 +94,6 @@ export function useGoogleSignIn() {
         console.error('❌ Failed to load Google Identity Services script');
       };
       document.head.appendChild(script);
-
-      return () => {
-        // Don't remove script on unmount as it might be used by other components
-      };
-    } else {
-      // For mobile platforms, GIS is not needed
-      setGisReady(true);
     }
   }, []);
 
@@ -109,20 +101,13 @@ export function useGoogleSignIn() {
     setLoading(true);
     try {
       // Use environment variable or fallback to hardcoded production ID
-      // Handle empty strings by trimming and checking length
       const envClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim();
       const googleClientId = (envClientId && envClientId.length > 0) 
         ? envClientId 
         : '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
       
-      if (!googleClientId || googleClientId.length === 0) {
-        console.error('❌ Google OAuth not configured');
-        return { success: false, error: 'Google OAuth not configured. Please set EXPO_PUBLIC_GOOGLE_CLIENT_ID' };
-      }
-      
       console.log('🔧 Using Google Client ID:', googleClientId.substring(0, 20) + '...');
 
-      // For web, use Google Identity Services SDK directly (more reliable)
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         console.log('🌐 Using Google Identity Services for web sign-in');
         
@@ -139,29 +124,20 @@ export function useGoogleSignIn() {
           }
         }
 
-        // Use direct OAuth redirect flow instead of FedCM/prompt API
-        // This is more reliable and doesn't require server-side FedCM configuration
+        // Use direct OAuth redirect flow
         console.log('🔄 Initiating Google OAuth redirect flow...');
         
-        // Generate a random nonce for security
         const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
         
-        // Store nonce in sessionStorage to verify on callback
         if (typeof window !== 'undefined' && window.sessionStorage) {
           sessionStorage.setItem('google_oauth_nonce', nonce);
         }
         
-        // Determine the correct redirect URI
-        // Use window.location.origin to match the current domain
-        // Normalize merchtrader.org domains to www.merchtrader.org for consistency
         let currentOrigin = window.location.origin;
         if (currentOrigin.includes('merchtrader.org')) {
-          // Normalize to www.merchtrader.org for all merchtrader.org subdomains
           currentOrigin = 'https://www.merchtrader.org';
         }
         const redirectUri = `${currentOrigin}/auth/google`;
-        console.log('🔄 Current origin:', window.location.origin);
-        console.log('🔄 Using redirect URI:', redirectUri);
         
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${encodeURIComponent(googleClientId)}` +
@@ -171,57 +147,37 @@ export function useGoogleSignIn() {
           `&nonce=${encodeURIComponent(nonce)}` +
           `&prompt=select_account`;
         
-        console.log('🔄 Redirecting to Google OAuth...');
-        
-        // Redirect to Google
         window.location.href = authUrl;
-        
-        // Return immediately - the callback handler will process the result
         return { success: false, error: 'Redirecting to Google...' };
       } else {
-        // For mobile platforms (iOS/Android), use expo-auth-session
-        console.log('📱 Using expo-auth-session for mobile sign-in');
+        // Native implementation
+        console.log('📱 Using native Google Sign-In');
         
-        const discovery = {
-          authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-          tokenEndpoint: 'https://oauth2.googleapis.com/token',
-          revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-        };
+        await GoogleSignin.hasPlayServices();
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken; // Updated for v13+ structure
 
-        const redirectUri = AuthSession.makeRedirectUri({
-          scheme: 'merchtechapp',
-          path: 'auth/google',
-        });
-
-        const request = new AuthSession.AuthRequest({
-          clientId: googleClientId,
-          scopes: ['openid', 'profile', 'email'],
-          responseType: AuthSession.ResponseType.IdToken,
-          redirectUri,
-          usePKCE: false,
-        });
-
-        const result = await request.promptAsync(discovery);
-
-        if (result.type !== 'success') {
-          return { success: false, error: 'Google sign-in was cancelled' };
-        }
-
-        const idToken = result.params.id_token;
-        
         if (!idToken) {
-          return { success: false, error: 'No ID token received from Google' };
+          throw new Error('No ID token returned from Google');
         }
 
         await socialLogin('google', idToken);
         return { success: true };
       }
     } catch (error: any) {
-      console.error('❌ Google sign-in error:', error);
-      return { 
-        success: false, 
-        error: error.message || 'Google sign-in failed' 
-      };
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return { success: false, error: 'Google sign-in was cancelled' };
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        return { success: false, error: 'Google sign-in is already in progress' };
+      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        return { success: false, error: 'Google Play Services not available or outdated' };
+      } else {
+        console.error('❌ Google sign-in error:', error);
+        return { 
+          success: false, 
+          error: error.message || 'Google sign-in failed' 
+        };
+      }
     } finally {
       setLoading(false);
     }
@@ -229,4 +185,3 @@ export function useGoogleSignIn() {
 
   return { signIn, loading };
 }
-

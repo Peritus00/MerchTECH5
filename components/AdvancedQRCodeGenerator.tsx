@@ -152,22 +152,55 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
       if (!qrCodeSvgRef.current) return null;
       
       try {
+        let svgContent: string | null = null;
+
         // react-native-qrcode-svg has a getString method
         if (qrCodeSvgRef.current.getString) {
-          return qrCodeSvgRef.current.getString();
-        }
-        // Fallback: try toDataURL and extract SVG
-        return new Promise((resolve) => {
-          qrCodeSvgRef.current.toDataURL((dataURL: string) => {
-            // If it's SVG data URL, extract the SVG content
-            if (dataURL.startsWith('data:image/svg+xml')) {
-              const svgContent = decodeURIComponent(dataURL.split(',')[1]);
-              resolve(svgContent);
-            } else {
-              resolve(null);
-            }
+          svgContent = qrCodeSvgRef.current.getString();
+        } else {
+          // Fallback: try toDataURL and extract SVG
+          svgContent = await new Promise((resolve) => {
+            qrCodeSvgRef.current.toDataURL((dataURL: string) => {
+              // If it's SVG data URL, extract the SVG content
+              if (dataURL.startsWith('data:image/svg+xml')) {
+                resolve(decodeURIComponent(dataURL.split(',')[1]));
+              } else {
+                resolve(null);
+              }
+            });
           });
-        });
+        }
+
+        // If we have SVG content and logo options, embed the logo
+        if (svgContent && (logoOptions?.imageData || logoOptions?.imageUrl)) {
+          const optimalLogoSize = calculateOptimalLogoSize();
+          // Assuming square QR code and center position for now (most common)
+          // SVG viewBox is usually equivalent to size prop in react-native-qrcode-svg
+          const x = (size - optimalLogoSize) / 2;
+          const y = (size - optimalLogoSize) / 2;
+          
+          let href = logoOptions.imageData;
+          // Prefer imageUrl if imageData is missing or invalid
+          if (!href && logoOptions.imageUrl) {
+             href = logoOptions.imageUrl;
+          }
+          
+          if (href) {
+             // Create an image tag
+             // Note: We use both href and xlink:href for compatibility
+             const imageTag = `<image x="${x}" y="${y}" width="${optimalLogoSize}" height="${optimalLogoSize}" href="${href}" xlink:href="${href}" preserveAspectRatio="xMidYMid slice" />`;
+             
+             // Check if xmlns:xlink is present, if not add it to svg tag
+             if (!svgContent.includes('xmlns:xlink')) {
+               svgContent = svgContent.replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ');
+             }
+             
+             // Insert image before closing svg tag
+             svgContent = svgContent.replace('</svg>', `${imageTag}</svg>`);
+          }
+        }
+        
+        return svgContent;
       } catch (error) {
         console.error('Error getting SVG string:', error);
         return null;

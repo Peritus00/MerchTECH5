@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
+import { Platform } from 'react-native';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { User } from '@/types';
 import { authService } from '@/services/authService';
 
@@ -163,6 +165,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
     try {
       setIsLoading(true);
+
+      // Sign out from Google if on native platform
+      if (Platform.OS !== 'web') {
+        try {
+          await GoogleSignin.signOut();
+          console.log('🔴 AuthContext: Google Sign-In signed out');
+        } catch (error) {
+          // Ignore error if not signed in with Google or other issue
+          console.log('🔴 AuthContext: Google Sign-In sign out error (ignorable):', error);
+        }
+      }
+
       console.log('🔴 AuthContext: Calling authService.logout()...');
       await authService.logout();
       console.log('🔴 AuthContext: authService.logout() completed');

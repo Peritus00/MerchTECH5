@@ -2,6 +2,7 @@
 
 # Environment
 .env
+.env.bak
 
 # Dependencies
 /node_modules

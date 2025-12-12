@@ -30,9 +30,6 @@
         "UIBackgroundModes": [
           "audio"
         ]
-      },
-      "config": {
-        "usesAppleSignIn": true
       }
     },
     "android": {
@@ -71,6 +68,12 @@
         "expo-apple-authentication",
         {
           "appleTeamId": "4F996CU4LJ"
+        }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.587879962618-blge4b7msal6lokld99n82hl9f9tpifs"
         }
       ]
     ],
