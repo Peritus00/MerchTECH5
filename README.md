@@ -4,6 +4,8 @@ A comprehensive React Native application for creating, managing, and tracking QR
 
 Built with [Expo](https://expo.dev) and React Native.
 
+<!-- Last deployment: 2025-12-12 -->
+
 ## 🚀 Quick Start
 
 ### Development Setup
