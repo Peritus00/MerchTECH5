@@ -19,6 +19,7 @@ import { UploadProgressIndicator } from '@/components/UploadProgressIndicator';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { useAppVersion } from '@/hooks/useAppVersion';
 import { UpdateNotificationModal } from '@/components/UpdateNotificationModal';
+import { configureAudioSession } from '@/services/audio/GlobalAudioConfig';
 
 // Initialize debug logging system early to capture all logs from app startup
 import '@/utils/debugLogger';
@@ -204,6 +205,12 @@ export default function RootLayout() {
   };
   
   const [loaded] = useFonts(fontConfig);
+
+  // Configure global audio session on app startup
+  // This ensures media playback continues when device is locked or app goes to background
+  useEffect(() => {
+    configureAudioSession();
+  }, []);
 
   useEffect(() => {
     if (loaded) {
