@@ -161,11 +161,53 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
           // Fallback: try toDataURL and extract SVG
           svgContent = await new Promise((resolve) => {
             qrCodeSvgRef.current.toDataURL((dataURL: string) => {
-              // If it's SVG data URL, extract the SVG content
-              if (dataURL.startsWith('data:image/svg+xml')) {
-                resolve(decodeURIComponent(dataURL.split(',')[1]));
-              } else {
+              if (!dataURL) {
                 resolve(null);
+                return;
+              }
+
+              // Check if it's a data URI
+              if (dataURL.startsWith('data:image/svg+xml')) {
+                try {
+                  const parts = dataURL.split(',');
+                  const header = parts[0];
+                  const data = parts[1];
+                  
+                  if (header.includes(';base64')) {
+                    resolve(atob(data));
+                  } else {
+                    resolve(decodeURIComponent(data));
+                  }
+                } catch (e) {
+                  console.warn('Error parsing SVG data URI:', e);
+                  resolve(null);
+                }
+              } else {
+                // Handle raw base64 string (common in react-native-qrcode-svg)
+                try {
+                  // Try to decode assuming it's base64
+                  // We clean the string just in case there are newlines or spaces
+                  const cleanData = dataURL.replace(/\s/g, '');
+                  const decoded = atob(cleanData);
+                  
+                  if (decoded.includes('<svg')) {
+                    resolve(decoded);
+                  } else if (dataURL.includes('<svg')) {
+                    // It was already an SVG string?
+                    resolve(dataURL);
+                  } else {
+                    console.warn('Decoded data does not look like SVG');
+                    resolve(null);
+                  }
+                } catch (e) {
+                  // If atob fails, maybe it's raw SVG
+                  if (dataURL.includes('<svg')) {
+                    resolve(dataURL);
+                  } else {
+                    console.warn('Error extracting SVG from data URL:', e);
+                    resolve(null);
+                  }
+                }
               }
             });
           });

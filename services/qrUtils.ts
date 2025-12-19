@@ -692,7 +692,8 @@ export const downloadQRCode = async (
         }
         return;
       } else {
-        Alert.alert('Error', 'Could not extract SVG data from QR code');
+        console.error('❌ Failed to extract SVG data from QR code reference');
+        Alert.alert('Error', 'Could not extract SVG data from QR code. Please try again or use PNG format.');
         return;
       }
     }
