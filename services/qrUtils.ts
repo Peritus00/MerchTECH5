@@ -26,8 +26,18 @@ export enum QRCodeFormat {
 }
 
 // New function to extract SVG from QR component ref
-const extractSVGFromQRRef = async (qrRef: any): Promise<string | null> => {
+const extractSVGFromQRRef = async (qrRef: any, generatorRef?: any): Promise<string | null> => {
   try {
+    // Check if generatorRef has getSVGString method
+    if (generatorRef && typeof generatorRef.getSVGString === 'function') {
+      return await generatorRef.getSVGString();
+    }
+    
+    // Check if generatorRef has current.getSVGString
+    if (generatorRef?.current && typeof generatorRef.current.getSVGString === 'function') {
+      return await generatorRef.current.getSVGString();
+    }
+
     // Check if ref has getSVGString method (from AdvancedQRCodeGenerator)
     if (qrRef && typeof qrRef.getSVGString === 'function') {
       return await qrRef.getSVGString();
@@ -592,7 +602,8 @@ const fallbackDownload = async (qrElement: any, filename: string, format: QRCode
 export const downloadQRCode = async (
   qrRef: any,
   filename: string,
-  format: QRCodeFormat = QRCodeFormat.PNG
+  format: QRCodeFormat = QRCodeFormat.PNG,
+  generatorRef?: any
 ): Promise<void> => {
   try {
     console.log('🔽 Starting QR code download:', { filename, format, platform: Platform.OS });
@@ -607,7 +618,7 @@ export const downloadQRCode = async (
     if (Platform.OS === 'web') {
       // For SVG format on web, extract SVG directly
       if (format === QRCodeFormat.SVG) {
-        const svgString = await extractSVGFromQRRef(qrRef);
+        const svgString = await extractSVGFromQRRef(qrRef, generatorRef);
         if (svgString) {
           const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
           const url = URL.createObjectURL(svgBlob);
@@ -626,7 +637,7 @@ export const downloadQRCode = async (
       
       // For PDF format on web, generate actual PDF
       if (format === QRCodeFormat.PDF) {
-        const svgString = await extractSVGFromQRRef(qrRef);
+        const svgString = await extractSVGFromQRRef(qrRef, generatorRef);
         const pdfBlob = await generatePDF(svgString, filename);
         if (pdfBlob) {
           const url = URL.createObjectURL(pdfBlob);
@@ -660,7 +671,7 @@ export const downloadQRCode = async (
 
     // For SVG on mobile, extract SVG string and save as file
     if (format === QRCodeFormat.SVG) {
-      const svgString = await extractSVGFromQRRef(qrRef);
+      const svgString = await extractSVGFromQRRef(qrRef, generatorRef);
       if (svgString) {
         const filename_sanitized = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
         const fileUri = `${FileSystem.documentDirectory}QRCode_${filename_sanitized}_${Date.now()}.svg`;
@@ -760,7 +771,8 @@ export const downloadAdvancedQRCode = async (
     content: string;
     options: any;
   },
-  format: QRCodeFormat = QRCodeFormat.PNG
+  format: QRCodeFormat = QRCodeFormat.PNG,
+  generatorRef?: any
 ): Promise<void> => {
   try {
     console.log('🚀 Advanced QR download starting:', { name: qrData.name, format });
@@ -773,7 +785,7 @@ export const downloadAdvancedQRCode = async (
     const filename = qrData.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     console.log('📝 Sanitized filename:', filename);
     
-    await downloadQRCode(qrRef, filename, format);
+    await downloadQRCode(qrRef, filename, format, generatorRef);
   } catch (error) {
     console.error('❌ Advanced download failed:', error);
     Alert.alert('Error', `Failed to download QR code: ${error.message || 'Unknown error'}`);

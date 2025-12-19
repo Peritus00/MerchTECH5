@@ -401,7 +401,7 @@ export default function QRCodesScreen() {
       }
       
       // Pass the actual rendered container so web can querySelector() and native can captureRef()
-      await downloadAdvancedQRCode(qrRef, qrData, format);
+      await downloadAdvancedQRCode(qrRef, qrData, format, qrGeneratorRef);
       
       console.log('✅ Download function completed');
     } catch (error) {

@@ -120,12 +120,7 @@ export default function QRCodeDetailsScreen() {
     if (!qrCode || !qrRef.current) return;
     
     try {
-      // Merge QR generator ref methods with wrapper ref for SVG/PDF extraction
-      const combinedRef = {
-        ...qrRef.current,
-        ...(qrGeneratorRef.current || {}),
-      };
-      await downloadQRCode(combinedRef, qrCode.name, format);
+      await downloadQRCode(qrRef.current, qrCode.name, format, qrGeneratorRef.current);
     } catch (error) {
       Alert.alert('Error', 'Failed to download QR code');
     }
