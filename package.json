@@ -140,6 +140,9 @@
     "puppeteer": "^24.19.0",
     "typescript": "~5.8.3"
   },
+  "overrides": {
+    "react-server-dom-webpack": "^19.0.2"
+  },
   "expo": {
     "doctor": {
       "reactNativeDirectoryCheck": {
