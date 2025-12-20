@@ -3,6 +3,24 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
+// Reduce log noise from extremely high-frequency endpoints (streaming, preflight, static assets).
+// This prevents stdout/backpressure issues that can stall the Node event loop under load.
+const shouldSkipRequestResponseLog = (req) => {
+  const url = req.originalUrl || '';
+
+  // Preflight requests can be extremely frequent and low-signal.
+  if (req.method === 'OPTIONS') return true;
+
+  // Media streaming endpoints generate many range requests and can spam logs.
+  if (/^\/api\/media\/\d+\/stream\b/.test(url)) return true;
+  if (/^\/api\/slideshow-(audio|images)\/.+\/stream\b/.test(url)) return true;
+
+  // Common static assets (especially on web) that don't need per-request logging.
+  if (/^\/(favicon\.ico|robots\.txt|manifest\.json|apple-touch-icon.*\.png)$/.test(url)) return true;
+
+  return false;
+};
+
 // Ensure logs directory exists (gracefully handle if it doesn't)
 let logsDirExists = false;
 try {
@@ -61,33 +79,39 @@ const requestIdMiddleware = (req, res, next) => {
 // Request logging middleware
 const requestLogger = (req, res, next) => {
   const startTime = Date.now();
+  const skip = shouldSkipRequestResponseLog(req);
   
   // Log request
-  logger.info({
-    type: 'request',
-    requestId: req.id,
-    method: req.method,
-    url: req.originalUrl,
-    ip: req.ip,
-    userAgent: req.get('user-agent'),
-    userId: req.user?.userId,
-    timestamp: new Date().toISOString()
-  });
+  // Use debug to avoid production log floods; raise LOG_LEVEL to 'debug' when needed.
+  if (!skip) {
+    logger.debug({
+      type: 'request',
+      requestId: req.id,
+      method: req.method,
+      url: req.originalUrl,
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+      userId: req.user?.userId,
+      timestamp: new Date().toISOString()
+    });
+  }
 
   // Override res.end to log response
   const originalEnd = res.end;
   res.end = function(chunk, encoding) {
     const duration = Date.now() - startTime;
     
-    logger.info({
-      type: 'response',
-      requestId: req.id,
-      method: req.method,
-      url: req.originalUrl,
-      statusCode: res.statusCode,
-      duration: `${duration}ms`,
-      timestamp: new Date().toISOString()
-    });
+    if (!skip) {
+      logger.debug({
+        type: 'response',
+        requestId: req.id,
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: res.statusCode,
+        duration: `${duration}ms`,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     originalEnd.call(this, chunk, encoding);
   };

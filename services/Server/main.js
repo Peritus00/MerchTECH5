@@ -49,6 +49,10 @@ try {
   process.exit(1);
 }
 
+// Verbose logging flags (keep production quiet by default to avoid event-loop stalls under load)
+const VERBOSE_PLAYLIST_LOGGING = process.env.VERBOSE_PLAYLIST_LOGGING === 'true';
+const LOG_CORS_NO_ORIGIN = process.env.LOG_CORS_NO_ORIGIN === 'true';
+
 // Environment Variable Validation - Fail fast if critical vars missing
 console.log('🔍 Validating environment variables...');
 const requiredEnvVars = ['JWT_SECRET', 'DATABASE_URL'];
@@ -100,14 +104,18 @@ const allowedOrigins = [
 // When credentials: true, cannot use '*' - must specify exact origins
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman, curl) - but log them
+    // Allow requests with no origin (mobile apps, Postman, curl).
+    // Logging this at warn can flood production logs (mobile frequently omits Origin),
+    // so only log when explicitly enabled.
     if (!origin) {
-      logger.warn({
-        type: 'cors_request',
-        message: 'Request with no origin header',
-        ip: this.ip,
-        timestamp: new Date().toISOString()
-      });
+      if (LOG_CORS_NO_ORIGIN) {
+        logger.warn({
+          type: 'cors_request',
+          message: 'Request with no origin header',
+          ip: this.ip,
+          timestamp: new Date().toISOString()
+        });
+      }
       return callback(null, true);
     }
     
@@ -1017,6 +1025,135 @@ app.get('/api/health', async (req, res) => {
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             error: error.message
+        });
+    }
+});
+
+// Playback health check - tests streaming endpoint with Range request
+// This simulates what a real browser/mobile app does when playing media
+app.get('/api/health/playback', async (req, res) => {
+    const startTime = Date.now();
+    const timeout = 10000; // 10 second timeout
+    
+    try {
+        // Find a test media file (prefer S3-backed media for realistic test)
+        const mediaResult = await db.query(`
+            SELECT id, s3_key, content_type 
+            FROM media 
+            WHERE s3_key IS NOT NULL 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        `);
+        
+        if (mediaResult.rows.length === 0) {
+            return res.status(200).json({
+                status: 'skipped',
+                message: 'No media files available for playback test',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        const testMedia = mediaResult.rows[0];
+        const mediaId = testMedia.id;
+        
+        // Test 1: Verify media exists and has S3 key
+        if (!testMedia.s3_key || !s3Service) {
+            return res.status(200).json({
+                status: 'degraded',
+                message: 'S3 service not configured or media missing S3 key',
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // Test 2: Get metadata from S3 (simulates what streaming endpoint does)
+        let metadata;
+        try {
+            metadata = await s3Service.getMetadata(testMedia.s3_key);
+        } catch (s3Error) {
+            return res.status(503).json({
+                status: 'unhealthy',
+                message: 'Failed to fetch S3 metadata',
+                error: s3Error.message,
+                timestamp: new Date().toISOString(),
+                responseTime: Date.now() - startTime
+            });
+        }
+        
+        const fileSize = metadata.ContentLength;
+        if (!fileSize || fileSize === 0) {
+            return res.status(503).json({
+                status: 'unhealthy',
+                message: 'Media file has zero size',
+                timestamp: new Date().toISOString(),
+                responseTime: Date.now() - startTime
+            });
+        }
+        
+        // Test 3: Make a Range request (bytes=0-1) to simulate browser seeking
+        // This is what browsers do when starting playback
+        let rangeStream;
+        try {
+            rangeStream = await Promise.race([
+                s3Service.getStream(testMedia.s3_key, { start: 0, end: 1 }),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('S3 stream timeout')), timeout)
+                )
+            ]);
+        } catch (streamError) {
+            return res.status(503).json({
+                status: 'unhealthy',
+                message: 'Failed to stream from S3',
+                error: streamError.message,
+                timestamp: new Date().toISOString(),
+                responseTime: Date.now() - startTime
+            });
+        }
+        
+        // Test 4: Verify stream is readable
+        if (!rangeStream || !rangeStream.stream) {
+            return res.status(503).json({
+                status: 'unhealthy',
+                message: 'S3 stream is not readable',
+                timestamp: new Date().toISOString(),
+                responseTime: Date.now() - startTime
+            });
+        }
+        
+        // Clean up: abort the stream since we're just testing
+        if (rangeStream.stream.destroy) {
+            rangeStream.stream.destroy();
+        }
+        
+        const responseTime = Date.now() - startTime;
+        
+        // Success - playback system is working
+        res.status(200).json({
+            status: 'healthy',
+            message: 'Playback streaming test passed',
+            timestamp: new Date().toISOString(),
+            responseTime: `${responseTime}ms`,
+            testMedia: {
+                id: mediaId,
+                contentType: testMedia.content_type,
+                fileSize: fileSize
+            },
+            checks: {
+                mediaExists: true,
+                s3Configured: true,
+                metadataAccessible: true,
+                streamAccessible: true
+            }
+        });
+        
+    } catch (error) {
+        const responseTime = Date.now() - startTime;
+        console.error('Playback health check error:', error);
+        res.status(503).json({
+            status: 'unhealthy',
+            message: 'Playback health check failed',
+            error: error.message,
+            timestamp: new Date().toISOString(),
+            responseTime: `${responseTime}ms`
         });
     }
 });
@@ -8279,10 +8416,61 @@ app.get('/api/media/:id/stream', async (req, res) => {
     }
     
     if (s3Key && s3Service) {
+      // Timeout configuration
+      const METADATA_TIMEOUT = 10000; // 10 seconds for metadata fetch
+      const STREAM_TIMEOUT = 30000; // 30 seconds for stream start
+      
+      let s3Stream = null; // Track stream for abort on disconnect
+      
+      // Enhanced abort handler: destroy S3 stream when client disconnects
+      const abortStream = () => {
+        if (s3Stream && s3Stream.destroy) {
+          try {
+            s3Stream.destroy();
+          } catch (err) {
+            // Ignore errors during cleanup
+          }
+          s3Stream = null;
+        }
+      };
+      
+      // Enhanced cleanup that also aborts stream
+      const enhancedCleanup = () => {
+        abortStream();
+        cleanup();
+      };
+      
+      // Replace cleanup handlers with enhanced version
+      res.removeListener('close', cleanup);
+      res.removeListener('finish', cleanup);
+      res.on('close', enhancedCleanup);
+      res.on('finish', enhancedCleanup);
+      
       try {
-        // Get file metadata from S3
-        const metadata = await s3Service.getMetadata(s3Key);
+        // Get file metadata from S3 with timeout
+        let metadata;
+        try {
+          metadata = await Promise.race([
+            s3Service.getMetadata(s3Key),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('S3 metadata fetch timeout')), METADATA_TIMEOUT)
+            )
+          ]);
+        } catch (metaError) {
+          if (!res.headersSent) {
+            console.error(`❌ MEDIA_STREAM[${correlationId}]: Metadata fetch failed for media ${id}:`, metaError.message);
+            return res.status(503).json({ error: 'Failed to fetch media metadata' });
+          }
+          return;
+        }
+        
         const fileSize = metadata.ContentLength;
+        if (!fileSize || fileSize === 0) {
+          if (!res.headersSent) {
+            return res.status(500).json({ error: 'Media file has zero size' });
+          }
+          return;
+        }
         
         // Enhanced content-type detection for audio files
         let contentType = metadata.ContentType || media.content_type;
@@ -8333,32 +8521,76 @@ app.get('/api/media/:id/stream', async (req, res) => {
         const range = req.headers.range;
         
         if (range) {
-          // Handle range requests for video/audio streaming
-          const parts = range.replace(/bytes=/, "").split("-");
-          const start = parseInt(parts[0], 10);
-          const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+          // Validate and parse Range header
+          const rangeMatch = range.match(/bytes=(\d+)-(\d*)/);
+          if (!rangeMatch) {
+            if (!res.headersSent) {
+              res.setHeader('Content-Range', `bytes */${fileSize}`);
+              return res.status(416).json({ error: 'Invalid range format' });
+            }
+            return;
+          }
+          
+          let start = parseInt(rangeMatch[1], 10);
+          let end = rangeMatch[2] ? parseInt(rangeMatch[2], 10) : fileSize - 1;
+          
+          // Validate range bounds
+          if (isNaN(start) || start < 0) {
+            start = 0;
+          }
+          if (isNaN(end) || end >= fileSize) {
+            end = fileSize - 1;
+          }
+          if (start > end) {
+            if (!res.headersSent) {
+              res.setHeader('Content-Range', `bytes */${fileSize}`);
+              return res.status(416).json({ error: 'Range start exceeds end' });
+            }
+            return;
+          }
+          
           const chunksize = (end - start) + 1;
           
           res.setHeader('Content-Range', `bytes ${start}-${end}/${fileSize}`);
           res.setHeader('Content-Length', chunksize);
           res.status(206);
           
-          // Stream the range from S3
-          const streamResponse = await s3Service.getStream(s3Key, { start, end });
+          // Stream the range from S3 with timeout
+          let streamResponse;
+          try {
+            streamResponse = await Promise.race([
+              s3Service.getStream(s3Key, { start, end }),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('S3 stream start timeout')), STREAM_TIMEOUT)
+              )
+            ]);
+          } catch (streamStartError) {
+            if (!res.headersSent) {
+              console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream start failed for media ${id}, range ${start}-${end}:`, streamStartError.message);
+              return res.status(503).json({ error: 'Failed to start stream' });
+            }
+            return;
+          }
+          
+          s3Stream = streamResponse.stream;
           streamStarted = true;
           
           // Handle stream errors
-          streamResponse.stream.on('error', (streamErr) => {
+          s3Stream.on('error', (streamErr) => {
             if (!streamEnded) {
               streamEnded = true;
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}, range ${start}-${end}:`, streamErr.message);
               if (!res.headersSent) {
                 res.status(500).json({ error: 'Stream error' });
+              } else {
+                // Headers already sent, just abort
+                abortStream();
               }
             }
           });
           
-          streamResponse.stream.pipe(res);
+          // Pipe with error handling
+          s3Stream.pipe(res);
           
           // Only log summary if verbose mode enabled
           if (verboseLogging) {
@@ -8366,24 +8598,42 @@ app.get('/api/media/:id/stream', async (req, res) => {
           }
           return; // Important: return after starting the stream
         } else {
-          // Stream the entire file
+          // Stream the entire file with timeout
           res.setHeader('Content-Length', fileSize);
           
-          const streamResponse = await s3Service.getStream(s3Key);
+          let streamResponse;
+          try {
+            streamResponse = await Promise.race([
+              s3Service.getStream(s3Key),
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('S3 stream start timeout')), STREAM_TIMEOUT)
+              )
+            ]);
+          } catch (streamStartError) {
+            if (!res.headersSent) {
+              console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream start failed for media ${id}:`, streamStartError.message);
+              return res.status(503).json({ error: 'Failed to start stream' });
+            }
+            return;
+          }
+          
+          s3Stream = streamResponse.stream;
           streamStarted = true;
           
           // Handle stream errors
-          streamResponse.stream.on('error', (streamErr) => {
+          s3Stream.on('error', (streamErr) => {
             if (!streamEnded) {
               streamEnded = true;
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}:`, streamErr.message);
               if (!res.headersSent) {
                 res.status(500).json({ error: 'Stream error' });
+              } else {
+                abortStream();
               }
             }
           });
           
-          streamResponse.stream.pipe(res);
+          s3Stream.pipe(res);
           
           if (verboseLogging) {
             console.log(`📺 MEDIA_STREAM[${correlationId}]: Streaming full file (${fileSize} bytes) for media ${id}`);
@@ -8590,7 +8840,9 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     if (user?.max_playlists !== null && user?.max_playlists !== undefined) {
       // Admin has set a custom limit
       maxPlaylists = user.max_playlists;
-      console.log(`📋 Using admin-set custom limit: ${maxPlaylists} playlists for user ${req.user.userId}`);
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'playlist_limit', message: 'Using admin-set custom limit', maxPlaylists, userId: req.user.userId });
+      }
     } else {
       // Use subscription tier limits
       const limits = {
@@ -8599,11 +8851,15 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
         premium: { maxPlaylists: 50 }
       };
       maxPlaylists = (limits[userTier] || limits.free).maxPlaylists;
-      console.log(`📋 Using subscription tier limit: ${maxPlaylists} playlists for ${userTier} plan`);
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'playlist_limit', message: 'Using subscription tier limit', maxPlaylists, userTier, userId: req.user.userId });
+      }
     }
     
     if (currentCount >= maxPlaylists) {
-      console.log(`🚫 Playlist creation blocked: User ${req.user.userId} has ${currentCount}/${maxPlaylists} playlists`);
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'playlist_limit', message: 'Playlist creation blocked', userId: req.user.userId, currentCount, maxPlaylists });
+      }
       return res.status(403).json({ 
         error: `Playlist limit reached. You have reached your limit of ${maxPlaylists} playlists. Please contact support if you need to increase your limit.`,
         limit: maxPlaylists,
@@ -8613,7 +8869,9 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
       });
     }
 
-    console.log(`✅ Playlist creation allowed: User ${req.user.userId} has ${currentCount}/${maxPlaylists} playlists`);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlist_limit', message: 'Playlist creation allowed', userId: req.user.userId, currentCount, maxPlaylists });
+    }
     // END SUBSCRIPTION CHECK
 
     const result = await db.query(
@@ -8669,7 +8927,9 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
     // Process playlists in batches of 5 to prevent database connection pool exhaustion
     // This prevents creating 26+ concurrent connections when fetching many playlists
     const BATCH_SIZE = 5;
-    console.log(`🔴 PLAYLISTS: Fetching ${result.rows.length} playlists in batches of ${BATCH_SIZE}`);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlists_fetch', message: 'Fetching playlists in batches', count: result.rows.length, batchSize: BATCH_SIZE, userId: req.user.userId });
+    }
     
     const playlists = await processInBatches(
       result.rows,
@@ -8679,7 +8939,9 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
       }
     );
 
-    console.log(`🔴 PLAYLISTS: Successfully fetched ${playlists.length} playlists`);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlists_fetch', message: 'Successfully fetched playlists', count: playlists.length, userId: req.user.userId });
+    }
     res.json({ playlists });
   } catch (error) {
     console.error('❌ Error fetching playlists:', error);
@@ -8731,9 +8993,15 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { name, description, requiresActivationCode, isPublic } = req.body;
 
-    console.log('🔴 PLAYLIST_PATCH: Updating playlist:', id);
-    console.log('🔴 PLAYLIST_PATCH: Request body:', { name, description, requiresActivationCode, isPublic });
-    console.log('🔴 PLAYLIST_PATCH: User ID:', req.user.userId);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({
+        type: 'playlist_patch',
+        message: 'Updating playlist',
+        playlistId: id,
+        userId: req.user.userId,
+        body: { name, description, requiresActivationCode, isPublic }
+      });
+    }
 
     // Check if user owns the playlist
     const ownerCheck = await db.query(
@@ -8741,19 +9009,33 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
       [id]
     );
 
-    console.log('🔴 PLAYLIST_PATCH: Owner check result:', ownerCheck.rows);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlist_patch', message: 'Owner check result', playlistId: id, rows: ownerCheck.rows });
+    }
 
     if (ownerCheck.rows.length === 0) {
-      console.log('🔴 PLAYLIST_PATCH: Playlist not found');
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'playlist_patch', message: 'Playlist not found', playlistId: id });
+      }
       return res.status(404).json({ error: 'Playlist not found' });
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
-      console.log('🔴 PLAYLIST_PATCH: Not authorized - owner:', ownerCheck.rows[0].user_id, 'user:', req.user.userId);
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({
+          type: 'playlist_patch',
+          message: 'Not authorized to update playlist',
+          playlistId: id,
+          ownerUserId: ownerCheck.rows[0].user_id,
+          userId: req.user.userId
+        });
+      }
       return res.status(403).json({ error: 'Not authorized to update this playlist' });
     }
 
-    console.log('🔴 PLAYLIST_PATCH: About to run UPDATE query...');
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlist_patch', message: 'Running UPDATE query', playlistId: id });
+    }
     const result = await db.query(
       `UPDATE playlists 
        SET name = COALESCE($1, name), 
@@ -8764,10 +9046,14 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
       [name, description, requiresActivationCode, isPublic, id]
     );
 
-    console.log('🔴 PLAYLIST_PATCH: UPDATE query successful, result:', result.rows[0]);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlist_patch', message: 'UPDATE query successful', playlistId: id });
+    }
 
     const updatedPlaylist = await getPlaylistWithMedia(id);
-    console.log('🔴 PLAYLIST_PATCH: getPlaylistWithMedia result:', updatedPlaylist);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'playlist_patch', message: 'Fetched updated playlist', playlistId: id });
+    }
     
     res.json({ playlist: updatedPlaylist });
   } catch (error) {
@@ -8809,8 +9095,9 @@ app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
 });
 // Helper function to get playlist with media files
 async function getPlaylistWithMedia(playlistId) {
-  console.log('🔴 GET_PLAYLIST: Fetching playlist:', playlistId);
-  console.log('🔴 GET_PLAYLIST: playlistId type:', typeof playlistId);
+  if (VERBOSE_PLAYLIST_LOGGING) {
+    logger.debug({ type: 'get_playlist', message: 'Fetching playlist', playlistId, playlistIdType: typeof playlistId });
+  }
 
   const playlistResult = await db.query(
     `SELECT p.*, u.username 
@@ -8820,13 +9107,20 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
-  console.log('🔴 GET_PLAYLIST: Query result rows:', playlistResult.rows.length);
-  if (playlistResult.rows.length > 0) {
-    console.log('🔴 GET_PLAYLIST: Found playlist:', playlistResult.rows[0].name);
+  if (VERBOSE_PLAYLIST_LOGGING) {
+    logger.debug({
+      type: 'get_playlist',
+      message: 'Playlist query result',
+      playlistId,
+      rows: playlistResult.rows.length,
+      name: playlistResult.rows[0]?.name
+    });
   }
 
   if (playlistResult.rows.length === 0) {
-    console.log('🔴 GET_PLAYLIST: No playlist found, returning null');
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'get_playlist', message: 'No playlist found', playlistId });
+    }
     return null;
   }
 
@@ -8840,15 +9134,23 @@ async function getPlaylistWithMedia(playlistId) {
     [playlistId]
   );
 
-  console.log('🔴 GET_PLAYLIST: Media query result:', mediaResult.rows.length, 'media files found');
+  if (VERBOSE_PLAYLIST_LOGGING) {
+    logger.debug({ type: 'get_playlist', message: 'Media query result', playlistId, mediaCount: mediaResult.rows.length });
+  }
   if (mediaResult.rows.length === 0) {
-    console.log('🔴 GET_PLAYLIST: No media files found for playlist', playlistId);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'get_playlist', message: 'No media files found for playlist', playlistId });
+    }
     // Let's check if media files exist but aren't linked
     const allMediaResult = await db.query('SELECT COUNT(*) FROM media');
-    console.log('🔴 GET_PLAYLIST: Total media files in database:', allMediaResult.rows[0].count);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'get_playlist', message: 'Total media files in database', count: allMediaResult.rows[0].count });
+    }
     
     const playlistMediaResult = await db.query('SELECT COUNT(*) FROM playlist_media WHERE playlist_id = $1', [playlistId]);
-    console.log('🔴 GET_PLAYLIST: Playlist-media links for playlist', playlistId, ':', playlistMediaResult.rows[0].count);
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'get_playlist', message: 'Playlist-media link count', playlistId, count: playlistMediaResult.rows[0].count });
+    }
   }
 
   const mediaFiles = await Promise.all(mediaResult.rows.map(async (media) => {
@@ -8858,7 +9160,9 @@ async function getPlaylistWithMedia(playlistId) {
     if (media.s3_key && s3Service) {
       // Use streaming endpoint to avoid CORS issues with direct S3 access
       properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
-      console.log(`🔧 CORS_FIX: Using streaming endpoint for media ${media.id}`);
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'cors_fix', message: 'Using streaming endpoint for media', mediaId: media.id });
+      }
     } else if (media.url && media.url.startsWith('data:')) {
       // Handle base64 files - use streaming endpoint
       properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
@@ -8959,7 +9263,9 @@ async function getPlaylistWithMedia(playlistId) {
       };
     });
 
-    console.log('🔴 GET_PLAYLIST: Found', productLinks.length, 'product links');
+    if (VERBOSE_PLAYLIST_LOGGING) {
+      logger.debug({ type: 'get_playlist', message: 'Found product links', playlistId, count: productLinks.length });
+    }
   } catch (error) {
     console.error('🔴 GET_PLAYLIST: Error fetching product links:', error);
     productLinks = [];

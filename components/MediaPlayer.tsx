@@ -87,6 +87,12 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxRetriesRef = useRef<number>(3);
   
+  // Stall detection state
+  const [isStalled, setIsStalled] = useState(false);
+  const stallStartTimeRef = useRef<number | null>(null);
+  const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const STALL_THRESHOLD_MS = 10000; // 10 seconds of buffering = stall
+  
   // Slideshow-specific state
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
@@ -546,6 +552,10 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
       }
+      if (stallTimeoutRef.current) {
+        clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -662,16 +672,51 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
     }
   }, [currentIndex, media.length]);
 
+  // Stall detection handler
+  const handleStallDetected = useCallback(() => {
+    const currentMediaItem = media[currentIndex];
+    console.warn(`⏸️ STALL_DETECTED: Media "${currentMediaItem?.title || 'media file'}" stalled for ${STALL_THRESHOLD_MS}ms. Attempting recovery.`);
+    setIsStalled(true);
+    
+    // Clear stall tracking
+    if (stallTimeoutRef.current) {
+      clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    stallStartTimeRef.current = null;
+    
+    // Try to recover: pause and resume, or reload
+    if (videoRef.current) {
+      videoRef.current.pauseAsync().then(() => {
+        setTimeout(() => {
+          videoRef.current?.playAsync().catch(() => {
+            // If resume fails, trigger retry logic
+            handleVideoError({ code: 2, message: 'Stall recovery failed' });
+          });
+        }, 500);
+      }).catch(() => {
+        // If pause fails, trigger retry logic
+        handleVideoError({ code: 2, message: 'Stall recovery failed' });
+      });
+    }
+  }, [media, currentIndex]);
+
   const handleVideoError = useCallback((error: any) => {
     const currentMediaItem = media[currentIndex];
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
     console.log('🎵 VIDEO_ERROR: Current media item:', currentMediaItem);
     
-    // Clear any existing retry timeout
+    // Clear any existing retry/stall timeouts
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
     }
+    if (stallTimeoutRef.current) {
+      clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    setIsStalled(false);
+    stallStartTimeRef.current = null;
     
     // Check for MEDIA_ERR_SRC_NOT_SUPPORTED (code 4) - skip immediately
     if (error?.code === 4 || error?.nativeEvent?.code === 4) {
@@ -743,6 +788,38 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           style={styles.media}
           useNativeControls={false}
           onError={handleVideoError}
+          onPlaybackStatusUpdate={(status) => {
+            // Stall detection: track buffering state
+            if (status.isBuffering) {
+              if (!stallStartTimeRef.current) {
+                // Buffering just started
+                stallStartTimeRef.current = Date.now();
+                setIsStalled(false);
+                
+                // Set timeout to detect stall
+                if (stallTimeoutRef.current) {
+                  clearTimeout(stallTimeoutRef.current);
+                }
+                stallTimeoutRef.current = setTimeout(() => {
+                  handleStallDetected();
+                }, STALL_THRESHOLD_MS);
+              }
+            } else {
+              // Not buffering - clear stall tracking
+              if (stallStartTimeRef.current) {
+                const bufferingDuration = Date.now() - stallStartTimeRef.current;
+                if (bufferingDuration > STALL_THRESHOLD_MS) {
+                  console.log(`✅ STALL_RECOVERED: Buffering resolved after ${bufferingDuration}ms`);
+                }
+                stallStartTimeRef.current = null;
+                setIsStalled(false);
+              }
+              if (stallTimeoutRef.current) {
+                clearTimeout(stallTimeoutRef.current);
+                stallTimeoutRef.current = null;
+              }
+            }
+          }}
         />
       );
     } else {

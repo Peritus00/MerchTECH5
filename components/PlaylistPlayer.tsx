@@ -91,6 +91,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const resumeOnAdvanceRef = useRef<boolean>(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxRetriesRef = useRef<number>(3);
+  
+  // Stall detection state (for HTML5 video on web)
+  const [isStalled, setIsStalled] = useState(false);
+  const stallStartTimeRef = useRef<number | null>(null);
+  const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const STALL_THRESHOLD_MS = 10000; // 10 seconds of buffering = stall
+  const html5VideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Analytics tracking state
   const playDurationRef = useRef<number>(0); // Duration in seconds
@@ -522,6 +529,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
       }
+      if (stallTimeoutRef.current) {
+        clearTimeout(stallTimeoutRef.current);
+        stallTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -560,11 +571,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
     console.log('🎵 VIDEO_ERROR: Current media item:', currentMediaItem);
     
-    // Clear any existing retry timeout
+    // Clear any existing retry/stall timeouts
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
     }
+    if (stallTimeoutRef.current) {
+      clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    setIsStalled(false);
+    stallStartTimeRef.current = null;
     
     // Check if we should retry automatically
     if (retryAttempt < maxRetriesRef.current) {
@@ -1087,13 +1104,66 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             onCanPlayThrough={() => {
               console.log('🎵 HTML5_VIDEO: onCanPlayThrough - React event');
             }}
+            ref={(el) => {
+              html5VideoRef.current = el;
+            }}
             onWaiting={() => {
               console.log('🎵 HTML5_VIDEO: onWaiting - React event');
+              // Stall detection: track when video is waiting/buffering
+              if (!stallStartTimeRef.current) {
+                // Buffering just started
+                stallStartTimeRef.current = Date.now();
+                setIsStalled(false);
+                
+                // Set timeout to detect stall
+                if (stallTimeoutRef.current) {
+                  clearTimeout(stallTimeoutRef.current);
+                }
+                stallTimeoutRef.current = setTimeout(() => {
+                  const currentMediaItem = media[currentIndex];
+                  console.warn(`⏸️ STALL_DETECTED: Media "${currentMediaItem?.title || 'media file'}" stalled for ${STALL_THRESHOLD_MS}ms. Attempting recovery.`);
+                  setIsStalled(true);
+                  
+                  // Try to recover: pause and resume
+                  const video = html5VideoRef.current;
+                  if (video) {
+                    video.pause();
+                    setTimeout(() => {
+                      video.play().catch(() => {
+                        // If resume fails, trigger retry logic
+                        console.warn('⏸️ STALL_RECOVERY_FAILED: Triggering retry');
+                        handleVideoError({ code: 2, message: 'Stall recovery failed' });
+                      });
+                    }, 500);
+                  }
+                  
+                  // Clear stall tracking
+                  if (stallTimeoutRef.current) {
+                    clearTimeout(stallTimeoutRef.current);
+                    stallTimeoutRef.current = null;
+                  }
+                  stallStartTimeRef.current = null;
+                }, STALL_THRESHOLD_MS);
+              }
             }}
             onPlaying={() => {
               console.log('🎵 HTML5_VIDEO: onPlaying - React event');
               console.log('📊 TRACKING: Video started playing, setting isPlaying to true');
               setIsPlaying(true);
+              
+              // Not buffering - clear stall tracking
+              if (stallStartTimeRef.current) {
+                const bufferingDuration = Date.now() - stallStartTimeRef.current;
+                if (bufferingDuration > STALL_THRESHOLD_MS) {
+                  console.log(`✅ STALL_RECOVERED: Buffering resolved after ${bufferingDuration}ms`);
+                }
+                stallStartTimeRef.current = null;
+                setIsStalled(false);
+              }
+              if (stallTimeoutRef.current) {
+                clearTimeout(stallTimeoutRef.current);
+                stallTimeoutRef.current = null;
+              }
             }}
             onPause={() => {
               console.log('🎵 HTML5_VIDEO: onPause - React event');
