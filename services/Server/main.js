@@ -52,6 +52,7 @@ try {
 // Verbose logging flags (keep production quiet by default to avoid event-loop stalls under load)
 const VERBOSE_PLAYLIST_LOGGING = process.env.VERBOSE_PLAYLIST_LOGGING === 'true';
 const LOG_CORS_NO_ORIGIN = process.env.LOG_CORS_NO_ORIGIN === 'true';
+const VERBOSE_MEDIA_LOGGING = process.env.VERBOSE_MEDIA_LOGGING === 'true';
 
 // Environment Variable Validation - Fail fast if critical vars missing
 console.log('🔍 Validating environment variables...');
@@ -8145,13 +8146,13 @@ app.post('/api/media',
 
 app.get('/api/media', authenticateToken, async (req, res) => {
   try {
-    console.log('🔴 MEDIA: Fetching media files for user:', req.user.userId);
+    if (VERBOSE_MEDIA_LOGGING) console.log('🔴 MEDIA: Fetching media files for user:', req.user.userId);
     
     // Check if current user is admin
     const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
     
-    console.log('🔴 MEDIA: User is admin:', isAdmin);
+    if (VERBOSE_MEDIA_LOGGING) console.log('🔴 MEDIA: User is admin:', isAdmin);
     
     let query, params;
     
@@ -8159,17 +8160,17 @@ app.get('/api/media', authenticateToken, async (req, res) => {
       // Admin can see all files
       query = 'SELECT * FROM media ORDER BY created_at DESC';
       params = [];
-      console.log('🔴 MEDIA: Admin access - returning all media files');
+      if (VERBOSE_MEDIA_LOGGING) console.log('🔴 MEDIA: Admin access - returning all media files');
     } else {
       // Regular users can only see their own files
       query = 'SELECT * FROM media WHERE user_id = $1 ORDER BY created_at DESC';
       params = [req.user.userId];
-      console.log('🔴 MEDIA: Regular user access - returning only own media files');
+      if (VERBOSE_MEDIA_LOGGING) console.log('🔴 MEDIA: Regular user access - returning only own media files');
     }
     
     const result = await db.query(query, params);
     
-    console.log('🔴 MEDIA: Found', result.rows.length, 'media files for user');
+    if (VERBOSE_MEDIA_LOGGING) console.log('🔴 MEDIA: Found', result.rows.length, 'media files for user');
     
     // Process media files to handle S3 URLs properly
     const processedMedia = await Promise.all(result.rows.map(async (media) => {
