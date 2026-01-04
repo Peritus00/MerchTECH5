@@ -87,6 +87,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
+  const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -559,13 +560,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   }, [isPlaying]);
 
   const goToNextVideo = useCallback(() => {
+    // Always stop current media before swapping to avoid overlap
+    stopCurrentMedia();
     if (currentIndex < media.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
       // Loop back to first video
       setCurrentIndex(0);
     }
-  }, [currentIndex, media.length]);
+  }, [currentIndex, media.length, stopCurrentMedia]);
 
   const handleVideoError = useCallback((error: any) => {
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
@@ -610,6 +613,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         console.log(`🔄 RETRY: Retrying playback (attempt ${nextAttempt})`);
         setIsReconnecting(false);
         // Force re-render by updating currentIndex (triggers video reload)
+        stopCurrentMedia();
         setCurrentIndex(currentIndex);
       }, backoffDelay);
       
@@ -623,7 +627,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     
     // Automatically skip to next track without blocking UI
     goToNextVideo();
-  }, [currentMediaItem, goToNextVideo, currentIndex, retryAttempt, user]);
+  }, [currentMediaItem, goToNextVideo, currentIndex, retryAttempt, user, stopCurrentMedia]);
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (status.isLoaded) {
@@ -694,9 +698,46 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     setIsMuted((prev) => !prev);
   };
 
+  // Stop any currently playing media before switching tracks to avoid overlap
+  const stopCurrentMedia = useCallback(() => {
+    // Pause HTML5 video if present
+    if (html5VideoRef.current) {
+      try {
+        html5VideoRef.current.pause();
+        html5VideoRef.current.currentTime = 0;
+        html5VideoRef.current.removeAttribute('src'); // fully unload
+        html5VideoRef.current.load();
+      } catch (e) {
+        console.warn('Stop media: error stopping html5 video', e);
+      }
+    }
+
+    // Pause HTML5 audio if present
+    if (html5AudioRef.current) {
+      try {
+        html5AudioRef.current.pause();
+        html5AudioRef.current.currentTime = 0;
+        html5AudioRef.current.removeAttribute('src');
+        html5AudioRef.current.load();
+      } catch (e) {
+        console.warn('Stop media: error stopping html5 audio', e);
+      }
+    }
+
+    // Pause expo-av player (mobile) or shimmed web audio
+    if (Platform.OS !== 'web' && (videoRef.current as any)?.stopAsync) {
+      (videoRef.current as any).stopAsync().catch(() => {});
+    } else if ((videoRef.current as any)?.pauseAsync) {
+      (videoRef.current as any).pauseAsync().catch(() => {});
+    }
+
+    setIsPlaying(false);
+  }, []);
+
   const handlePrevious = () => {
     // Preserve play state across manual navigation
     resumeOnAdvanceRef.current = isPlaying;
+    stopCurrentMedia();
     if (currentIndex > 0) {
       setCurrentIndex(currentIndex - 1);
     } else {
@@ -708,6 +749,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const handleNext = () => {
     // Preserve play state across manual navigation
     resumeOnAdvanceRef.current = isPlaying;
+    stopCurrentMedia();
     goToNextVideo();
   };
 
@@ -1262,6 +1304,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               crossOrigin="anonymous"
               ref={(ref) => {
                 console.log('🎵 HTML5_AUDIO: Audio ref callback called:', !!ref);
+                html5AudioRef.current = ref;
                 if (ref) {
                   // Store reference for play/pause control
                   (videoRef as any).current = {
