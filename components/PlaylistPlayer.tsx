@@ -1127,7 +1127,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               borderRadius: 8,
               objectFit: 'contain'
             } as React.CSSProperties}
-            controls={false}
+            controls={true}
             playsInline
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
