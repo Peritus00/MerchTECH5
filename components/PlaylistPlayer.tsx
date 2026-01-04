@@ -550,6 +550,42 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
   }, []);
 
+  // Stop any currently playing media before switching tracks to avoid overlap
+  const stopCurrentMedia = useCallback(() => {
+    // Pause HTML5 video if present
+    if (html5VideoRef.current) {
+      try {
+        html5VideoRef.current.pause();
+        html5VideoRef.current.currentTime = 0;
+        html5VideoRef.current.removeAttribute('src'); // fully unload
+        html5VideoRef.current.load();
+      } catch (e) {
+        console.warn('Stop media: error stopping html5 video', e);
+      }
+    }
+
+    // Pause HTML5 audio if present
+    if (html5AudioRef.current) {
+      try {
+        html5AudioRef.current.pause();
+        html5AudioRef.current.currentTime = 0;
+        html5AudioRef.current.removeAttribute('src');
+        html5AudioRef.current.load();
+      } catch (e) {
+        console.warn('Stop media: error stopping html5 audio', e);
+      }
+    }
+
+    // Pause expo-av player (mobile) or shimmed web audio
+    if (Platform.OS !== 'web' && (videoRef.current as any)?.stopAsync) {
+      (videoRef.current as any).stopAsync().catch(() => {});
+    } else if ((videoRef.current as any)?.pauseAsync) {
+      (videoRef.current as any).pauseAsync().catch(() => {});
+    }
+
+    setIsPlaying(false);
+  }, []);
+
   // Play/pause synchronization - only handle the current track's Video component
   useEffect(() => {
     if (isPlaying) {
@@ -697,42 +733,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const handleMuteToggle = () => {
     setIsMuted((prev) => !prev);
   };
-
-  // Stop any currently playing media before switching tracks to avoid overlap
-  const stopCurrentMedia = useCallback(() => {
-    // Pause HTML5 video if present
-    if (html5VideoRef.current) {
-      try {
-        html5VideoRef.current.pause();
-        html5VideoRef.current.currentTime = 0;
-        html5VideoRef.current.removeAttribute('src'); // fully unload
-        html5VideoRef.current.load();
-      } catch (e) {
-        console.warn('Stop media: error stopping html5 video', e);
-      }
-    }
-
-    // Pause HTML5 audio if present
-    if (html5AudioRef.current) {
-      try {
-        html5AudioRef.current.pause();
-        html5AudioRef.current.currentTime = 0;
-        html5AudioRef.current.removeAttribute('src');
-        html5AudioRef.current.load();
-      } catch (e) {
-        console.warn('Stop media: error stopping html5 audio', e);
-      }
-    }
-
-    // Pause expo-av player (mobile) or shimmed web audio
-    if (Platform.OS !== 'web' && (videoRef.current as any)?.stopAsync) {
-      (videoRef.current as any).stopAsync().catch(() => {});
-    } else if ((videoRef.current as any)?.pauseAsync) {
-      (videoRef.current as any).pauseAsync().catch(() => {});
-    }
-
-    setIsPlaying(false);
-  }, []);
 
   const handlePrevious = () => {
     // Preserve play state across manual navigation
