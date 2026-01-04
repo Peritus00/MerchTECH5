@@ -578,9 +578,20 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
     // Pause expo-av player (mobile) or shimmed web audio
     if (Platform.OS !== 'web' && (videoRef.current as any)?.stopAsync) {
-      (videoRef.current as any).stopAsync().catch(() => {});
+      try {
+        (videoRef.current as any).stopAsync().catch(() => {});
+      } catch (e) {
+        console.warn('Stop media: error calling stopAsync', e);
+      }
     } else if ((videoRef.current as any)?.pauseAsync) {
-      (videoRef.current as any).pauseAsync().catch(() => {});
+      try {
+        const pauseResult = (videoRef.current as any).pauseAsync();
+        if (pauseResult && typeof pauseResult.catch === 'function') {
+          pauseResult.catch(() => {});
+        }
+      } catch (e) {
+        console.warn('Stop media: error calling pauseAsync', e);
+      }
     }
 
     setIsPlaying(false);
@@ -589,21 +600,28 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   // Play/pause synchronization - only handle the current track's Video component
   useEffect(() => {
     if (isPlaying) {
-      videoRef.current?.playAsync();
+      videoRef.current?.playAsync()?.catch((err) => {
+        console.warn('Play failed:', err);
+      });
     } else {
-      videoRef.current?.pauseAsync();
+      videoRef.current?.pauseAsync()?.catch((err) => {
+        console.warn('Pause failed:', err);
+      });
     }
   }, [isPlaying]);
 
   const goToNextVideo = useCallback(() => {
-    // Always stop current media before swapping to avoid overlap
+    // Stop current media first
     stopCurrentMedia();
-    if (currentIndex < media.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      // Loop back to first video
-      setCurrentIndex(0);
-    }
+    
+    // Small delay to let cleanup complete before switching
+    setTimeout(() => {
+      if (currentIndex < media.length - 1) {
+        setCurrentIndex(currentIndex + 1);
+      } else {
+        setCurrentIndex(0);
+      }
+    }, 100); // 100ms for cleanup
   }, [currentIndex, media.length, stopCurrentMedia]);
 
   const handleVideoError = useCallback((error: any) => {
@@ -716,6 +734,23 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
     }
+  }, [currentIndex]);
+
+  // Cleanup media when track changes
+  useEffect(() => {
+    return () => {
+      // Ensure old media stops when index changes
+      if (html5VideoRef.current) {
+        try {
+          html5VideoRef.current.pause();
+        } catch (e) {}
+      }
+      if (html5AudioRef.current) {
+        try {
+          html5AudioRef.current.pause();
+        } catch (e) {}
+      }
+    };
   }, [currentIndex]);
 
   // If we advanced while playing, auto-resume playback on the new item
@@ -997,6 +1032,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         
         return (
           <video
+            key={`video-${currentIndex}-${currentItem.id}`}
             ref={(ref) => {
               console.log('🎵 HTML5_VIDEO: Video ref callback called:', !!ref);
               if (ref) {
@@ -1009,6 +1045,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                   pauseAsync: () => {
                     console.log('🎵 HTML5_VIDEO: pauseAsync called');
                     ref.pause();
+                    return Promise.resolve(); // Return resolved promise
                   },
                   setPositionAsync: (position: number) => { 
                     console.log('🎵 HTML5_VIDEO: setPositionAsync called:', position);
@@ -1090,7 +1127,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               borderRadius: 8,
               objectFit: 'contain'
             } as React.CSSProperties}
-            controls={true}
+            controls={false}
             playsInline
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
@@ -1301,6 +1338,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           
             {/* HTML5 audio element for web */}
             <audio
+              key={`audio-${currentIndex}-${currentItem.id}`}
               crossOrigin="anonymous"
               ref={(ref) => {
                 console.log('🎵 HTML5_AUDIO: Audio ref callback called:', !!ref);
@@ -1315,6 +1353,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                     pauseAsync: () => {
                       console.log('🎵 HTML5_AUDIO: pauseAsync called');
                       ref.pause();
+                      return Promise.resolve(); // Return resolved promise
                     },
                     setPositionAsync: (position: number) => { 
                       console.log('🎵 HTML5_AUDIO: setPositionAsync called:', position);
@@ -1397,7 +1436,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               }}
               src={itemUri}
               style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
-              controls={true}
+              controls={false}
               controlsList="nodownload noplaybackrate noremoteplayback"
               onContextMenu={(e) => e.preventDefault()}
               muted={isMuted}
