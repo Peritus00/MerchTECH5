@@ -84,6 +84,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [showExitButton, setShowExitButton] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
+  const [userHasInteracted, setUserHasInteracted] = useState(false);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -599,16 +600,25 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   // Play/pause synchronization - only handle the current track's Video component
   useEffect(() => {
+    // Only attempt programmatic play after user has interacted
+    if (!userHasInteracted) {
+      return;
+    }
+
     if (isPlaying) {
       videoRef.current?.playAsync()?.catch((err) => {
         console.warn('Play failed:', err);
+        // If play fails, retry once after short delay
+        setTimeout(() => {
+          videoRef.current?.playAsync()?.catch(() => {});
+        }, 100);
       });
     } else {
       videoRef.current?.pauseAsync()?.catch((err) => {
         console.warn('Pause failed:', err);
       });
     }
-  }, [isPlaying]);
+  }, [isPlaying, userHasInteracted]);
 
   const goToNextVideo = useCallback(() => {
     // Stop current media first
@@ -762,6 +772,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   }, [currentIndex]);
 
   const handlePlayPause = () => {
+    // Mark that user has interacted
+    if (!userHasInteracted) {
+      setUserHasInteracted(true);
+    }
     setIsPlaying((prev) => !prev);
   };
 
@@ -1127,13 +1141,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               borderRadius: 8,
               objectFit: 'contain'
             } as React.CSSProperties}
-            controls={true}
+            controls={false}
             playsInline
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
             muted={isMuted}
-            autoPlay={isPlaying}
             onError={(e) => {
               const video = e.target as HTMLVideoElement;
               const errorCode = video.error?.code;
@@ -1440,7 +1453,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               controlsList="nodownload noplaybackrate noremoteplayback"
               onContextMenu={(e) => e.preventDefault()}
               muted={isMuted}
-              autoPlay={isPlaying}
               onError={(e) => {
                 const audio = e.target as HTMLAudioElement;
                 const errorCode = audio.error?.code;
@@ -1644,6 +1656,25 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               !isFullscreen && { minHeight: estimatedVideoHeight }
             ]}>
                 {renderCurrentMedia()}
+                
+                {/* Play Overlay - shown until first user interaction */}
+                {!userHasInteracted && !isPlaying && (
+                  <TouchableOpacity 
+                    style={styles.playOverlay}
+                    onPress={() => {
+                      setUserHasInteracted(true);
+                      setIsPlaying(true);
+                    }}
+                  >
+                    <View style={styles.playOverlayButton}>
+                      <FontAwesome5 name="play" size={48} color="#ffffff" />
+                    </View>
+                    <Text style={styles.playOverlayText}>
+                      Tap to Start Playlist
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                
                 {/* Reconnecting Overlay */}
                 {isReconnecting && (
                   <View style={styles.reconnectingOverlay}>
@@ -2488,6 +2519,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Play overlay styles
+  playOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  playOverlayButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#3b82f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  playOverlayText: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '600',
   },
 });
 
