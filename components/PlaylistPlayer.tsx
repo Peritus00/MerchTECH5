@@ -1664,6 +1664,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                     onPress={() => {
                       setUserHasInteracted(true);
                       setIsPlaying(true);
+                      // Directly trigger play to avoid race condition with effect
+                      setTimeout(() => {
+                        videoRef.current?.playAsync()?.catch((err) => {
+                          console.warn('Initial play failed:', err);
+                        });
+                      }, 50);
                     }}
                   >
                     <View style={styles.playOverlayButton}>
