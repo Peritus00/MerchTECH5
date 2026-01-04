@@ -1049,6 +1049,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             key={`video-${currentIndex}-${currentItem.id}`}
             ref={(ref) => {
               console.log('🎵 HTML5_VIDEO: Video ref callback called:', !!ref);
+              // Store the native HTML5 video element ref
+              html5VideoRef.current = ref;
               if (ref) {
                 // Store reference for play/pause control
                 (videoRef as any).current = {
@@ -1195,9 +1197,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             }}
             onCanPlayThrough={() => {
               console.log('🎵 HTML5_VIDEO: onCanPlayThrough - React event');
-            }}
-            ref={(el) => {
-              html5VideoRef.current = el;
+              // Auto-play when media is ready and user has interacted
+              if (userHasInteracted && isPlaying && html5VideoRef.current) {
+                console.log('🎵 HTML5_VIDEO: Auto-playing on canplaythrough');
+                html5VideoRef.current.play().catch((err) => {
+                  console.warn('🎵 HTML5_VIDEO: Auto-play on canplaythrough failed:', err);
+                });
+              }
             }}
             onWaiting={() => {
               console.log('🎵 HTML5_VIDEO: onWaiting - React event');
@@ -1495,6 +1501,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               }}
               onCanPlayThrough={() => {
                 console.log('🎵 HTML5_AUDIO: onCanPlayThrough - React event');
+                // Auto-play when media is ready and user has interacted
+                if (userHasInteracted && isPlaying && html5AudioRef.current) {
+                  console.log('🎵 HTML5_AUDIO: Auto-playing on canplaythrough');
+                  html5AudioRef.current.play().catch((err) => {
+                    console.warn('🎵 HTML5_AUDIO: Auto-play on canplaythrough failed:', err);
+                  });
+                }
               }}
               onWaiting={() => {
                 console.log('🎵 HTML5_AUDIO: onWaiting - React event');
@@ -1665,11 +1678,30 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                       setUserHasInteracted(true);
                       setIsPlaying(true);
                       // Directly trigger play to avoid race condition with effect
+                      // Use native element refs for more reliable playback
                       setTimeout(() => {
-                        videoRef.current?.playAsync()?.catch((err) => {
-                          console.warn('Initial play failed:', err);
-                        });
-                      }, 50);
+                        // Try HTML5 video first
+                        if (html5VideoRef.current) {
+                          console.log('🎵 OVERLAY: Playing via HTML5 video ref');
+                          html5VideoRef.current.play().catch((err) => {
+                            console.warn('Initial video play failed:', err);
+                          });
+                        } 
+                        // Try HTML5 audio
+                        else if (html5AudioRef.current) {
+                          console.log('🎵 OVERLAY: Playing via HTML5 audio ref');
+                          html5AudioRef.current.play().catch((err) => {
+                            console.warn('Initial audio play failed:', err);
+                          });
+                        }
+                        // Fallback to videoRef shim
+                        else {
+                          console.log('🎵 OVERLAY: Playing via videoRef shim');
+                          videoRef.current?.playAsync()?.catch((err) => {
+                            console.warn('Initial play failed:', err);
+                          });
+                        }
+                      }, 100); // Increased delay to ensure refs are set
                     }}
                   >
                     <View style={styles.playOverlayButton}>
