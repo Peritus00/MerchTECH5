@@ -1,8 +1,56 @@
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Platform, Image } from 'react-native';
 import QRCodeSVG from 'react-native-qrcode-svg';
-import QRCode from 'qrcode';
+import qrGenerator from 'qrcode-generator';
 import { ThemedText } from './ThemedText';
+
+// Generate SVG string using qrcode-generator (pure JS, works in React Native)
+const generateQRCodeSVG = (
+  text: string,
+  size: number,
+  fgColor: string,
+  bgColor: string,
+  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H' = 'H'
+): string | null => {
+  try {
+    // Map error correction level to qrcode-generator format
+    const ecLevelMap: { [key: string]: 'L' | 'M' | 'Q' | 'H' } = {
+      'L': 'L',
+      'M': 'M', 
+      'Q': 'Q',
+      'H': 'H'
+    };
+    
+    // Create QR code
+    const qr = qrGenerator(0, ecLevelMap[errorCorrectionLevel] || 'H');
+    qr.addData(text);
+    qr.make();
+    
+    const moduleCount = qr.getModuleCount();
+    const cellSize = size / moduleCount;
+    
+    // Build SVG paths
+    let paths = '';
+    for (let row = 0; row < moduleCount; row++) {
+      for (let col = 0; col < moduleCount; col++) {
+        if (qr.isDark(row, col)) {
+          const x = col * cellSize;
+          const y = row * cellSize;
+          paths += `<rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${cellSize.toFixed(2)}" height="${cellSize.toFixed(2)}" fill="${fgColor}"/>`;
+        }
+      }
+    }
+    
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  <rect width="100%" height="100%" fill="${bgColor}"/>
+  ${paths}
+</svg>`;
+  } catch (error) {
+    console.error('❌ Error generating QR SVG:', error);
+    return null;
+  }
+};
 
 interface LogoOptions {
   // Existing base64 data URI (kept for backward compatibility)
@@ -155,29 +203,27 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
         const colors = optimizeColors();
 
         // On mobile, react-native-qrcode-svg's toDataURL returns PNG, not SVG
-        // So we use the 'qrcode' package to generate SVG directly
+        // So we use qrcode-generator (pure JS) to generate SVG directly
         if (Platform.OS !== 'web') {
           // Use the value prop directly instead of qrData state to avoid timing issues
           const qrValue = value && value.trim() ? value.trim() : 'https://example.com';
-          console.log('📱 Mobile platform detected - generating SVG with qrcode package');
+          console.log('📱 Mobile platform detected - generating SVG with qrcode-generator');
           console.log('📱 QR value:', qrValue);
+          console.log('📱 Colors:', colors);
+          console.log('📱 Size:', size, 'Level:', level);
           
           try {
-            // Generate SVG string using qrcode package
-            svgContent = await QRCode.toString(qrValue, {
-              type: 'svg',
-              errorCorrectionLevel: level,
-              color: {
-                dark: colors.fg,
-                light: colors.bg,
-              },
-              width: size,
-              margin: 0,
-            });
+            // Generate SVG string using our pure JS implementation
+            svgContent = generateQRCodeSVG(qrValue, size, colors.fg, colors.bg, level);
             
-            console.log('✅ SVG generated successfully, length:', svgContent?.length);
+            if (svgContent) {
+              console.log('✅ SVG generated successfully, length:', svgContent.length);
+            } else {
+              console.error('❌ generateQRCodeSVG returned null');
+              return null;
+            }
           } catch (qrError) {
-            console.error('❌ Failed to generate SVG with qrcode package:', qrError);
+            console.error('❌ Failed to generate SVG:', qrError);
             return null;
           }
         } else {
