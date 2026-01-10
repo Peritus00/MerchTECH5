@@ -28,28 +28,49 @@ export enum QRCodeFormat {
 // New function to extract SVG from QR component ref
 const extractSVGFromQRRef = async (qrRef: any, generatorRef?: any): Promise<string | null> => {
   try {
+    console.log('🔍 extractSVGFromQRRef called:', { 
+      platform: Platform.OS,
+      hasGeneratorRef: !!generatorRef, 
+      hasQrRef: !!qrRef,
+      generatorRefMethods: generatorRef ? Object.keys(generatorRef).filter(k => typeof generatorRef[k] === 'function') : [],
+      generatorRefCurrentMethods: generatorRef?.current ? Object.keys(generatorRef.current).filter(k => typeof generatorRef.current[k] === 'function') : [],
+    });
+    
     // Check if generatorRef has getSVGString method
     if (generatorRef && typeof generatorRef.getSVGString === 'function') {
-      return await generatorRef.getSVGString();
+      console.log('📱 Using generatorRef.getSVGString()');
+      const result = await generatorRef.getSVGString();
+      console.log('📱 getSVGString result length:', result?.length || 0);
+      return result;
     }
     
     // Check if generatorRef has current.getSVGString
     if (generatorRef?.current && typeof generatorRef.current.getSVGString === 'function') {
-      return await generatorRef.current.getSVGString();
+      console.log('📱 Using generatorRef.current.getSVGString()');
+      const result = await generatorRef.current.getSVGString();
+      console.log('📱 getSVGString result length:', result?.length || 0);
+      return result;
     }
 
     // Check if ref has getSVGString method (from AdvancedQRCodeGenerator)
     if (qrRef && typeof qrRef.getSVGString === 'function') {
-      return await qrRef.getSVGString();
+      console.log('📱 Using qrRef.getSVGString()');
+      const result = await qrRef.getSVGString();
+      console.log('📱 getSVGString result length:', result?.length || 0);
+      return result;
     }
     
     // Check if ref has current.getSVGString
     if (qrRef?.current && typeof qrRef.current.getSVGString === 'function') {
-      return await qrRef.current.getSVGString();
+      console.log('📱 Using qrRef.current.getSVGString()');
+      const result = await qrRef.current.getSVGString();
+      console.log('📱 getSVGString result length:', result?.length || 0);
+      return result;
     }
     
     // For web, try to find SVG element in DOM
     if (Platform.OS === 'web' && qrRef) {
+      console.log('🌐 Web platform - using DOM extraction');
       const qrElement = qrRef.querySelector ? qrRef : (qrRef.current || qrRef);
       const svgElement = qrElement?.querySelector?.('svg');
       if (svgElement) {
@@ -57,9 +78,10 @@ const extractSVGFromQRRef = async (qrRef: any, generatorRef?: any): Promise<stri
       }
     }
     
+    console.warn('⚠️ No SVG extraction method found');
     return null;
   } catch (error) {
-    console.error('Error extracting SVG:', error);
+    console.error('❌ Error extracting SVG:', error);
     return null;
   }
 };

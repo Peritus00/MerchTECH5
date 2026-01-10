@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { View, StyleSheet, Platform, Image } from 'react-native';
 import QRCodeSVG from 'react-native-qrcode-svg';
+import QRCode from 'qrcode';
 import { ThemedText } from './ThemedText';
 
 interface LogoOptions {
@@ -149,68 +150,98 @@ export const AdvancedQRCodeGenerator = forwardRef<QRCodeRef, AdvancedQRCodeGener
   // Expose methods via ref
   useImperativeHandle(ref, () => ({
     getSVGString: async (): Promise<string | null> => {
-      if (!qrCodeSvgRef.current) return null;
-      
       try {
         let svgContent: string | null = null;
+        const colors = optimizeColors();
 
-        // react-native-qrcode-svg has a getString method
-        if (qrCodeSvgRef.current.getString) {
-          svgContent = qrCodeSvgRef.current.getString();
-        } else {
-          // Fallback: try toDataURL and extract SVG
-          svgContent = await new Promise((resolve) => {
-            qrCodeSvgRef.current.toDataURL((dataURL: string) => {
-              if (!dataURL) {
-                resolve(null);
-                return;
-              }
-
-              // Check if it's a data URI
-              if (dataURL.startsWith('data:image/svg+xml')) {
-                try {
-                  const parts = dataURL.split(',');
-                  const header = parts[0];
-                  const data = parts[1];
-                  
-                  if (header.includes(';base64')) {
-                    resolve(atob(data));
-                  } else {
-                    resolve(decodeURIComponent(data));
-                  }
-                } catch (e) {
-                  console.warn('Error parsing SVG data URI:', e);
-                  resolve(null);
-                }
-              } else {
-                // Handle raw base64 string (common in react-native-qrcode-svg)
-                try {
-                  // Try to decode assuming it's base64
-                  // We clean the string just in case there are newlines or spaces
-                  const cleanData = dataURL.replace(/\s/g, '');
-                  const decoded = atob(cleanData);
-                  
-                  if (decoded.includes('<svg')) {
-                    resolve(decoded);
-                  } else if (dataURL.includes('<svg')) {
-                    // It was already an SVG string?
-                    resolve(dataURL);
-                  } else {
-                    console.warn('Decoded data does not look like SVG');
-                    resolve(null);
-                  }
-                } catch (e) {
-                  // If atob fails, maybe it's raw SVG
-                  if (dataURL.includes('<svg')) {
-                    resolve(dataURL);
-                  } else {
-                    console.warn('Error extracting SVG from data URL:', e);
-                    resolve(null);
-                  }
-                }
-              }
+        // On mobile, react-native-qrcode-svg's toDataURL returns PNG, not SVG
+        // So we use the 'qrcode' package to generate SVG directly
+        if (Platform.OS !== 'web') {
+          // Use the value prop directly instead of qrData state to avoid timing issues
+          const qrValue = value && value.trim() ? value.trim() : 'https://example.com';
+          console.log('📱 Mobile platform detected - generating SVG with qrcode package');
+          console.log('📱 QR value:', qrValue);
+          
+          try {
+            // Generate SVG string using qrcode package
+            svgContent = await QRCode.toString(qrValue, {
+              type: 'svg',
+              errorCorrectionLevel: level,
+              color: {
+                dark: colors.fg,
+                light: colors.bg,
+              },
+              width: size,
+              margin: 0,
             });
-          });
+            
+            console.log('✅ SVG generated successfully, length:', svgContent?.length);
+          } catch (qrError) {
+            console.error('❌ Failed to generate SVG with qrcode package:', qrError);
+            return null;
+          }
+        } else {
+          // Web platform - use existing methods
+          if (!qrCodeSvgRef.current) return null;
+          
+          // react-native-qrcode-svg has a getString method (web)
+          if (qrCodeSvgRef.current.getString) {
+            svgContent = qrCodeSvgRef.current.getString();
+          } else {
+            // Fallback: try toDataURL and extract SVG
+            svgContent = await new Promise((resolve) => {
+              qrCodeSvgRef.current.toDataURL((dataURL: string) => {
+                if (!dataURL) {
+                  resolve(null);
+                  return;
+                }
+
+                // Check if it's a data URI
+                if (dataURL.startsWith('data:image/svg+xml')) {
+                  try {
+                    const parts = dataURL.split(',');
+                    const header = parts[0];
+                    const data = parts[1];
+                    
+                    if (header.includes(';base64')) {
+                      resolve(atob(data));
+                    } else {
+                      resolve(decodeURIComponent(data));
+                    }
+                  } catch (e) {
+                    console.warn('Error parsing SVG data URI:', e);
+                    resolve(null);
+                  }
+                } else {
+                  // Handle raw base64 string (common in react-native-qrcode-svg)
+                  try {
+                    // Try to decode assuming it's base64
+                    // We clean the string just in case there are newlines or spaces
+                    const cleanData = dataURL.replace(/\s/g, '');
+                    const decoded = atob(cleanData);
+                    
+                    if (decoded.includes('<svg')) {
+                      resolve(decoded);
+                    } else if (dataURL.includes('<svg')) {
+                      // It was already an SVG string?
+                      resolve(dataURL);
+                    } else {
+                      console.warn('Decoded data does not look like SVG');
+                      resolve(null);
+                    }
+                  } catch (e) {
+                    // If atob fails, maybe it's raw SVG
+                    if (dataURL.includes('<svg')) {
+                      resolve(dataURL);
+                    } else {
+                      console.warn('Error extracting SVG from data URL:', e);
+                      resolve(null);
+                    }
+                  }
+                }
+              });
+            });
+          }
         }
 
         // If we have SVG content and logo options, embed the logo
