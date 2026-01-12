@@ -2,6 +2,7 @@ import { Alert, Platform } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system';
 import * as MediaLibrary from 'expo-media-library';
+import * as Clipboard from 'expo-clipboard';
 import { captureRef } from 'react-native-view-shot';
 
 // Add PDF import (will be undefined on mobile, that's OK)
@@ -691,7 +692,7 @@ export const downloadQRCode = async (
       return;
     }
 
-    // For SVG on mobile, extract SVG string and save as file
+    // For SVG on mobile, provide better options since SVG isn't natively supported
     if (format === QRCodeFormat.SVG) {
       const svgString = await extractSVGFromQRRef(qrRef, generatorRef);
       if (svgString) {
@@ -702,16 +703,50 @@ export const downloadQRCode = async (
           encoding: FileSystem.EncodingType.UTF8,
         });
         
-        // Share the SVG file
-        const isAvailable = await Sharing.isAvailableAsync();
-        if (isAvailable) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'image/svg+xml',
-            dialogTitle: 'Share QR Code SVG',
-          });
-        } else {
-          Alert.alert('Success', `QR code SVG saved to ${fileUri}`);
-        }
+        // Show options dialog for better UX on mobile
+        Alert.alert(
+          'SVG Download Options',
+          'SVG files are vector graphics best for editing software. Choose how to save:',
+          [
+            {
+              text: 'Copy SVG Code',
+              onPress: async () => {
+                try {
+                  await Clipboard.setStringAsync(svgString);
+                  Alert.alert('Copied!', 'SVG code copied to clipboard. You can paste it in any text editor or design tool.');
+                } catch (e) {
+                  console.error('Failed to copy to clipboard:', e);
+                  Alert.alert('Error', 'Failed to copy SVG code');
+                }
+              },
+            },
+            {
+              text: 'Save to Files',
+              onPress: async () => {
+                try {
+                  const isAvailable = await Sharing.isAvailableAsync();
+                  if (isAvailable) {
+                    await Sharing.shareAsync(fileUri, {
+                      mimeType: 'image/svg+xml',
+                      dialogTitle: 'Save QR Code SVG',
+                      UTI: 'public.svg-image', // iOS specific
+                    });
+                  } else {
+                    Alert.alert('Error', 'File sharing is not available on this device');
+                  }
+                } catch (e) {
+                  console.error('Failed to share file:', e);
+                  Alert.alert('Error', 'Failed to save file');
+                }
+              },
+            },
+            {
+              text: 'Cancel',
+              style: 'cancel',
+            },
+          ],
+          { cancelable: true }
+        );
         return;
       } else {
         console.error('❌ Failed to extract SVG data from QR code reference');
