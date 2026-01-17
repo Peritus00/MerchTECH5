@@ -138,6 +138,13 @@ export default function SubscriptionScreen() {
     console.log('User data:', user);
 
     try {
+      // If user is not logged in, redirect to register with the selected plan
+      if (!user) {
+        console.log('User not logged in, redirecting to register with plan:', tierKey);
+        router.push(`/auth/register?plan=${tierKey}`);
+        return;
+      }
+
       if (tierKey === 'free') {
         if (isNewUser) {
           console.log('Showing confirmation for new user choosing free tier');
@@ -146,22 +153,12 @@ export default function SubscriptionScreen() {
           return;
         }
 
-
         console.log('Free tier selected for existing user');
-        if (user) {
-          router.push('/(tabs)/');
-        } else {
-          router.push('/auth/login');
-        }
+        router.push('/(tabs)/');
         return;
       }
 
       console.log('Paid tier selected:', tierKey);
-      if (!user) {
-        router.push(`/auth/login?plan=${tierKey}`);
-        return;
-      }
-
       router.push(`/subscription/checkout?tier=${tierKey}&newUser=${isNewUser}`);
     } catch (error) {
       console.error('Error in handleSelectPlan:', error);
@@ -232,7 +229,10 @@ export default function SubscriptionScreen() {
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <ThemedText style={styles.buttonText}>
-              {isCurrent && tierKey !== 'free' ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : 'Select Plan'}
+              {!user 
+                ? (tierKey === 'free' ? 'Sign Up Free' : 'Sign Up & Subscribe')
+                : (isCurrent && tierKey !== 'free' ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : 'Select Plan')
+              }
             </ThemedText>
           )}
         </TouchableOpacity>
@@ -244,20 +244,32 @@ export default function SubscriptionScreen() {
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <ThemedView style={styles.content}>
         <View style={styles.header}>
-          {!isNewUser && (
+          {!isNewUser && user && (
             <TouchableOpacity onPress={() => router.back()}>
               <ThemedText style={styles.backButton}>← Back</ThemedText>
             </TouchableOpacity>
           )}
           <ThemedText type="title" style={styles.title}>
-            {isNewUser ? 'Welcome! Choose Your Plan' : 'Choose Your Plan'}
+            {!user ? 'Pricing Plans' : isNewUser ? 'Welcome! Choose Your Plan' : 'Choose Your Plan'}
           </ThemedText>
           <ThemedText style={styles.subtitle}>
-            {isNewUser
-              ? 'Get started with MerchTech by selecting the perfect plan for your needs'
-              : 'Select the perfect plan for your QR code and media management needs'
+            {!user
+              ? 'See what MerchTech can do for you. Sign up to get started!'
+              : isNewUser
+                ? 'Get started with MerchTech by selecting the perfect plan for your needs'
+                : 'Select the perfect plan for your QR code and media management needs'
             }
           </ThemedText>
+          {!user && (
+            <TouchableOpacity 
+              onPress={() => router.push('/auth/login')}
+              style={styles.loginLink}
+            >
+              <ThemedText style={styles.loginLinkText}>
+                Already have an account? Log in
+              </ThemedText>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.tiersContainer}>
@@ -342,6 +354,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.7,
     textAlign: 'center',
+  },
+  loginLink: {
+    marginTop: 16,
+    padding: 8,
+  },
+  loginLinkText: {
+    color: '#3b82f6',
+    fontSize: 14,
+    textAlign: 'center',
+    textDecorationLine: 'underline',
   },
   tiersContainer: {
     gap: 16,

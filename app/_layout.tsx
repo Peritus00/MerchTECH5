@@ -96,6 +96,7 @@ function RootLayoutNav() {
       segments[0] === 'slideshow-player' || // Public slideshow players
       segments[0] === 'preview-player' || // Public preview players
       segments[0] === 'shop' || // Public master shop page
+      segments[0] === 'subscription' || // Public pricing/subscription page
       (
         segments[0] === 'store' && // Allow public access to specific store pages
         (
