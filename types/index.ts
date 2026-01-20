@@ -37,6 +37,7 @@ export interface User {
 export interface QRCode {
   id: number;
   ownerId: number;
+  user_id?: number;
   name: string;
   url: string;
   qrCodeData: string;
@@ -44,7 +45,14 @@ export interface QRCode {
   description?: string;
   options?: QRCodeOptions;
   isActive: boolean;
+  is_active?: boolean;
   scanCount?: number;
+  is_delegate?: boolean;
+  deleteRequest?: {
+    id: number;
+    status: 'pending' | 'approved' | 'denied';
+    requested_at: string;
+  };
   createdAt: string;
   created_at?: string; // Backend uses snake_case
   updatedAt?: string;

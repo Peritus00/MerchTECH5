@@ -112,6 +112,18 @@ export const qrCodeService = {
     }
   },
 
+  // Request deletion of a QR code (delegates)
+  async requestDeleteQRCode(id: number, reason?: string): Promise<void> {
+    try {
+      console.log('📱 QRCodeService: Requesting delete for QR code:', id);
+      await qrCodeAPI.requestDelete(id.toString(), reason);
+      console.log('📱 QRCodeService: Delete request submitted');
+    } catch (error: any) {
+      console.error('📱 QRCodeService: Error requesting delete:', error);
+      throw new Error(error.response?.data?.error || error.message || 'Failed to request delete');
+    }
+  },
+
   // Get a specific QR code by ID
   async getQRCodeById(id: number): Promise<QRCode | null> {
     try {

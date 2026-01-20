@@ -20,6 +20,7 @@ import EditUserPermissionsModal from '@/components/EditUserPermissionsModal';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { User } from '@/types';
+import { adminQrCodeAPI } from '@/services/api';
 
 const UserStatsCard = ({ title, value, icon, color }: { title: string; value: number; icon: string; color: string }) => (
   <View style={[styles.statsCard, { borderLeftColor: color }]}>
@@ -174,6 +175,12 @@ export default function UserPermissionsScreen() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [assignedQrCodes, setAssignedQrCodes] = useState<any[]>([]);
+  const [allQrCodes, setAllQrCodes] = useState<any[]>([]);
+  const [qrCodeLoading, setQrCodeLoading] = useState(false);
+  const [deleteRequests, setDeleteRequests] = useState<any[]>([]);
+  const [deleteRequestsLoading, setDeleteRequestsLoading] = useState(false);
+  const [deleteRequestStatus, setDeleteRequestStatus] = useState<'pending' | 'approved' | 'denied'>('pending');
 
   React.useEffect(() => {
     if (currentUser === null) {
@@ -186,6 +193,44 @@ export default function UserPermissionsScreen() {
       ]);
     }
   }, [currentUser, router]);
+
+  useEffect(() => {
+    if (currentUser?.isAdmin) {
+      loadDeleteRequests(deleteRequestStatus);
+    }
+  }, [currentUser?.isAdmin, deleteRequestStatus]);
+
+  const loadDeleteRequests = async (status: 'pending' | 'approved' | 'denied') => {
+    setDeleteRequestsLoading(true);
+    try {
+      const requests = await adminQrCodeAPI.getDeleteRequests(status);
+      setDeleteRequests(requests || []);
+    } catch (error) {
+      console.error('Failed to load delete requests:', error);
+    } finally {
+      setDeleteRequestsLoading(false);
+    }
+  };
+
+  const handleApproveDeleteRequest = async (requestId: number) => {
+    try {
+      await adminQrCodeAPI.approveDeleteRequest(requestId);
+      await loadDeleteRequests(deleteRequestStatus);
+      Alert.alert('Approved', 'QR code deleted successfully.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to approve delete request');
+    }
+  };
+
+  const handleDenyDeleteRequest = async (requestId: number) => {
+    try {
+      await adminQrCodeAPI.denyDeleteRequest(requestId);
+      await loadDeleteRequests(deleteRequestStatus);
+      Alert.alert('Denied', 'Delete request denied.');
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to deny delete request');
+    }
+  };
 
   const handleSuspendUser = async (userId: number, suspend: boolean) => {
     const targetUser = users.find(u => u.id === userId);
@@ -243,9 +288,45 @@ export default function UserPermissionsScreen() {
     setUserToDelete(null);
   };
 
-  const handleEditUser = (userToEdit: User) => {
+  const loadQrCodeAccess = async (userId: number) => {
+    setQrCodeLoading(true);
+    try {
+      const [assigned, all] = await Promise.all([
+        adminQrCodeAPI.getUserDelegatedQrCodes(userId),
+        adminQrCodeAPI.getAll()
+      ]);
+      setAssignedQrCodes(assigned || []);
+      setAllQrCodes(all || []);
+    } catch (error) {
+      console.error('Failed to load QR code access:', error);
+    } finally {
+      setQrCodeLoading(false);
+    }
+  };
+
+  const handleEditUser = async (userToEdit: User) => {
     setSelectedUser(userToEdit);
     setEditModalVisible(true);
+    await loadQrCodeAccess(userToEdit.id);
+  };
+
+  const handleGrantQrCode = async (qrCodeId: number) => {
+    if (!selectedUser) return;
+    try {
+      await adminQrCodeAPI.addDelegate(qrCodeId.toString(), selectedUser.id);
+      await loadQrCodeAccess(selectedUser.id);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to grant QR code access');
+    }
+  };
+
+  const handleRevokeQrCode = async (qrCodeId: number, userId: number) => {
+    try {
+      await adminQrCodeAPI.revokeDelegate(qrCodeId.toString(), userId);
+      await loadQrCodeAccess(userId);
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'Failed to revoke QR code access');
+    }
   };
 
   const handleUpdatePermissions = async (userId: number, permissions: Partial<User>) => {
@@ -360,6 +441,69 @@ export default function UserPermissionsScreen() {
           ))}
         </View>
 
+        <View style={styles.deleteRequestsSection}>
+          <View style={styles.deleteRequestsHeader}>
+            <ThemedText style={styles.sectionTitle}>QR Delete Requests</ThemedText>
+            <View style={styles.statusTabs}>
+              {(['pending', 'approved', 'denied'] as const).map((status) => (
+                <TouchableOpacity
+                  key={status}
+                  style={[
+                    styles.statusTab,
+                    deleteRequestStatus === status && styles.activeStatusTab
+                  ]}
+                  onPress={() => setDeleteRequestStatus(status)}
+                >
+                  <ThemedText style={[
+                    styles.statusTabText,
+                    deleteRequestStatus === status && styles.activeStatusTabText
+                  ]}>
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {deleteRequestsLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="small" color="#8b5cf6" />
+            </View>
+          ) : (
+            <View style={styles.deleteRequestList}>
+              {deleteRequests.length === 0 && (
+                <ThemedText style={styles.helperText}>No delete requests.</ThemedText>
+              )}
+              {deleteRequests.map((request) => (
+                <View key={request.id} style={styles.deleteRequestRow}>
+                  <View style={styles.deleteRequestInfo}>
+                    <ThemedText style={styles.deleteRequestTitle}>{request.qr_name}</ThemedText>
+                    <ThemedText style={styles.deleteRequestSub}>
+                      Requested by {request.requested_by_username || request.requested_by_email || 'Unknown'}
+                    </ThemedText>
+                  </View>
+                  {deleteRequestStatus === 'pending' && (
+                    <View style={styles.deleteRequestActions}>
+                      <TouchableOpacity
+                        style={styles.approveButton}
+                        onPress={() => handleApproveDeleteRequest(request.id)}
+                      >
+                        <ThemedText style={styles.approveButtonText}>Approve</ThemedText>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.denyButton}
+                        onPress={() => handleDenyDeleteRequest(request.id)}
+                      >
+                        <ThemedText style={styles.denyButtonText}>Deny</ThemedText>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#8b5cf6" />
@@ -383,6 +527,11 @@ export default function UserPermissionsScreen() {
           visible={editModalVisible}
           onClose={() => setEditModalVisible(false)}
           onUpdatePermissions={handleUpdatePermissions}
+          assignedQrCodes={assignedQrCodes}
+          allQrCodes={allQrCodes}
+          qrCodeLoading={qrCodeLoading}
+          onGrantQrCode={handleGrantQrCode}
+          onRevokeQrCode={handleRevokeQrCode}
         />
       )}
 
@@ -506,6 +655,103 @@ const styles = StyleSheet.create({
   },
   activeFilterText: {
     color: '#ffffff',
+  },
+  deleteRequestsSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  deleteRequestsHeader: {
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  statusTabs: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statusTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#e5e7eb',
+  },
+  activeStatusTab: {
+    backgroundColor: '#3b82f6',
+  },
+  statusTabText: {
+    fontSize: 12,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  activeStatusTabText: {
+    color: '#ffffff',
+  },
+  deleteRequestList: {
+    gap: 10,
+  },
+  deleteRequestRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+  },
+  deleteRequestInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  deleteRequestTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  deleteRequestSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  deleteRequestActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  approveButton: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  approveButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  denyButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  denyButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   userCard: {
     backgroundColor: '#ffffff',

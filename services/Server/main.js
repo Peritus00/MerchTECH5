@@ -9022,6 +9022,11 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+
+      if (!delegateAccess) {
       if (VERBOSE_PLAYLIST_LOGGING) {
         logger.debug({
           type: 'playlist_patch',
@@ -9032,6 +9037,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
         });
       }
       return res.status(403).json({ error: 'Not authorized to update this playlist' });
+      }
     }
 
     if (VERBOSE_PLAYLIST_LOGGING) {
@@ -9691,6 +9697,64 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
 // ---------- QR CODES API ----------
 
+async function getQRCodeAccess(qrCodeId, userId) {
+  const accessResult = await db.query(
+    `SELECT qr.user_id,
+            EXISTS(
+              SELECT 1
+              FROM qr_code_delegates d
+              WHERE d.qr_code_id = qr.id
+                AND d.user_id = $2
+                AND d.revoked_at IS NULL
+            ) AS is_delegate
+     FROM qr_codes qr
+     WHERE qr.id = $1 AND qr.is_active = true`,
+    [qrCodeId, userId]
+  );
+
+  if (accessResult.rows.length === 0) {
+    return { exists: false, isOwner: false, isDelegate: false, ownerId: null };
+  }
+
+  const row = accessResult.rows[0];
+  return {
+    exists: true,
+    isOwner: row.user_id === userId,
+    isDelegate: row.is_delegate,
+    ownerId: row.user_id
+  };
+}
+
+async function isDelegateForPlaylist(userId, playlistId) {
+  const result = await db.query(
+    `SELECT 1
+     FROM qr_codes qr
+     JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+     WHERE d.user_id = $1
+       AND d.revoked_at IS NULL
+       AND qr.playlist_id = $2
+       AND qr.is_active = true
+     LIMIT 1`,
+    [userId, playlistId]
+  );
+  return result.rows.length > 0;
+}
+
+async function isDelegateForSlideshow(userId, slideshowId) {
+  const result = await db.query(
+    `SELECT 1
+     FROM qr_codes qr
+     JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+     WHERE d.user_id = $1
+       AND d.revoked_at IS NULL
+       AND qr.slideshow_id = $2
+       AND qr.is_active = true
+     LIMIT 1`,
+    [userId, slideshowId]
+  );
+  return result.rows.length > 0;
+}
+
 // Get all QR codes for the logged-in user
 app.get('/api/qrcodes', authenticateToken, async (req, res) => {
   try {
@@ -9702,7 +9766,15 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
       // Use deduplication to match analytics approach (unique visitor per minute)
       // This ensures consistency between QR code list and analytics dashboard
       result = await db.query(
-        `WITH dedup_scans AS (
+        `WITH allowed_qr AS (
+          SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+          UNION
+          SELECT qr.id
+          FROM qr_codes qr
+          JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+          WHERE d.user_id = $1 AND d.revoked_at IS NULL AND qr.is_active = true
+        ),
+        dedup_scans AS (
           SELECT DISTINCT ON (
             s.qr_code_id,
             COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
@@ -9710,13 +9782,14 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
           ) s.qr_code_id
           FROM qr_scans s
           JOIN qr_codes q ON s.qr_code_id = q.id
-          WHERE q.user_id = $1
+          WHERE q.id IN (SELECT id FROM allowed_qr)
           ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
         )
-        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
+        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count,
+               CASE WHEN qr.user_id = $1 THEN false ELSE true END AS is_delegate
          FROM qr_codes qr
          LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
-         WHERE qr.user_id = $1 AND qr.is_active = true
+         WHERE qr.id IN (SELECT id FROM allowed_qr)
          GROUP BY qr.id
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
@@ -9724,9 +9797,17 @@ app.get('/api/qrcodes', authenticateToken, async (req, res) => {
     } catch (scanError) {
       console.log('📱 QR_CODES: qr_scans table not available, using simple query');
       result = await db.query(
-        `SELECT qr.*, 0 as scan_count
+        `SELECT qr.*, 0 as scan_count,
+                CASE WHEN qr.user_id = $1 THEN false ELSE true END AS is_delegate
          FROM qr_codes qr
-         WHERE qr.user_id = $1 AND qr.is_active = true
+         WHERE qr.id IN (
+           SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+           UNION
+           SELECT qr.id
+           FROM qr_codes qr
+           JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+           WHERE d.user_id = $1 AND d.revoked_at IS NULL AND qr.is_active = true
+         )
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
       );
@@ -9758,7 +9839,15 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
       // Use deduplication to match analytics approach (unique visitor per minute)
       // This ensures consistency between QR code list and analytics dashboard
       result = await db.query(
-        `WITH dedup_scans AS (
+        `WITH allowed_qr AS (
+          SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+          UNION
+          SELECT qr.id
+          FROM qr_codes qr
+          JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+          WHERE d.user_id = $1 AND d.revoked_at IS NULL AND qr.is_active = true
+        ),
+        dedup_scans AS (
           SELECT DISTINCT ON (
             s.qr_code_id,
             COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))),
@@ -9766,13 +9855,14 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
           ) s.qr_code_id
           FROM qr_scans s
           JOIN qr_codes q ON s.qr_code_id = q.id
-          WHERE q.user_id = $1
+          WHERE q.id IN (SELECT id FROM allowed_qr)
           ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
         )
-        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
+        SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count,
+               CASE WHEN qr.user_id = $1 THEN false ELSE true END AS is_delegate
          FROM qr_codes qr
          LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
-         WHERE qr.user_id = $1 AND qr.is_active = true
+         WHERE qr.id IN (SELECT id FROM allowed_qr)
          GROUP BY qr.id
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
@@ -9780,9 +9870,17 @@ app.get('/api/qr-codes', authenticateToken, async (req, res) => {
     } catch (scanError) {
       console.log('📱 QR_CODES: qr_scans table not available, using simple query');
       result = await db.query(
-        `SELECT qr.*, 0 as scan_count
+        `SELECT qr.*, 0 as scan_count,
+                CASE WHEN qr.user_id = $1 THEN false ELSE true END AS is_delegate
          FROM qr_codes qr
-         WHERE qr.user_id = $1 AND qr.is_active = true
+         WHERE qr.id IN (
+           SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+           UNION
+           SELECT qr.id
+           FROM qr_codes qr
+           JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+           WHERE d.user_id = $1 AND d.revoked_at IS NULL AND qr.is_active = true
+         )
          ORDER BY qr.created_at DESC`,
         [req.user.userId]
       );
@@ -9808,6 +9906,14 @@ app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     console.log('📱 QR_CODES: Fetching QR code:', id);
+
+    const access = await getQRCodeAccess(id, req.user.userId);
+    if (!access.exists) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    if (!access.isOwner && !access.isDelegate && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to view this QR code' });
+    }
     
     // Use deduplication to match analytics approach (unique visitor per minute)
     const result = await db.query(
@@ -9824,9 +9930,9 @@ app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
       SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
        FROM qr_codes qr
        LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
-       WHERE qr.id = $1 AND qr.user_id = $2
+       WHERE qr.id = $1 AND qr.is_active = true
        GROUP BY qr.id`,
-      [id, req.user.userId]
+      [id]
     );
     
     if (result.rows.length === 0) {
@@ -9836,8 +9942,21 @@ app.get('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     const qrCode = {
       ...result.rows[0],
       options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
-      scanCount: parseInt(result.rows[0].scan_count) || 0
+      scanCount: parseInt(result.rows[0].scan_count) || 0,
+      is_delegate: !access.isOwner
     };
+
+    const deleteRequestResult = await db.query(
+      `SELECT id, status, requested_at
+       FROM qr_code_delete_requests
+       WHERE qr_code_id = $1 AND requested_by = $2
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [id, req.user.userId]
+    );
+    if (deleteRequestResult.rows.length > 0) {
+      qrCode.deleteRequest = deleteRequestResult.rows[0];
+    }
     
     console.log('📱 QR_CODES: QR code found:', qrCode.name);
     res.json({ qrCode });
@@ -9853,6 +9972,14 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     console.log('📱 QR_CODES: Fetching QR code:', id);
+
+    const access = await getQRCodeAccess(id, req.user.userId);
+    if (!access.exists) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    if (!access.isOwner && !access.isDelegate && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Not authorized to view this QR code' });
+    }
     
     // Use deduplication to match analytics approach (unique visitor per minute)
     const result = await db.query(
@@ -9869,9 +9996,9 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
       SELECT qr.*, COALESCE(COUNT(ds.qr_code_id), 0) as scan_count
        FROM qr_codes qr
        LEFT JOIN dedup_scans ds ON qr.id = ds.qr_code_id
-       WHERE qr.id = $1 AND qr.user_id = $2
+       WHERE qr.id = $1 AND qr.is_active = true
        GROUP BY qr.id`,
-      [id, req.user.userId]
+      [id]
     );
     
     if (result.rows.length === 0) {
@@ -9881,8 +10008,21 @@ app.get('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     const qrCode = {
       ...result.rows[0],
       options: typeof result.rows[0].options === 'string' ? JSON.parse(result.rows[0].options) : result.rows[0].options,
-      scanCount: parseInt(result.rows[0].scan_count) || 0
+      scanCount: parseInt(result.rows[0].scan_count) || 0,
+      is_delegate: !access.isOwner
     };
+
+    const deleteRequestResult = await db.query(
+      `SELECT id, status, requested_at
+       FROM qr_code_delete_requests
+       WHERE qr_code_id = $1 AND requested_by = $2
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [id, req.user.userId]
+    );
+    if (deleteRequestResult.rows.length > 0) {
+      qrCode.deleteRequest = deleteRequestResult.rows[0];
+    }
     
     console.log('📱 QR_CODES: QR code found:', qrCode.name);
     res.json({ qrCode });
@@ -10129,7 +10269,17 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
+    const countResult = await db.query(
+      `SELECT COUNT(*) FROM (
+         SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+         UNION
+         SELECT d.qr_code_id
+         FROM qr_code_delegates d
+         JOIN qr_codes q ON q.id = d.qr_code_id
+         WHERE d.user_id = $1 AND d.revoked_at IS NULL AND q.is_active = true
+       ) AS allowed_qr`,
+      [req.user.userId]
+    );
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -10220,7 +10370,17 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
     const user = userResult.rows[0];
     const userTier = user?.subscription_tier || 'free';
     
-    const countResult = await db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [req.user.userId]);
+    const countResult = await db.query(
+      `SELECT COUNT(*) FROM (
+         SELECT id FROM qr_codes WHERE user_id = $1 AND is_active = true
+         UNION
+         SELECT d.qr_code_id
+         FROM qr_code_delegates d
+         JOIN qr_codes q ON q.id = d.qr_code_id
+         WHERE d.user_id = $1 AND d.revoked_at IS NULL AND q.is_active = true
+       ) AS allowed_qr`,
+      [req.user.userId]
+    );
     const currentCount = parseInt(countResult.rows[0].count);
 
     // Check for admin-set custom limit first, then fall back to subscription tier limits
@@ -10279,17 +10439,11 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     
     console.log('📱 QR_CODES: Updating QR code:', id);
     
-    // Check if user owns the QR code
-    const ownerCheck = await db.query(
-      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
-      [id]
-    );
-
-    if (ownerCheck.rows.length === 0) {
+    const access = await getQRCodeAccess(id, req.user.userId);
+    if (!access.exists) {
       return res.status(404).json({ error: 'QR code not found' });
     }
-
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+    if (!access.isOwner && !access.isDelegate && !req.user.isAdmin) {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
@@ -10334,17 +10488,11 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
     
     console.log('📱 QR_CODES: Updating QR code:', id);
     
-    // Check if user owns the QR code
-    const ownerCheck = await db.query(
-      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
-      [id]
-    );
-
-    if (ownerCheck.rows.length === 0) {
+    const access = await getQRCodeAccess(id, req.user.userId);
+    if (!access.exists) {
       return res.status(404).json({ error: 'QR code not found' });
     }
-
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+    if (!access.isOwner && !access.isDelegate && !req.user.isAdmin) {
       return res.status(403).json({ error: 'Not authorized to update this QR code' });
     }
 
@@ -10381,22 +10529,17 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
     
     console.log('📱 QR_CODES: Deleting QR code:', id, 'for user:', req.user.userId);
     
-    // Check if user owns the QR code
-    const ownerCheck = await db.query(
-      'SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true',
-      [id]
-    );
+    const access = await getQRCodeAccess(id, req.user.userId);
+    console.log('📱 QR_CODES: Access check result:', access);
 
-    console.log('📱 QR_CODES: Owner check result:', ownerCheck.rows);
-
-    if (ownerCheck.rows.length === 0) {
+    if (!access.exists) {
       console.log('📱 QR_CODES: QR code not found or inactive');
       return res.status(404).json({ error: 'QR code not found' });
     }
 
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
-      console.log('📱 QR_CODES: Ownership mismatch. Owner:', ownerCheck.rows[0].user_id, 'User:', req.user.userId);
-      return res.status(403).json({ error: 'Not authorized to delete this QR code' });
+    if (!access.isOwner && !req.user.isAdmin) {
+      console.log('📱 QR_CODES: Deletion not authorized for user:', req.user.userId);
+      return res.status(403).json({ error: 'Not authorized to delete this QR code. Delegates must request deletion.' });
     }
 
     // Soft delete by setting is_active to false
@@ -10419,6 +10562,270 @@ app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   // Redirect to the main endpoint
   req.url = req.url.replace('/api/qr-codes/', '/api/qrcodes/');
   return app._router.handle(req, res);
+});
+
+// ---------- QR CODE DELEGATION (ADMIN) ----------
+app.get('/api/admin/qr-codes', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT qr.*, u.email as owner_email, u.username as owner_username
+       FROM qr_codes qr
+       JOIN users u ON qr.user_id = u.id
+       WHERE qr.is_active = true
+       ORDER BY qr.created_at DESC`
+    );
+    res.json({ qrCodes: result.rows });
+  } catch (error) {
+    console.error('Error fetching all QR codes (admin):', error);
+    res.status(500).json({ error: 'Failed to fetch QR codes' });
+  }
+});
+
+app.get('/api/admin/qr-codes/:id/delegates', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      `SELECT d.user_id, u.email, u.username, d.granted_at, d.revoked_at, d.granted_by
+       FROM qr_code_delegates d
+       JOIN users u ON d.user_id = u.id
+       WHERE d.qr_code_id = $1
+       ORDER BY d.revoked_at NULLS FIRST, d.granted_at DESC`,
+      [id]
+    );
+    res.json({ delegates: result.rows });
+  } catch (error) {
+    console.error('Error fetching QR code delegates:', error);
+    res.status(500).json({ error: 'Failed to fetch delegates' });
+  }
+});
+
+app.post('/api/admin/qr-codes/:id/delegates', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const qrResult = await db.query('SELECT user_id FROM qr_codes WHERE id = $1 AND is_active = true', [id]);
+    if (qrResult.rows.length === 0) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+
+    if (qrResult.rows[0].user_id === userId) {
+      return res.status(400).json({ error: 'Owner already has access to this QR code' });
+    }
+
+    const userResult = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const activeCheck = await db.query(
+      `SELECT id FROM qr_code_delegates
+       WHERE qr_code_id = $1 AND user_id = $2 AND revoked_at IS NULL`,
+      [id, userId]
+    );
+    if (activeCheck.rows.length > 0) {
+      return res.json({ message: 'User already has access to this QR code' });
+    }
+
+    const reviveResult = await db.query(
+      `UPDATE qr_code_delegates
+       SET revoked_at = NULL, granted_by = $3, granted_at = NOW()
+       WHERE qr_code_id = $1 AND user_id = $2 AND revoked_at IS NOT NULL
+       RETURNING *`,
+      [id, userId, req.user.userId]
+    );
+
+    if (reviveResult.rows.length === 0) {
+      const insertResult = await db.query(
+        `INSERT INTO qr_code_delegates (qr_code_id, user_id, granted_by, granted_at)
+         VALUES ($1, $2, $3, NOW())
+         RETURNING *`,
+        [id, userId, req.user.userId]
+      );
+      return res.json({ delegate: insertResult.rows[0], message: 'Delegate added' });
+    }
+
+    res.json({ delegate: reviveResult.rows[0], message: 'Delegate access restored' });
+  } catch (error) {
+    console.error('Error adding QR code delegate:', error);
+    res.status(500).json({ error: 'Failed to add delegate' });
+  }
+});
+
+app.delete('/api/admin/qr-codes/:id/delegates/:userId', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+    const result = await db.query(
+      `UPDATE qr_code_delegates
+       SET revoked_at = NOW()
+       WHERE qr_code_id = $1 AND user_id = $2 AND revoked_at IS NULL
+       RETURNING *`,
+      [id, userId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Delegate assignment not found' });
+    }
+    res.json({ delegate: result.rows[0], message: 'Delegate revoked' });
+  } catch (error) {
+    console.error('Error revoking QR code delegate:', error);
+    res.status(500).json({ error: 'Failed to revoke delegate' });
+  }
+});
+
+app.get('/api/admin/users/:id/qr-codes', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.query(
+      `SELECT qr.*, d.granted_at, u.email as owner_email, u.username as owner_username
+       FROM qr_code_delegates d
+       JOIN qr_codes qr ON d.qr_code_id = qr.id
+       JOIN users u ON qr.user_id = u.id
+       WHERE d.user_id = $1 AND d.revoked_at IS NULL AND qr.is_active = true
+       ORDER BY d.granted_at DESC`,
+      [id]
+    );
+    res.json({ qrCodes: result.rows });
+  } catch (error) {
+    console.error('Error fetching user delegated QR codes:', error);
+    res.status(500).json({ error: 'Failed to fetch user QR codes' });
+  }
+});
+
+// ---------- QR CODE DELETE REQUESTS ----------
+app.post('/api/qr-codes/:id/delete-request', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    const access = await getQRCodeAccess(id, req.user.userId);
+    if (!access.exists) {
+      return res.status(404).json({ error: 'QR code not found' });
+    }
+    if (access.isOwner || req.user.isAdmin) {
+      return res.status(400).json({ error: 'Owners or admins can delete directly' });
+    }
+    if (!access.isDelegate) {
+      return res.status(403).json({ error: 'Not authorized to request deletion for this QR code' });
+    }
+
+    const existing = await db.query(
+      `SELECT id, status
+       FROM qr_code_delete_requests
+       WHERE qr_code_id = $1 AND requested_by = $2 AND status = 'pending'
+       LIMIT 1`,
+      [id, req.user.userId]
+    );
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'Delete request already pending' });
+    }
+
+    const result = await db.query(
+      `INSERT INTO qr_code_delete_requests (qr_code_id, requested_by, reason)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [id, req.user.userId, reason || null]
+    );
+    res.json({ deleteRequest: result.rows[0] });
+  } catch (error) {
+    console.error('Error creating delete request:', error);
+    res.status(500).json({ error: 'Failed to create delete request' });
+  }
+});
+
+app.get('/api/admin/qr-codes/delete-requests', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { status = 'pending' } = req.query;
+    const result = await db.query(
+      `SELECT dr.*, qr.name as qr_name, qr.user_id as owner_id, u.email as requested_by_email, u.username as requested_by_username
+       FROM qr_code_delete_requests dr
+       JOIN qr_codes qr ON dr.qr_code_id = qr.id
+       LEFT JOIN users u ON dr.requested_by = u.id
+       WHERE dr.status = $1
+       ORDER BY dr.requested_at DESC`,
+      [status]
+    );
+    res.json({ deleteRequests: result.rows });
+  } catch (error) {
+    console.error('Error fetching delete requests:', error);
+    res.status(500).json({ error: 'Failed to fetch delete requests' });
+  }
+});
+
+app.post('/api/admin/qr-codes/delete-requests/:id/approve', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+
+    await db.query('BEGIN');
+
+    const requestResult = await db.query(
+      `SELECT * FROM qr_code_delete_requests WHERE id = $1 FOR UPDATE`,
+      [id]
+    );
+    if (requestResult.rows.length === 0) {
+      await db.query('ROLLBACK');
+      return res.status(404).json({ error: 'Delete request not found' });
+    }
+    if (requestResult.rows[0].status !== 'pending') {
+      await db.query('ROLLBACK');
+      return res.status(400).json({ error: 'Delete request already processed' });
+    }
+
+    const qrCodeId = requestResult.rows[0].qr_code_id;
+
+    await db.query(
+      `UPDATE qr_code_delete_requests
+       SET status = 'approved', reviewed_by = $2, reviewed_at = NOW(), reason = COALESCE($3, reason)
+       WHERE id = $1`,
+      [id, req.user.userId, reason || null]
+    );
+
+    await db.query(
+      `UPDATE qr_codes
+       SET is_active = false, updated_at = NOW()
+       WHERE id = $1`,
+      [qrCodeId]
+    );
+
+    await db.query(
+      `UPDATE qr_code_delegates
+       SET revoked_at = NOW()
+       WHERE qr_code_id = $1 AND revoked_at IS NULL`,
+      [qrCodeId]
+    );
+
+    await db.query('COMMIT');
+    res.json({ message: 'Delete request approved and QR code deleted' });
+  } catch (error) {
+    await db.query('ROLLBACK');
+    console.error('Error approving delete request:', error);
+    res.status(500).json({ error: 'Failed to approve delete request' });
+  }
+});
+
+app.post('/api/admin/qr-codes/delete-requests/:id/deny', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body || {};
+    const result = await db.query(
+      `UPDATE qr_code_delete_requests
+       SET status = 'denied', reviewed_by = $2, reviewed_at = NOW(), reason = COALESCE($3, reason)
+       WHERE id = $1 AND status = 'pending'
+       RETURNING *`,
+      [id, req.user.userId, reason || null]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Delete request not found or already processed' });
+    }
+    res.json({ deleteRequest: result.rows[0], message: 'Delete request denied' });
+  } catch (error) {
+    console.error('Error denying delete request:', error);
+    res.status(500).json({ error: 'Failed to deny delete request' });
+  }
 });
 
 // ---------- ACTIVATION CODES API ----------
@@ -11993,8 +12400,13 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     }
 
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForSlideshow(req.user.userId, id);
+      if (!delegateAccess) {
       console.log('🎬 SLIDESHOWS: ❌ Not authorized - owner:', ownerCheck.rows[0].user_id, 'user:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to update this slideshow' });
+      }
     }
 
     console.log('🎬 SLIDESHOWS: ✅ Ownership verified');
@@ -12168,8 +12580,13 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
     }
     
     if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForSlideshow(req.user.userId, id);
+      if (!delegateAccess) {
       console.log('🎬 SLIDESHOW_UPLOAD: User not authorized:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to upload to this slideshow' });
+      }
     }
     
     // Upload to S3
@@ -12280,8 +12697,13 @@ app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, as
     }
     
     if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForSlideshow(req.user.userId, slideshowId);
+      if (!delegateAccess) {
       console.log('🎬 SLIDESHOW_DELETE_IMAGE: User not authorized:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to delete from this slideshow' });
+      }
     }
     
     // Get image details for file deletion
@@ -12831,7 +13253,12 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+      if (!delegateAccess) {
       return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+      }
     }
     
     // Get current max display order
@@ -12909,7 +13336,12 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     }
     
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+      if (!delegateAccess) {
       return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+      }
     }
     
     // Remove media from playlist
@@ -12951,7 +13383,12 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     if (ownerCheck.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+      if (!delegateAccess) {
       return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+      }
     }
     
     // Clear existing media links
@@ -13529,10 +13966,18 @@ app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res)
 
     console.log('🔗 PRODUCT_LINK: Adding product link:', { playlistId: id, productId, userId: req.user.userId });
 
-    // Check if playlist exists and user owns it
-    const playlistResult = await db.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    // Check if playlist exists and user can access it
+    const playlistResult = await db.query('SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
+    }
+    if (playlistResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+      if (!delegateAccess) {
+        return res.status(403).json({ error: 'Playlist not found or access denied' });
+      }
     }
 
     // Check if product exists and user owns it
@@ -13579,10 +14024,18 @@ app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, asy
     
     console.log('🔗 PRODUCT_LINK: Removing product link:', { playlistId: id, productId, userId: req.user.userId });
 
-    // Check if playlist exists and user owns it
-    const playlistResult = await db.query('SELECT * FROM playlists WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    // Check if playlist exists and user can access it
+    const playlistResult = await db.query('SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (playlistResult.rows.length === 0) {
       return res.status(404).json({ error: 'Playlist not found or access denied' });
+    }
+    if (playlistResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForPlaylist(req.user.userId, id);
+      if (!delegateAccess) {
+        return res.status(403).json({ error: 'Playlist not found or access denied' });
+      }
     }
 
     // Remove link
@@ -13647,10 +14100,18 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
 
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Adding product link:', { slideshowId: id, productId, userId: req.user.userId });
 
-    // Check if slideshow exists and user owns it
-    const slideshowResult = await db.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    // Check if slideshow exists and user can access it
+    const slideshowResult = await db.query('SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
+    }
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForSlideshow(req.user.userId, id);
+      if (!delegateAccess) {
+        return res.status(403).json({ error: 'Slideshow not found or access denied' });
+      }
     }
 
     // Check if product exists and user owns it
@@ -13697,10 +14158,18 @@ app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, as
     
     console.log('🔗 SLIDESHOW_PRODUCT_LINK: Removing product link:', { slideshowId: id, productId, userId: req.user.userId });
 
-    // Check if slideshow exists and user owns it
-    const slideshowResult = await db.query('SELECT * FROM slideshows WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL', [id, req.user.userId]);
+    // Check if slideshow exists and user can access it
+    const slideshowResult = await db.query('SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL', [id]);
     if (slideshowResult.rows.length === 0) {
       return res.status(404).json({ error: 'Slideshow not found or access denied' });
+    }
+    if (slideshowResult.rows[0].user_id !== req.user.userId) {
+      const delegateAccess = req.user.isAdmin
+        ? true
+        : await isDelegateForSlideshow(req.user.userId, id);
+      if (!delegateAccess) {
+        return res.status(403).json({ error: 'Slideshow not found or access denied' });
+      }
     }
 
     // Remove link

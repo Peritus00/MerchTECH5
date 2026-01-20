@@ -922,6 +922,45 @@ export const qrCodeAPI = {
       throw error;
     }
   },
+  async requestDelete(id: string, reason?: string) {
+    const response = await api.post(`/qr-codes/${id}/delete-request`, { reason });
+    return response.data;
+  },
+};
+
+export const adminQrCodeAPI = {
+  async getAll() {
+    const response = await api.get('/admin/qr-codes');
+    return response.data.qrCodes || response.data;
+  },
+  async getDelegates(qrCodeId: string) {
+    const response = await api.get(`/admin/qr-codes/${qrCodeId}/delegates`);
+    return response.data.delegates || response.data;
+  },
+  async addDelegate(qrCodeId: string, userId: number) {
+    const response = await api.post(`/admin/qr-codes/${qrCodeId}/delegates`, { userId });
+    return response.data;
+  },
+  async revokeDelegate(qrCodeId: string, userId: number) {
+    const response = await api.delete(`/admin/qr-codes/${qrCodeId}/delegates/${userId}`);
+    return response.data;
+  },
+  async getUserDelegatedQrCodes(userId: number) {
+    const response = await api.get(`/admin/users/${userId}/qr-codes`);
+    return response.data.qrCodes || response.data;
+  },
+  async getDeleteRequests(status: 'pending' | 'approved' | 'denied' = 'pending') {
+    const response = await api.get('/admin/qr-codes/delete-requests', { params: { status } });
+    return response.data.deleteRequests || response.data;
+  },
+  async approveDeleteRequest(requestId: number, reason?: string) {
+    const response = await api.post(`/admin/qr-codes/delete-requests/${requestId}/approve`, { reason });
+    return response.data;
+  },
+  async denyDeleteRequest(requestId: number, reason?: string) {
+    const response = await api.post(`/admin/qr-codes/delete-requests/${requestId}/deny`, { reason });
+    return response.data;
+  }
 };
 
 export const accessCodeAPI = {

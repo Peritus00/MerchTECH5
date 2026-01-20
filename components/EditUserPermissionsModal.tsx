@@ -46,6 +46,11 @@ interface EditUserPermissionsModalProps {
   user: UserPermissions | null;
   onClose: () => void;
   onUpdatePermissions: (userId: number, permissions: Partial<UserPermissions>) => void;
+  assignedQrCodes?: any[];
+  allQrCodes?: any[];
+  qrCodeLoading?: boolean;
+  onGrantQrCode?: (qrCodeId: number) => void;
+  onRevokeQrCode?: (qrCodeId: number, userId: number) => void;
 }
 
 const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
@@ -53,8 +58,15 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
   user,
   onClose,
   onUpdatePermissions,
+  assignedQrCodes = [],
+  allQrCodes = [],
+  qrCodeLoading = false,
+  onGrantQrCode,
+  onRevokeQrCode,
 }) => {
   const [permissions, setPermissions] = useState<Partial<UserPermissions>>({});
+  const [qrSearch, setQrSearch] = useState('');
+  const [selectedQrCodeId, setSelectedQrCodeId] = useState<number | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -76,6 +88,17 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
   const updatePermission = (key: keyof UserPermissions, value: any) => {
     setPermissions(prev => ({ ...prev, [key]: value }));
   };
+
+  const availableQrCodes = allQrCodes.filter((qr) => {
+    const isActive = qr.is_active !== false && qr.isActive !== false;
+    const alreadyAssigned = assignedQrCodes.some((assigned) => assigned.id === qr.id);
+    const matchesSearch = qrSearch.trim().length === 0
+      ? true
+      : `${qr.name || ''} ${qr.owner_email || ''} ${qr.owner_username || ''}`
+          .toLowerCase()
+          .includes(qrSearch.toLowerCase());
+    return isActive && !alreadyAssigned && matchesSearch;
+  });
 
   const permissionCategories = [
     {
@@ -245,6 +268,76 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
               </View>
             </View>
           ))}
+
+          {/* QR Code Access */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>QR Code Access</Text>
+            {qrCodeLoading ? (
+              <Text style={styles.helperText}>Loading QR codes...</Text>
+            ) : (
+              <>
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search QR codes"
+                  placeholderTextColor="#9ca3af"
+                  value={qrSearch}
+                  onChangeText={setQrSearch}
+                />
+                <ScrollView style={styles.qrList} keyboardShouldPersistTaps="handled">
+                  {availableQrCodes.slice(0, 10).map((qr) => (
+                    <TouchableOpacity
+                      key={qr.id}
+                      style={[
+                        styles.qrOption,
+                        selectedQrCodeId === qr.id && styles.qrOptionSelected
+                      ]}
+                      onPress={() => setSelectedQrCodeId(qr.id)}
+                    >
+                      <Text style={styles.qrOptionText}>{qr.name}</Text>
+                      <Text style={styles.qrOptionSub}>{qr.owner_email || qr.owner_username}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {availableQrCodes.length === 0 && (
+                    <Text style={styles.helperText}>No available QR codes found.</Text>
+                  )}
+                </ScrollView>
+
+                <TouchableOpacity
+                  style={[styles.grantButton, !selectedQrCodeId && styles.disabledButton]}
+                  disabled={!selectedQrCodeId}
+                  onPress={() => {
+                    if (selectedQrCodeId && onGrantQrCode) {
+                      onGrantQrCode(selectedQrCodeId);
+                      setSelectedQrCodeId(null);
+                      setQrSearch('');
+                    }
+                  }}
+                >
+                  <Text style={styles.grantButtonText}>Grant QR Access</Text>
+                </TouchableOpacity>
+
+                <View style={styles.assignedList}>
+                  {assignedQrCodes.length === 0 && (
+                    <Text style={styles.helperText}>No QR codes assigned to this user.</Text>
+                  )}
+                  {assignedQrCodes.map((qr) => (
+                    <View key={qr.id} style={styles.assignedRow}>
+                      <View style={styles.assignedInfo}>
+                        <Text style={styles.assignedName}>{qr.name}</Text>
+                        <Text style={styles.assignedSub}>{qr.owner_email || qr.owner_username}</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.revokeButton}
+                        onPress={() => onRevokeQrCode && onRevokeQrCode(qr.id, user.id)}
+                      >
+                        <Text style={styles.revokeButtonText}>Revoke</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              </>
+            )}
+          </View>
 
           {/* Account Status */}
           <View style={styles.section}>
@@ -459,6 +552,98 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#92400e',
     lineHeight: 20,
+  },
+  helperText: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  searchInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    backgroundColor: '#fff',
+    color: '#1f2937',
+    marginBottom: 8,
+  },
+  qrList: {
+    maxHeight: 160,
+    marginBottom: 8,
+  },
+  qrOption: {
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  qrOptionSelected: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#eff6ff',
+  },
+  qrOptionText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  qrOptionSub: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  grantButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  grantButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
+  },
+  assignedList: {
+    gap: 8,
+  },
+  assignedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+  },
+  assignedInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  assignedName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  assignedSub: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  revokeButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#ef4444',
+  },
+  revokeButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
 
