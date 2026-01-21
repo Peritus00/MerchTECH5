@@ -24,6 +24,7 @@ import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
 import CustomAlert from '@/components/CustomAlert';
 import EditPlaylistModal from '@/components/EditPlaylistModal';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   performOptimisticUpdate,
   createOptimisticUpdater,
@@ -33,6 +34,7 @@ import {
 
 export default function PlaylistsScreen() {
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +63,25 @@ export default function PlaylistsScreen() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setPlaylists([]);
+      setMediaFiles([]);
+      setEditingPlaylist(null);
+      setShowEditModal(false);
+      return;
+    }
+
+    setPlaylists([]);
+    setMediaFiles([]);
+    setEditingPlaylist(null);
+    setShowEditModal(false);
+    setIsLoading(true);
+    fetchData().catch((error) => {
+      console.error('🔴 PLAYLISTS: Error fetching data after user change:', error);
+    });
+  }, [user?.id]);
 
   const fetchData = async () => {
     try {
