@@ -284,7 +284,7 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
                   onChangeText={setQrSearch}
                 />
                 <ScrollView style={styles.qrList} keyboardShouldPersistTaps="handled">
-                  {availableQrCodes.slice(0, 10).map((qr) => (
+                  {availableQrCodes.map((qr) => (
                     <TouchableOpacity
                       key={qr.id}
                       style={[

@@ -8917,11 +8917,25 @@ async function processInBatches(items, batchSize, processor) {
 app.get('/api/playlists', authenticateToken, async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT p.*, u.username 
-       FROM playlists p 
-       JOIN users u ON p.user_id = u.id 
-       WHERE p.user_id = $1 AND p.deleted_at IS NULL
-       ORDER BY p.created_at DESC`,
+      `WITH allowed_playlists AS (
+        SELECT p.id
+        FROM playlists p
+        WHERE p.user_id = $1 AND p.deleted_at IS NULL
+        UNION
+        SELECT p.id
+        FROM playlists p
+        JOIN qr_codes qr ON qr.playlist_id = p.id
+        JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+        WHERE d.user_id = $1
+          AND d.revoked_at IS NULL
+          AND qr.is_active = true
+          AND p.deleted_at IS NULL
+      )
+      SELECT p.*, u.username
+      FROM playlists p
+      JOIN users u ON p.user_id = u.id
+      WHERE p.id IN (SELECT id FROM allowed_playlists)
+      ORDER BY p.created_at DESC`,
       [req.user.userId]
     );
 
@@ -11476,9 +11490,23 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS: Fetching slideshows for user:', req.user.userId);
     
     const result = await db.query(
-      `SELECT s.* FROM slideshows s 
-       WHERE s.user_id = $1 AND s.deleted_at IS NULL
-       ORDER BY s.created_at DESC`,
+      `WITH allowed_slideshows AS (
+        SELECT s.id
+        FROM slideshows s
+        WHERE s.user_id = $1 AND s.deleted_at IS NULL
+        UNION
+        SELECT s.id
+        FROM slideshows s
+        JOIN qr_codes qr ON qr.slideshow_id = s.id
+        JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+        WHERE d.user_id = $1
+          AND d.revoked_at IS NULL
+          AND qr.is_active = true
+          AND s.deleted_at IS NULL
+      )
+      SELECT s.* FROM slideshows s
+      WHERE s.id IN (SELECT id FROM allowed_slideshows)
+      ORDER BY s.created_at DESC`,
       [req.user.userId]
     );
     
