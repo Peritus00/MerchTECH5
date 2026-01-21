@@ -5354,9 +5354,9 @@ app.get('/api/user/usage', authenticateToken, async (req, res) => {
     const [productsRes, mediaRes, playlistsRes, qrRes, slideshowsRes] = await Promise.all([
       db.query('SELECT COUNT(*) FROM products WHERE user_id = $1 AND is_deleted = false', [userId]),
       db.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [userId]),
-      db.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1', [userId]),
-      db.query('SELECT COUNT(*) FROM qr_codes WHERE owner_id = $1 AND is_active = true', [userId]),
-      db.query('SELECT COUNT(*) FROM slideshows WHERE owner_id = $1 AND is_active = true', [userId])
+      db.query('SELECT COUNT(*) FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
+      db.query('SELECT COUNT(*) FROM qr_codes WHERE user_id = $1 AND is_active = true', [userId]),
+      db.query('SELECT COUNT(*) FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [userId])
     ]);
     
     const usage = {
