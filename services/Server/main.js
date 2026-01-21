@@ -10676,6 +10676,7 @@ app.post('/api/admin/qr-codes/:id/delegates', authenticateToken, isAdmin, async 
   }
 });
 
+// DELETE endpoint to revoke QR code delegate access
 app.delete('/api/admin/qr-codes/:id/delegates/:userId', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { id, userId } = req.params;
