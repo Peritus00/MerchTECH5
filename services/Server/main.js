@@ -8915,6 +8915,9 @@ async function processInBatches(items, batchSize, processor) {
 }
 
 app.get('/api/playlists', authenticateToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const result = await db.query(
       `WITH allowed_playlists AS (
@@ -8970,6 +8973,9 @@ app.get('/api/playlists', authenticateToken, async (req, res) => {
 });
 
 app.get('/api/playlists/:id', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   try {
     const { id } = req.params;
     const playlist = await getPlaylistWithMedia(id);

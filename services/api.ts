@@ -373,7 +373,7 @@ export const usersAPI = {
     return response.data;
   },
   async getUsage() {
-    const response = await api.get('/api/user/usage');
+    const response = await api.get('/user/usage');
     return response.data;
   },
 };
