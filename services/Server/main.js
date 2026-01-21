@@ -13280,7 +13280,8 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
       return res.status(404).json({ error: 'Playlist not found' });
     }
     
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+    const playlistOwnerId = ownerCheck.rows[0].user_id;
+    if (playlistOwnerId !== req.user.userId) {
       const delegateAccess = req.user.isAdmin
         ? true
         : await isDelegateForPlaylist(req.user.userId, id);
@@ -13288,6 +13289,9 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to modify this playlist' });
       }
     }
+    
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
     
     // Get current max display order
     const maxOrderResult = await db.query(
@@ -13311,12 +13315,8 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         
         const mediaFile = mediaCheck.rows[0];
         
-        // Check if user is admin
-        const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
-        const isAdmin = userResult.rows[0]?.is_admin || false;
-        
-        // Allow access if: user owns the file OR user is admin
-        if (mediaFile.user_id !== req.user.userId && !isAdmin) {
+        // Allow access if: user owns the file OR playlist owner owns it OR user is admin
+        if (mediaFile.user_id !== req.user.userId && mediaFile.user_id !== playlistOwnerId && !isAdmin) {
           return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
         }
         
@@ -13363,7 +13363,8 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
       return res.status(404).json({ error: 'Playlist not found' });
     }
     
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
+    const playlistOwnerId = ownerCheck.rows[0].user_id;
+    if (playlistOwnerId !== req.user.userId) {
       const delegateAccess = req.user.isAdmin
         ? true
         : await isDelegateForPlaylist(req.user.userId, id);
@@ -13371,6 +13372,9 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
       return res.status(403).json({ error: 'Not authorized to modify this playlist' });
       }
     }
+    
+    const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
     
     // Remove media from playlist
     const result = await db.query(
@@ -13439,12 +13443,8 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         
         const mediaFile = mediaCheck.rows[0];
         
-        // Check if user is admin
-        const userResult = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
-        const isAdmin = userResult.rows[0]?.is_admin || false;
-        
-        // Allow access if: user owns the file OR user is admin
-        if (mediaFile.user_id !== req.user.userId && !isAdmin) {
+        // Allow access if: user owns the file OR playlist owner owns it OR user is admin
+        if (mediaFile.user_id !== req.user.userId && mediaFile.user_id !== playlistOwnerId && !isAdmin) {
           return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
         }
         
