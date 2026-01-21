@@ -10679,6 +10679,8 @@ app.post('/api/admin/qr-codes/:id/delegates', authenticateToken, isAdmin, async 
 app.delete('/api/admin/qr-codes/:id/delegates/:userId', authenticateToken, isAdmin, async (req, res) => {
   try {
     const { id, userId } = req.params;
+    console.log('🔴 DELETE DELEGATE: Revoking delegate access', { qrCodeId: id, userId, adminId: req.user.userId });
+    
     const result = await db.query(
       `UPDATE qr_code_delegates
        SET revoked_at = NOW()
@@ -10686,12 +10688,18 @@ app.delete('/api/admin/qr-codes/:id/delegates/:userId', authenticateToken, isAdm
        RETURNING *`,
       [id, userId]
     );
+    
+    console.log('🔴 DELETE DELEGATE: Query result', { rowsAffected: result.rows.length });
+    
     if (result.rows.length === 0) {
+      console.log('🔴 DELETE DELEGATE: No active delegate assignment found', { qrCodeId: id, userId });
       return res.status(404).json({ error: 'Delegate assignment not found' });
     }
+    
+    console.log('🔴 DELETE DELEGATE: Successfully revoked', { delegate: result.rows[0] });
     res.json({ delegate: result.rows[0], message: 'Delegate revoked' });
   } catch (error) {
-    console.error('Error revoking QR code delegate:', error);
+    console.error('🔴 DELETE DELEGATE: Error revoking QR code delegate:', error);
     res.status(500).json({ error: 'Failed to revoke delegate' });
   }
 });
