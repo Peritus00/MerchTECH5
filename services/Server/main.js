@@ -13398,6 +13398,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
 // Update playlist media order
 app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
   const client = await db.connect();
+  let released = false;
   try {
     await client.query('BEGIN');
     
@@ -13414,7 +13415,6 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     // Guard against accidental clearing - require explicit empty array to clear
-    // If mediaFileIds is undefined/null, don't proceed (this prevents accidental clearing)
     if (mediaFileIds === null || mediaFileIds === undefined) {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'mediaFileIds is required' });
@@ -13432,27 +13432,31 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     const playlistOwnerId = ownerCheck.rows[0].user_id;
-    
-    // Check authorization
-    if (playlistOwnerId !== req.user.userId) {
-      const userResult = await client.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
-      const isAdmin = userResult.rows[0]?.is_admin || false;
-      
-      if (!isAdmin) {
-        const delegateAccess = await isDelegateForPlaylist(req.user.userId, id);
-        if (!delegateAccess) {
-          await client.query('ROLLBACK');
-          return res.status(403).json({ error: 'Not authorized to modify this playlist' });
-        }
-      }
-    }
-    
-    // Get admin status for media authorization
     const userResult = await client.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
     
+    // Check authorization using the same client to avoid pool exhaustion
+    if (playlistOwnerId !== req.user.userId && !isAdmin) {
+      const delegateAccessResult = await client.query(
+        `SELECT 1
+         FROM qr_codes qr
+         JOIN qr_code_delegates d ON d.qr_code_id = qr.id
+         WHERE d.user_id = $1
+           AND d.revoked_at IS NULL
+           AND qr.playlist_id = $2
+           AND qr.is_active = true
+         LIMIT 1`,
+        [req.user.userId, id]
+      );
+      if (delegateAccessResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+      }
+    }
+    
     // Validate all media files before making any changes
     const validatedMedia = [];
+    const seenMediaIds = new Set();
     for (let i = 0; i < mediaFileIds.length; i++) {
       const mediaId = mediaFileIds[i];
       
@@ -13461,6 +13465,13 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         console.warn(`🔴 PLAYLIST_MEDIA_UPDATE: Skipping invalid media ID at index ${i}:`, mediaId);
         continue;
       }
+      
+      const mediaKey = String(mediaId);
+      if (seenMediaIds.has(mediaKey)) {
+        console.warn(`🔴 PLAYLIST_MEDIA_UPDATE: Skipping duplicate media ID:`, mediaId);
+        continue;
+      }
+      seenMediaIds.add(mediaKey);
       
       // Check if media file exists
       const mediaCheck = await client.query(
@@ -13483,10 +13494,9 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         });
       }
       
-      validatedMedia.push({ id: mediaId, order: i + 1 });
+      validatedMedia.push({ id: mediaId, order: validatedMedia.length + 1 });
     }
     
-    // Only proceed if we have validated media (or explicit empty array to clear)
     // Clear existing media links
     await client.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
     
@@ -13499,18 +13509,24 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
     }
     
     await client.query('COMMIT');
+    client.release();
+    released = true;
     
-    // Return updated playlist
+    // Return updated playlist after releasing the client
     const updatedPlaylist = await getPlaylistWithMedia(id);
-    res.json({ playlist: updatedPlaylist });
+    return res.json({ playlist: updatedPlaylist });
     
   } catch (error) {
-    await client.query('ROLLBACK');
+    if (!released) {
+      await client.query('ROLLBACK');
+    }
     console.error('🔴 PLAYLIST_MEDIA_UPDATE: Error updating playlist media:', error);
     console.error('🔴 PLAYLIST_MEDIA_UPDATE: Error stack:', error.stack);
-    res.status(500).json({ error: 'Failed to update playlist media' });
+    return res.status(500).json({ error: 'Failed to update playlist media' });
   } finally {
-    client.release();
+    if (!released) {
+      client.release();
+    }
   }
 });
 
