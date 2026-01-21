@@ -23,6 +23,12 @@ import ShareButton from '@/components/ShareButton';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
 import SubscriptionLimitsCard from '@/components/SubscriptionLimitsCard';
 import { env } from '@/config/environment';
+import {
+  performOptimisticUpdate,
+  createOptimisticUpdater,
+  updateOptimisticUpdater,
+  deleteOptimisticUpdater,
+} from '@/utils/optimisticUpdates';
 
 // --- Helpers -------------------------------------------------------------
 const normalizeProduct = (p: any): Product => {
@@ -107,25 +113,83 @@ export default function MyStoreManager() {
     if (!editing) return;
     
     try {
-      let updatedProduct: Product;
       if (editing.id === 'new') {
-        console.log('🟡 Creating new product...');
-        // Creating a new product
-        updatedProduct = await productsAPI.createProduct(updates);
-        console.log('✅ Product created:', updatedProduct);
-        setProducts((prev) => [normalizeProduct(updatedProduct), ...prev]);
-        // Refresh subscription limits after creating a product
+        console.log('🟡 Creating new product with optimistic update...');
+        
+        // Create temporary product for optimistic update
+        const tempProduct: Product = normalizeProduct({
+          ...editing,
+          ...updates,
+          id: `temp-${Date.now()}`,
+        } as Product);
+        
+        // Optimistic update: immediately add to UI, then create on server
+        const updatedState = await performOptimisticUpdate({
+          currentState: products,
+          mutationType: 'create',
+          optimisticUpdate: createOptimisticUpdater(tempProduct),
+          serverMutation: async () => {
+            const created = await productsAPI.createProduct(updates);
+            return normalizeProduct(created);
+          },
+          extractItem: (response) => response as Product,
+          getItemId: (p) => p.id,
+          refreshState: fetchProducts,
+          onError: (e) => {
+            console.error('🔴 Save failed:', e);
+            Alert.alert('Error', 'Failed to create product. Please try again.');
+          },
+          onSuccess: (created) => {
+            // Replace temp product with real one
+            setProducts(prev => prev.map(p => 
+              p.id === tempProduct.id ? created : p
+            ));
+            refreshLimits();
+            Alert.alert('Success', 'Product created successfully.');
+            setEditing(null);
+          },
+        });
+        
+        setProducts(updatedState);
         refreshLimits();
         Alert.alert('Success', 'Product created successfully.');
+        setEditing(null);
       } else {
-        console.log('🟡 Updating existing product with ID:', editing.id);
-        // Updating an existing product
-        updatedProduct = await productsAPI.updateProduct(editing.id, updates);
-        console.log('✅ Product updated:', updatedProduct);
-        setProducts((prev) => prev.map((p) => (p.id === editing.id ? normalizeProduct(updatedProduct) : p)));
+        console.log('🟡 Updating existing product with optimistic update:', editing.id);
+        
+        // Create optimistic updated product
+        const optimisticProduct = normalizeProduct({
+          ...editing,
+          ...updates,
+        } as Product);
+        
+        // Optimistic update: immediately update UI, then update on server
+        const updatedState = await performOptimisticUpdate({
+          currentState: products,
+          mutationType: 'update',
+          optimisticUpdate: updateOptimisticUpdater(optimisticProduct, (p) => p.id),
+          serverMutation: async () => {
+            const updated = await productsAPI.updateProduct(editing.id, updates);
+            return normalizeProduct(updated);
+          },
+          extractItem: (response) => response as Product,
+          getItemId: (p) => p.id,
+          refreshState: fetchProducts,
+          onError: (e) => {
+            console.error('🔴 Save failed:', e);
+            Alert.alert('Error', 'Failed to update product. Changes have been reverted.');
+          },
+          onSuccess: (updated) => {
+            setProducts(prev => prev.map(p => (p.id === updated.id ? updated : p)));
+            Alert.alert('Success', 'Product updated successfully.');
+            setEditing(null);
+          },
+        });
+        
+        setProducts(updatedState);
         Alert.alert('Success', 'Product updated successfully.');
+        setEditing(null);
       }
-      setEditing(null);
     } catch (e) {
       console.error('🔴 Save failed:', e);
       console.error('🔴 Error details:', e.response?.data || e.message);
@@ -143,54 +207,41 @@ export default function MyStoreManager() {
 
     const performDelete = async () => {
       try {
-        console.log('🗑️ DELETE DEBUG: Starting API delete for product:', idStr);
-        await productsAPI.deleteProduct(idStr);
-        console.log('🗑️ DELETE DEBUG: API delete successful, updating local state...');
+        console.log('🗑️ DELETE DEBUG: Starting optimistic delete for product:', idStr);
         
-        // Update state and log the change
-        setProducts((prev) => {
-          const beforeCount = prev.length;
-          console.log('🗑️ DELETE DEBUG: Before filtering - products:', prev.map(p => ({ 
-            id: p.id, 
-            idType: typeof p.id, 
-            name: p.name 
-          })));
-          console.log('🗑️ DELETE DEBUG: Looking for product with ID:', idStr, 'Type:', typeof idStr);
-          
-          const filteredProducts = prev.filter((p) => {
-            const productId = String(p.id);
-            const targetId = String(idStr);
-            const shouldKeep = productId !== targetId;
-            console.log('🗑️ DELETE DEBUG: Product ID:', productId, 'Target ID:', targetId, 'Keep:', shouldKeep);
-            return shouldKeep;
-          });
-          
-          const afterCount = filteredProducts.length;
-          
-          console.log('🗑️ DELETE DEBUG: State update - Before:', beforeCount, 'After:', afterCount);
-          console.log('🗑️ DELETE DEBUG: Filtered out product with ID:', idStr);
-          console.log('🗑️ DELETE DEBUG: Remaining products:', filteredProducts.map(p => ({ id: p.id, name: p.name })));
-          
-          // Force a re-render by returning a new array reference
-          return [...filteredProducts];
+        // Optimistic update: immediately remove from UI, then delete on server
+        const updatedState = await performOptimisticUpdate({
+          currentState: products,
+          mutationType: 'delete',
+          optimisticUpdate: deleteOptimisticUpdater(idStr, (p) => String(p.id)),
+          serverMutation: async () => {
+            await productsAPI.deleteProduct(idStr);
+            return { success: true };
+          },
+          getItemId: (p) => String(p.id),
+          refreshState: fetchProducts,
+          onError: (e) => {
+            console.error('🗑️ DELETE DEBUG: Delete failed:', e);
+            if (Platform.OS !== 'web') {
+              Alert.alert('Error', 'Failed to delete product. The product has been restored.');
+            }
+          },
+          onSuccess: () => {
+            setEditing(null);
+            refreshLimits();
+            setRenderTrigger(prev => prev + 1);
+            if (Platform.OS !== 'web') {
+              Alert.alert('Success', 'Product deleted.');
+            } else {
+              console.log('🗑️ DELETE DEBUG: Product deleted successfully (web)');
+            }
+          },
         });
         
-        // Force FlatList re-render
-        setRenderTrigger(prev => prev + 1);
-        
-        console.log('🗑️ DELETE DEBUG: setProducts called, closing editor...');
+        setProducts(updatedState);
         setEditing(null);
-        
-        // Refresh subscription limits after deleting a product
         refreshLimits();
-        
-        // Add a small delay to check final state
-        setTimeout(() => {
-          console.log('🗑️ DELETE DEBUG: Final state check after 500ms:');
-          console.log('🗑️ DELETE DEBUG: products.length:', products.length);
-          console.log('🗑️ DELETE DEBUG: productsRef.current.length:', productsRef.current.length);
-          console.log('🗑️ DELETE DEBUG: productsRef.current:', productsRef.current.map(p => ({ id: p.id, name: p.name })));
-        }, 500);
+        setRenderTrigger(prev => prev + 1);
         
         if (Platform.OS !== 'web') {
           Alert.alert('Success', 'Product deleted.');

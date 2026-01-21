@@ -20,6 +20,11 @@ import { useMediaUpload } from '@/hooks/useMediaUpload';
 import { useUpload } from '@/contexts/UploadContext';
 import { mediaAPI } from '@/services/api';
 import MediaFileCard from '@/components/MediaFileCard';
+import {
+  performOptimisticUpdate,
+  createOptimisticUpdater,
+  deleteOptimisticUpdater,
+} from '@/utils/optimisticUpdates';
 
 export default function MediaScreen() {
   const router = useRouter();
@@ -61,10 +66,43 @@ export default function MediaScreen() {
       const uploadedFile = await selectAndUploadFile();
       if (uploadedFile) {
         console.log('🔴 MEDIA: File uploaded successfully:', uploadedFile);
-        setMediaFiles(prev => [uploadedFile, ...prev]);
+        
+        // Optimistic update: immediately add to UI, then refresh in background
+        const updatedState = await performOptimisticUpdate({
+          currentState: mediaFiles,
+          mutationType: 'create',
+          optimisticUpdate: createOptimisticUpdater(uploadedFile),
+          serverMutation: async () => uploadedFile,
+          getItemId: (f) => f.id,
+          refreshState: fetchMediaFiles,
+          onError: (error: any) => {
+            console.error('🔴 MEDIA: Upload error:', error);
+            // Provide specific error messages based on error type
+            let errorMessage = 'Please try again';
+            
+            if (error.message?.includes('File too large')) {
+              errorMessage = error.message;
+            } else if (error.response?.status === 413) {
+              errorMessage = 'File too large for upload. Please use a smaller file (under 4MB) or contact support for assistance.';
+            } else if (error.message?.includes('Network Error') || error.code === 'NETWORK_ERROR') {
+              errorMessage = 'Network error. Please check your connection and try again.';
+            } else if (error.response?.status === 403) {
+              errorMessage = 'Upload limit reached. Please upgrade your plan or contact support.';
+            } else if (error.message?.includes('Unable to read file')) {
+              errorMessage = 'Unable to read the selected file. Please try a different file.';
+            } else if (error.message) {
+              errorMessage = error.message;
+            }
+            
+            Alert.alert('Upload Failed', errorMessage);
+          },
+          onSuccess: () => {
+            Alert.alert('Success', 'File uploaded successfully');
+          },
+        });
+        
+        setMediaFiles(updatedState);
         Alert.alert('Success', 'File uploaded successfully');
-        // Refresh the media list to ensure consistency
-        await fetchMediaFiles();
       }
     } catch (error: any) {
       console.error('🔴 MEDIA: Upload error:', error);
@@ -117,49 +155,45 @@ export default function MediaScreen() {
     setShowDeleteDialog(false);
 
     try {
-      console.log('🔴 MEDIA: Starting delete for file:', fileToDelete);
+      console.log('🔴 MEDIA: Starting delete with optimistic update:', fileToDelete);
       
-      // Call the delete API
-      await mediaAPI.delete(fileToDelete.id);
-      console.log('🔴 MEDIA: Delete API call completed successfully');
-      
-      // Remove from local state immediately for better UX
-      setMediaFiles(prev => {
-        const newFiles = prev.filter(file => file.id !== fileToDelete.id);
-        console.log('🔴 MEDIA: Updated media files list, removed file:', fileToDelete.id);
-        console.log('🔴 MEDIA: Remaining files count:', newFiles.length);
-        return newFiles;
+      // Optimistic update: immediately remove from UI, then delete on server
+      const updatedState = await performOptimisticUpdate({
+        currentState: mediaFiles,
+        mutationType: 'delete',
+        optimisticUpdate: deleteOptimisticUpdater(fileToDelete.id, (f) => f.id),
+        serverMutation: async () => {
+          await mediaAPI.delete(fileToDelete.id);
+          return { success: true };
+        },
+        getItemId: (f) => f.id,
+        refreshState: fetchMediaFiles,
+        onError: (error: any) => {
+          console.error('🔴 MEDIA: Delete error:', error);
+          
+          let errorMessage = 'Failed to delete file';
+          if (error.response?.status === 404) {
+            errorMessage = 'File not found or already deleted';
+          } else if (error.response?.status === 403) {
+            errorMessage = 'You do not have permission to delete this file';
+          } else if (error.response?.data?.error) {
+            errorMessage = error.response.data.error;
+          } else if (error.message) {
+            errorMessage = error.message;
+          }
+          
+          Alert.alert('Delete Failed', `${errorMessage}. The file has been restored.`);
+        },
+        onSuccess: () => {
+          Alert.alert('Success', `"${fileToDelete.name}" has been deleted successfully`);
+        },
       });
       
-      Alert.alert('Success', `"${fileToDelete.name}" has been deleted successfully`);
-      
-      // Refresh the media list after a short delay to ensure consistency
-      // Only refresh if deletion was successful (no error thrown)
-      setTimeout(() => {
-        console.log('🔴 MEDIA: Refreshing media list after successful deletion');
-        fetchMediaFiles();
-      }, 500);
+      setMediaFiles(updatedState);
       
     } catch (error: any) {
       console.error('🔴 MEDIA: Delete error:', error);
-      
-      // If deletion failed, restore the file in the UI by refreshing
-      // This ensures the UI matches the server state
-      console.log('🔴 MEDIA: Delete failed, refreshing to restore file in UI');
-      fetchMediaFiles();
-      
-      let errorMessage = 'Failed to delete file';
-      if (error.response?.status === 404) {
-        errorMessage = 'File not found or already deleted';
-      } else if (error.response?.status === 403) {
-        errorMessage = 'You do not have permission to delete this file';
-      } else if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      Alert.alert('Delete Failed', errorMessage);
+      Alert.alert('Error', 'Failed to delete file');
     } finally {
       setFileToDelete(null);
     }

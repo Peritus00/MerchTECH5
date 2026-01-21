@@ -24,6 +24,12 @@ import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
 import CustomAlert from '@/components/CustomAlert';
 import EditPlaylistModal from '@/components/EditPlaylistModal';
+import {
+  performOptimisticUpdate,
+  createOptimisticUpdater,
+  updateOptimisticUpdater,
+  deleteOptimisticUpdater,
+} from '@/utils/optimisticUpdates';
 
 export default function PlaylistsScreen() {
   const insets = useSafeAreaInsets();
@@ -138,13 +144,35 @@ export default function PlaylistsScreen() {
 
   const handleCreatePlaylist = async (playlist: Playlist) => {
     try {
-      console.log('🔴 PLAYLISTS: Adding new playlist to state:', playlist);
+      console.log('🔴 PLAYLISTS: Creating playlist with optimistic update:', playlist);
       
-      // Add the newly created playlist to the state
-      setPlaylists(prev => [playlist, ...prev]);
-      setShowCreateModal(false);
+      const { playlistsAPI } = await import('@/services/api');
       
+      // Optimistic update: immediately add to UI, then create on server
+      const updatedState = await performOptimisticUpdate({
+        currentState: playlists,
+        mutationType: 'create',
+        optimisticUpdate: createOptimisticUpdater(playlist),
+        serverMutation: async () => {
+          // The playlist is already created by the modal, but we refresh to ensure consistency
+          return playlist;
+        },
+        getItemId: (p) => p.id,
+        refreshState: fetchData,
+        onError: (error) => {
+          console.error('Error creating playlist:', error);
+          Alert.alert('Error', 'Failed to create playlist. Please try again.');
+        },
+        onSuccess: () => {
+          setShowCreateModal(false);
+        },
+      });
+      
+      setPlaylists(updatedState);
+      
+      // Show success immediately (optimistic)
       Alert.alert('Success', 'Playlist created successfully');
+      setShowCreateModal(false);
     } catch (error) {
       console.error('Error handling created playlist:', error);
       Alert.alert('Error', 'Failed to add playlist to list');
@@ -153,21 +181,32 @@ export default function PlaylistsScreen() {
 
   const handleUpdatePlaylist = async (updatedPlaylist: Playlist) => {
     try {
-      console.log('🔴 PLAYLISTS: Updating playlist in state:', updatedPlaylist);
+      console.log('🔴 PLAYLISTS: Updating playlist with optimistic update:', updatedPlaylist);
       
-      // Update the playlist in the state
-      setPlaylists(prev => prev.map(p => 
-        p.id === updatedPlaylist.id ? updatedPlaylist : p
-      ));
+      // Optimistic update: immediately update UI, then refresh in background
+      const updatedState = await performOptimisticUpdate({
+        currentState: playlists,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updatedPlaylist, (p) => p.id),
+        serverMutation: async () => {
+          // The playlist is already updated by the modal, but we refresh to ensure consistency
+          return updatedPlaylist;
+        },
+        getItemId: (p) => p.id,
+        refreshState: fetchData,
+        onError: (error) => {
+          console.error('Error updating playlist:', error);
+          Alert.alert('Error', 'Failed to update playlist. Changes have been reverted.');
+        },
+        onSuccess: () => {
+          setShowEditModal(false);
+          setEditingPlaylist(null);
+        },
+      });
       
+      setPlaylists(updatedState);
       setShowEditModal(false);
       setEditingPlaylist(null);
-      
-      console.log('🔴 PLAYLISTS: Playlist updated successfully in state');
-      
-      // Also refresh the data to ensure we have the latest from server
-      console.log('🔴 PLAYLISTS: Refreshing data from server to ensure consistency');
-      await fetchData();
       
     } catch (error) {
       console.error('Error handling updated playlist:', error);
@@ -203,35 +242,47 @@ export default function PlaylistsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('🔴 PLAYLISTS: User confirmed delete, calling API...');
+              console.log('🔴 PLAYLISTS: User confirmed delete, performing optimistic update...');
               
               // Import API service
               const { playlistsAPI } = await import('@/services/api');
               
-              // Call API to delete playlist from database
-              await playlistsAPI.delete(playlistId);
-              console.log('🔴 PLAYLISTS: API delete successful, removing from state...');
+              // Optimistic update: immediately remove from UI, then delete on server
+              const updatedState = await performOptimisticUpdate({
+                currentState: playlists,
+                mutationType: 'delete',
+                optimisticUpdate: deleteOptimisticUpdater(playlistId, (p) => p.id),
+                serverMutation: async () => {
+                  await playlistsAPI.delete(playlistId);
+                  return { success: true };
+                },
+                getItemId: (p) => p.id,
+                refreshState: fetchData,
+                onError: (error: any) => {
+                  console.error('🔴 PLAYLISTS: Error deleting playlist:', error);
+                  Alert.alert('Error', `Failed to delete playlist: ${error.message || 'Unknown error'}. The playlist has been restored.`);
+                },
+                onSuccess: () => {
+                  // Show success message
+                  setTimeout(() => {
+                    setAlertConfig({
+                      visible: true,
+                      title: 'Success',
+                      message: 'Playlist deleted successfully',
+                      buttons: [
+                        {
+                          text: 'OK',
+                          onPress: () => {
+                            console.log('🔴 PLAYLISTS: Delete operation completed');
+                          },
+                        },
+                      ],
+                    });
+                  }, 100);
+                },
+              });
               
-              // Remove from local state only after successful API call
-              setPlaylists(prev => prev.filter(p => p.id !== playlistId));
-              console.log('🔴 PLAYLISTS: Playlist removed from state, showing success alert...');
-              
-              // Show success message
-              setTimeout(() => {
-                setAlertConfig({
-                  visible: true,
-                  title: 'Success',
-                  message: 'Playlist deleted successfully',
-                  buttons: [
-                    {
-                      text: 'OK',
-                      onPress: () => {
-                        console.log('🔴 PLAYLISTS: Delete operation completed');
-                      },
-                    },
-                  ],
-                });
-              }, 100);
+              setPlaylists(updatedState);
             } catch (error: any) {
               console.error('🔴 PLAYLISTS: Error deleting playlist:', error);
               Alert.alert('Error', `Failed to delete playlist: ${error.message || 'Unknown error'}`);
@@ -278,53 +329,45 @@ export default function PlaylistsScreen() {
 
   const handleToggleProtection = async (playlist: Playlist) => {
     try {
-      console.log('🔴 PLAYLISTS: ===== TOGGLE PROTECTION DEBUG START =====');
-      console.log('🔴 PLAYLISTS: Toggling protection for playlist:', playlist.id, 'Current status:', playlist.requiresActivationCode);
+      console.log('🔴 PLAYLISTS: Toggling protection with optimistic update:', playlist.id);
       
       const { playlistsAPI } = await import('@/services/api');
       // Handle undefined case - default to false (public)
       const currentStatus = playlist.requiresActivationCode ?? false;
       const newProtectionStatus = !currentStatus;
       
-      console.log('🔴 PLAYLISTS: Current status (with fallback):', currentStatus, 'New status:', newProtectionStatus);
-      console.log('🔴 PLAYLISTS: About to call playlistsAPI.update with:', {
-        playlistId: playlist.id,
-        requiresActivationCode: newProtectionStatus
+      const updatedPlaylist = { ...playlist, requiresActivationCode: newProtectionStatus };
+      
+      // Optimistic update: immediately update UI, then update on server
+      const updatedState = await performOptimisticUpdate({
+        currentState: playlists,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updatedPlaylist, (p) => p.id),
+        serverMutation: async () => {
+          return await playlistsAPI.update(playlist.id, {
+            requiresActivationCode: newProtectionStatus
+          });
+        },
+        getItemId: (p) => p.id,
+        refreshState: fetchData,
+        onError: (error: any) => {
+          console.error('🔴 PLAYLISTS: ❌ Error toggling protection:', error);
+          Alert.alert('Error', `Failed to update playlist protection: ${error.message || 'Unknown error'}. Changes have been reverted.`);
+        },
+        onSuccess: () => {
+          Alert.alert(
+            'Protection Updated', 
+            newProtectionStatus 
+              ? 'Playlist is now protected and requires an activation code'
+              : 'Playlist is now public and freely accessible'
+          );
+        },
       });
       
-      // Update the playlist protection status
-      const updatedPlaylist = await playlistsAPI.update(playlist.id, {
-        requiresActivationCode: newProtectionStatus
-      });
-      
-      console.log('🔴 PLAYLISTS: Protection toggled successfully. New status:', newProtectionStatus);
-      console.log('🔴 PLAYLISTS: Server response:', updatedPlaylist);
-      
-      // Update the local state
-      console.log('🔴 PLAYLISTS: Updating local state...');
-      setPlaylists(prev => {
-        const updated = prev.map(p => 
-          p.id === playlist.id 
-            ? { ...p, requiresActivationCode: newProtectionStatus }
-            : p
-        );
-        console.log('🔴 PLAYLISTS: Local state updated. Updated playlist:', updated.find(p => p.id === playlist.id));
-        return updated;
-      });
-      
-      console.log('🔴 PLAYLISTS: Showing success alert...');
-      Alert.alert(
-        'Protection Updated', 
-        newProtectionStatus 
-          ? 'Playlist is now protected and requires an activation code'
-          : 'Playlist is now public and freely accessible'
-      );
-      
-      console.log('🔴 PLAYLISTS: ===== TOGGLE PROTECTION DEBUG END =====');
+      setPlaylists(updatedState);
       
     } catch (error: any) {
       console.error('🔴 PLAYLISTS: ❌ Error toggling protection:', error);
-      console.error('🔴 PLAYLISTS: Error details:', error.response?.data || error.message);
       Alert.alert('Error', `Failed to update playlist protection: ${error.message || 'Unknown error'}`);
     }
   };

@@ -21,6 +21,10 @@ import { downloadQRCode, shareQRCode, QRCodeFormat } from '@/services/qrUtils';
 import { captureRef } from 'react-native-view-shot';
 import { QRCode } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  performOptimisticUpdate,
+  updateOptimisticUpdater,
+} from '@/utils/optimisticUpdates';
 
 export default function QRCodeDetailsScreen() {
   const { id } = useLocalSearchParams();
@@ -113,16 +117,31 @@ export default function QRCodeDetailsScreen() {
     if (!editedQRCode) return;
 
     try {
-      await qrCodeService.updateQRCode(editedQRCode.id, {
-        name: editedQRCode.name,
-        url: editedQRCode.url,
-        description: editedQRCode.description,
-        options: editedQRCode.options,
-      });
+      // Optimistic update: immediately update UI, then update on server
+      const previousQRCode = qrCode;
       
+      // Update local state immediately
       setQrCode(editedQRCode);
       setEditing(false);
-      Alert.alert('Success', 'QR code updated successfully');
+      
+      try {
+        const updated = await qrCodeService.updateQRCode(editedQRCode.id, {
+          name: editedQRCode.name,
+          url: editedQRCode.url,
+          description: editedQRCode.description,
+          options: editedQRCode.options,
+        });
+        
+        // Update with server response (revalidation)
+        setQrCode(updated);
+        Alert.alert('Success', 'QR code updated successfully');
+      } catch (error) {
+        // Rollback on error
+        setQrCode(previousQRCode);
+        setEditing(true);
+        setEditedQRCode(previousQRCode);
+        Alert.alert('Error', 'Failed to update QR code. Changes have been reverted.');
+      }
     } catch (error) {
       Alert.alert('Error', 'Failed to update QR code');
     }

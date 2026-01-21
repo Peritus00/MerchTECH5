@@ -24,6 +24,12 @@ import SlideshowPreview from '@/components/SlideshowPreview';
 import { slideshowsAPI } from '@/services/api';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import {
+  performOptimisticUpdate,
+  createOptimisticUpdater,
+  updateOptimisticUpdater,
+  deleteOptimisticUpdater,
+} from '@/utils/optimisticUpdates';
 
 interface SlideshowImage {
   id: number;
@@ -121,8 +127,47 @@ export default function SlideshowsScreen() {
     requiresActivationCode: boolean;
   }) => {
     try {
-      const created = await slideshowsAPI.create(slideshowData);
-      setSlideshows(prev => [created, ...prev]);
+      // Create temporary slideshow object for optimistic update
+      const tempId = Date.now();
+      const tempSlideshow: Slideshow = {
+        id: tempId, // Temporary ID
+        name: slideshowData.name,
+        description: slideshowData.description,
+        uniqueId: '',
+        autoplayInterval: slideshowData.autoplayInterval,
+        transition: slideshowData.transition,
+        requiresActivationCode: slideshowData.requiresActivationCode,
+        createdAt: new Date().toISOString(),
+        images: [],
+        userId: user?.id || 0,
+      };
+      
+      // Optimistic update: immediately add to UI, then create on server
+      const updatedState = await performOptimisticUpdate({
+        currentState: slideshows,
+        mutationType: 'create',
+        optimisticUpdate: createOptimisticUpdater(tempSlideshow),
+        serverMutation: async () => {
+          const created = await slideshowsAPI.create(slideshowData);
+          return created;
+        },
+        extractItem: (response) => response as Slideshow,
+        getItemId: (s) => s.id,
+        refreshState: fetchSlideshows,
+        onError: (error) => {
+          console.error('Error creating slideshow:', error);
+          Alert.alert('Error', 'Failed to create slideshow. Please try again.');
+        },
+        onSuccess: (created) => {
+          // Replace temp slideshow with real one from server
+          setSlideshows(prev => prev.map(s => 
+            s.id === tempId ? created : s
+          ));
+          setShowCreateModal(false);
+        },
+      });
+      
+      setSlideshows(updatedState);
       setShowCreateModal(false);
       Alert.alert('Success', 'Slideshow created successfully');
     } catch (error) {
@@ -133,19 +178,35 @@ export default function SlideshowsScreen() {
 
   const handleDeleteSlideshow = async (slideshowId: number) => {
     console.log('🗑️ DELETE REQUEST: Slideshow ID:', slideshowId);
-    console.log('🗑️ Current slideshows count before delete:', slideshows.length);
 
-    const executeDelete = () => {
-      console.log('🗑️ Confirmed delete, filtering slideshows...');
-              slideshowsAPI.delete(String(slideshowId)).catch(err =>
-        console.error('Failed to delete slideshow on server:', err)
-      );
-      setSlideshows(prev => prev.filter(slideshow => slideshow.id !== slideshowId));
-      setTimeout(() => {
-        console.log('🗑️ Slideshows count after delete:', slideshows.length - 1);
-      }, 0);
-      if (Platform.OS !== 'web') {
-        Alert.alert('Success', 'Slideshow deleted successfully');
+    const executeDelete = async () => {
+      try {
+        // Optimistic update: immediately remove from UI, then delete on server
+        const updatedState = await performOptimisticUpdate({
+          currentState: slideshows,
+          mutationType: 'delete',
+          optimisticUpdate: deleteOptimisticUpdater(slideshowId, (s) => s.id),
+          serverMutation: async () => {
+            await slideshowsAPI.delete(String(slideshowId));
+            return { success: true };
+          },
+          getItemId: (s) => s.id,
+          refreshState: fetchSlideshows,
+          onError: (error) => {
+            console.error('Failed to delete slideshow on server:', error);
+            Alert.alert('Error', 'Failed to delete slideshow. The slideshow has been restored.');
+          },
+          onSuccess: () => {
+            if (Platform.OS !== 'web') {
+              Alert.alert('Success', 'Slideshow deleted successfully');
+            }
+          },
+        });
+        
+        setSlideshows(updatedState);
+      } catch (error) {
+        console.error('Error deleting slideshow:', error);
+        Alert.alert('Error', 'Failed to delete slideshow');
       }
     };
 
@@ -343,9 +404,20 @@ export default function SlideshowsScreen() {
             return;
           }
           
-          setSlideshows(prev =>
-            prev.map(s => s.id === updatedSlideshow.id ? updatedSlideshow : s)
-          );
+          // Optimistic update: immediately update UI, then refresh in background
+          performOptimisticUpdate({
+            currentState: slideshows,
+            mutationType: 'update',
+            optimisticUpdate: updateOptimisticUpdater(updatedSlideshow, (s) => s.id),
+            serverMutation: async () => updatedSlideshow,
+            getItemId: (s) => s.id,
+            refreshState: fetchSlideshows,
+            onError: (error) => {
+              console.error('Error updating slideshow images:', error);
+            },
+          }).then(updatedState => {
+            setSlideshows(updatedState);
+          });
         }}
       />
 
@@ -365,14 +437,38 @@ export default function SlideshowsScreen() {
             if (updates.autoplayInterval !== undefined) payload.autoplayInterval = updates.autoplayInterval;
             if (updates.requiresActivationCode !== undefined) payload.requiresActivationCode = updates.requiresActivationCode;
 
-            console.log('📤 PATCH payload:', payload);
-            await slideshowsAPI.update(editingSlideshow.id, payload);
+            // Create optimistic updated slideshow
+            const optimisticSlideshow: Slideshow = {
+              ...editingSlideshow,
+              ...updates,
+            };
 
-            // fetch fresh object
-            const fresh = await slideshowsAPI.getById(String(editingSlideshow.id));
-            console.log('📥 Fresh slideshow:', fresh);
-
-            setSlideshows(prev => prev.map(s => (s.id === fresh.id ? fresh : s)));
+            // Optimistic update: immediately update UI, then update on server
+            const updatedState = await performOptimisticUpdate({
+              currentState: slideshows,
+              mutationType: 'update',
+              optimisticUpdate: updateOptimisticUpdater(optimisticSlideshow, (s) => s.id),
+              serverMutation: async () => {
+                await slideshowsAPI.update(editingSlideshow.id, payload);
+                // Fetch fresh object
+                const fresh = await slideshowsAPI.getById(String(editingSlideshow.id));
+                return fresh;
+              },
+              extractItem: (response) => response as Slideshow,
+              getItemId: (s) => s.id,
+              refreshState: fetchSlideshows,
+              onError: (err) => {
+                Alert.alert('Error', 'Failed to update slideshow. Changes have been reverted.');
+                console.error('Update error', err);
+              },
+              onSuccess: (fresh) => {
+                // Update with fresh data from server
+                setSlideshows(prev => prev.map(s => (s.id === fresh.id ? fresh : s)));
+                setEditingSlideshow(null);
+              },
+            });
+            
+            setSlideshows(updatedState);
             setEditingSlideshow(null);
           } catch (err) {
             Alert.alert('Error', 'Failed to update slideshow');
