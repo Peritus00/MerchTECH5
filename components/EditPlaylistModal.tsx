@@ -86,7 +86,16 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         console.log('🔴 EDIT_PLAYLIST: Current order:', currentMediaIds);
         console.log('🔴 EDIT_PLAYLIST: New order:', newMediaIds);
         
-        await playlistsAPI.updateMedia(playlist.id, newMediaIds);
+        // Guard: Ensure we have a valid array (never send undefined/null)
+        if (!Array.isArray(newMediaIds)) {
+          console.error('🔴 EDIT_PLAYLIST: Invalid media IDs array, skipping update');
+          throw new Error('Invalid media IDs array');
+        }
+        
+        // Filter out any invalid IDs before sending
+        const validMediaIds = newMediaIds.filter(id => id != null && id !== undefined);
+        
+        await playlistsAPI.updateMedia(playlist.id, validMediaIds);
         console.log('🔴 EDIT_PLAYLIST: Media files updated');
       } else {
         console.log('🔴 EDIT_PLAYLIST: No media file changes detected');

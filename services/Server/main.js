@@ -13397,71 +13397,120 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
 });
 // Update playlist media order
 app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+  const client = await db.connect();
   try {
+    await client.query('BEGIN');
+    
     const { id } = req.params;
     const { mediaFileIds } = req.body; // Array of media IDs in desired order
     
     console.log('🔴 PLAYLIST_MEDIA_UPDATE: Updating playlist media order:', id);
     console.log('🔴 PLAYLIST_MEDIA_UPDATE: New order:', mediaFileIds);
     
+    // Validate mediaFileIds is an array
+    if (!Array.isArray(mediaFileIds)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'mediaFileIds must be an array' });
+    }
+    
+    // Guard against accidental clearing - require explicit empty array to clear
+    // If mediaFileIds is undefined/null, don't proceed (this prevents accidental clearing)
+    if (mediaFileIds === null || mediaFileIds === undefined) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'mediaFileIds is required' });
+    }
+    
     // Check if user owns the playlist
-    const ownerCheck = await db.query(
+    const ownerCheck = await client.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
     
     if (ownerCheck.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Playlist not found' });
     }
     
-    if (ownerCheck.rows[0].user_id !== req.user.userId) {
-      const delegateAccess = req.user.isAdmin
-        ? true
-        : await isDelegateForPlaylist(req.user.userId, id);
-      if (!delegateAccess) {
-      return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+    const playlistOwnerId = ownerCheck.rows[0].user_id;
+    
+    // Check authorization
+    if (playlistOwnerId !== req.user.userId) {
+      const userResult = await client.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+      const isAdmin = userResult.rows[0]?.is_admin || false;
+      
+      if (!isAdmin) {
+        const delegateAccess = await isDelegateForPlaylist(req.user.userId, id);
+        if (!delegateAccess) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ error: 'Not authorized to modify this playlist' });
+        }
       }
     }
     
+    // Get admin status for media authorization
+    const userResult = await client.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
+    const isAdmin = userResult.rows[0]?.is_admin || false;
+    
+    // Validate all media files before making any changes
+    const validatedMedia = [];
+    for (let i = 0; i < mediaFileIds.length; i++) {
+      const mediaId = mediaFileIds[i];
+      
+      // Skip invalid/null/undefined IDs
+      if (!mediaId || (typeof mediaId !== 'number' && typeof mediaId !== 'string')) {
+        console.warn(`🔴 PLAYLIST_MEDIA_UPDATE: Skipping invalid media ID at index ${i}:`, mediaId);
+        continue;
+      }
+      
+      // Check if media file exists
+      const mediaCheck = await client.query(
+        'SELECT id, user_id FROM media WHERE id = $1',
+        [mediaId]
+      );
+      
+      if (mediaCheck.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: `Media file ${mediaId} not found` });
+      }
+      
+      const mediaFile = mediaCheck.rows[0];
+      
+      // Allow access if: user owns the file OR playlist owner owns it OR user is admin
+      if (mediaFile.user_id !== req.user.userId && mediaFile.user_id !== playlistOwnerId && !isAdmin) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ 
+          error: `Media file ${mediaId} not authorized. Only media owned by you or the playlist owner can be used.` 
+        });
+      }
+      
+      validatedMedia.push({ id: mediaId, order: i + 1 });
+    }
+    
+    // Only proceed if we have validated media (or explicit empty array to clear)
     // Clear existing media links
-    await db.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
+    await client.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
     
-    // Add media files in new order
-    if (mediaFileIds && mediaFileIds.length > 0) {
-      for (let i = 0; i < mediaFileIds.length; i++) {
-        const mediaId = mediaFileIds[i];
-        
-        // Check if media file exists and user can access it (own file or admin)
-        const mediaCheck = await db.query(
-          'SELECT id, user_id FROM media WHERE id = $1',
-          [mediaId]
-        );
-        
-        if (mediaCheck.rows.length === 0) {
-          return res.status(404).json({ error: `Media file ${mediaId} not found` });
-        }
-        
-        const mediaFile = mediaCheck.rows[0];
-        
-        // Allow access if: user owns the file OR playlist owner owns it OR user is admin
-        if (mediaFile.user_id !== req.user.userId && mediaFile.user_id !== playlistOwnerId && !isAdmin) {
-          return res.status(403).json({ error: `Media file ${mediaId} not authorized` });
-        }
-        
-        await db.query(
-          'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
-          [id, mediaId, i + 1]
-        );
-      }
+    // Add validated media files in new order
+    for (const media of validatedMedia) {
+      await client.query(
+        'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
+        [id, media.id, media.order]
+      );
     }
+    
+    await client.query('COMMIT');
     
     // Return updated playlist
     const updatedPlaylist = await getPlaylistWithMedia(id);
     res.json({ playlist: updatedPlaylist });
     
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('🔴 PLAYLIST_MEDIA_UPDATE: Error updating playlist media:', error);
+    console.error('🔴 PLAYLIST_MEDIA_UPDATE: Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to update playlist media' });
+  } finally {
+    client.release();
   }
 });
 
