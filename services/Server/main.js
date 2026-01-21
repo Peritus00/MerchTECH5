@@ -13397,7 +13397,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
 });
 // Update playlist media order
 app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
-  const client = await db.connect();
+  const client = await db.getClient();
   let released = false;
   try {
     await client.query('BEGIN');
