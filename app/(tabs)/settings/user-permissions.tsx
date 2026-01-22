@@ -340,8 +340,9 @@ export default function UserPermissionsScreen() {
       return;
     }
 
-    const previousAssigned = assignedQrCodes;
-    setAssignedQrCodes((prev) => prev.filter((qr) => qr.id !== qrCodeId));
+    const previousAssigned = [...assignedQrCodes];
+    const qrIdString = String(qrCodeId);
+    setAssignedQrCodes((prev) => prev.filter((qr) => String(qr.id) !== qrIdString));
 
     try {
       await adminQrCodeAPI.revokeDelegate(qrCodeId.toString(), userId);
