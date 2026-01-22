@@ -315,7 +315,8 @@ export default function UserPermissionsScreen() {
     if (!selectedUser) return;
     
     // Find the QR code from allQrCodes to create optimistic entry
-    const qrCodeToAdd = allQrCodes.find(qr => qr.id === qrCodeId);
+    const qrIdString = String(qrCodeId);
+    const qrCodeToAdd = allQrCodes.find(qr => String(qr.id) === qrIdString);
     if (!qrCodeToAdd) {
       Alert.alert('Error', 'QR code not found');
       return;
@@ -335,7 +336,7 @@ export default function UserPermissionsScreen() {
     // Optimistically add to assigned list immediately
     setAssignedQrCodes((prev) => {
       // Check if already exists to avoid duplicates
-      if (prev.some(qr => String(qr.id) === String(qrCodeId))) {
+      if (prev.some(qr => String(qr.id) === qrIdString)) {
         return prev;
       }
       return [...prev, optimisticEntry];
