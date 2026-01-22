@@ -380,6 +380,12 @@ export default function UserPermissionsScreen() {
       await adminQrCodeAPI.revokeDelegate(qrCodeId.toString(), userId);
       await loadQrCodeAccess(userId);
     } catch (error: any) {
+      const status = error?.response?.status;
+      if (status === 404) {
+        // Delegate already revoked; keep optimistic removal and refresh list
+        await loadQrCodeAccess(userId);
+        return;
+      }
       setAssignedQrCodes(previousAssigned);
       Alert.alert('Error', error?.message || 'Failed to revoke QR code access');
     }
