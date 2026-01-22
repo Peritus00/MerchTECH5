@@ -313,10 +313,41 @@ export default function UserPermissionsScreen() {
 
   const handleGrantQrCode = async (qrCodeId: number) => {
     if (!selectedUser) return;
+    
+    // Find the QR code from allQrCodes to create optimistic entry
+    const qrCodeToAdd = allQrCodes.find(qr => qr.id === qrCodeId);
+    if (!qrCodeToAdd) {
+      Alert.alert('Error', 'QR code not found');
+      return;
+    }
+
+    // Create optimistic entry with expected structure
+    const optimisticEntry = {
+      ...qrCodeToAdd,
+      granted_at: new Date().toISOString(),
+      owner_email: qrCodeToAdd.owner_email || qrCodeToAdd.ownerEmail,
+      owner_username: qrCodeToAdd.owner_username || qrCodeToAdd.ownerUsername,
+    };
+
+    // Save previous state for rollback
+    const previousAssigned = [...assignedQrCodes];
+    
+    // Optimistically add to assigned list immediately
+    setAssignedQrCodes((prev) => {
+      // Check if already exists to avoid duplicates
+      if (prev.some(qr => String(qr.id) === String(qrCodeId))) {
+        return prev;
+      }
+      return [...prev, optimisticEntry];
+    });
+
     try {
       await adminQrCodeAPI.addDelegate(qrCodeId.toString(), selectedUser.id);
+      // Refresh to get server data (includes granted_at timestamp)
       await loadQrCodeAccess(selectedUser.id);
     } catch (error: any) {
+      // Rollback on error
+      setAssignedQrCodes(previousAssigned);
       Alert.alert('Error', error?.message || 'Failed to grant QR code access');
     }
   };
