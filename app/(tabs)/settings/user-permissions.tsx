@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
-  Text
+  Text,
+  Platform
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -320,11 +321,33 @@ export default function UserPermissionsScreen() {
     }
   };
 
+  const confirmRevoke = async () => {
+    const message = 'Revoke access now? This takes effect immediately even if you do not save the page.';
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.confirm(message);
+    }
+    return new Promise<boolean>((resolve) => {
+      Alert.alert('Confirm Revoke', message, [
+        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+        { text: 'Revoke', style: 'destructive', onPress: () => resolve(true) },
+      ]);
+    });
+  };
+
   const handleRevokeQrCode = async (qrCodeId: number, userId: number) => {
+    const confirmed = await confirmRevoke();
+    if (!confirmed) {
+      return;
+    }
+
+    const previousAssigned = assignedQrCodes;
+    setAssignedQrCodes((prev) => prev.filter((qr) => qr.id !== qrCodeId));
+
     try {
       await adminQrCodeAPI.revokeDelegate(qrCodeId.toString(), userId);
       await loadQrCodeAccess(userId);
     } catch (error: any) {
+      setAssignedQrCodes(previousAssigned);
       Alert.alert('Error', error?.message || 'Failed to revoke QR code access');
     }
   };
