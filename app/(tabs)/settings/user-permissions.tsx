@@ -366,10 +366,13 @@ export default function UserPermissionsScreen() {
     });
   };
 
-  const handleRevokeQrCode = async (qrCodeId: number, userId: number) => {
-    const confirmed = await confirmRevoke();
-    if (!confirmed) {
-      return;
+  const handleRevokeQrCode = async (qrCodeId: number, userId: number, skipConfirmation = false) => {
+    // Skip confirmation when called from Save (changes apply on Save)
+    if (!skipConfirmation) {
+      const confirmed = await confirmRevoke();
+      if (!confirmed) {
+        return;
+      }
     }
 
     const previousAssigned = [...assignedQrCodes];

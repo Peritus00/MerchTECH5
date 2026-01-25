@@ -49,7 +49,7 @@ interface EditUserPermissionsModalProps {
   allQrCodes?: any[];
   qrCodeLoading?: boolean;
   onGrantQrCode?: (qrCodeId: number) => void;
-  onRevokeQrCode?: (qrCodeId: number, userId: number) => void;
+  onRevokeQrCode?: (qrCodeId: number, userId: number, skipConfirmation?: boolean) => void;
 }
 
 const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
@@ -66,6 +66,10 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
   const [permissions, setPermissions] = useState<Partial<UserPermissions>>({});
   const [qrSearch, setQrSearch] = useState('');
   const [selectedQrCodeId, setSelectedQrCodeId] = useState<number | null>(null);
+  // Working set of QR code IDs that have access (for Yes/No checkboxes)
+  const [workingQrAccessSet, setWorkingQrAccessSet] = useState<Set<number>>(new Set());
+  // Original assigned QR codes snapshot (to compute diff on save)
+  const [originalQrAccessSet, setOriginalQrAccessSet] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (user) {
@@ -73,9 +77,52 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
     }
   }, [user]);
 
-  const handleSave = () => {
+  // Initialize working QR access set from assignedQrCodes when modal opens or assignedQrCodes changes
+  useEffect(() => {
+    if (visible && assignedQrCodes) {
+      const assignedIds = new Set(assignedQrCodes.map(qr => Number(qr.id)));
+      setWorkingQrAccessSet(assignedIds);
+      setOriginalQrAccessSet(new Set(assignedIds));
+    } else if (!visible) {
+      // Reset when modal closes
+      setWorkingQrAccessSet(new Set());
+      setOriginalQrAccessSet(new Set());
+      setQrSearch('');
+    }
+  }, [visible, assignedQrCodes]);
+
+  const handleSave = async () => {
     if (!user) return;
-    onUpdatePermissions(user.id, permissions);
+    
+    // First, update permissions
+    await onUpdatePermissions(user.id, permissions);
+    
+    // Then, compute and apply QR code access changes
+    const addedIds = Array.from(workingQrAccessSet).filter(id => !originalQrAccessSet.has(id));
+    const removedIds = Array.from(originalQrAccessSet).filter(id => !workingQrAccessSet.has(id));
+    
+    // Apply grants (added IDs)
+    if (addedIds.length > 0 && onGrantQrCode) {
+      for (const qrCodeId of addedIds) {
+        try {
+          await onGrantQrCode(qrCodeId);
+        } catch (error) {
+          console.error(`Failed to grant access to QR code ${qrCodeId}:`, error);
+        }
+      }
+    }
+    
+    // Apply revocations (removed IDs) - skip confirmation since changes apply on save
+    if (removedIds.length > 0 && onRevokeQrCode) {
+      for (const qrCodeId of removedIds) {
+        try {
+          await onRevokeQrCode(qrCodeId, user.id, true);
+        } catch (error) {
+          console.error(`Failed to revoke access from QR code ${qrCodeId}:`, error);
+        }
+      }
+    }
+    
     onClose();
   };
 
@@ -88,16 +135,29 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
     setPermissions(prev => ({ ...prev, [key]: value }));
   };
 
-  const availableQrCodes = allQrCodes.filter((qr) => {
+  // Filter all QR codes by search (show all active QR codes, not just unassigned ones)
+  const filteredQrCodes = allQrCodes.filter((qr) => {
     const isActive = qr.is_active !== false && qr.isActive !== false;
-    const alreadyAssigned = assignedQrCodes.some((assigned) => assigned.id === qr.id);
     const matchesSearch = qrSearch.trim().length === 0
       ? true
       : `${qr.name || ''} ${qr.owner_email || ''} ${qr.owner_username || ''}`
           .toLowerCase()
           .includes(qrSearch.toLowerCase());
-    return isActive && !alreadyAssigned && matchesSearch;
+    return isActive && matchesSearch;
   });
+
+  // Toggle QR code access (Yes/No)
+  const toggleQrCodeAccess = (qrCodeId: number, hasAccess: boolean) => {
+    setWorkingQrAccessSet(prev => {
+      const newSet = new Set(prev);
+      if (hasAccess) {
+        newSet.add(qrCodeId);
+      } else {
+        newSet.delete(qrCodeId);
+      }
+      return newSet;
+    });
+  };
 
   const permissionCategories = [
     {
@@ -283,57 +343,55 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
                   onChangeText={setQrSearch}
                 />
                 <ScrollView style={styles.qrList} keyboardShouldPersistTaps="handled">
-                  {availableQrCodes.map((qr) => (
-                    <TouchableOpacity
-                      key={qr.id}
-                      style={[
-                        styles.qrOption,
-                        selectedQrCodeId === qr.id && styles.qrOptionSelected
-                      ]}
-                      onPress={() => setSelectedQrCodeId(qr.id)}
-                    >
-                      <Text style={styles.qrOptionText}>{qr.name}</Text>
-                      <Text style={styles.qrOptionSub}>{qr.owner_email || qr.owner_username}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {availableQrCodes.length === 0 && (
-                    <Text style={styles.helperText}>No available QR codes found.</Text>
+                  {filteredQrCodes.length === 0 ? (
+                    <Text style={styles.helperText}>No QR codes found.</Text>
+                  ) : (
+                    filteredQrCodes.map((qr) => {
+                      const qrId = Number(qr.id);
+                      const hasAccess = workingQrAccessSet.has(qrId);
+                      return (
+                        <View key={qr.id} style={styles.qrAccessRow}>
+                          <View style={styles.qrAccessInfo}>
+                            <Text style={styles.qrAccessName}>{qr.name}</Text>
+                            <Text style={styles.qrAccessSub}>{qr.owner_email || qr.owner_username}</Text>
+                          </View>
+                          <View style={styles.yesNoContainer}>
+                            <TouchableOpacity
+                              style={[
+                                styles.yesNoOption,
+                                hasAccess && styles.yesNoOptionSelected,
+                                hasAccess && styles.yesOptionSelected
+                              ]}
+                              onPress={() => toggleQrCodeAccess(qrId, true)}
+                            >
+                              <Text style={[
+                                styles.yesNoText,
+                                hasAccess && styles.yesNoTextSelected
+                              ]}>
+                                Yes
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[
+                                styles.yesNoOption,
+                                !hasAccess && styles.yesNoOptionSelected,
+                                !hasAccess && styles.noOptionSelected
+                              ]}
+                              onPress={() => toggleQrCodeAccess(qrId, false)}
+                            >
+                              <Text style={[
+                                styles.yesNoText,
+                                !hasAccess && styles.yesNoTextSelected
+                              ]}>
+                                No
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
                   )}
                 </ScrollView>
-
-                <TouchableOpacity
-                  style={[styles.grantButton, !selectedQrCodeId && styles.disabledButton]}
-                  disabled={!selectedQrCodeId}
-                  onPress={() => {
-                    if (selectedQrCodeId && onGrantQrCode) {
-                      onGrantQrCode(selectedQrCodeId);
-                      setSelectedQrCodeId(null);
-                      setQrSearch('');
-                    }
-                  }}
-                >
-                  <Text style={styles.grantButtonText}>Grant QR Access</Text>
-                </TouchableOpacity>
-
-                <View style={styles.assignedList}>
-                  {assignedQrCodes.length === 0 && (
-                    <Text style={styles.helperText}>No QR codes assigned to this user.</Text>
-                  )}
-                  {assignedQrCodes.map((qr) => (
-                    <View key={qr.id} style={styles.assignedRow}>
-                      <View style={styles.assignedInfo}>
-                        <Text style={styles.assignedName}>{qr.name}</Text>
-                        <Text style={styles.assignedSub}>{qr.owner_email || qr.owner_username}</Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.revokeButton}
-                        onPress={() => onRevokeQrCode && onRevokeQrCode(qr.id, user.id)}
-                      >
-                        <Text style={styles.revokeButtonText}>Revoke</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
               </>
             )}
           </View>
@@ -643,6 +701,64 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
+  },
+  qrAccessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    marginBottom: 8,
+  },
+  qrAccessInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  qrAccessName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  qrAccessSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  yesNoContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  yesNoOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    backgroundColor: '#fff',
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  yesNoOptionSelected: {
+    borderWidth: 2,
+  },
+  yesOptionSelected: {
+    borderColor: '#10b981',
+    backgroundColor: '#d1fae5',
+  },
+  noOptionSelected: {
+    borderColor: '#ef4444',
+    backgroundColor: '#fee2e2',
+  },
+  yesNoText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+  },
+  yesNoTextSelected: {
+    color: '#1f2937',
   },
 });
 
