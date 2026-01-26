@@ -42,8 +42,6 @@ export default function DemographicsSurveyOverlay({
 }: DemographicsSurveyOverlayProps) {
   const [selectedAge, setSelectedAge] = useState('');
   const [selectedGender, setSelectedGender] = useState('');
-  const [showAgeList, setShowAgeList] = useState(false);
-  const [showGenderList, setShowGenderList] = useState(false);
 
   // Log when selections change
   useEffect(() => {
@@ -72,8 +70,6 @@ export default function DemographicsSurveyOverlay({
       // Reset form
       setSelectedAge('');
       setSelectedGender('');
-      setShowAgeList(false);
-      setShowGenderList(false);
     } catch (error) {
       console.error('❌ SURVEY: Error in onSubmit:', error);
     }
@@ -105,90 +101,62 @@ export default function DemographicsSurveyOverlay({
           </Text>
 
           <View style={styles.form}>
-            {/* Age Range Selector */}
+            {/* Age Range Button Grid */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Age Range</Text>
-              <TouchableOpacity
-                style={styles.selector}
-                onPress={() => {
-                  setShowAgeList(!showAgeList);
-                  setShowGenderList(false);
-                }}
-              >
-                <Text style={selectedAge ? styles.selectorText : styles.selectorPlaceholder}>
-                  {selectedAge || 'Select your age range'}
-                </Text>
-                <MaterialIcons
-                  name={showAgeList ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#6b7280"
-                />
-              </TouchableOpacity>
-
-              {showAgeList && (
-                <View style={styles.dropdown}>
-                  <ScrollView style={styles.dropdownScroll}>
-                    {AGE_RANGES.map((range) => (
-                      <TouchableOpacity
-                        key={range}
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          setSelectedAge(range);
-                          setShowAgeList(false);
-                        }}
-                      >
-                        <Text style={styles.dropdownItemText}>{range}</Text>
-                        {selectedAge === range && (
-                          <MaterialIcons name="check" size={20} color="#8b5cf6" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              <View style={styles.optionGrid}>
+                {AGE_RANGES.map((range) => (
+                  <TouchableOpacity
+                    key={range}
+                    style={[
+                      styles.optionButton,
+                      selectedAge === range && styles.optionButtonSelected,
+                    ]}
+                    onPress={() => setSelectedAge(range)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selectedAge === range && styles.optionTextSelected,
+                      ]}
+                    >
+                      {range}
+                    </Text>
+                    {selectedAge === range && (
+                      <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
-            {/* Gender Selector */}
+            {/* Gender Button Grid */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Gender Identity</Text>
-              <TouchableOpacity
-                style={styles.selector}
-                onPress={() => {
-                  setShowGenderList(!showGenderList);
-                  setShowAgeList(false);
-                }}
-              >
-                <Text style={selectedGender ? styles.selectorText : styles.selectorPlaceholder}>
-                  {selectedGender || 'Select your gender identity'}
-                </Text>
-                <MaterialIcons
-                  name={showGenderList ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#6b7280"
-                />
-              </TouchableOpacity>
-
-              {showGenderList && (
-                <View style={styles.dropdown}>
-                  <ScrollView style={styles.dropdownScroll}>
-                    {GENDER_OPTIONS.map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        style={styles.dropdownItem}
-                        onPress={() => {
-                          setSelectedGender(option);
-                          setShowGenderList(false);
-                        }}
-                      >
-                        <Text style={styles.dropdownItemText}>{option}</Text>
-                        {selectedGender === option && (
-                          <MaterialIcons name="check" size={20} color="#8b5cf6" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              <View style={styles.optionGrid}>
+                {GENDER_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.optionButton,
+                      selectedGender === option && styles.optionButtonSelected,
+                    ]}
+                    onPress={() => setSelectedGender(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selectedGender === option && styles.optionTextSelected,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                    {selectedGender === option && (
+                      <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
 
@@ -272,51 +240,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  selector: {
+  optionGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    minWidth: '47%',
+    flex: 1,
+    flexBasis: '47%',
+    minHeight: 48,
     paddingVertical: 14,
-  },
-  selectorText: {
-    fontSize: 16,
-    color: '#1f2937',
-  },
-  selectorPlaceholder: {
-    fontSize: 16,
-    color: '#9ca3af',
-  },
-  dropdown: {
-    marginTop: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    paddingHorizontal: 12,
     borderRadius: 12,
-    maxHeight: 200,
-    overflow: 'hidden',
+    backgroundColor: '#f9fafb',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    gap: 6,
   },
-  dropdownScroll: {
-    maxHeight: 180,
+  optionButtonSelected: {
+    backgroundColor: '#f3e8ff',
+    borderColor: '#8b5cf6',
   },
-  dropdownItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+  optionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    textAlign: 'center',
+    flexShrink: 1,
   },
-  dropdownItemText: {
-    fontSize: 16,
-    color: '#1f2937',
+  optionTextSelected: {
+    color: '#8b5cf6',
+    fontWeight: '600',
+  },
+  checkIcon: {
+    marginLeft: 2,
   },
   benefit: {
     flexDirection: 'row',

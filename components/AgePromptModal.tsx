@@ -33,14 +33,12 @@ export default function AgePromptModal({
   onSubmit,
 }: AgePromptModalProps) {
   const [selectedAge, setSelectedAge] = useState('');
-  const [showAgeList, setShowAgeList] = useState(false);
 
   const handleSubmit = () => {
     if (selectedAge) {
       onSubmit(selectedAge);
       // Reset form
       setSelectedAge('');
-      setShowAgeList(false);
     }
   };
 
@@ -70,44 +68,33 @@ export default function AgePromptModal({
           </Text>
 
           <View style={styles.form}>
-            {/* Age Range Selector */}
+            {/* Age Range Button Grid */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Age Range</Text>
-              <TouchableOpacity
-                style={styles.ageSelector}
-                onPress={() => setShowAgeList(!showAgeList)}
-              >
-                <Text style={selectedAge ? styles.ageSelectorText : styles.ageSelectorPlaceholder}>
-                  {selectedAge || 'Select your age range'}
-                </Text>
-                <MaterialIcons
-                  name={showAgeList ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#6b7280"
-                />
-              </TouchableOpacity>
-
-              {showAgeList && (
-                <View style={styles.ageList}>
-                  <ScrollView style={styles.ageScroll}>
-                    {AGE_RANGES.map((range) => (
-                      <TouchableOpacity
-                        key={range}
-                        style={styles.ageItem}
-                        onPress={() => {
-                          setSelectedAge(range);
-                          setShowAgeList(false);
-                        }}
-                      >
-                        <Text style={styles.ageItemText}>{range}</Text>
-                        {selectedAge === range && (
-                          <MaterialIcons name="check" size={20} color="#3b82f6" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              <View style={styles.optionGrid}>
+                {AGE_RANGES.map((range) => (
+                  <TouchableOpacity
+                    key={range}
+                    style={[
+                      styles.optionButton,
+                      selectedAge === range && styles.optionButtonSelected,
+                    ]}
+                    onPress={() => setSelectedAge(range)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selectedAge === range && styles.optionTextSelected,
+                      ]}
+                    >
+                      {range}
+                    </Text>
+                    {selectedAge === range && (
+                      <MaterialIcons name="check" size={18} color="#3b82f6" style={styles.checkIcon} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
 
@@ -187,51 +174,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  ageSelector: {
+  optionGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    minWidth: '47%',
+    flex: 1,
+    flexBasis: '47%',
+    minHeight: 48,
     paddingVertical: 14,
-  },
-  ageSelectorText: {
-    fontSize: 16,
-    color: '#1f2937',
-  },
-  ageSelectorPlaceholder: {
-    fontSize: 16,
-    color: '#9ca3af',
-  },
-  ageList: {
-    marginTop: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    paddingHorizontal: 12,
     borderRadius: 12,
-    maxHeight: 300,
-    overflow: 'hidden',
+    backgroundColor: '#f9fafb',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    gap: 6,
   },
-  ageScroll: {
-    maxHeight: 250,
+  optionButtonSelected: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
   },
-  ageItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+  optionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    textAlign: 'center',
+    flexShrink: 1,
   },
-  ageItemText: {
-    fontSize: 16,
-    color: '#1f2937',
+  optionTextSelected: {
+    color: '#3b82f6',
+    fontWeight: '600',
+  },
+  checkIcon: {
+    marginLeft: 2,
   },
   benefit: {
     flexDirection: 'row',

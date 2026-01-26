@@ -31,14 +31,12 @@ export default function GenderPromptModal({
   onSubmit,
 }: GenderPromptModalProps) {
   const [selectedGender, setSelectedGender] = useState('');
-  const [showGenderList, setShowGenderList] = useState(false);
 
   const handleSubmit = () => {
     if (selectedGender) {
       onSubmit(selectedGender);
       // Reset form
       setSelectedGender('');
-      setShowGenderList(false);
     }
   };
 
@@ -68,44 +66,33 @@ export default function GenderPromptModal({
           </Text>
 
           <View style={styles.form}>
-            {/* Gender Selector */}
+            {/* Gender Button Grid */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Gender Identity</Text>
-              <TouchableOpacity
-                style={styles.genderSelector}
-                onPress={() => setShowGenderList(!showGenderList)}
-              >
-                <Text style={selectedGender ? styles.genderSelectorText : styles.genderSelectorPlaceholder}>
-                  {selectedGender || 'Select your gender identity'}
-                </Text>
-                <MaterialIcons
-                  name={showGenderList ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
-                  size={24}
-                  color="#6b7280"
-                />
-              </TouchableOpacity>
-
-              {showGenderList && (
-                <View style={styles.genderList}>
-                  <ScrollView style={styles.genderScroll}>
-                    {GENDER_OPTIONS.map((option) => (
-                      <TouchableOpacity
-                        key={option}
-                        style={styles.genderItem}
-                        onPress={() => {
-                          setSelectedGender(option);
-                          setShowGenderList(false);
-                        }}
-                      >
-                        <Text style={styles.genderItemText}>{option}</Text>
-                        {selectedGender === option && (
-                          <MaterialIcons name="check" size={20} color="#8b5cf6" />
-                        )}
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
+              <View style={styles.optionGrid}>
+                {GENDER_OPTIONS.map((option) => (
+                  <TouchableOpacity
+                    key={option}
+                    style={[
+                      styles.optionButton,
+                      selectedGender === option && styles.optionButtonSelected,
+                    ]}
+                    onPress={() => setSelectedGender(option)}
+                  >
+                    <Text
+                      style={[
+                        styles.optionText,
+                        selectedGender === option && styles.optionTextSelected,
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                    {selectedGender === option && (
+                      <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
 
@@ -185,51 +172,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  genderSelector: {
+  optionGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  optionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f9fafb',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    justifyContent: 'center',
+    minWidth: '47%',
+    flex: 1,
+    flexBasis: '47%',
+    minHeight: 48,
     paddingVertical: 14,
-  },
-  genderSelectorText: {
-    fontSize: 16,
-    color: '#1f2937',
-  },
-  genderSelectorPlaceholder: {
-    fontSize: 16,
-    color: '#9ca3af',
-  },
-  genderList: {
-    marginTop: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+    paddingHorizontal: 12,
     borderRadius: 12,
-    maxHeight: 250,
-    overflow: 'hidden',
+    backgroundColor: '#f9fafb',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    gap: 6,
   },
-  genderScroll: {
-    maxHeight: 200,
+  optionButtonSelected: {
+    backgroundColor: '#f3e8ff',
+    borderColor: '#8b5cf6',
   },
-  genderItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
+  optionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6b7280',
+    textAlign: 'center',
+    flexShrink: 1,
   },
-  genderItemText: {
-    fontSize: 16,
-    color: '#1f2937',
+  optionTextSelected: {
+    color: '#8b5cf6',
+    fontWeight: '600',
+  },
+  checkIcon: {
+    marginLeft: 2,
   },
   benefit: {
     flexDirection: 'row',
