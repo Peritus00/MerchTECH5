@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -34,12 +33,18 @@ export default function AgePromptModal({
 }: AgePromptModalProps) {
   const [selectedAge, setSelectedAge] = useState('');
 
-  const handleSubmit = () => {
-    if (selectedAge) {
-      onSubmit(selectedAge);
-      // Reset form
-      setSelectedAge('');
-    }
+  const handleSubmit = (ageRange: string) => {
+    onSubmit(ageRange);
+    setSelectedAge('');
+  };
+
+  const handleAgeSelect = (ageRange: string) => {
+    setSelectedAge(ageRange);
+    handleSubmit(ageRange);
+  };
+
+  const handleSkip = () => {
+    handleSubmit('Prefer not to say');
   };
 
   return (
@@ -79,7 +84,7 @@ export default function AgePromptModal({
                       styles.optionButton,
                       selectedAge === range && styles.optionButtonSelected,
                     ]}
-                    onPress={() => setSelectedAge(range)}
+                    onPress={() => handleAgeSelect(range)}
                   >
                     <Text
                       style={[
@@ -96,6 +101,9 @@ export default function AgePromptModal({
                 ))}
               </View>
             </View>
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.benefit}>
@@ -105,19 +113,7 @@ export default function AgePromptModal({
             </Text>
           </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                !selectedAge && styles.submitButtonDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={!selectedAge}
-            >
-              <Text style={styles.submitButtonText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          <View style={styles.actions} />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -214,6 +210,15 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     marginLeft: 2,
+  },
+  skipButton: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  skipText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
   benefit: {
     flexDirection: 'row',

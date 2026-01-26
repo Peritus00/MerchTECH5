@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -32,12 +31,18 @@ export default function GenderPromptModal({
 }: GenderPromptModalProps) {
   const [selectedGender, setSelectedGender] = useState('');
 
-  const handleSubmit = () => {
-    if (selectedGender) {
-      onSubmit(selectedGender);
-      // Reset form
-      setSelectedGender('');
-    }
+  const handleSubmit = (gender: string) => {
+    onSubmit(gender);
+    setSelectedGender('');
+  };
+
+  const handleGenderSelect = (gender: string) => {
+    setSelectedGender(gender);
+    handleSubmit(gender);
+  };
+
+  const handleSkip = () => {
+    handleSubmit('Prefer not to say');
   };
 
   return (
@@ -77,7 +82,7 @@ export default function GenderPromptModal({
                       styles.optionButton,
                       selectedGender === option && styles.optionButtonSelected,
                     ]}
-                    onPress={() => setSelectedGender(option)}
+                    onPress={() => handleGenderSelect(option)}
                   >
                     <Text
                       style={[
@@ -94,6 +99,9 @@ export default function GenderPromptModal({
                 ))}
               </View>
             </View>
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.benefit}>
@@ -103,19 +111,7 @@ export default function GenderPromptModal({
             </Text>
           </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                !selectedGender && styles.submitButtonDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={!selectedGender}
-            >
-              <Text style={styles.submitButtonText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          <View style={styles.actions} />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -212,6 +208,15 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     marginLeft: 2,
+  },
+  skipButton: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  skipText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
   benefit: {
     flexDirection: 'row',

@@ -5,7 +5,6 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -42,37 +41,56 @@ export default function DemographicsSurveyOverlay({
 }: DemographicsSurveyOverlayProps) {
   const [selectedAge, setSelectedAge] = useState('');
   const [selectedGender, setSelectedGender] = useState('');
+  const [step, setStep] = useState<'age' | 'gender'>('age');
+
+  useEffect(() => {
+    if (visible) {
+      setSelectedAge('');
+      setSelectedGender('');
+      setStep('age');
+    }
+  }, [visible]);
 
   // Log when selections change
   useEffect(() => {
     console.log('📋 SURVEY: Selection changed', { selectedAge, selectedGender });
   }, [selectedAge, selectedGender]);
 
-  const handleSubmit = () => {
-    console.log('📋 SURVEY: Submit button pressed!', { selectedAge, selectedGender });
-    
-    if (!selectedAge) {
-      console.log('❌ SURVEY: Missing age');
-      return;
-    }
-    
-    if (!selectedGender) {
-      console.log('❌ SURVEY: Missing gender');
-      return;
-    }
-    
-    console.log('✅ SURVEY: Both fields filled, calling onSubmit');
-    
+  const handleSubmit = (ageRange: string, gender: string) => {
+    console.log('📋 SURVEY: Auto submit', { ageRange, gender });
+
     try {
-      onSubmit({ ageRange: selectedAge, gender: selectedGender });
+      onSubmit({ ageRange, gender });
       console.log('✅ SURVEY: onSubmit called successfully');
-      
+
       // Reset form
       setSelectedAge('');
       setSelectedGender('');
+      setStep('age');
     } catch (error) {
       console.error('❌ SURVEY: Error in onSubmit:', error);
     }
+  };
+
+  const handleAgeSelect = (ageRange: string) => {
+    setSelectedAge(ageRange);
+    setStep('gender');
+  };
+
+  const handleGenderSelect = (gender: string) => {
+    const ageRange = selectedAge || 'Prefer not to say';
+    setSelectedGender(gender);
+    handleSubmit(ageRange, gender);
+  };
+
+  const handleSkip = () => {
+    if (step === 'age') {
+      handleAgeSelect('Prefer not to say');
+      return;
+    }
+
+    const ageRange = selectedAge || 'Prefer not to say';
+    handleSubmit(ageRange, 'Prefer not to say');
   };
 
   return (
@@ -101,63 +119,67 @@ export default function DemographicsSurveyOverlay({
           </Text>
 
           <View style={styles.form}>
-            {/* Age Range Button Grid */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Age Range</Text>
-              <View style={styles.optionGrid}>
-                {AGE_RANGES.map((range) => (
-                  <TouchableOpacity
-                    key={range}
-                    style={[
-                      styles.optionButton,
-                      selectedAge === range && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => setSelectedAge(range)}
-                  >
-                    <Text
+            {step === 'age' ? (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Age Range</Text>
+                <View style={styles.optionGrid}>
+                  {AGE_RANGES.map((range) => (
+                    <TouchableOpacity
+                      key={range}
                       style={[
-                        styles.optionText,
-                        selectedAge === range && styles.optionTextSelected,
+                        styles.optionButton,
+                        selectedAge === range && styles.optionButtonSelected,
                       ]}
+                      onPress={() => handleAgeSelect(range)}
                     >
-                      {range}
-                    </Text>
-                    {selectedAge === range && (
-                      <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
-                    )}
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={[
+                          styles.optionText,
+                          selectedAge === range && styles.optionTextSelected,
+                        ]}
+                      >
+                        {range}
+                      </Text>
+                      {selectedAge === range && (
+                        <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
-            </View>
+            ) : (
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Gender Identity</Text>
+                <View style={styles.optionGrid}>
+                  {GENDER_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option}
+                      style={[
+                        styles.optionButton,
+                        selectedGender === option && styles.optionButtonSelected,
+                      ]}
+                      onPress={() => handleGenderSelect(option)}
+                    >
+                      <Text
+                        style={[
+                          styles.optionText,
+                          selectedGender === option && styles.optionTextSelected,
+                        ]}
+                      >
+                        {option}
+                      </Text>
+                      {selectedGender === option && (
+                        <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
 
-            {/* Gender Button Grid */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>Gender Identity</Text>
-              <View style={styles.optionGrid}>
-                {GENDER_OPTIONS.map((option) => (
-                  <TouchableOpacity
-                    key={option}
-                    style={[
-                      styles.optionButton,
-                      selectedGender === option && styles.optionButtonSelected,
-                    ]}
-                    onPress={() => setSelectedGender(option)}
-                  >
-                    <Text
-                      style={[
-                        styles.optionText,
-                        selectedGender === option && styles.optionTextSelected,
-                      ]}
-                    >
-                      {option}
-                    </Text>
-                    {selectedGender === option && (
-                      <MaterialIcons name="check" size={18} color="#8b5cf6" style={styles.checkIcon} />
-                    )}
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+            <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+              <Text style={styles.skipText}>Skip</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.benefit}>
@@ -167,19 +189,7 @@ export default function DemographicsSurveyOverlay({
             </Text>
           </View>
 
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[
-                styles.submitButton,
-                (!selectedAge || !selectedGender) && styles.submitButtonDisabled,
-              ]}
-              onPress={handleSubmit}
-              disabled={!selectedAge || !selectedGender}
-            >
-              <Text style={styles.submitButtonText}>Continue</Text>
-              <MaterialIcons name="arrow-forward" size={18} color="#fff" />
-            </TouchableOpacity>
-          </View>
+          <View style={styles.actions} />
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -280,6 +290,15 @@ const styles = StyleSheet.create({
   },
   checkIcon: {
     marginLeft: 2,
+  },
+  skipButton: {
+    marginTop: 12,
+    alignSelf: 'center',
+  },
+  skipText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
   },
   benefit: {
     flexDirection: 'row',
