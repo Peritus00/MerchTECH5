@@ -692,18 +692,51 @@ export const downloadQRCode = async (
       return;
     }
 
-    // For SVG on mobile, provide better options since SVG isn't natively supported
+    // For SVG on mobile, use platform-specific save flows
     if (format === QRCodeFormat.SVG) {
       const svgString = await extractSVGFromQRRef(qrRef, generatorRef);
       if (svgString) {
         const filename_sanitized = filename.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const fileUri = `${FileSystem.documentDirectory}QRCode_${filename_sanitized}_${Date.now()}.svg`;
-        
+        const fileName = `QRCode_${filename_sanitized}_${Date.now()}.svg`;
+
+        // Android: save directly to user-selected folder (Downloads, etc.)
+        if (Platform.OS === 'android' && FileSystem.StorageAccessFramework) {
+          try {
+            Alert.alert(
+              'Choose a Save Location',
+              'Android will ask you to pick a folder (Downloads recommended) to save the SVG file.'
+            );
+            const permissions = await FileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+            if (!permissions.granted) {
+              Alert.alert('Permission Denied', 'Storage permission is required to save SVG files');
+              return;
+            }
+
+            const fileUri = await FileSystem.StorageAccessFramework.createFileAsync(
+              permissions.directoryUri,
+              fileName,
+              'image/svg+xml'
+            );
+
+            await FileSystem.writeAsStringAsync(fileUri, svgString, {
+              encoding: FileSystem.EncodingType.UTF8,
+            });
+
+            Alert.alert('Success', `SVG saved to device storage as ${fileName}`);
+            return;
+          } catch (e) {
+            console.error('Failed to save SVG to storage:', e);
+            Alert.alert('Error', 'Failed to save SVG to device storage');
+            return;
+          }
+        }
+
+        // iOS (and fallback): share sheet to save in Files app
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
         await FileSystem.writeAsStringAsync(fileUri, svgString, {
           encoding: FileSystem.EncodingType.UTF8,
         });
-        
-        // Show options dialog for better UX on mobile
+
         Alert.alert(
           'SVG Download Options',
           'SVG files are vector graphics best for editing software. Choose how to save:',
