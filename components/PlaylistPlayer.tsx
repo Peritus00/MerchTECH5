@@ -734,7 +734,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     if (videoRef.current && currentItemMediaType === 'video') {
       videoRef.current.setPositionAsync(0);
       setVideoDimensions(null); // Reset dimensions for new video
-      setZoomLevel(1); // Reset zoom level for new video
+      setZoomLevel(0.5); // Reset zoom level for new video
       setIsFullscreen(false); // Reset fullscreen state for new video
     }
     // Reset retry state when media changes
@@ -811,7 +811,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   };
 
   const handleZoomReset = () => {
-    setZoomLevel(1);
+    setZoomLevel(0.5);
   };
 
   // Handle touch to show/hide exit button in fullscreen
