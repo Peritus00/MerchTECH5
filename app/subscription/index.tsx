@@ -8,6 +8,8 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Linking,
+  Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -285,6 +287,22 @@ export default function SubscriptionScreen() {
           <ThemedText style={styles.footerSubtext}>
             Cancel anytime • No hidden fees • 24/7 support
           </ThemedText>
+          
+          <TouchableOpacity
+            style={styles.businessInquiriesButton}
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                window.open('mailto:mymerchtrader@gmail.com', '_blank');
+              } else {
+                Linking.openURL('mailto:mymerchtrader@gmail.com');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <ThemedText style={styles.businessInquiriesText}>
+              BUSINESS INQUIRIES?
+            </ThemedText>
+          </TouchableOpacity>
         </View>
       </ThemedView>
 
@@ -538,5 +556,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  businessInquiriesButton: {
+    alignItems: 'center',
+    marginTop: 24,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    backgroundColor: 'transparent',
+  },
+  businessInquiriesText: {
+    color: '#3b82f6',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });

@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Text,
   ScrollView,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -389,6 +390,22 @@ export default function LoginScreen() {
                 Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
               </ThemedText>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.businessInquiriesButton}
+              onPress={() => {
+                if (Platform.OS === 'web') {
+                  window.open('mailto:mymerchtrader@gmail.com', '_blank');
+                } else {
+                  Linking.openURL('mailto:mymerchtrader@gmail.com');
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.businessInquiriesText}>
+                BUSINESS INQUIRIES?
+              </ThemedText>
+            </TouchableOpacity>
           </View>
         </ThemedView>
       </ScrollView>
@@ -545,5 +562,20 @@ const styles = StyleSheet.create({
   },
   socialIcon: {
     fontSize: 20,
+  },
+  businessInquiriesButton: {
+    alignItems: 'center',
+    marginTop: 24,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#3b82f6',
+    backgroundColor: 'transparent',
+  },
+  businessInquiriesText: {
+    color: '#3b82f6',
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 });
