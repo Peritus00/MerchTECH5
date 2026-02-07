@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -19,6 +19,7 @@ import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback'
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
 import { useAppleSignIn } from '@/hooks/useAppleSignIn';
+import { settingsAPI } from '@/services/api';
 
 interface FormErrors {
   email?: string;
@@ -52,6 +53,23 @@ export default function RegisterScreen() {
   const router = useRouter();
   const { signIn: googleSignIn, loading: googleLoading } = useGoogleSignIn();
   const { signIn: appleSignIn, loading: appleLoading } = useAppleSignIn();
+
+  // Check signup status on page load
+  useEffect(() => {
+    const checkSignupStatus = async () => {
+      try {
+        const result = await settingsAPI.getSignupsEnabled();
+        if (!result.enabled) {
+          router.replace('/auth/beta-splash');
+        }
+      } catch (error) {
+        console.error('Error checking signup status:', error);
+        // On error, allow registration to proceed (fail open)
+      }
+    };
+
+    checkSignupStatus();
+  }, [router]);
 
   const updateFormData = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -177,6 +195,12 @@ export default function RegisterScreen() {
       }
     } catch (error: any) {
       console.error('🔴 Registration: Exception caught:', error);
+
+      // Check if signups are disabled
+      if (error.response?.data?.code === 'SIGNUPS_DISABLED' || error.response?.status === 503) {
+        router.replace('/auth/beta-splash');
+        return;
+      }
 
       // Provide user-friendly error messages
       let errorMessage = 'An unexpected error occurred during registration.';

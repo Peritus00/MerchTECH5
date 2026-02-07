@@ -2308,6 +2308,79 @@ app.get('/api/admin/users/search', authenticateToken, isAdmin, async (req, res) 
   }
 });
 
+// Admin settings endpoints
+app.get('/api/admin/settings', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT setting_key, setting_value, updated_by, updated_at FROM system_settings ORDER BY setting_key',
+      [],
+      { queryName: 'get_all_settings', requestId: req.requestId }
+    );
+    
+    const settings = {};
+    result.rows.forEach(row => {
+      settings[row.setting_key] = {
+        value: row.setting_value,
+        updatedBy: row.updated_by,
+        updatedAt: row.updated_at
+      };
+    });
+    
+    res.json({ settings });
+  } catch (error) {
+    console.error('Error fetching system settings:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/admin/settings/signups', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    
+    const userId = req.user.userId;
+    const settingValue = enabled ? 'true' : 'false';
+    
+    // Update or insert the setting
+    await db.query(
+      `INSERT INTO system_settings (setting_key, setting_value, updated_by, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) 
+       DO UPDATE SET setting_value = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP`,
+      ['signups_enabled', settingValue, userId],
+      { queryName: 'update_signups_setting', requestId: req.requestId }
+    );
+    
+    // Log the activity
+    try {
+      const { logActivity } = require('./middleware/activityLogger');
+      logActivity({
+        userId,
+        actionType: 'update',
+        resourceType: 'system_setting',
+        resourceId: null,
+        details: { setting: 'signups_enabled', enabled },
+        requestId: req.requestId
+      });
+    } catch (logError) {
+      // Activity logger might not be available, continue anyway
+      console.warn('Could not log activity:', logError);
+    }
+    
+    res.json({ 
+      success: true, 
+      enabled,
+      message: `Signups ${enabled ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating signups setting:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get user scan details
 app.get('/api/admin/users/:id/scans', authenticateToken, isAdmin, async (req, res) => {
   try {
@@ -5791,6 +5864,29 @@ function transformUser(dbUser) {
   };
 }
 
+// Public endpoint to check if signups are enabled
+app.get('/api/settings/signups-enabled', async (req, res) => {
+  try {
+    const result = await db.query(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      ['signups_enabled'],
+      { queryName: 'get_signups_enabled', requestId: req.requestId }
+    );
+    
+    if (result.rows.length === 0) {
+      // Default to enabled if setting doesn't exist
+      return res.json({ enabled: true });
+    }
+    
+    const enabled = result.rows[0].setting_value === 'true';
+    res.json({ enabled });
+  } catch (error) {
+    console.error('Error checking signups enabled:', error);
+    // Default to enabled on error to avoid blocking signups
+    res.json({ enabled: true });
+  }
+});
+
 app.post('/api/auth/register',
   validators.email,
   validators.password,
@@ -5798,6 +5894,22 @@ app.post('/api/auth/register',
   validate,
   async (req, res) => {
   try {
+    // Check if signups are enabled
+    const signupCheck = await db.query(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      ['signups_enabled'],
+      { queryName: 'check_signups_enabled', requestId: req.requestId }
+    );
+    
+    const signupsEnabled = signupCheck.rows.length === 0 || signupCheck.rows[0].setting_value === 'true';
+    
+    if (!signupsEnabled) {
+      return res.status(503).json({ 
+        error: 'Signups are currently disabled', 
+        code: 'SIGNUPS_DISABLED' 
+      });
+    }
+    
     const { email, password, username } = req.body;
     // Case-insensitive email check
     const existingUser = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);

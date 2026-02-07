@@ -365,6 +365,13 @@ export default function Settings() {
         icon: '🔄',
         adminOnly: true,
       },
+      {
+        title: 'Sign-Up Control',
+        description: 'Enable or disable user registrations and control signup access',
+        onPress: () => router.push('/(tabs)/settings/signup-control'),
+        icon: '🚫',
+        adminOnly: true,
+      },
     ] : []),
     // Logout option at the bottom
     {

@@ -1183,3 +1183,24 @@ export const activityLogsAPI = {
     return response.data;
   },
 };
+
+// Settings API (public)
+export const settingsAPI = {
+  async getSignupsEnabled() {
+    const response = await api.get('/settings/signups-enabled');
+    return response.data;
+  },
+};
+
+// Admin Settings API
+export const adminSettingsAPI = {
+  async getSettings() {
+    const response = await api.get('/admin/settings');
+    return response.data;
+  },
+  
+  async toggleSignups(enabled: boolean) {
+    const response = await api.patch('/admin/settings/signups', { enabled });
+    return response.data;
+  },
+};
