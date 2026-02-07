@@ -11,8 +11,10 @@ import {
   Text,
   ScrollView,
   Linking,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +38,8 @@ export default function LoginScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showBusinessInquiriesModal, setShowBusinessInquiriesModal] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
 
   const { login, isLoading } = useAuth();
   const router = useRouter();
@@ -393,13 +397,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity
               style={styles.businessInquiriesButton}
-              onPress={() => {
-                if (Platform.OS === 'web') {
-                  window.open('mailto:mymerchtrader@gmail.com', '_blank');
-                } else {
-                  Linking.openURL('mailto:mymerchtrader@gmail.com');
-                }
-              }}
+              onPress={() => setShowBusinessInquiriesModal(true)}
               activeOpacity={0.7}
             >
               <ThemedText style={styles.businessInquiriesText}>
@@ -409,6 +407,72 @@ export default function LoginScreen() {
           </View>
         </ThemedView>
       </ScrollView>
+
+      {/* Business Inquiries Modal */}
+      <Modal
+        visible={showBusinessInquiriesModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowBusinessInquiriesModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <ThemedView style={styles.businessModalContent}>
+            <ThemedText type="title" style={styles.businessModalTitle}>
+              Business Inquiries
+            </ThemedText>
+            <ThemedText style={styles.businessModalSubtitle}>
+              Contact us for business partnerships and inquiries
+            </ThemedText>
+            
+            <View style={styles.emailContainer}>
+              <ThemedText style={styles.emailLabel}>Email Address:</ThemedText>
+              <View style={styles.emailBox}>
+                <ThemedText style={styles.emailText}>mymerchtrader@gmail.com</ThemedText>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.copyButton}
+              onPress={async () => {
+                const emailAddress = 'mymerchtrader@gmail.com';
+                try {
+                  if (Platform.OS === 'web') {
+                    await navigator.clipboard.writeText(emailAddress);
+                  } else {
+                    await Clipboard.setStringAsync(emailAddress);
+                  }
+                  setEmailCopied(true);
+                  setTimeout(() => {
+                    setEmailCopied(false);
+                  }, 2000);
+                } catch (error) {
+                  console.error('Error copying to clipboard:', error);
+                  Alert.alert('Error', 'Failed to copy email address');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <MaterialIconWithFallback 
+                name={emailCopied ? 'check' : 'content-copy'} 
+                size={20} 
+                color="#fff" 
+                style={styles.copyIcon}
+              />
+              <ThemedText style={styles.copyButtonText}>
+                {emailCopied ? 'Copied!' : 'Copy Email'}
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowBusinessInquiriesModal(false)}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.closeButtonText}>Close</ThemedText>
+            </TouchableOpacity>
+          </ThemedView>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -577,5 +641,85 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  businessModalContent: {
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  businessModalTitle: {
+    textAlign: 'center',
+    marginBottom: 8,
+    fontSize: 24,
+  },
+  businessModalSubtitle: {
+    textAlign: 'center',
+    marginBottom: 24,
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  emailContainer: {
+    width: '100%',
+    marginBottom: 24,
+  },
+  emailLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 8,
+    opacity: 0.8,
+  },
+  emailBox: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  emailText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#3b82f6',
+    textAlign: 'center',
+  },
+  copyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#3b82f6',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: '100%',
+    marginBottom: 12,
+    gap: 8,
+  },
+  copyIcon: {
+    marginRight: 4,
+  },
+  copyButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  closeButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  closeButtonText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '500',
   },
 });
