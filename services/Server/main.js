@@ -6598,14 +6598,17 @@ app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) 
     const { id } = req.params;
     const { invalidateCache } = require('./config/performance');
     
+    // Get dedicated client for transaction
+    const client = await db.pool.connect();
+    
     try {
         // Start transaction for atomicity
-        await db.query('BEGIN');
+        await client.query('BEGIN');
         
         // Get user email before deletion for logging
-        const userCheck = await db.query('SELECT email FROM users WHERE id = $1', [id]);
+        const userCheck = await client.query('SELECT email FROM users WHERE id = $1', [id]);
         if (userCheck.rowCount === 0) {
-            await db.query('ROLLBACK');
+            await client.query('ROLLBACK');
             return res.status(404).json({ error: 'User not found' });
         }
         
@@ -6616,10 +6619,10 @@ app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) 
         // - qr_codes, products, slideshows, fanmail, media, playlists
         // - activation_codes, user_activation_codes, user_achievements
         // - chat_messages, universal_chat_messages, qr_code_delegates)
-        const deleteResult = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+        const deleteResult = await client.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
         
         // Commit transaction - ensures all cascades complete before response
-        await db.query('COMMIT');
+        await client.query('COMMIT');
         
         console.log(`✅ User ${id} and all related records deleted successfully`);
         
@@ -6641,12 +6644,15 @@ app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) 
         
     } catch (error) {
         // Rollback on any error
-        await db.query('ROLLBACK');
+        await client.query('ROLLBACK');
         console.error(`❌ Error deleting user ${id}:`, error);
         res.status(500).json({ 
             error: 'Failed to delete user',
             details: error.message 
         });
+    } finally {
+        // Always release the client back to the pool
+        client.release();
     }
 });
 app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
