@@ -6596,15 +6596,57 @@ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
 
 app.delete('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {
     const { id } = req.params;
+    const { invalidateCache } = require('./config/performance');
+    
     try {
-        const deleteResult = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
-        if (deleteResult.rowCount === 0) {
+        // Start transaction for atomicity
+        await db.query('BEGIN');
+        
+        // Get user email before deletion for logging
+        const userCheck = await db.query('SELECT email FROM users WHERE id = $1', [id]);
+        if (userCheck.rowCount === 0) {
+            await db.query('ROLLBACK');
             return res.status(404).json({ error: 'User not found' });
         }
-        res.status(200).json({ message: 'User deleted successfully' });
+        
+        const userEmail = userCheck.rows[0].email;
+        console.log(`🗑️ Deleting user ${id} (${userEmail}) and all related records...`);
+        
+        // Delete user (CASCADE will delete related records in these tables:
+        // - qr_codes, products, slideshows, fanmail, media, playlists
+        // - activation_codes, user_activation_codes, user_achievements
+        // - chat_messages, universal_chat_messages, qr_code_delegates)
+        const deleteResult = await db.query('DELETE FROM users WHERE id = $1 RETURNING id', [id]);
+        
+        // Commit transaction - ensures all cascades complete before response
+        await db.query('COMMIT');
+        
+        console.log(`✅ User ${id} and all related records deleted successfully`);
+        
+        // Invalidate relevant caches after successful deletion
+        invalidateCache([
+            '/api/admin/all-users',           // User list cache
+            `/api/admin/users/${id}`,         // Individual user cache
+            '/api/admin/users',               // Admin users endpoint
+            '/api/qr-codes',                  // QR codes may be affected
+            '/api/products',                  // Products may be affected
+            '/api/playlists',                 // Playlists may be affected
+            '/api/media'                      // Media may be affected
+        ]);
+        
+        res.status(200).json({ 
+            message: 'User deleted successfully',
+            deletedUserId: id 
+        });
+        
     } catch (error) {
-        console.error(`Error deleting user ${id}:`, error);
-        res.status(500).json({ error: 'Internal server error' });
+        // Rollback on any error
+        await db.query('ROLLBACK');
+        console.error(`❌ Error deleting user ${id}:`, error);
+        res.status(500).json({ 
+            error: 'Failed to delete user',
+            details: error.message 
+        });
     }
 });
 app.patch('/api/admin/users/:id', authenticateToken, isAdmin, async (req, res) => {

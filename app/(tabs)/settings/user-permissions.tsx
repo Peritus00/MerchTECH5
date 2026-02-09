@@ -18,7 +18,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import EditUserPermissionsModal from '@/components/EditUserPermissionsModal';
-import { useUserPermissions } from '@/hooks/useUserPermissions';
+import { useUserPermissionsQuery as useUserPermissions } from '@/hooks/useUserPermissionsQuery';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { User } from '@/types';
 import { adminQrCodeAPI } from '@/services/api';

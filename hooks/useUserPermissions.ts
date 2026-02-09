@@ -170,18 +170,29 @@ export const useUserPermissions = (): UseUserPermissionsResult => {
   };
 
   const deleteUser = async (userId: number | string): Promise<boolean> => {
+    // Store previous state for rollback on error
+    const previousUsers = [...users];
+    
     try {
+      // OPTIMISTIC UPDATE: Remove user from UI immediately
+      setUsers(prev => prev.filter(u => u.id !== Number(userId)));
+      console.log(`🔄 Optimistically removed user ${userId} from UI`);
+      
+      // Make backend call
       const response = await api.delete(`/admin/users/${userId}`);
       
       if (response.status === 200) {
-        setUsers(prev => prev.filter(u => u.id !== Number(userId)));
+        console.log(`✅ User ${userId} deleted successfully on backend`);
         Alert.alert('Success', 'User deleted successfully');
         return true;
       } else {
-        const errorData = response.data || { error: 'Failed to delete user' };
-        throw new Error(errorData.error);
+        throw new Error(response.data?.error || 'Failed to delete user');
       }
     } catch (error) {
+      // ROLLBACK: Restore previous state on error
+      console.error(`❌ Delete failed, rolling back optimistic update`);
+      setUsers(previousUsers);
+      
       if (axios.isAxiosError(error)) {
         const errorMessage = error.response?.data?.error || error.message;
         console.error('Error deleting user:', errorMessage);
