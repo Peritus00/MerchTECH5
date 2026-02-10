@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -411,7 +411,8 @@ export default function UserPermissionsScreen() {
     setRefreshing(false);
   };
 
-  const getFilteredUsers = () => {
+  // Memoize filtered users to ensure proper re-renders when data changes
+  const filteredUsers = useMemo(() => {
     let filtered = users;
     if (filterType === 'active') {
       filtered = users.filter(u => !u.isSuspended && !u.isPending);
@@ -431,15 +432,16 @@ export default function UserPermissionsScreen() {
       u.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
       u.email.toLowerCase().includes(searchQuery.toLowerCase())
     );
-  };
+  }, [users, filterType, searchQuery]);
 
-  const getUserStats = () => {
+  // Memoize user stats to ensure proper re-renders
+  const stats = useMemo(() => {
     const totalUsers = users.length;
     const admins = users.filter(u => u.isAdmin).length;
     const suspended = users.filter(u => u.isSuspended).length;
     const pending = users.filter(u => u.isPending).length;
     return { totalUsers, admins, suspended, pending };
-  };
+  }, [users]);
 
   if (isLoading && !refreshing && !users.length) {
     return (
@@ -449,9 +451,6 @@ export default function UserPermissionsScreen() {
       </ThemedView>
     );
   }
-
-  const filteredUsers = getFilteredUsers();
-  const stats = getUserStats();
 
   return (
     <ThemedView style={styles.container}>
@@ -469,6 +468,7 @@ export default function UserPermissionsScreen() {
       </View>
 
       <ScrollView
+        key={`users-${users.length}-${users.map(u => u.id).join(',')}`}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
