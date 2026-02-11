@@ -99,6 +99,8 @@ const allowedOrigins = [
   // Add Vercel deployment URLs (common patterns)
   'https://merchtechapp5.vercel.app',
   'https://merchtech-app.vercel.app',
+  // Vercel preview URLs (unique per deployment: project-hash-owner-projects.vercel.app)
+  '*.vercel.app',
   // Apple OAuth callback (required for form_post response_mode)
   'https://appleid.apple.com',
   // Add any custom domain that might be configured
