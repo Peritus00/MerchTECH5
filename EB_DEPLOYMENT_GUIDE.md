@@ -113,6 +113,47 @@ Make sure these are set in your EB environment configuration:
 - `BREVO_SMTP_KEY` - Email service key (if using email)
 - `NODE_ENV` - Set to `production`
 
+### ClamAV Malware Scanning (Optional)
+
+To enable malware scanning on uploaded files:
+
+- `CLAMAV_URL` - ClamAV daemon URL. Examples:
+  - `tcp://clamav-host:3310` - Direct clamd TCP (recommended)
+  - `localhost:3310` - Same as above for local ClamAV
+  - `http://clamav-rest-api:8080` - REST API wrapper URL
+- `ENABLE_MALWARE_SCAN` - Set to `true` to enable (default: `true` when CLAMAV_URL is set). Set to `false` to disable.
+- `SCAN_TIMEOUT_MS` - Max scan time per file in ms (default: 30000)
+
+## ClamAV Setup
+
+### Option 1: Docker (for local dev or separate EC2)
+
+```bash
+docker-compose -f docker-compose.clamav.yml up -d
+```
+
+Set `CLAMAV_URL=tcp://localhost:3310` (or your ClamAV host). Allow 1-2 minutes for virus definitions to download on first start.
+
+### Option 2: EC2 Instance
+
+1. Launch an EC2 instance (t3.small or larger) in the same VPC as your EB environment.
+2. Install ClamAV: `sudo apt install clamav clamav-daemon`
+3. Start clamd: `sudo systemctl start clamav-daemon`
+4. Open port 3310 in the security group for traffic from your EB instances.
+5. Set `CLAMAV_URL=tcp://<ec2-private-ip>:3310` in EB environment variables.
+
+### Option 3: Disable Scanning
+
+If ClamAV is not configured, uploads will work without scanning. File magic byte validation still runs to prevent MIME spoofing.
+
+## Database Migration
+
+Run the quarantine table migration if using malware scanning:
+
+```bash
+psql $DATABASE_URL -f database/migrations/032_create_quarantined_files_table.sql
+```
+
 ## Troubleshooting
 
 ### "Cannot find module" error
@@ -143,6 +184,8 @@ services/
     main.js
     config/
     middleware/
+      fileValidator.js
+      clamavScanner.js
     s3Service.js
     socialAuthService.js
 ```

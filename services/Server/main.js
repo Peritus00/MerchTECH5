@@ -28,6 +28,7 @@ let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaRe
 let validate, validators;
 let errorHandler, errorLogger;
 let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
+let validateFileMagic, clamavScanner;
 
 try {
   console.log('📦 Loading rate limiter...');
@@ -41,6 +42,10 @@ try {
   
   console.log('📦 Loading logger...');
   ({ logger, requestIdMiddleware, requestLogger, sanitizeLogData } = require('./middleware/logger'));
+
+  console.log('📦 Loading file validator and ClamAV scanner...');
+  ({ validateFileMagic } = require('./middleware/fileValidator'));
+  clamavScanner = require('./middleware/clamavScanner');
   
   console.log('✅ All middleware loaded successfully');
 } catch (error) {
@@ -349,38 +354,72 @@ app.use(express.static(distDir));
 
 const storage = multer.memoryStorage();
 
-const upload = multer({ 
+const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB limit (matches web frontend)
+
+// General upload: images, audio, video only - NO executables (ipa, apk)
+const generalUpload = multer({
   storage: storage,
-  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB limit (matches web frontend)
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (req, file, cb) => {
     const requestId = `req_${Date.now()}`;
-    console.log(`🔍 FILE_FILTER [${requestId}]: Checking file:`, {
+    console.log(`🔍 GENERAL_FILE_FILTER [${requestId}]: Checking file:`, {
         originalname: file.originalname,
         mimetype: file.mimetype,
         size: file.size
     });
 
-    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime|ipa|apk/;
-    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-    const mimetype = allowedTypes.test(file.mimetype) || 
-                    file.mimetype.startsWith('audio/') || 
+    const allowedTypes = /jpeg|jpg|png|gif|webp|mp3|wav|m4a|aac|ogg|mp4|webm|avi|mov|wmv|flv|mkv|quicktime/;
+    const ext = path.extname(file.originalname).toLowerCase().replace(/^\./, '');
+    const extname = allowedTypes.test(ext);
+    const mimetype = allowedTypes.test(file.mimetype) ||
+                    file.mimetype.startsWith('audio/') ||
                     file.mimetype.startsWith('image/') ||
-                    file.mimetype.startsWith('video/') ||
-                    file.mimetype === 'application/vnd.android.package-archive' ||
-                    file.mimetype === 'com.apple.itunes.ipa' ||
-                    file.mimetype === 'application/octet-stream';
+                    file.mimetype.startsWith('video/');
     
     if (extname || mimetype) {
-      console.log(`✅ FILE_FILTER [${requestId}]: File accepted`);
+      console.log(`✅ GENERAL_FILE_FILTER [${requestId}]: File accepted`);
       cb(null, true);
     } else {
-      const filterError = new Error('File type not allowed. Only images, audio, video, IPA, and APK files are supported.');
+      const filterError = new Error('File type not allowed. Only images, audio, and video are supported. Executable files are not allowed.');
       filterError.code = 'FILE_TYPE_NOT_ALLOWED';
-      console.log(`❌ FILE_FILTER [${requestId}]: File rejected. Type not allowed: ${file.mimetype}`);
+      console.log(`❌ GENERAL_FILE_FILTER [${requestId}]: File rejected. Type not allowed: ${file.mimetype}`);
       cb(filterError, false);
     }
   }
 });
+
+// App version upload: IPA and APK only - admin-only endpoint
+const appVersionUpload = multer({
+  storage: storage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (req, file, cb) => {
+    const requestId = `req_${Date.now()}`;
+    console.log(`🔍 APP_VERSION_FILE_FILTER [${requestId}]: Checking file:`, {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size
+    });
+
+    const ext = path.extname(file.originalname).toLowerCase().replace(/^\./, '');
+    const extname = /ipa|apk/.test(ext);
+    const mimetype = file.mimetype === 'application/vnd.android.package-archive' ||
+                    file.mimetype === 'com.apple.itunes.ipa' ||
+                    file.mimetype === 'application/octet-stream';
+    
+    if (extname || mimetype) {
+      console.log(`✅ APP_VERSION_FILE_FILTER [${requestId}]: File accepted`);
+      cb(null, true);
+    } else {
+      const filterError = new Error('File type not allowed. Only IPA and APK files are supported for app version uploads.');
+      filterError.code = 'FILE_TYPE_NOT_ALLOWED';
+      console.log(`❌ APP_VERSION_FILE_FILTER [${requestId}]: File rejected. Type not allowed: ${file.mimetype}`);
+      cb(filterError, false);
+    }
+  }
+});
+
+// Backward compatibility: generalUpload for general uploads
+const upload = generalUpload;
 
 // --- CONFIGURATION ---
 // Database pool is now configured in config/database.js with:
@@ -7169,7 +7208,7 @@ app.get('/api/app/version/check', async (req, res) => {
 });
 
 // Admin: Upload new app version
-app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('file'), async (req, res) => {
+app.post('/api/admin/app/upload', authenticateToken, isAdmin, appVersionUpload.single('file'), async (req, res) => {
   try {
     console.log('📤 APP VERSION UPLOAD: Request received');
     console.log('📤 APP VERSION UPLOAD: req.file:', req.file ? {
@@ -7229,6 +7268,60 @@ app.post('/api/admin/app/upload', authenticateToken, isAdmin, upload.single('fil
       return res.status(400).json({ 
         error: `Version ${version} already exists for ${platform} platform` 
       });
+    }
+
+    // File magic byte validation - IPA/APK are ZIP archives
+    const magicResult = validateFileMagic(req.file.buffer, req.file.originalname);
+    if (!magicResult.valid) {
+      console.error('❌ APP VERSION UPLOAD: File content validation failed:', magicResult.error);
+      try {
+        const { logUploadRejected } = require('./config/security');
+        logUploadRejected(req, req.file, 'FILE_CONTENT_MISMATCH', { error: magicResult.error });
+      } catch (e) { /* security module may not be loaded */ }
+      return res.status(400).json({
+        error: magicResult.error || 'File validation failed. IPA and APK files must be valid zip archives.',
+        code: 'FILE_CONTENT_MISMATCH'
+      });
+    }
+
+    // ClamAV malware scan (if configured)
+    if (clamavScanner.isConfigured()) {
+      try {
+        const scanResult = await clamavScanner.scanBuffer(req.file.buffer, req.file.originalname);
+        if (scanResult.infected) {
+          console.error('🚨 APP VERSION UPLOAD: Malware detected:', scanResult.viruses);
+          try {
+            const { securityAuditLogger } = require('./config/security');
+            securityAuditLogger.log({
+              type: 'app_upload_malware_detected',
+              severity: 'critical',
+              userId: req.user?.userId,
+              ip: req.ip,
+              action: 'App version upload rejected - malware detected',
+              resource: '/api/admin/app/upload',
+              success: false,
+              details: { filename: req.file.originalname, version, platform, viruses: scanResult.viruses }
+            });
+          } catch (e) { /* security module may not be loaded */ }
+          try {
+            await db.query(
+              `INSERT INTO quarantined_files (filename, mime_type, file_size, user_id, scan_result, ip_address, user_agent, upload_endpoint, virus_names)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [req.file.originalname, req.file.mimetype, req.file.size, req.user?.userId, JSON.stringify(scanResult), req.ip, req.get('User-Agent'), '/api/admin/app/upload', scanResult.viruses || []]
+            );
+          } catch (qErr) { /* quarantined_files table may not exist yet */ }
+          return res.status(403).json({
+            error: 'File could not be processed. Please upload a different file.',
+            code: 'FILE_REJECTED'
+          });
+        }
+      } catch (scanErr) {
+        console.error('❌ APP VERSION UPLOAD: Malware scan failed:', scanErr.message);
+        return res.status(503).json({
+          error: 'File scanning service is temporarily unavailable. Please try again later.',
+          code: 'SCAN_SERVICE_UNAVAILABLE'
+        });
+      }
     }
 
     // Upload to S3
@@ -7844,6 +7937,60 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
         if (!s3Service.isConfigured()) {
             console.error(`❌ UPLOAD_ERROR [${requestId}]: S3 service is not configured.`);
             return res.status(500).json({ error: 'File upload service is not available.' });
+        }
+
+        // File magic byte validation - prevent MIME spoofing
+        const magicResult = validateFileMagic(req.file.buffer, req.file.originalname);
+        if (!magicResult.valid) {
+            console.error(`❌ UPLOAD [${requestId}]: File content validation failed:`, magicResult.error);
+            try {
+                const { logUploadRejected } = require('./config/security');
+                logUploadRejected(req, req.file, 'FILE_CONTENT_MISMATCH', { error: magicResult.error });
+            } catch (e) { /* security module may not be loaded */ }
+            return res.status(400).json({
+                error: magicResult.error || 'File validation failed',
+                code: 'FILE_CONTENT_MISMATCH'
+            });
+        }
+
+        // ClamAV malware scan (if configured)
+        if (clamavScanner.isConfigured()) {
+            try {
+                const scanResult = await clamavScanner.scanBuffer(req.file.buffer, req.file.originalname);
+                if (scanResult.infected) {
+                    console.error(`🚨 UPLOAD [${requestId}]: Malware detected:`, scanResult.viruses);
+                    try {
+                        const { securityAuditLogger } = require('./config/security');
+                        securityAuditLogger.log({
+                            type: 'upload_malware_detected',
+                            severity: 'high',
+                            userId: req.user?.userId,
+                            ip: req.ip,
+                            action: 'Upload rejected - malware detected',
+                            resource: '/api/upload',
+                            success: false,
+                            details: { filename: req.file.originalname, viruses: scanResult.viruses }
+                        });
+                    } catch (e) { /* security module may not be loaded */ }
+                    try {
+                        await db.query(
+                            `INSERT INTO quarantined_files (filename, mime_type, file_size, user_id, scan_result, ip_address, user_agent, upload_endpoint, virus_names)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+                            [req.file.originalname, req.file.mimetype, req.file.size, req.user?.userId, JSON.stringify(scanResult), req.ip, req.get('User-Agent'), '/api/upload', scanResult.viruses || []]
+                        );
+                    } catch (qErr) { /* quarantined_files table may not exist yet */ }
+                    return res.status(403).json({
+                        error: 'File could not be processed. Please upload a different file.',
+                        code: 'FILE_REJECTED'
+                    });
+                }
+            } catch (scanErr) {
+                console.error(`❌ UPLOAD [${requestId}]: Malware scan failed:`, scanErr.message);
+                return res.status(503).json({
+                    error: 'File scanning service is temporarily unavailable. Please try again later.',
+                    code: 'SCAN_SERVICE_UNAVAILABLE'
+                });
+            }
         }
 
         try {
@@ -12789,6 +12936,60 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
       if (!delegateAccess) {
       console.log('🎬 SLIDESHOW_UPLOAD: User not authorized:', req.user.userId);
       return res.status(403).json({ error: 'Not authorized to upload to this slideshow' });
+      }
+    }
+
+    // File magic byte validation
+    const magicResult = validateFileMagic(req.file.buffer, req.file.originalname);
+    if (!magicResult.valid) {
+      console.error('🎬 SLIDESHOW_UPLOAD: File content validation failed:', magicResult.error);
+      try {
+        const { logUploadRejected } = require('./config/security');
+        logUploadRejected(req, req.file, 'FILE_CONTENT_MISMATCH', { error: magicResult.error });
+      } catch (e) { /* security module may not be loaded */ }
+      return res.status(400).json({
+        error: magicResult.error || 'File validation failed',
+        code: 'FILE_CONTENT_MISMATCH'
+      });
+    }
+
+    // ClamAV malware scan (if configured)
+    if (clamavScanner.isConfigured()) {
+      try {
+        const scanResult = await clamavScanner.scanBuffer(req.file.buffer, req.file.originalname);
+        if (scanResult.infected) {
+          console.error('🚨 SLIDESHOW_UPLOAD: Malware detected:', scanResult.viruses);
+          try {
+            const { securityAuditLogger } = require('./config/security');
+            securityAuditLogger.log({
+              type: 'upload_malware_detected',
+              severity: 'high',
+              userId: req.user?.userId,
+              ip: req.ip,
+              action: 'Slideshow image upload rejected - malware detected',
+              resource: '/api/slideshows/:id/images',
+              success: false,
+              details: { filename: req.file.originalname, viruses: scanResult.viruses }
+            });
+          } catch (e) { /* security module may not be loaded */ }
+          try {
+            await db.query(
+              `INSERT INTO quarantined_files (filename, mime_type, file_size, user_id, scan_result, ip_address, user_agent, upload_endpoint, virus_names)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [req.file.originalname, req.file.mimetype, req.file.size, req.user?.userId, JSON.stringify(scanResult), req.ip, req.get('User-Agent'), '/api/slideshows/:id/images', scanResult.viruses || []]
+            );
+          } catch (qErr) { /* quarantined_files table may not exist yet */ }
+          return res.status(403).json({
+            error: 'File could not be processed. Please upload a different file.',
+            code: 'FILE_REJECTED'
+          });
+        }
+      } catch (scanErr) {
+        console.error('🎬 SLIDESHOW_UPLOAD: Malware scan failed:', scanErr.message);
+        return res.status(503).json({
+          error: 'File scanning service is temporarily unavailable. Please try again later.',
+          code: 'SCAN_SERVICE_UNAVAILABLE'
+        });
       }
     }
     

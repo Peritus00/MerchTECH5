@@ -418,6 +418,49 @@ const logSensitiveOperation = (req, operation, details = {}) => {
   });
 };
 
+/**
+ * Upload security logger
+ * Logs all upload attempts, rejections, and malware detections for audit trail
+ */
+const logUploadAttempt = (req, fileInfo, success = true, details = {}) => {
+  securityAuditLogger.log({
+    type: 'upload_attempt',
+    severity: success ? 'info' : 'medium',
+    userId: req.user?.userId || null,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    action: success ? 'Upload completed' : 'Upload rejected',
+    resource: req.path,
+    success,
+    details: {
+      filename: fileInfo?.originalname || fileInfo?.filename,
+      mimeType: fileInfo?.mimetype,
+      fileSize: fileInfo?.size,
+      ...details
+    }
+  });
+};
+
+const logUploadRejected = (req, fileInfo, reason, details = {}) => {
+  securityAuditLogger.log({
+    type: 'upload_rejected',
+    severity: 'medium',
+    userId: req.user?.userId || null,
+    ip: req.ip,
+    userAgent: req.get('User-Agent'),
+    action: 'Upload rejected',
+    resource: req.path,
+    success: false,
+    details: {
+      reason,
+      filename: fileInfo?.originalname || fileInfo?.filename,
+      mimeType: fileInfo?.mimetype,
+      fileSize: fileInfo?.size,
+      ...details
+    }
+  });
+};
+
 module.exports = {
   securityAuditLogger,
   sanitizeInput,
@@ -426,6 +469,8 @@ module.exports = {
   rateLimitViolationHandler,
   authenticationFailureHandler,
   authorizationFailureHandler,
-  logSensitiveOperation
+  logSensitiveOperation,
+  logUploadAttempt,
+  logUploadRejected
 };
 
