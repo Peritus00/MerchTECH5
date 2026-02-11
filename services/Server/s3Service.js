@@ -4,12 +4,20 @@ const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 
 // S3 Configuration - Aggressive trimming to handle Railway environment variable issues
+// Enhanced with proper timeout configurations to prevent stream timeouts
 const s3Config = {
   region: (process.env.AWS_REGION || 'us-east-1').replace(/\s+/g, ''),
   credentials: {
     accessKeyId: (process.env.AWS_ACCESS_KEY_ID || '').replace(/\s+/g, ''),
     secretAccessKey: (process.env.AWS_SECRET_ACCESS_KEY || '').replace(/\s+/g, ''),
   },
+  // Request timeout configurations
+  requestHandler: {
+    requestTimeout: 120000, // 120 seconds for requests (increased for large files)
+    connectionTimeout: 30000, // 30 seconds for connection establishment
+  },
+  // Retry configuration
+  maxAttempts: 3,
 };
 
 // Create S3 client

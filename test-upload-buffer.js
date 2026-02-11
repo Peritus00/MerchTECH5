@@ -9,7 +9,7 @@ const app = express();
 const storage = multer.memoryStorage();
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB limit (matches web frontend)
   fileFilter: (req, file, cb) => {
     const requestId = `req_${Date.now()}`;
     console.log(`🔍 FILE_FILTER [${requestId}]: Checking file:`, {

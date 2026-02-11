@@ -281,7 +281,7 @@ const apiSecurityMiddleware = (req, res, next) => {
   }
 
   // Check for excessive request size
-  // Exclude upload endpoints - they handle their own size validation via multer (500MB limit)
+  // Exclude upload endpoints - they handle their own size validation via multer (1GB limit)
   const isUploadEndpoint = req.path === '/api/upload' || req.path.startsWith('/api/upload/');
   if (!isUploadEndpoint) {
     const contentLength = parseInt(req.get('Content-Length') || '0', 10);

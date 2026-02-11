@@ -54,9 +54,12 @@ The uploads likely worked before because:
 
 **The upload system is now fixed:**
 - ✅ **Express limits**: 1GB (no duplicates)
-- ✅ **Multer limits**: 500MB
+- ✅ **Multer limits**: 1GB (updated from 500MB to match web frontend)
 - ✅ **Server timeouts**: 10 minutes
-- ✅ **S3 optimization**: Multipart uploads
+- ✅ **S3 optimization**: Multipart uploads with enhanced timeout handling
+- ✅ **S3 request timeout**: 120 seconds (increased for large files)
+- ✅ **S3 stream timeout**: 60 seconds (increased from 30s)
+- ✅ **S3 metadata timeout**: 30 seconds (increased from 10s)
 - ✅ **Validation system**: Buffer truncation detection
 - ✅ **Upload validation**: S3 file verification
 

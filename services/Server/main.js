@@ -351,7 +351,7 @@ const storage = multer.memoryStorage();
 
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB limit (matches web frontend)
   fileFilter: (req, file, cb) => {
     const requestId = `req_${Date.now()}`;
     console.log(`🔍 FILE_FILTER [${requestId}]: Checking file:`, {
@@ -8577,9 +8577,9 @@ app.get('/api/media/:id/stream', async (req, res) => {
     }
     
     if (s3Key && s3Service) {
-      // Timeout configuration
-      const METADATA_TIMEOUT = 10000; // 10 seconds for metadata fetch
-      const STREAM_TIMEOUT = 30000; // 30 seconds for stream start
+      // Timeout configuration - Increased to handle large files and network latency
+      const METADATA_TIMEOUT = 30000; // 30 seconds for metadata fetch (increased from 10s)
+      const STREAM_TIMEOUT = 60000; // 60 seconds for stream start (increased from 30s)
       
       let s3Stream = null; // Track stream for abort on disconnect
       

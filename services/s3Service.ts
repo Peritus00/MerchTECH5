@@ -3,12 +3,20 @@ import { Upload } from '@aws-sdk/lib-storage';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 // S3 Configuration
+// Enhanced with proper timeout configurations to prevent stream timeouts
 const s3Config = {
   region: process.env.AWS_REGION || 'us-east-1',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   },
+  // Request timeout configurations
+  requestHandler: {
+    requestTimeout: 120000, // 120 seconds for requests (increased for large files)
+    connectionTimeout: 30000, // 30 seconds for connection establishment
+  },
+  // Retry configuration
+  maxAttempts: 3,
 };
 
 // Create S3 client

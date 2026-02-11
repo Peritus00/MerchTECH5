@@ -174,7 +174,7 @@ AWS_REGION=us-east-2
 
 ```javascript
 // Maximum file size for validation
-const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB
+const MAX_FILE_SIZE = 1024 * 1024 * 1024; // 1GB (matches web frontend)
 
 // Validation timeout
 const VALIDATION_TIMEOUT = 30000; // 30 seconds
