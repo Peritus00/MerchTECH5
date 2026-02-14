@@ -8,8 +8,25 @@ const net = require('net');
 const axios = require('axios');
 const FormData = require('form-data');
 
-const SCAN_TIMEOUT_MS = parseInt(process.env.SCAN_TIMEOUT_MS || '30000', 10);
+const MIN_SCAN_TIMEOUT_MS = 180000; // never lower than 3 minutes
+const SCAN_TIMEOUT_MS = Math.max(parseInt(process.env.SCAN_TIMEOUT_MS || '180000', 10), MIN_SCAN_TIMEOUT_MS);
 const CHUNK_SIZE = 64 * 1024; // 64KB chunks for INSTREAM
+
+/**
+ * Large uploads (especially video) need longer scan windows.
+ * We keep a conservative floor from env, then scale by file size.
+ */
+function getScanTimeoutMs(bufferLength = 0) {
+  const MB = 1024 * 1024;
+  const sizeInMb = Math.max(1, Math.ceil(bufferLength / MB));
+  const sizeBasedTimeout = Math.ceil(sizeInMb / 25) * 45000; // +45s per 25MB
+  return Math.max(SCAN_TIMEOUT_MS, sizeBasedTimeout);
+}
+
+function isTimeoutError(err) {
+  const message = String(err?.message || '').toLowerCase();
+  return message.includes('timeout');
+}
 
 /**
  * Parse ClamAV URL - supports:
@@ -59,9 +76,10 @@ function scanViaClamd(buffer, filename) {
   return new Promise((resolve, reject) => {
     const startTime = Date.now();
     const { host, port } = config;
+    const timeoutMs = getScanTimeoutMs(buffer?.length || 0);
 
     const client = new net.Socket();
-    client.setTimeout(SCAN_TIMEOUT_MS);
+    client.setTimeout(timeoutMs);
 
     let responseData = '';
 
@@ -136,12 +154,13 @@ function scanViaClamd(buffer, filename) {
  */
 async function scanViaRest(buffer, filename) {
   const startTime = Date.now();
+  const timeoutMs = getScanTimeoutMs(buffer?.length || 0);
   const form = new FormData();
   form.append('file', buffer, { filename: filename || 'scan.bin' });
 
   const response = await axios.post(`${config.url}/scan`, form, {
     headers: form.getHeaders(),
-    timeout: SCAN_TIMEOUT_MS,
+    timeout: timeoutMs,
     maxContentLength: Infinity,
     maxBodyLength: Infinity
   });
@@ -182,15 +201,29 @@ async function scanBuffer(fileBuffer, filename = 'unknown') {
     throw new Error('Invalid file buffer');
   }
 
-  try {
+  const scanOnce = async () => {
     if (config.mode === 'tcp') {
-      return await scanViaClamd(fileBuffer, filename);
+      return scanViaClamd(fileBuffer, filename);
     }
     if (config.mode === 'rest') {
-      return await scanViaRest(fileBuffer, filename);
+      return scanViaRest(fileBuffer, filename);
     }
     return { infected: false, viruses: [], scanTime: 0, skipped: true };
+  };
+
+  try {
+    return await scanOnce();
   } catch (err) {
+    // One retry for transient scanner/network timeout.
+    if (isTimeoutError(err)) {
+      console.warn('ClamAV scan timeout, retrying once:', err.message);
+      try {
+        return await scanOnce();
+      } catch (retryErr) {
+        console.error('ClamAV scan error after retry:', retryErr.message);
+        throw retryErr;
+      }
+    }
     console.error('ClamAV scan error:', err.message);
     throw err;
   }

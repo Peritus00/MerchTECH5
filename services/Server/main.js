@@ -7901,6 +7901,100 @@ app.get('/api/sales/all/csv', authenticateToken, isAdmin, async (req,res)=>{
   }catch(err){console.error(err);res.status(500).json({error:'Internal'});}
 });
 
+function getSafeErrorMessage(error) {
+    const message = String(error?.message || 'Unknown error');
+    return message.length > 300 ? `${message.slice(0, 300)}...` : message;
+}
+
+function buildScanServiceError(scanErr, requestId) {
+    const raw = getSafeErrorMessage(scanErr);
+    const lower = raw.toLowerCase();
+    const timeout = lower.includes('timeout');
+    const unreachable = lower.includes('econnrefused') || lower.includes('enotfound') || lower.includes('connect');
+
+    if (timeout) {
+        return {
+            status: 503,
+            body: {
+                error: 'File scan timed out before completion. Please retry; large files may take longer.',
+                code: 'SCAN_TIMEOUT',
+                retryable: true,
+                requestId,
+                reason: raw
+            }
+        };
+    }
+
+    if (unreachable) {
+        return {
+            status: 503,
+            body: {
+                error: 'File scanning service is currently unreachable. Please try again shortly.',
+                code: 'SCAN_SERVICE_UNREACHABLE',
+                retryable: true,
+                requestId,
+                reason: raw
+            }
+        };
+    }
+
+    return {
+        status: 503,
+        body: {
+            error: 'File scanning service is temporarily unavailable. Please try again later.',
+            code: 'SCAN_SERVICE_UNAVAILABLE',
+            retryable: true,
+            requestId,
+            reason: raw
+        }
+    };
+}
+
+function buildUploadFailureError(uploadErr, requestId) {
+    const raw = getSafeErrorMessage(uploadErr);
+    const lower = raw.toLowerCase();
+    const timeout = lower.includes('timed out') || lower.includes('timeout') || lower.includes('etimedout');
+    const network = lower.includes('socket') || lower.includes('econnreset') || lower.includes('eai_again') || lower.includes('network');
+    const s3Auth = lower.includes('access denied') || lower.includes('invalidaccesskeyid') || lower.includes('signaturedoesnotmatch');
+
+    if (timeout || network) {
+        return {
+            status: 503,
+            body: {
+                error: 'Upload could not reach storage in time. Please retry.',
+                code: 'S3_NETWORK_TIMEOUT',
+                retryable: true,
+                requestId,
+                reason: raw
+            }
+        };
+    }
+
+    if (s3Auth) {
+        return {
+            status: 500,
+            body: {
+                error: 'Upload service is misconfigured for storage access.',
+                code: 'S3_AUTH_FAILED',
+                retryable: false,
+                requestId,
+                reason: raw
+            }
+        };
+    }
+
+    return {
+        status: 500,
+        body: {
+            error: 'Failed to upload file.',
+            code: 'UPLOAD_FAILED',
+            retryable: false,
+            requestId,
+            reason: raw
+        }
+    };
+}
+
 app.post('/api/upload', authenticateToken, (req, res, next) => {
     const requestId = `req_${Date.now()}`;
     console.log(`📤 UPLOAD [${requestId}]: Starting upload request for user ${req.user?.userId}`);
@@ -7988,10 +8082,8 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
                 }
             } catch (scanErr) {
                 console.error(`❌ UPLOAD [${requestId}]: Malware scan failed:`, scanErr.message);
-                return res.status(503).json({
-                    error: 'File scanning service is temporarily unavailable. Please try again later.',
-                    code: 'SCAN_SERVICE_UNAVAILABLE'
-                });
+                const scanFailure = buildScanServiceError(scanErr, requestId);
+                return res.status(scanFailure.status).json(scanFailure.body);
             }
         }
 
@@ -8126,10 +8218,8 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
 
         } catch (error) {
             console.error(`❌ UPLOAD_ERROR [${requestId}]:`, error);
-            res.status(500).json({ 
-                error: 'Failed to upload file.', 
-                message: error.message 
-            });
+            const uploadFailure = buildUploadFailureError(error, requestId);
+            res.status(uploadFailure.status).json(uploadFailure.body);
         }
     });
 });
