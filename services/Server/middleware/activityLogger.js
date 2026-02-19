@@ -269,7 +269,7 @@ function createActivityLogger(dbInstance) {
         }
       }
 
-      // Log asynchronously (don't block response)
+      // Log asynchronously (don't block response). Fire-and-forget: never let logging failures bubble.
       setImmediate(() => {
         logActivity(
           db,
@@ -281,7 +281,14 @@ function createActivityLogger(dbInstance) {
           req,
           statusCode,
           errorMessage
-        );
+        ).catch((err) => {
+          // Logging failures must never crash the process. Suppress noisy connection errors.
+          const msg = err?.message || String(err);
+          const code = err?.code;
+          if (code !== 'ECONNREFUSED' && code !== 'ETIMEDOUT' && !msg.includes('Connection terminated')) {
+            console.error('Activity logging failed (non-critical):', msg);
+          }
+        });
       });
 
       // Call original end

@@ -1,6 +1,16 @@
 # Monitoring Setup Guide
 
-This guide helps you set up external monitoring for your MerchTech platform to catch playback issues before customers do.
+This guide helps you set up external monitoring for your MerchTech/MerchTrader platform to catch playback issues before customers do.
+
+## Health Endpoints
+
+| Endpoint | Purpose | Expected | Use For |
+|----------|---------|----------|---------|
+| `/api/health/liveness` | Process alive | 200 always | Host liveness probes only |
+| `/api/health` | Readiness (DB + S3) | 200 healthy, 503 degraded/unhealthy | Uptime monitoring, load balancer |
+| `/api/health/playback` | Streaming works | 200 healthy, 503 if broken | Playback verification |
+
+**Alert on**: `/api/health` or `/api/health/playback` returning non-200, or response time > 5s.
 
 ## Phase 1: Basic Uptime Monitoring
 
@@ -9,12 +19,12 @@ This guide helps you set up external monitoring for your MerchTech platform to c
 1. **Sign up**: Go to https://uptimerobot.com and create a free account
 2. **Add Monitor**:
    - Monitor Type: **HTTP(s)**
-   - Friendly Name: `MerchTech API Health`
-   - URL: `https://merchtech5-production.up.railway.app/api/health`
+   - Friendly Name: `MerchTrader API Readiness`
+   - URL: `https://www.merchtrader.org/api/health` (or your production URL)
    - Monitoring Interval: **5 minutes** (free tier minimum)
    - Alert Contacts: Add your email/SMS
 
-3. **Expected Response**: 
+3. **Expected Response (healthy)**:
    ```json
    {
      "status": "healthy",
@@ -29,6 +39,7 @@ This guide helps you set up external monitoring for your MerchTech platform to c
 
 4. **Alert Settings**:
    - Alert when: Status code is not 200 OR response time > 5 seconds
+   - 503 = unhealthy (DB/S3 down) - immediate alert
    - Alert contacts: Your email (and SMS if available)
 
 ### Option B: Pingdom (Paid, more features)

@@ -1004,12 +1004,29 @@ app.post('/api/analytics/geo', async (req, res) => {
   }
 });
 
-// Enhanced health check with database pool monitoring and system metrics
+// Liveness probe: process/event loop alive. Use for host-level liveness only.
+app.get('/api/health/liveness', (req, res) => {
+    res.status(200).json({
+        status: 'alive',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime()
+    });
+});
+
+// Health check cache to reduce DB load when hit frequently (5 second TTL)
+let healthCheckCache = null;
+const HEALTH_CACHE_TTL_MS = 5000;
+
+// Readiness probe: DB + critical services. Returns 200 healthy, 503 degraded/unhealthy.
 app.get('/api/health', async (req, res) => {
+    const now = Date.now();
+    if (healthCheckCache && (now - healthCheckCache.timestamp) < HEALTH_CACHE_TTL_MS) {
+        return res.status(healthCheckCache.statusCode).json(healthCheckCache.data);
+    }
+
     try {
         const dbHealth = await db.healthCheck();
-        
-        // Get monitoring metrics if available
+
         let monitoringMetrics = null;
         try {
             const { getMetrics } = require('./config/monitoring');
@@ -1017,7 +1034,7 @@ app.get('/api/health', async (req, res) => {
         } catch (err) {
             // Monitoring not available, continue without it
         }
-        
+
         const healthData = {
             status: dbHealth.status === 'healthy' ? 'healthy' : 'degraded',
             timestamp: new Date().toISOString(),
@@ -1033,8 +1050,7 @@ app.get('/api/health', async (req, res) => {
                 brevo: !!process.env.BREVO_API_KEY
             }
         };
-        
-        // Add monitoring data if available
+
         if (monitoringMetrics) {
             healthData.monitoring = {
                 requests: monitoringMetrics.requests.total,
@@ -1048,26 +1064,28 @@ app.get('/api/health', async (req, res) => {
                 alerts: monitoringMetrics.alerts.filter(a => a.severity === 'high').length
             };
         }
-        
-        // Safely check S3 service
+
         try {
             healthData.services.s3 = s3Service && s3Service.isConfigured ? s3Service.isConfigured() : false;
         } catch (error) {
             console.error('Health check S3 error:', error);
             healthData.services.s3 = false;
         }
-        
+
         const statusCode = healthData.status === 'healthy' ? 200 : 503;
+        healthCheckCache = { data: healthData, statusCode, timestamp: now };
         res.status(statusCode).json(healthData);
     } catch (error) {
         console.error('Health check error:', error);
-        // Always return 200 for Railway health checks, even if there are issues
-        res.status(200).json({
-            status: 'degraded',
+        const statusCode = 503;
+        const fallbackData = {
+            status: 'unhealthy',
             timestamp: new Date().toISOString(),
             uptime: process.uptime(),
             error: error.message
-        });
+        };
+        healthCheckCache = { data: fallbackData, statusCode, timestamp: now };
+        res.status(statusCode).json(fallbackData);
     }
 });
 
@@ -15363,26 +15381,64 @@ async function fixActivationCodes() {
 // Environment validation is done inline above (before logger initialization)
 // Additional validation can be added here if needed, but basic checks are done
 
+// Startup dependency verification with bounded retries (DB + critical services)
+async function verifyStartupDependencies() {
+  const maxRetries = 5;
+  const initialDelayMs = 1000;
+  const maxDelayMs = 10000;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const health = await db.healthCheck();
+      if (health.status === 'healthy' || health.status === 'degraded') {
+        console.log(`✅ Startup: Database reachable (attempt ${attempt}/${maxRetries})`);
+        return;
+      }
+    } catch (err) {
+      const delay = Math.min(initialDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+      console.warn(`⚠️  Startup: DB check failed (attempt ${attempt}/${maxRetries}): ${err.message}. Retrying in ${delay}ms...`);
+      if (attempt === maxRetries) {
+        console.error('❌ CRITICAL: Database unreachable after retries. Exiting.');
+        throw err;
+      }
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 // Add unhandled error handlers before server starts
 // Phase 6: Enhanced Process Management & Error Recovery
-// Enhanced uncaught exception handler with recovery attempts
+// Enhanced uncaught exception handler - do NOT shutdown for recoverable DB errors
 process.on('uncaughtException', (error) => {
+  const { isRecoverableDbError } = require('./config/database');
+  const recoverable = isRecoverableDbError(error);
+
   errorLogger.error({
     type: 'uncaught_exception',
     message: 'Uncaught exception detected',
     error: error.message,
     stack: error.stack,
+    recoverable,
     timestamp: new Date().toISOString()
   });
-  
+
   console.error('❌ UNCAUGHT EXCEPTION:', error.message);
   console.error('❌ Stack:', error.stack);
-  
-  // Attempt graceful shutdown instead of immediate exit
+
+  if (recoverable && server) {
+    console.warn('⚠️  Recoverable DB error - NOT shutting down. Pool will reconnect.');
+    logger.warn({
+      type: 'recoverable_db_exception_ignored',
+      message: 'Transient DB error - continuing',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+    return;
+  }
+
   if (server) {
     gracefulShutdown('UNCAUGHT_EXCEPTION');
   } else {
-    // Server not started yet, exit immediately
     process.exit(1);
   }
 });
@@ -15414,59 +15470,56 @@ process.on('unhandledRejection', (reason, promise) => {
 console.log(`🌐 Starting server on port ${PORT}...`);
 
 let server;
-try {
-  server = app.listen(PORT, '0.0.0.0', async () => {
-    const address = server.address();
-    
-    // Use console.log for critical startup messages (always visible)
-    console.log(`✅ Server listening on http://${address.address}:${address.port}`);
-    console.log(`🚀 Server ready to accept connections`);
-    console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    
-    // Also log via structured logger if available
-    try {
-      logger.info({
-        type: 'server_started',
-        message: 'Server listening',
-        address: address.address,
-        port: address.port,
-        timestamp: new Date().toISOString()
-      });
-    } catch (err) {
-      console.warn('⚠️  Logger not available for structured logging:', err.message);
-    }
-    
-    // Run database fixes on startup
-    try {
-      console.log('🔧 Running startup database fixes...');
-      await fixActivationCodes();
-      console.log('✅ Startup database fixes completed');
-    } catch (err) {
-      console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
-    }
-  });
+(async () => {
+  try {
+    await verifyStartupDependencies();
+    server = app.listen(PORT, '0.0.0.0', async () => {
+      const address = server.address();
 
-  // Add error handler for server startup errors
-  server.on('error', (err) => {
-    console.error('❌ SERVER STARTUP ERROR:', err.message);
-    console.error('❌ Error code:', err.code);
-    if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${PORT} is already in use`);
-    }
+      console.log(`✅ Server listening on http://${address.address}:${address.port}`);
+      console.log(`🚀 Server ready to accept connections`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+
+      try {
+        logger.info({
+          type: 'server_started',
+          message: 'Server listening',
+          address: address.address,
+          port: address.port,
+          timestamp: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('⚠️  Logger not available for structured logging:', err.message);
+      }
+
+      try {
+        console.log('🔧 Running startup database fixes...');
+        await fixActivationCodes();
+        console.log('✅ Startup database fixes completed');
+      } catch (err) {
+        console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
+      }
+    });
+
+    server.on('error', (err) => {
+      console.error('❌ SERVER STARTUP ERROR:', err.message);
+      console.error('❌ Error code:', err.code);
+      if (err.code === 'EADDRINUSE') {
+        console.error(`❌ Port ${PORT} is already in use`);
+      }
+      process.exit(1);
+    });
+
+    server.timeout = 10 * 60 * 1000; // 10 minutes for large uploads
+    server.keepAliveTimeout = 10 * 60 * 1000;
+    server.headersTimeout = 10 * 60 * 1000;
+    console.log(`🔧 Server timeouts set to 10 minutes for large uploads`);
+  } catch (startupError) {
+    console.error('❌ CRITICAL: Server failed to start:', startupError.message);
+    console.error('❌ Stack:', startupError.stack);
     process.exit(1);
-  });
-} catch (startupError) {
-  console.error('❌ CRITICAL: Server failed to start:', startupError.message);
-  console.error('❌ Stack:', startupError.stack);
-  process.exit(1);
-}
-
-// 🔧 INCREASE SERVER TIMEOUT FOR LARGE UPLOADS
-server.timeout = 10 * 60 * 1000; // 10 minutes timeout
-server.keepAliveTimeout = 10 * 60 * 1000; // 10 minutes keep-alive
-server.headersTimeout = 10 * 60 * 1000; // 10 minutes headers timeout
-
-console.log(`🔧 Server timeouts set to 10 minutes for large uploads`);
+  }
+})();
 
 // Phase 6: Enhanced Graceful Shutdown with Resilience Patterns
 const gracefulShutdown = async (signal) => {
@@ -15540,16 +15593,16 @@ const gracefulShutdown = async (signal) => {
     }
   });
   
-  // Force shutdown after 30 seconds if graceful shutdown doesn't complete
+  // Force shutdown after 15 seconds to align with EB/Railway termination grace period
   shutdownTimeout = setTimeout(() => {
-    console.error('❌ Forced shutdown after 30 seconds');
+    console.error('❌ Forced shutdown after 15 seconds');
     errorLogger.error({
       type: 'server_shutdown_timeout',
       message: 'Graceful shutdown timed out, forcing exit',
       timestamp: new Date().toISOString()
     });
     process.exit(1);
-  }, 30000);
+  }, 15000);
 };
 
 // Handle shutdown signals

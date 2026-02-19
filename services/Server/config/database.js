@@ -21,6 +21,46 @@ const poolMetrics = {
 // Default query timeout: 30 seconds
 const DEFAULT_QUERY_TIMEOUT = 30000;
 
+// Recoverable DB error codes/messages - do not escalate to process failure
+const RECOVERABLE_DB_ERRORS = [
+  'ECONNREFUSED',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'EPIPE',
+  '57P01',   // admin_shutdown
+  '57P02',   // crash_shutdown
+  '57P03'    // cannot_connect_now
+];
+
+function isRecoverableDbError(err) {
+  if (!err) return false;
+  const code = err.code || '';
+  const msg = (err.message || '').toLowerCase();
+  if (RECOVERABLE_DB_ERRORS.includes(code)) return true;
+  if (msg.includes('connection terminated') || msg.includes('connection closed')) return true;
+  return false;
+}
+
+/**
+ * Cancellable timeout - clears timer on both success and failure to prevent leaks
+ */
+function withCancellableTimeout(promise, ms, message) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message || `Timeout after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise, timeoutPromise]).then(
+    (result) => {
+      clearTimeout(timeoutId);
+      return result;
+    },
+    (err) => {
+      clearTimeout(timeoutId);
+      throw err;
+    }
+  );
+}
+
 // Determine pool size based on environment
 // Production: 20-50, Development: 10-20
 const getPoolMax = () => {
@@ -83,29 +123,27 @@ pool.on('remove', (client) => {
   });
 });
 
-pool.on('error', (err, client) => {
+pool.on('error', (err) => {
   poolMetrics.connectionErrors++;
-  
-  errorLogger.error({
+
+  const recoverable = isRecoverableDbError(err);
+  const logPayload = {
     type: 'db_pool_error',
     message: 'Unexpected error on idle database client',
     error: err.message,
     code: err.code,
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    recoverable,
     timestamp: new Date().toISOString()
-  });
-  
-  // Don't exit on pool errors - let the pool handle reconnection
-  // Only exit if it's a critical error
-  if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-    logger.warn({
-      type: 'db_pool_connection_failure',
-      message: 'Database connection failure - pool will retry',
-      error: err.message,
-      code: err.code,
-      timestamp: new Date().toISOString()
-    });
+  };
+  if (process.env.NODE_ENV === 'development') logPayload.stack = err.stack;
+
+  if (recoverable) {
+    logger.warn(logPayload);
+  } else {
+    errorLogger.error(logPayload);
   }
+
+  // Never propagate - pool handles reconnection. Transient disconnects are expected.
 });
 
 /**
@@ -127,17 +165,16 @@ const query = async (text, params = [], options = {}) => {
   let connectionWaitStart = Date.now();
   
   try {
-    // Track connection wait time
-    client = await Promise.race([
+    // Track connection wait time (cancellable timeout to prevent leaks)
+    client = await withCancellableTimeout(
       pool.connect(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 10000)
-      )
-    ]);
-    
+      10000,
+      'Connection timeout'
+    );
+
     const connectionWaitTime = Date.now() - connectionWaitStart;
     poolMetrics.poolWaitTime += connectionWaitTime;
-    
+
     if (connectionWaitTime > 1000) {
       logger.warn({
         type: 'db_pool_wait',
@@ -151,21 +188,13 @@ const query = async (text, params = [], options = {}) => {
         timestamp: new Date().toISOString()
       });
     }
-    
-    // Execute query with timeout
-    const queryPromise = client.query({
-      text,
-      values: params
-      // Use default rowMode to maintain compatibility with existing code
-    });
-    
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Query timeout after ${queryTimeout}ms`));
-      }, queryTimeout);
-    });
-    
-    const result = await Promise.race([queryPromise, timeoutPromise]);
+
+    // Execute query with cancellable timeout
+    const result = await withCancellableTimeout(
+      client.query({ text, values: params }),
+      queryTimeout,
+      `Query timeout after ${queryTimeout}ms`
+    );
     
     const queryTime = Date.now() - startTime;
     
@@ -274,10 +303,19 @@ const query = async (text, params = [], options = {}) => {
     
   } finally {
     if (client) {
-      client.release();
+      try {
+        client.release();
+      } catch (releaseErr) {
+        // Connection may be dead; pool will discard. Do not propagate.
+        logger.warn({
+          type: 'db_client_release_error',
+          message: 'Error releasing client (connection likely dead)',
+          error: releaseErr.message,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
-    
-    // Update pool metrics
+
     poolMetrics.poolConnections.total = pool.totalCount;
     poolMetrics.poolConnections.idle = pool.idleCount;
     poolMetrics.poolConnections.waiting = pool.waitingCount;
@@ -290,24 +328,33 @@ const query = async (text, params = [], options = {}) => {
  */
 const getClient = async () => {
   const connectionWaitStart = Date.now();
-  
+
   try {
-    const client = await Promise.race([
+    const client = await withCancellableTimeout(
       pool.connect(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Connection timeout')), 10000)
-      )
-    ]);
-    
+      10000,
+      'Connection timeout'
+    );
+
     const connectionWaitTime = Date.now() - connectionWaitStart;
     poolMetrics.poolWaitTime += connectionWaitTime;
-    
+
     return client;
   } catch (error) {
     poolMetrics.connectionErrors++;
     throw error;
   }
 };
+
+/**
+ * Get pool stats for monitoring (compatible with monitoring.checkAlerts)
+ * @returns {Object} Pool stats
+ */
+const getPoolStats = () => ({
+  totalConnections: pool.totalCount,
+  maxConnections: pool.options.max,
+  waitingClients: pool.waitingCount
+});
 
 /**
  * Get current pool metrics
@@ -423,9 +470,11 @@ module.exports = {
   query,
   getClient,
   getMetrics,
+  getPoolStats,
   resetMetrics,
   healthCheck,
   close,
-  DEFAULT_QUERY_TIMEOUT
+  DEFAULT_QUERY_TIMEOUT,
+  isRecoverableDbError
 };
 

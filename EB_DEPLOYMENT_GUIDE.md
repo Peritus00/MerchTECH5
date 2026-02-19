@@ -101,6 +101,18 @@ You should see `package.json` and `Procfile` at the root, not nested in a folder
 3. Upload `eb-backend-deploy.zip`
 4. Deploy
 
+### Step 6: Post-deploy verification (recommended)
+
+After deployment, verify the app is healthy before considering the release successful:
+
+```bash
+# Replace with your EB URL or production domain
+API_BASE_URL=https://www.merchtrader.org node scripts/verify-deployment-health.js
+```
+
+- Exit 0 = healthy; exit 1 = fail rollout (investigate logs, consider rollback).
+- See [OUTAGE_RUNBOOK.md](OUTAGE_RUNBOOK.md) for recovery steps.
+
 ## Environment Variables
 
 Make sure these are set in your EB environment configuration:
@@ -122,11 +134,11 @@ To enable malware scanning on uploaded files:
   - `localhost:3310` - Same as above for local ClamAV
   - `http://clamav-rest-api:8080` - REST API wrapper URL
 - `ENABLE_MALWARE_SCAN` - Set to `true` to enable (default: `true` when CLAMAV_URL is set). Set to `false` to disable.
-- `SCAN_TIMEOUT_MS` - Max scan time per file in ms (default: 30000)
+- `SCAN_TIMEOUT_MS` - Max scan time floor per file in ms (default: 180000). Actual timeout scales up automatically for large files.
 
 ## ClamAV Setup
 
-### Option 1: Docker (for local dev or separate EC2)
+### Option 1: Docker (recommended for local dev and EC2)
 
 ```bash
 docker-compose -f docker-compose.clamav.yml up -d
@@ -134,13 +146,21 @@ docker-compose -f docker-compose.clamav.yml up -d
 
 Set `CLAMAV_URL=tcp://localhost:3310` (or your ClamAV host). Allow 1-2 minutes for virus definitions to download on first start.
 
-### Option 2: EC2 Instance
+Always pull a fresh image before first deploy and when troubleshooting update failures:
+
+```bash
+docker compose -f docker-compose.clamav.yml pull
+docker compose -f docker-compose.clamav.yml up -d
+```
+
+### Option 2: EC2 host install (advanced)
 
 1. Launch an EC2 instance (t3.small or larger) in the same VPC as your EB environment.
-2. Install ClamAV: `sudo apt install clamav clamav-daemon`
-3. Start clamd: `sudo systemctl start clamav-daemon`
-4. Open port 3310 in the security group for traffic from your EB instances.
-5. Set `CLAMAV_URL=tcp://<ec2-private-ip>:3310` in EB environment variables.
+2. Prefer Docker on that host (Option 1) to avoid outdated distro ClamAV packages.
+3. If you must use host packages, use a current distro/repo that provides ClamAV 1.x and verify version with `clamd --version`.
+4. Start `clamd` and ensure `freshclam` updates succeed.
+5. Open port 3310 in the security group for traffic from your EB instances.
+6. Set `CLAMAV_URL=tcp://<ec2-private-ip>:3310` in EB environment variables.
 
 ### Option 3: Disable Scanning
 

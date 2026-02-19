@@ -56,12 +56,18 @@ class MetricsCollector {
     };
     
     this.startTime = Date.now();
+    this.lastDbConnectionErrors = 0;
+    this.lastDbFailedQueries = 0;
     this.alertThresholds = {
       errorRate: 0.05, // 5% error rate triggers alert
       slowResponseTime: 5000, // 5 seconds
       memoryUsage: 0.90, // 90% memory usage
       databaseSlowQueries: 10, // 10 slow queries per minute
-      highErrorCount: 10 // 10 errors per minute
+      highErrorCount: 10, // 10 errors per minute
+      dbConnectionErrorsPerMinute: 3, // warning threshold
+      dbConnectionErrorsPerMinuteCritical: 10, // critical threshold
+      dbFailedQueriesPerMinute: 5, // warning
+      dbFailedQueriesPerMinuteCritical: 20 // critical
     };
     
     // Reset metrics every hour
@@ -233,7 +239,7 @@ class MetricsCollector {
     // Check database connection pool health
     try {
       const poolStats = db.getPoolStats();
-      if (poolStats) {
+      if (poolStats && poolStats.maxConnections > 0) {
         const poolUtilization = poolStats.totalConnections / poolStats.maxConnections;
         if (poolUtilization > 0.8) {
           this.addAlert('database_pool_high_utilization', {
@@ -243,6 +249,47 @@ class MetricsCollector {
             waitingClients: poolStats.waitingClients
           });
         }
+      }
+    } catch (err) {
+      // Ignore errors in alert checking
+    }
+
+    // Check DB connection errors (disconnects) - delta per minute
+    try {
+      const dbMetrics = db.getMetrics();
+      const connErrors = dbMetrics.errors?.connection ?? 0;
+      const failedQueries = dbMetrics.queries?.failed ?? 0;
+      const connDelta = connErrors - this.lastDbConnectionErrors;
+      const failedDelta = failedQueries - this.lastDbFailedQueries;
+      this.lastDbConnectionErrors = connErrors;
+      this.lastDbFailedQueries = failedQueries;
+
+      if (connDelta >= this.alertThresholds.dbConnectionErrorsPerMinuteCritical) {
+        this.addAlert('database_connection_errors_critical', {
+          count: connDelta,
+          threshold: this.alertThresholds.dbConnectionErrorsPerMinuteCritical,
+          total: connErrors
+        });
+      } else if (connDelta >= this.alertThresholds.dbConnectionErrorsPerMinute) {
+        this.addAlert('database_connection_errors_warning', {
+          count: connDelta,
+          threshold: this.alertThresholds.dbConnectionErrorsPerMinute,
+          total: connErrors
+        });
+      }
+
+      if (failedDelta >= this.alertThresholds.dbFailedQueriesPerMinuteCritical) {
+        this.addAlert('database_failed_queries_critical', {
+          count: failedDelta,
+          threshold: this.alertThresholds.dbFailedQueriesPerMinuteCritical,
+          total: failedQueries
+        });
+      } else if (failedDelta >= this.alertThresholds.dbFailedQueriesPerMinute) {
+        this.addAlert('database_failed_queries_warning', {
+          count: failedDelta,
+          threshold: this.alertThresholds.dbFailedQueriesPerMinute,
+          total: failedQueries
+        });
       }
     } catch (err) {
       // Ignore errors in alert checking
@@ -294,7 +341,11 @@ class MetricsCollector {
       high_memory_usage: 'high',
       database_slow_queries: 'medium',
       database_pool_high_utilization: 'high',
-      high_error_count: 'high'
+      high_error_count: 'high',
+      database_connection_errors_critical: 'high',
+      database_connection_errors_warning: 'medium',
+      database_failed_queries_critical: 'high',
+      database_failed_queries_warning: 'medium'
     };
     return severityMap[type] || 'low';
   }
@@ -309,7 +360,11 @@ class MetricsCollector {
       high_memory_usage: `High memory usage: ${data.memoryUsage} (${data.used}/${data.total})`,
       database_slow_queries: `Database slow queries detected: ${data.slowQueries} (avg: ${data.avgQueryTime})`,
       database_pool_high_utilization: `Database pool high utilization: ${data.utilization} (${data.totalConnections}/${data.maxConnections} connections)`,
-      high_error_count: `High error count: ${data.count} errors in the last minute`
+      high_error_count: `High error count: ${data.count} errors in the last minute`,
+      database_connection_errors_critical: `Database connection errors (critical): ${data.count} disconnects in last minute (threshold: ${data.threshold})`,
+      database_connection_errors_warning: `Database connection errors (warning): ${data.count} disconnects in last minute (threshold: ${data.threshold})`,
+      database_failed_queries_critical: `Database failed queries (critical): ${data.count} in last minute (threshold: ${data.threshold})`,
+      database_failed_queries_warning: `Database failed queries (warning): ${data.count} in last minute (threshold: ${data.threshold})`
     };
     return messages[type] || `Alert: ${type}`;
   }
