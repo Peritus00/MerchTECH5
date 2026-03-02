@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/contexts/AuthContext';
 import { env } from '@/config/environment';
+import { profileAPI } from '@/services/api';
 
 // Declare Google Identity Services types for web
 declare global {
@@ -102,45 +103,79 @@ export function useGoogleSignIn() {
     setLoading(true);
     try {
       const googleClientId = env.googleClientId;
-      console.log('🔧 Using Google Client ID:', googleClientId.substring(0, 20) + '...');
 
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        console.log('🌐 Using Google Identity Services for web sign-in');
-        
         // Wait for GIS to be ready if not already
         if (!gisReady) {
-          console.log('⏳ Waiting for Google Identity Services to be ready...');
           let attempts = 0;
           while (!window.google?.accounts?.id && attempts < 50) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
           }
           if (!window.google?.accounts?.id) {
-            return { success: false, error: 'Google sign-in service failed to load. Please refresh the page and try again.' };
+            return { success: false, error: 'Google sign-in failed to load. Please refresh and try again.' };
           }
         }
 
-        // Use direct OAuth redirect flow - use canonical callback host from config
-        console.log('🔄 Initiating Google OAuth redirect flow...');
-        
-        const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          sessionStorage.setItem('google_oauth_nonce', nonce);
-        }
-        
-        const redirectUri = `${env.oauthCallbackHost}/auth/google`;
-        
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${encodeURIComponent(googleClientId)}` +
-          `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-          `&response_type=id_token` +
-          `&scope=${encodeURIComponent('openid profile email')}` +
-          `&nonce=${encodeURIComponent(nonce)}` +
-          `&prompt=select_account`;
-        
-        window.location.href = authUrl;
-        return { success: false, error: 'Redirecting to Google...' };
+        // Use GIS JavaScript callback flow - no redirect, no hash fragment issues.
+        // The credential (id_token) is delivered directly to the callback function.
+        return new Promise<GoogleSignInResult>((resolve) => {
+          const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+
+          window.google!.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: async (response: { credential: string }) => {
+              try {
+                const isLinkMode = typeof sessionStorage !== 'undefined' &&
+                  sessionStorage.getItem('google_oauth_mode') === 'link';
+                if (typeof sessionStorage !== 'undefined') {
+                  sessionStorage.removeItem('google_oauth_mode');
+                }
+                if (isLinkMode) {
+                  await profileAPI.linkGoogle(response.credential);
+                  resolve({ success: true });
+                } else {
+                  await socialLogin('google', response.credential);
+                  resolve({ success: true });
+                }
+              } catch (err: any) {
+                resolve({ success: false, error: err.message || 'Google sign-in failed' });
+              } finally {
+                setLoading(false);
+              }
+            },
+            nonce,
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+
+          window.google!.accounts.id.prompt((notification: any) => {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+              // One Tap blocked by browser or user not signed into Google.
+              // Fall back to GIS redirect using response_type=code (query param,
+              // not hash fragment) so the callback page can read it reliably.
+              console.log('⚠️ GIS prompt not shown, falling back to redirect flow');
+              const sessionNonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+              if (typeof sessionStorage !== 'undefined') {
+                sessionStorage.setItem('google_oauth_nonce', sessionNonce);
+              }
+              const redirectUri = `${env.oauthCallbackHost}/auth/google`;
+              const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                `client_id=${encodeURIComponent(googleClientId)}` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&response_type=id_token` +
+                `&scope=${encodeURIComponent('openid profile email')}` +
+                `&nonce=${encodeURIComponent(sessionNonce)}` +
+                `&prompt=select_account`;
+              window.location.href = authUrl;
+              // Page navigates away; Promise is never resolved (intentional)
+            }
+            if (notification.isDismissedMoment()) {
+              setLoading(false);
+              resolve({ success: false, error: 'Google sign-in was dismissed' });
+            }
+          });
+        });
       } else {
         // Native implementation
         console.log('📱 Using native Google Sign-In');
@@ -171,7 +206,10 @@ export function useGoogleSignIn() {
         };
       }
     } finally {
-      setLoading(false);
+      // Only clear loading for native; web clears it inside the GIS callbacks
+      if (Platform.OS !== 'web') {
+        setLoading(false);
+      }
     }
   };
 

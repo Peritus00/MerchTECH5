@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -7,9 +7,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { profileAPI } from '@/services/api';
 import { Platform } from 'react-native';
 
+// Capture the hash fragment synchronously at module load time, before any SPA
+// routing can clear window.location.  This is the fallback for the redirect flow.
+const _capturedHash: string =
+  Platform.OS === 'web' && typeof window !== 'undefined'
+    ? window.location.hash
+    : '';
+
 /**
  * Google OAuth callback handler
- * Handles both login and account linking flows (link mode set via sessionStorage)
+ * Primary path: GIS JS callback (no redirect) – this page only loads if the
+ * redirect fallback was used instead.
  */
 export default function GoogleAuthCallback() {
   const router = useRouter();
@@ -17,35 +25,35 @@ export default function GoogleAuthCallback() {
   const { socialLogin, refreshUser } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
-  const [processed, setProcessed] = useState(false);
+  const processed = useRef(false);
 
   useEffect(() => {
-    // Prevent multiple executions (React StrictMode or re-renders)
-    if (processed) {
-      return;
-    }
+    if (processed.current) return;
 
     const processCallback = async () => {
       try {
-        setProcessed(true);
-        
-        // Check for ID token in URL params (from expo-auth-session redirect)
+        processed.current = true;
+
         const idToken = params.id_token as string | undefined;
         const error = params.error as string | undefined;
 
         if (error) {
           console.error('❌ Google OAuth error:', error);
           setStatus('error');
-          setErrorMessage(error === 'access_denied' 
-            ? 'Google sign-in was cancelled' 
+          setErrorMessage(error === 'access_denied'
+            ? 'Google sign-in was cancelled'
             : `Google sign-in failed: ${error}`);
           return;
         }
 
+        // Try query params first, then the hash captured at module load time
         let tokenToUse = idToken;
-        if (!tokenToUse && Platform.OS === 'web' && typeof window !== 'undefined') {
-          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        if (!tokenToUse && Platform.OS === 'web') {
+          const hashParams = new URLSearchParams(_capturedHash.substring(1));
           tokenToUse = hashParams.get('id_token') || undefined;
+          if (tokenToUse) {
+            console.log('🔑 Found ID token in captured hash fragment');
+          }
         }
 
         if (!tokenToUse) {
@@ -80,7 +88,7 @@ export default function GoogleAuthCallback() {
     };
 
     processCallback();
-  }, [params, socialLogin, refreshUser, router, processed]);
+  }, [params, socialLogin, refreshUser, router]);
 
   return (
     <ThemedView style={styles.container}>
