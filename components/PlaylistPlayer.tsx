@@ -87,9 +87,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [audioIntensity, setAudioIntensity] = useState(0);
-  const [animTick, setAnimTick] = useState(0);
+  const [quickPayIndex, setQuickPayIndex] = useState(0);
   
   const videoRef = useRef<Video>(null);
+  const quickPayScrollRef = useRef<ScrollView>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
@@ -130,70 +131,103 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastIntensityUpdateRef = useRef<number>(0);
-  const THROTTLE_MS = 50;
+  const THROTTLE_MS = 220;
+  const QUICK_PAY_ITEM_WIDTH = 230;
+
+  const scrollQuickPay = useCallback((direction: 'prev' | 'next', total: number) => {
+    if (total <= 1) return;
+    const nextIndex =
+      direction === 'next'
+        ? Math.min(quickPayIndex + 1, total - 1)
+        : Math.max(quickPayIndex - 1, 0);
+    quickPayScrollRef.current?.scrollTo({
+      x: nextIndex * QUICK_PAY_ITEM_WIDTH,
+      animated: true,
+    });
+    setQuickPayIndex(nextIndex);
+  }, [quickPayIndex]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
-      const video = html5VideoRef.current;
-      const audio = html5AudioRef.current;
-      const mediaEl = video || audio;
-      if (!mediaEl || !mediaEl.src) {
-        setAudioIntensity(0);
-        return () => {};
-      }
-      try {
-        const ctx = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
-        if (audioContextRef.current !== ctx) audioContextRef.current = ctx;
-        if (ctx.state === 'suspended') ctx.resume();
-        const analyser = analyserRef.current || ctx.createAnalyser();
-        if (analyserRef.current !== analyser) analyserRef.current = analyser;
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.8;
-        let source = mediaSourceRef.current;
-        if (!source || source.mediaElement !== mediaEl) {
-          if (source) try { source.disconnect(); } catch (_) {}
-          source = ctx.createMediaElementSource(mediaEl);
-          mediaSourceRef.current = source;
-          source.connect(analyser);
-          analyser.connect(ctx.destination);
-        }
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const sample = () => {
-          if (!analyserRef.current) return;
-          analyser.getByteFrequencyData(dataArray);
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-          const avg = sum / dataArray.length / 255;
-          const now = Date.now();
-          if (now - lastIntensityUpdateRef.current >= THROTTLE_MS) {
-            lastIntensityUpdateRef.current = now;
-            setAudioIntensity(Math.min(1, avg * 2));
-          }
-          rafRef.current = requestAnimationFrame(sample);
-        };
-        rafRef.current = requestAnimationFrame(sample);
-        return () => {
-          if (rafRef.current) cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        };
-      } catch (e) {
-        setAudioIntensity(0);
-        return () => {};
-      }
-    } else {
-      // Native fallback: gentle pulse from playback state
-      const id = setInterval(() => {
-        setAudioIntensity(isPlaying ? 0.3 + Math.sin(Date.now() / 400) * 0.2 : 0.2);
-      }, 100);
-      return () => clearInterval(id);
-    }
-  }, [currentIndex, isPlaying, Platform.OS]);
+      let cancelled = false;
 
-  // Tick for Quick Pay button phase animation
-  useEffect(() => {
-    const id = setInterval(() => setAnimTick((t) => t + 1), 120);
+      const setupAnalyser = async () => {
+        if (!userHasInteracted || !isPlaying) {
+          setAudioIntensity(0);
+          return;
+        }
+
+        const video = html5VideoRef.current;
+        const audio = html5AudioRef.current;
+        const mediaEl = video || audio;
+        if (!mediaEl || !mediaEl.src) {
+          setAudioIntensity(0);
+          return;
+        }
+
+        try {
+          const ctx = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
+          if (audioContextRef.current !== ctx) audioContextRef.current = ctx;
+
+          // Never route media into a suspended context; that can mute playback.
+          if (ctx.state !== 'running') {
+            await ctx.resume();
+          }
+          if (cancelled || ctx.state !== 'running') {
+            setAudioIntensity(0);
+            return;
+          }
+
+          const analyser = analyserRef.current || ctx.createAnalyser();
+          if (analyserRef.current !== analyser) analyserRef.current = analyser;
+          analyser.fftSize = 256;
+          analyser.smoothingTimeConstant = 0.8;
+
+          let source = mediaSourceRef.current;
+          if (!source || source.mediaElement !== mediaEl) {
+            if (source) {
+              try { source.disconnect(); } catch (_) {}
+            }
+            source = ctx.createMediaElementSource(mediaEl);
+            mediaSourceRef.current = source;
+            source.connect(analyser);
+            analyser.connect(ctx.destination);
+          }
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          const sample = () => {
+            if (cancelled || !analyserRef.current) return;
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length / 255;
+            const now = Date.now();
+            if (now - lastIntensityUpdateRef.current >= THROTTLE_MS) {
+              lastIntensityUpdateRef.current = now;
+              setAudioIntensity(Math.min(1, avg * 2));
+            }
+            rafRef.current = requestAnimationFrame(sample);
+          };
+          rafRef.current = requestAnimationFrame(sample);
+        } catch (e) {
+          setAudioIntensity(0);
+        }
+      };
+
+      setupAnalyser();
+      return () => {
+        cancelled = true;
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      };
+    }
+
+    // Native fallback: gentle pulse from playback state
+    const id = setInterval(() => {
+      setAudioIntensity(isPlaying ? 0.3 + Math.sin(Date.now() / 400) * 0.2 : 0.2);
+    }, 220);
     return () => clearInterval(id);
-  }, []);
+  }, [currentIndex, isPlaying, userHasInteracted, Platform.OS]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -1816,15 +1850,38 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                   styles.quickPayOverlay,
                   isFullscreen && styles.quickPayOverlayFullscreen,
                 ]}>
+                  {activeProducts.length > 1 && (
+                    <TouchableOpacity
+                      style={[styles.quickPayNavButton, styles.quickPayNavButtonLeft]}
+                      onPress={() => scrollQuickPay('prev', activeProducts.length)}
+                      disabled={quickPayIndex === 0}
+                    >
+                      <Ionicons
+                        name="chevron-back"
+                        size={16}
+                        color={quickPayIndex === 0 ? 'rgba(255,255,255,0.4)' : '#fff'}
+                      />
+                    </TouchableOpacity>
+                  )}
                   <ScrollView
+                    ref={quickPayScrollRef}
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.quickPayScrollContent}
+                    snapToInterval={QUICK_PAY_ITEM_WIDTH}
+                    decelerationRate="fast"
+                    onScroll={(event) => {
+                      const x = event.nativeEvent.contentOffset.x;
+                      setQuickPayIndex(Math.round(x / QUICK_PAY_ITEM_WIDTH));
+                    }}
+                    scrollEventThrottle={16}
                   >
                     {activeProducts.map((link: ProductLink, idx: number) => {
-                      const phase = (idx * 0.2) % 1;
-                      const animScale = 1 + audioIntensity * 0.08 * Math.sin(animTick * 0.15 + phase * Math.PI * 2);
-                      const animOpacity = 0.85 + audioIntensity * 0.15;
+                      const phase = idx * 1.1;
+                      const wave = Math.sin((audioIntensity * 10) + phase);
+                      const animScale = 1 + audioIntensity * 0.06 * wave;
+                      const animOpacity = 0.84 + audioIntensity * 0.16;
+                      const animTranslateY = -audioIntensity * 4 * Math.cos((audioIntensity * 8) + phase);
                       return (
                         <TouchableOpacity
                           key={link.id}
@@ -1832,7 +1889,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                             styles.quickPayButton,
                             {
                               opacity: animOpacity,
-                              transform: [{ scale: animScale }],
+                              transform: [{ scale: animScale }, { translateY: animTranslateY }],
                             },
                           ]}
                           onPress={() => handleBuyNow(link)}
@@ -1842,20 +1899,32 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                           {isCheckoutLoading ? (
                             <ActivityIndicator size="small" color="#fff" />
                           ) : (
-                            <>
-                              <MaterialIcons name="flash-on" size={14} color="#fff" />
+                            <View style={styles.quickPayTextBlock}>
                               <Text style={styles.quickPayButtonText} numberOfLines={1}>
                                 {link.title}
                               </Text>
-                              {link.price && (
-                                <Text style={styles.quickPayPriceText}>{formatPrice(link.price)}</Text>
-                              )}
-                            </>
+                              <Text style={styles.quickPayPriceText} numberOfLines={1}>
+                                {link.price ? formatPrice(link.price) : ' '}
+                              </Text>
+                            </View>
                           )}
                         </TouchableOpacity>
                       );
                     })}
                   </ScrollView>
+                  {activeProducts.length > 1 && (
+                    <TouchableOpacity
+                      style={[styles.quickPayNavButton, styles.quickPayNavButtonRight]}
+                      onPress={() => scrollQuickPay('next', activeProducts.length)}
+                      disabled={quickPayIndex >= activeProducts.length - 1}
+                    >
+                      <Ionicons
+                        name="chevron-forward"
+                        size={16}
+                        color={quickPayIndex >= activeProducts.length - 1 ? 'rgba(255,255,255,0.4)' : '#fff'}
+                      />
+                    </TouchableOpacity>
+                  )}
                 </View>
               );
             })()}
@@ -2603,9 +2672,10 @@ const styles = StyleSheet.create({
   quickPayOverlay: {
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingVertical: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 36,
     marginVertical: 8,
     borderRadius: 12,
+    position: 'relative',
   },
   quickPayOverlayFullscreen: {
     marginVertical: 8,
@@ -2618,26 +2688,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   quickPayButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
     backgroundColor: 'rgba(59, 130, 246, 0.85)',
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 20,
-    gap: 6,
+    borderRadius: 4,
     minWidth: 100,
-    maxWidth: 180,
+    width: 230,
+    minHeight: 68,
+  },
+  quickPayTextBlock: {
+    width: '100%',
+    justifyContent: 'center',
   },
   quickPayButtonText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    width: '100%',
   },
   quickPayPriceText: {
     color: 'rgba(255, 255, 255, 0.95)',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
+    marginTop: 4,
+  },
+  quickPayNavButton: {
+    position: 'absolute',
+    top: '50%',
+    transform: [{ translateY: -14 }],
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  quickPayNavButtonLeft: {
+    left: 6,
+  },
+  quickPayNavButtonRight: {
+    right: 6,
   },
   
   // Fullscreen-specific styles
