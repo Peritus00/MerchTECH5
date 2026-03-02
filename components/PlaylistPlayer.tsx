@@ -150,6 +150,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   useEffect(() => {
     if (Platform.OS === 'web') {
       let cancelled = false;
+      let fallbackInterval: ReturnType<typeof setInterval> | null = null;
 
       const setupAnalyser = async () => {
         if (!userHasInteracted || !isPlaying) {
@@ -162,6 +163,22 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         const mediaEl = video || audio;
         if (!mediaEl || !mediaEl.src) {
           setAudioIntensity(0);
+          return;
+        }
+
+        // Avoid WebAudio routing for cross-origin streams. The browser log shows
+        // CORS-restricted MediaElementAudioSource outputting zeros, which can mute audio.
+        let mediaOrigin = '';
+        try {
+          mediaOrigin = new URL(mediaEl.currentSrc || mediaEl.src, window.location.href).origin;
+        } catch (_) {
+          mediaOrigin = '';
+        }
+        const isSameOriginMedia = mediaOrigin === window.location.origin;
+        if (!isSameOriginMedia) {
+          fallbackInterval = setInterval(() => {
+            setAudioIntensity(isPlaying ? 0.34 + Math.sin(Date.now() / 420) * 0.14 : 0.14);
+          }, 220);
           return;
         }
 
@@ -219,6 +236,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         cancelled = true;
         if (rafRef.current) cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
+        if (fallbackInterval) {
+          clearInterval(fallbackInterval);
+          fallbackInterval = null;
+        }
       };
     }
 
