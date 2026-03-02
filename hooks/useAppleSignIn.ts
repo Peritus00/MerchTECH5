@@ -3,6 +3,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
 import { useAuth } from '@/contexts/AuthContext';
+import { env } from '@/config/environment';
 
 interface AppleSignInResult {
   success: boolean;
@@ -61,19 +62,14 @@ export function useAppleSignIn() {
 
   const initializeAppleAuth = () => {
     try {
-      const appleClientId = process.env.EXPO_PUBLIC_APPLE_CLIENT_ID || process.env.EXPO_PUBLIC_APPLE_SERVICE_ID;
+      const appleClientId = env.appleClientId;
       
       if (!appleClientId) {
         console.error('❌ Apple Client ID not configured');
         return;
       }
 
-      // Determine the correct redirect URI
-      let currentOrigin = window.location.origin;
-      if (currentOrigin.includes('merchtrader.org')) {
-        currentOrigin = 'https://www.merchtrader.org';
-      }
-      const redirectURI = `${currentOrigin}/auth/apple`;
+      const redirectURI = `${env.oauthCallbackHost}/auth/apple`;
 
       // Initialize Apple Sign-In
       window.AppleID?.auth.init({
@@ -97,23 +93,12 @@ export function useAppleSignIn() {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         console.log('🌐 Using Apple Sign-In OAuth redirect flow for web');
 
-        // Get Apple Client ID from environment variables
-        // Note: In Expo web builds, these are injected at build time
-        const appleClientId = process.env.EXPO_PUBLIC_APPLE_CLIENT_ID || process.env.EXPO_PUBLIC_APPLE_SERVICE_ID;
-        
-        console.log('🍎 Apple Client ID check:', {
-          hasClientId: !!process.env.EXPO_PUBLIC_APPLE_CLIENT_ID,
-          hasServiceId: !!process.env.EXPO_PUBLIC_APPLE_SERVICE_ID,
-          resolvedClientId: appleClientId
-        });
+        const appleClientId = env.appleClientId;
         
         if (!appleClientId) {
-          console.error('❌ Apple OAuth not configured - environment variables missing');
-          console.error('❌ EXPO_PUBLIC_APPLE_CLIENT_ID:', process.env.EXPO_PUBLIC_APPLE_CLIENT_ID);
-          console.error('❌ EXPO_PUBLIC_APPLE_SERVICE_ID:', process.env.EXPO_PUBLIC_APPLE_SERVICE_ID);
           return { 
             success: false, 
-            error: 'Apple OAuth not configured. Please set EXPO_PUBLIC_APPLE_CLIENT_ID' 
+            error: 'Apple OAuth not configured. Please set EXPO_PUBLIC_APPLE_CLIENT_ID or EXPO_PUBLIC_APPLE_SERVICE_ID' 
           };
         }
 
@@ -123,20 +108,10 @@ export function useAppleSignIn() {
         // Store nonce in sessionStorage to verify on callback
         if (typeof window !== 'undefined' && window.sessionStorage) {
           sessionStorage.setItem('apple_oauth_nonce', nonce);
-          console.log('🍎 Stored nonce in sessionStorage');
         }
 
-        // Determine the correct redirect URI
-        // For form_post, we need a backend endpoint that can receive POST data
-        let currentOrigin = window.location.origin;
-        if (currentOrigin.includes('merchtrader.org')) {
-          currentOrigin = 'https://www.merchtrader.org';
-        }
-        // Use backend endpoint for form_post callback
-        const redirectURI = `${currentOrigin}/api/auth/apple/callback`;
-        console.log('🔄 Current origin:', window.location.origin);
-        console.log('🔄 Using redirect URI:', redirectURI);
-        console.log('🔄 Apple Client ID:', appleClientId);
+        // Use canonical callback host - backend receives form_post at /api/auth/apple/callback
+        const redirectURI = `${env.oauthCallbackHost}/api/auth/apple/callback`;
 
         // Use Apple's redirect flow with authorization code
         // For web OAuth with Service IDs, Apple requires response_type=code

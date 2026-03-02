@@ -13,6 +13,7 @@
     "deploy:setup": "node ./scripts/deploy-setup.js",
     "deploy:merchtech": "node ./scripts/setup-merchtech.js",
     "deploy:validate": "node ./scripts/validate-env.js",
+    "deploy:verify-social-auth": "node ./scripts/verify-social-auth.js",
     "env:check": "node -e \"require('./config/environment').env.logConfiguration()\"",
     "build:production": "NODE_ENV=production expo export",
     "server:start": "node ./services/Server/main.js",

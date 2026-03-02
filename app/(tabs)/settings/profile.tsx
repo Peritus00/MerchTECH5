@@ -62,7 +62,7 @@ export default function ProfileScreen() {
   
   // Social account linking state
   const [linkingProvider, setLinkingProvider] = useState<'google' | 'apple' | null>(null);
-  const { signIn: googleSignIn, loading: googleLoading } = useGoogleSignIn();
+  const { signIn: googleSignIn, getTokenForLinking, signInForLinking, loading: googleLoading } = useGoogleSignIn();
   const { signIn: appleSignIn, loading: appleLoading } = useAppleSignIn();
 
   const handleSave = async () => {
@@ -231,21 +231,23 @@ export default function ProfileScreen() {
     }
   };
 
-  // Social account linking handlers
+  // Social account linking handlers - use dedicated link APIs, not full login flow
   const handleLinkGoogle = async () => {
     setLinkingProvider('google');
     try {
-      const result = await googleSignIn();
-      if (result.success) {
-        // Refresh user data
-        const { refreshUser } = useAuth();
-        await refreshUser();
-        Alert.alert('Success', 'Google account linked successfully');
-      } else {
-        Alert.alert('Error', result.error || 'Failed to link Google account');
+      if (Platform.OS === 'web') {
+        await signInForLinking();
+        return; // Redirects to Google; callback will complete linking
       }
+      const idToken = await getTokenForLinking();
+      if (!idToken) {
+        return; // User cancelled
+      }
+      await profileAPI.linkGoogle(idToken);
+      await refreshUser();
+      Alert.alert('Success', 'Google account linked successfully');
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to link Google account');
+      Alert.alert('Error', error.response?.data?.error || error.message || 'Failed to link Google account');
     } finally {
       setLinkingProvider(null);
     }

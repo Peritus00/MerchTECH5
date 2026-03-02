@@ -9,6 +9,9 @@ export default function AuthLayout() {
       <Stack.Screen name="reset-password" options={{ headerShown: false }} />
       <Stack.Screen name="verify-email" options={{ headerShown: false }} />
       <Stack.Screen name="verification-success" options={{ headerShown: false }} />
+      {/* OAuth callback routes - must be registered to prevent not-found on redirect */}
+      <Stack.Screen name="google" options={{ headerShown: false }} />
+      <Stack.Screen name="apple" options={{ headerShown: false }} />
     </Stack>
   );
 }

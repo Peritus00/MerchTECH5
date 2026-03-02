@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import { useAuth } from '@/contexts/AuthContext';
+import { env } from '@/config/environment';
 
 // Declare Google Identity Services types for web
 declare global {
@@ -56,7 +57,7 @@ export function useGoogleSignIn() {
   useEffect(() => {
     if (Platform.OS !== 'web') {
       GoogleSignin.configure({
-        webClientId: '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com', // Web Client ID for backend verification
+        webClientId: env.googleClientId, // Web Client ID for backend verification
         iosClientId: '587879962618-blge4b7msal6lokld99n82hl9f9tpifs.apps.googleusercontent.com', // iOS Client ID
         scopes: ['profile', 'email', 'openid'],
         offlineAccess: true,
@@ -100,12 +101,7 @@ export function useGoogleSignIn() {
   const signIn = async (): Promise<GoogleSignInResult> => {
     setLoading(true);
     try {
-      // Use environment variable or fallback to hardcoded production ID
-      const envClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim();
-      const googleClientId = (envClientId && envClientId.length > 0) 
-        ? envClientId 
-        : '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
-      
+      const googleClientId = env.googleClientId;
       console.log('🔧 Using Google Client ID:', googleClientId.substring(0, 20) + '...');
 
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -124,7 +120,7 @@ export function useGoogleSignIn() {
           }
         }
 
-        // Use direct OAuth redirect flow
+        // Use direct OAuth redirect flow - use canonical callback host from config
         console.log('🔄 Initiating Google OAuth redirect flow...');
         
         const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -133,11 +129,7 @@ export function useGoogleSignIn() {
           sessionStorage.setItem('google_oauth_nonce', nonce);
         }
         
-        let currentOrigin = window.location.origin;
-        if (currentOrigin.includes('merchtrader.org')) {
-          currentOrigin = 'https://www.merchtrader.org';
-        }
-        const redirectUri = `${currentOrigin}/auth/google`;
+        const redirectUri = `${env.oauthCallbackHost}/auth/google`;
         
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${encodeURIComponent(googleClientId)}` +
@@ -183,5 +175,33 @@ export function useGoogleSignIn() {
     }
   };
 
-  return { signIn, loading };
+  /** Get idToken for linking (does not perform login - use with profileAPI.linkGoogle) */
+  const getTokenForLinking = async (): Promise<string | null> => {
+    if (Platform.OS === 'web') {
+      return null; // Web linking uses redirect flow
+    }
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      return userInfo.data?.idToken ?? null;
+    } catch (error: any) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        return null;
+      }
+      throw error;
+    }
+  };
+
+  /** Initiate Google OAuth for linking (web only - redirects; callback checks mode) */
+  const signInForLinking = async (): Promise<GoogleSignInResult> => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') {
+      return { success: false, error: 'Use getTokenForLinking on native' };
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('google_oauth_mode', 'link');
+    }
+    return signIn();
+  };
+
+  return { signIn, getTokenForLinking, signInForLinking, loading };
 }

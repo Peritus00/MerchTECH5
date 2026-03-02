@@ -71,6 +71,20 @@ if (missingVars.length > 0) {
 }
 console.log('✅ Environment variables validated');
 
+// Social auth config validation - fail fast in production if misconfigured
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.GOOGLE_CLIENT_ID) {
+    console.error('❌ CRITICAL: GOOGLE_CLIENT_ID is required for production. Google sign-in will fail.');
+    process.exit(1);
+  }
+  const appleVars = ['APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY'];
+  const hasAppleClientId = !!(process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID);
+  const hasAppleKey = appleVars.every(v => process.env[v]);
+  if (!hasAppleClientId || !hasAppleKey) {
+    console.warn('⚠️ Apple Sign-In may be unavailable: APPLE_CLIENT_ID/APPLE_SERVICE_ID and APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY must be set.');
+  }
+}
+
 const app = express();
 // Trust proxy headers so req.ip and related helpers reflect the original client IP
 app.set('trust proxy', true);
@@ -539,17 +553,21 @@ app.use('/api/', generalApiLimiter);
 app.use('/uploads', express.static(uploadsDir));
 
 // Handle domain redirects for legacy URLs
+// Skip redirects for OAuth callbacks - POST body must not be lost (301 can convert POST to GET)
 app.use((req, res, next) => {
+  const isAuthCallback = req.method === 'POST' && req.path === '/api/auth/apple/callback';
+  if (isAuthCallback) {
+    return next();
+  }
+
   const host = req.get('host');
   if (host === 'merchtechapp5-production.up.railway.app') {
-    console.log(`🔀 REDIRECT: Redirecting from ${host} to merchtech5-production.up.railway.app`);
     return res.redirect(301, `https://merchtech5-production.up.railway.app${req.originalUrl}`);
   }
-  // Redirect merchtrader.org to www.merchtrader.org (ensures SSL works)
-  // www.merchtrader.org has SSL certificate, merchtrader.org certificate is pending
   if (host === 'merchtrader.org' && !host.startsWith('www.')) {
-    console.log(`🔀 REDIRECT: Redirecting ${host}${req.originalUrl} to www.merchtrader.org (SSL certificate active)`);
-    return res.redirect(301, `https://www.merchtrader.org${req.originalUrl}`);
+    // Use 307 to preserve POST method/body if client sent POST
+    const code = req.method === 'POST' ? 307 : 301;
+    return res.redirect(code, `https://www.merchtrader.org${req.originalUrl}`);
   }
   next();
 });
@@ -1071,6 +1089,12 @@ app.get('/api/health', async (req, res) => {
             console.error('Health check S3 error:', error);
             healthData.services.s3 = false;
         }
+
+        healthData.services.socialAuth = {
+            google: !!process.env.GOOGLE_CLIENT_ID,
+            apple: !!(process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID) &&
+                !!process.env.APPLE_TEAM_ID && !!process.env.APPLE_KEY_ID && !!process.env.APPLE_PRIVATE_KEY,
+        };
 
         const statusCode = healthData.status === 'healthy' ? 200 : 503;
         healthCheckCache = { data: healthData, statusCode, timestamp: now };
@@ -6057,10 +6081,15 @@ function generateAppleClientSecret() {
   const teamId = process.env.APPLE_TEAM_ID;
   const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
   const keyId = process.env.APPLE_KEY_ID;
-  const privateKey = process.env.APPLE_PRIVATE_KEY;
+  let privateKey = process.env.APPLE_PRIVATE_KEY;
 
   if (!teamId || !clientId || !keyId || !privateKey) {
     throw new Error('Apple OAuth configuration incomplete. Required: APPLE_TEAM_ID, APPLE_CLIENT_ID/APPLE_SERVICE_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY');
+  }
+
+  // Normalize private key: env vars often store PEM with literal \n - convert to real newlines
+  if (typeof privateKey === 'string' && privateKey.includes('\\n')) {
+    privateKey = privateKey.replace(/\\n/g, '\n');
   }
 
   // Apple client secret is a JWT signed with the private key
@@ -6133,17 +6162,6 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Apple authorization code is required' });
     }
 
-    console.log('🍎 Apple web OAuth: Exchanging authorization code for tokens');
-    console.log('🍎 Environment check:', {
-      hasTeamId: !!process.env.APPLE_TEAM_ID,
-      hasClientId: !!process.env.APPLE_CLIENT_ID,
-      hasServiceId: !!process.env.APPLE_SERVICE_ID,
-      hasKeyId: !!process.env.APPLE_KEY_ID,
-      hasPrivateKey: !!process.env.APPLE_PRIVATE_KEY,
-      privateKeyLength: process.env.APPLE_PRIVATE_KEY?.length || 0,
-      privateKeyStartsWith: process.env.APPLE_PRIVATE_KEY?.substring(0, 30) || 'N/A',
-    });
-
     // Generate client secret JWT
     let clientSecret;
     try {
@@ -6156,8 +6174,8 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
     }
 
     const clientId = process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID;
-    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
-    const redirectUri = `${frontendUrl}/api/auth/apple/callback`;
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const redirectUri = `${frontendUrl.replace(/\/+$/, '')}/api/auth/apple/callback`;
 
     console.log('🍎 Apple token exchange params:', {
       clientId,
@@ -6229,8 +6247,6 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
         status: tokenError.response?.status,
         statusText: tokenError.response?.statusText,
         data: tokenError.response?.data,
-        requestUrl: tokenError.config?.url,
-        requestData: tokenError.config?.data,
       });
       const errorMessage = tokenError.response?.data?.error_description || tokenError.response?.data?.error || tokenError.message || 'Failed to exchange authorization code';
       return res.status(401).json({ error: `Apple authentication failed: ${errorMessage}` });
@@ -6247,9 +6263,9 @@ app.post('/api/auth/apple/callback', async (req, res) => {
     console.log('🍎 Apple form_post callback received');
     const { code, state, error, error_description } = req.body;
     
-    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
-    const callbackUrl = `${frontendUrl}/auth/apple`;
-    
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const callbackUrl = `${frontendUrl.replace(/\/+$/, '')}/auth/apple`;
+
     if (error) {
       console.error('❌ Apple OAuth error:', error, error_description);
       // Redirect to frontend with error
@@ -6265,9 +6281,9 @@ app.post('/api/auth/apple/callback', async (req, res) => {
     // Redirect to frontend callback page with code and state as query parameters
     res.redirect(`${callbackUrl}?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state || '')}`);
   } catch (error) {
-    console.error('🔴 APPLE CALLBACK ERROR:', error);
-    const frontendUrl = process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
-    const callbackUrl = `${frontendUrl}/auth/apple`;
+    console.error('🔴 APPLE CALLBACK ERROR:', error.message);
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const callbackUrl = `${frontendUrl.replace(/\/+$/, '')}/auth/apple`;
     res.redirect(`${callbackUrl}?error=callback_error&error_description=${encodeURIComponent(error.message || 'Callback processing failed')}`);
   }
 });

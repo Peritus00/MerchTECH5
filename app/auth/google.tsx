@@ -4,17 +4,17 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { profileAPI } from '@/services/api';
 import { Platform } from 'react-native';
 
 /**
  * Google OAuth callback handler
- * This route handles the redirect from Google OAuth flow
- * Used as a fallback if expo-auth-session redirect flow is used
+ * Handles both login and account linking flows (link mode set via sessionStorage)
  */
 export default function GoogleAuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { socialLogin } = useAuth();
+  const { socialLogin, refreshUser } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
   const [processed, setProcessed] = useState(false);
@@ -42,36 +42,36 @@ export default function GoogleAuthCallback() {
           return;
         }
 
-        if (!idToken) {
-          // Try to extract from hash fragment (some OAuth flows use hash)
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            const hashParams = new URLSearchParams(window.location.hash.substring(1));
-            const hashToken = hashParams.get('id_token');
-            if (hashToken) {
-              console.log('✅ Found ID token in hash fragment');
-              await socialLogin('google', hashToken);
-              setStatus('success');
-              setTimeout(() => {
-                router.replace('/(tabs)');
-              }, 1000);
-              return;
-            }
-          }
+        let tokenToUse = idToken;
+        if (!tokenToUse && Platform.OS === 'web' && typeof window !== 'undefined') {
+          const hashParams = new URLSearchParams(window.location.hash.substring(1));
+          tokenToUse = hashParams.get('id_token') || undefined;
+        }
 
+        if (!tokenToUse) {
           console.error('❌ No ID token found in callback');
           setStatus('error');
           setErrorMessage('No authentication token received from Google');
           return;
         }
 
-        console.log('✅ Processing Google OAuth callback with ID token');
-        await socialLogin('google', idToken);
+        if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('google_oauth_nonce');
+          const isLinkMode = sessionStorage.getItem('google_oauth_mode') === 'link';
+          sessionStorage.removeItem('google_oauth_mode');
+
+          if (isLinkMode) {
+            await profileAPI.linkGoogle(tokenToUse);
+            await refreshUser();
+            setStatus('success');
+            setTimeout(() => router.replace('/(tabs)/settings/profile'), 1000);
+            return;
+          }
+        }
+
+        await socialLogin('google', tokenToUse);
         setStatus('success');
-        
-        // Redirect to main app after short delay
-        setTimeout(() => {
-          router.replace('/(tabs)');
-        }, 1000);
+        setTimeout(() => router.replace('/(tabs)'), 1000);
       } catch (error: any) {
         console.error('❌ Error processing Google OAuth callback:', error);
         setStatus('error');
@@ -80,7 +80,7 @@ export default function GoogleAuthCallback() {
     };
 
     processCallback();
-  }, [params, socialLogin, router, processed]);
+  }, [params, socialLogin, refreshUser, router, processed]);
 
   return (
     <ThemedView style={styles.container}>

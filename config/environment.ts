@@ -10,6 +10,10 @@ export interface EnvironmentConfig {
   IS_DEVELOPMENT: boolean;
   FRONTEND_URL: string;
   EXPO_PROJECT_ID: string;
+  /** Google OAuth Web Client ID - must match backend GOOGLE_CLIENT_ID */
+  GOOGLE_CLIENT_ID: string;
+  /** Apple OAuth Client/Service ID - must match backend APPLE_CLIENT_ID/APPLE_SERVICE_ID */
+  APPLE_CLIENT_ID: string | null;
 }
 
 /**
@@ -78,6 +82,13 @@ class Environment {
       console.log(`🔧 Normalized FRONTEND_URL: ${rawFrontendUrl} → ${normalizedFrontendUrl}`);
     }
     
+    // Social auth - single source of truth; must align with backend env
+    const googleClientId = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID?.trim()
+      || '587879962618-hrknoc2i6g1jecittiro88qceavhj4ea.apps.googleusercontent.com';
+    const appleClientId = process.env.EXPO_PUBLIC_APPLE_CLIENT_ID?.trim()
+      || process.env.EXPO_PUBLIC_APPLE_SERVICE_ID?.trim()
+      || null;
+
     return {
       API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
@@ -85,6 +96,8 @@ class Environment {
       IS_DEVELOPMENT: !isProduction,
       FRONTEND_URL: normalizedFrontendUrl,
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
+      GOOGLE_CLIENT_ID: googleClientId,
+      APPLE_CLIENT_ID: appleClientId,
     };
   }
 
@@ -152,6 +165,19 @@ class Environment {
     return this.config.EXPO_PROJECT_ID;
   }
 
+  get googleClientId(): string {
+    return this.config.GOOGLE_CLIENT_ID;
+  }
+
+  get appleClientId(): string | null {
+    return this.config.APPLE_CLIENT_ID;
+  }
+
+  /** Callback host for OAuth redirects - always use canonical frontend URL */
+  get oauthCallbackHost(): string {
+    return this.config.FRONTEND_URL;
+  }
+
   // Debug information
   public logConfiguration(): void {
     console.log('🔧 Environment Configuration:');
@@ -160,6 +186,8 @@ class Environment {
     console.log(`  Frontend URL: ${this.config.FRONTEND_URL}`);
     console.log(`  Expo Project ID: ${this.config.EXPO_PROJECT_ID}`);
     console.log(`  Is Production: ${this.config.IS_PRODUCTION}`);
+    console.log(`  Google Client ID: ${this.config.GOOGLE_CLIENT_ID ? this.config.GOOGLE_CLIENT_ID.substring(0, 30) + '...' : 'not set'}`);
+    console.log(`  Apple Client ID: ${this.config.APPLE_CLIENT_ID ? 'configured' : 'not set'}`);
   }
 
   // Get full configuration object
@@ -178,7 +206,10 @@ export const {
   isProduction,
   isDevelopment,
   frontendUrl,
-  expoProjectId
+  expoProjectId,
+  googleClientId,
+  appleClientId,
+  oauthCallbackHost,
 } = env;
 
 // Always log configuration for debugging

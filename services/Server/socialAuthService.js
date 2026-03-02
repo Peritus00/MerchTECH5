@@ -82,10 +82,16 @@ function getAppleSigningKey(kid) {
  * @returns {Promise<{appleId: string, email?: string, emailVerified?: boolean}>}
  */
 async function verifyAppleToken(identityToken, nonce = null) {
+  // Define expected audiences outside try so catch can reference them
+  const expectedAudiences = [
+    process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID, // Service ID for web
+    'com.peritus00.merchtech', // Bundle ID for iOS native
+  ].filter(Boolean);
+
   try {
     // Decode token header to get key ID
     const decoded = jwt.decode(identityToken, { complete: true });
-    
+
     if (!decoded || !decoded.header || !decoded.header.kid) {
       throw new Error('Invalid Apple token format');
     }
@@ -93,34 +99,20 @@ async function verifyAppleToken(identityToken, nonce = null) {
     // Get Apple's public key
     const signingKey = await getAppleSigningKey(decoded.header.kid);
 
-    // Verify token signature and issuer first
-    // For iOS native apps, Apple uses the bundle ID as audience (com.peritus00.merchtech)
-    // For web OAuth, Apple uses the Service ID as audience (com.peritus00.merchtech.signin)
-    // Accept both to support both native and web Apple Sign-In
-    const expectedAudiences = [
-      process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID, // Service ID for web
-      'com.peritus00.merchtech', // Bundle ID for iOS native
-    ].filter(Boolean); // Remove any undefined values
-    
     // Verify token signature and issuer (without audience check first)
     let payload;
-    try {
-      payload = jwt.verify(identityToken, signingKey, {
-        algorithms: ['RS256'],
-        issuer: 'https://appleid.apple.com',
-        // Don't check audience here - we'll verify manually
-      });
-    } catch (verifyError) {
-      // If verification fails, try with audience check for better error messages
-      throw verifyError;
-    }
-    
+    payload = jwt.verify(identityToken, signingKey, {
+      algorithms: ['RS256'],
+      issuer: 'https://appleid.apple.com',
+      // Don't check audience here - we'll verify manually
+    });
+
     // Manually verify audience matches one of our expected values
     if (!payload.aud) {
       console.error('Apple token missing audience field');
       throw new Error('Invalid Apple token: missing audience');
     }
-    
+
     if (!expectedAudiences.includes(payload.aud)) {
       console.error('Apple token audience mismatch:', {
         received: payload.aud,
@@ -128,21 +120,14 @@ async function verifyAppleToken(identityToken, nonce = null) {
       });
       throw new Error(`Invalid Apple token audience. Expected one of: ${expectedAudiences.join(', ')}, but got: ${payload.aud}`);
     }
-    
-    console.log('✅ Apple token verified successfully with audience:', payload.aud);
 
     // Verify nonce if provided
-    // Note: For web OAuth with form_post, the nonce is in the token payload
-    // If nonce is provided, it must match the token's nonce field
     if (nonce) {
       if (!payload.nonce) {
-        console.warn('⚠️ Nonce provided but token has no nonce field - this may be expected for some Apple token types');
-        // Don't fail - nonce verification is optional for some flows
+        console.warn('Nonce provided but token has no nonce field - may be expected for some Apple token types');
       } else if (payload.nonce !== nonce) {
-        console.error('❌ Nonce mismatch:', { expected: nonce, received: payload.nonce });
+        console.error('Nonce mismatch');
         throw new Error('Nonce mismatch');
-      } else {
-        console.log('✅ Nonce verified successfully');
       }
     }
 
@@ -150,18 +135,14 @@ async function verifyAppleToken(identityToken, nonce = null) {
       appleId: payload.sub,
       email: payload.email,
       emailVerified: payload.email_verified || false,
-      // Apple may not always provide email (especially on subsequent sign-ins)
-      // The email is only guaranteed on first authorization
     };
   } catch (error) {
-    console.error('Apple token verification error:', error);
-    
-    // Provide more specific error messages
+    console.error('Apple token verification error:', error.message);
+
     if (error.message && error.message.includes('audience')) {
-      console.error('Apple token audience validation failed. Expected:', expectedAudiences);
       throw new Error(`Invalid Apple token audience. Expected one of: ${expectedAudiences.join(', ')}`);
     }
-    
+
     throw new Error('Invalid Apple token');
   }
 }
@@ -189,7 +170,8 @@ async function findOrCreateSocialUser(db, provider, providerId, email, metadata 
   }
 
   // If not found, try to find by email (for linking existing accounts)
-  if (email) {
+  // Only auto-link when provider email is verified to prevent account takeover
+  if (email && metadata.emailVerified) {
     result = await db.query(
       'SELECT * FROM users WHERE LOWER(email) = LOWER($1)',
       [email]

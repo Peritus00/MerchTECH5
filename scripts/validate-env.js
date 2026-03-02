@@ -19,13 +19,16 @@ const requiredVars = {
     'AWS_SECRET_ACCESS_KEY',
     'AWS_S3_BUCKET_NAME',
     'STRIPE_SECRET_KEY',
-    'BREVO_SMTP_KEY'
+    'BREVO_SMTP_KEY',
+    'GOOGLE_CLIENT_ID'
   ],
   // Optional - nice to have for production
   OPTIONAL: [
     'FRONTEND_URL',
     'GEO_PROVIDER',
-    'GEO_API_KEY'
+    'GEO_API_KEY',
+    'APPLE_CLIENT_ID',
+    'APPLE_SERVICE_ID'
   ]
 };
 
