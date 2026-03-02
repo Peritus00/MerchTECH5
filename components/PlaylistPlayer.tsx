@@ -85,6 +85,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [isReconnecting, setIsReconnecting] = useState(false);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [userHasInteracted, setUserHasInteracted] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [audioIntensity, setAudioIntensity] = useState(0);
+  const [animTick, setAnimTick] = useState(0);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -120,6 +123,77 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const estimatedVideoHeight = useMemo(() => {
     return Math.max(200, Math.round(500 * zoomLevel));
   }, [zoomLevel]);
+
+  // Audio-reactive intensity for Quick Pay button animation
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const lastIntensityUpdateRef = useRef<number>(0);
+  const THROTTLE_MS = 50;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      const video = html5VideoRef.current;
+      const audio = html5AudioRef.current;
+      const mediaEl = video || audio;
+      if (!mediaEl || !mediaEl.src) {
+        setAudioIntensity(0);
+        return () => {};
+      }
+      try {
+        const ctx = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
+        if (audioContextRef.current !== ctx) audioContextRef.current = ctx;
+        if (ctx.state === 'suspended') ctx.resume();
+        const analyser = analyserRef.current || ctx.createAnalyser();
+        if (analyserRef.current !== analyser) analyserRef.current = analyser;
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.8;
+        let source = mediaSourceRef.current;
+        if (!source || source.mediaElement !== mediaEl) {
+          if (source) try { source.disconnect(); } catch (_) {}
+          source = ctx.createMediaElementSource(mediaEl);
+          mediaSourceRef.current = source;
+          source.connect(analyser);
+          analyser.connect(ctx.destination);
+        }
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const sample = () => {
+          if (!analyserRef.current) return;
+          analyser.getByteFrequencyData(dataArray);
+          let sum = 0;
+          for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+          const avg = sum / dataArray.length / 255;
+          const now = Date.now();
+          if (now - lastIntensityUpdateRef.current >= THROTTLE_MS) {
+            lastIntensityUpdateRef.current = now;
+            setAudioIntensity(Math.min(1, avg * 2));
+          }
+          rafRef.current = requestAnimationFrame(sample);
+        };
+        rafRef.current = requestAnimationFrame(sample);
+        return () => {
+          if (rafRef.current) cancelAnimationFrame(rafRef.current);
+          rafRef.current = null;
+        };
+      } catch (e) {
+        setAudioIntensity(0);
+        return () => {};
+      }
+    } else {
+      // Native fallback: gentle pulse from playback state
+      const id = setInterval(() => {
+        setAudioIntensity(isPlaying ? 0.3 + Math.sin(Date.now() / 400) * 0.2 : 0.2);
+      }, 100);
+      return () => clearInterval(id);
+    }
+  }, [currentIndex, isPlaying, Platform.OS]);
+
+  // Tick for Quick Pay button phase animation
+  useEffect(() => {
+    const id = setInterval(() => setAnimTick((t) => t + 1), 120);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     // Disable right-click on web
@@ -176,6 +250,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
+    if (isCheckoutLoading) return;
+    setIsCheckoutLoading(true);
     try {
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
@@ -219,6 +295,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     } catch (error) {
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+    } finally {
+      setIsCheckoutLoading(false);
     }
   };
 
@@ -1723,17 +1801,64 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 )}
             </View>
             
-            {/* Current Track Display - Hidden in fullscreen */}
-            {!isFullscreen && (
-            <View style={styles.currentTrackDisplay}>
-              <Text style={styles.currentTrackTitle}>
-                {currentMediaItem?.title || `Track ${currentIndex + 1}`}
-              </Text>
-              <Text style={styles.currentTrackInfo}>
-                {currentMediaItem?.fileType?.toUpperCase() || 'MEDIA'} • {currentIndex + 1} of {media.length}
-              </Text>
-            </View>
-            )}
+            {/* Quick Pay Overlay - visible in both standard and fullscreen when products exist.
+                Validation: (1) Chips render and are tappable in standard mode.
+                (2) Enter fullscreen and verify chips remain reachable and do not block controls.
+                (3) Buy Now launches checkout from both standard and fullscreen.
+                (4) No chips when no active playlist products. (5) Playback controls unchanged. */}
+            {(() => {
+              const activeProducts = playlistData?.productLinks
+                ?.filter((link: ProductLink) => link.isActive)
+                .sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder) ?? [];
+              if (activeProducts.length === 0) return null;
+              return (
+                <View style={[
+                  styles.quickPayOverlay,
+                  isFullscreen && styles.quickPayOverlayFullscreen,
+                ]}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.quickPayScrollContent}
+                  >
+                    {activeProducts.map((link: ProductLink, idx: number) => {
+                      const phase = (idx * 0.2) % 1;
+                      const animScale = 1 + audioIntensity * 0.08 * Math.sin(animTick * 0.15 + phase * Math.PI * 2);
+                      const animOpacity = 0.85 + audioIntensity * 0.15;
+                      return (
+                        <TouchableOpacity
+                          key={link.id}
+                          style={[
+                            styles.quickPayButton,
+                            {
+                              opacity: animOpacity,
+                              transform: [{ scale: animScale }],
+                            },
+                          ]}
+                          onPress={() => handleBuyNow(link)}
+                          disabled={isCheckoutLoading}
+                          activeOpacity={0.8}
+                        >
+                          {isCheckoutLoading ? (
+                            <ActivityIndicator size="small" color="#fff" />
+                          ) : (
+                            <>
+                              <MaterialIcons name="flash-on" size={14} color="#fff" />
+                              <Text style={styles.quickPayButtonText} numberOfLines={1}>
+                                {link.title}
+                              </Text>
+                              {link.price && (
+                                <Text style={styles.quickPayPriceText}>{formatPrice(link.price)}</Text>
+                              )}
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              );
+            })()}
 
             {/* CONTROLS MOVED HERE */}
             <View style={styles.controls}>
@@ -2474,6 +2599,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#9ca3af',
     textAlign: 'center',
+  },
+  quickPayOverlay: {
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginVertical: 8,
+    borderRadius: 12,
+  },
+  quickPayOverlayFullscreen: {
+    marginVertical: 8,
+    zIndex: 10,
+  },
+  quickPayScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 4,
+  },
+  quickPayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(59, 130, 246, 0.85)',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    gap: 6,
+    minWidth: 100,
+    maxWidth: 180,
+  },
+  quickPayButtonText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+  },
+  quickPayPriceText: {
+    color: 'rgba(255, 255, 255, 0.95)',
+    fontSize: 12,
+    fontWeight: '700',
   },
   
   // Fullscreen-specific styles
