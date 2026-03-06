@@ -68,6 +68,306 @@ interface PlaylistPlayerProps {
   autoPlay?: boolean;
 }
 
+const debugLog = (...args: unknown[]) => {
+  if (__DEV__) {
+    console.log(...args);
+  }
+};
+
+interface FeaturedProductsPanelProps {
+  productLinks?: ProductLink[];
+  isMobile: boolean;
+  productImageIndexes: Record<string, number>;
+  onImageNavigate: (productId: string, direction: 'prev' | 'next', imageCount: number) => void;
+  onBuyNow: (productLink: ProductLink) => void;
+  onAddToCart: (productLink: ProductLink) => void;
+  formatPrice: (price: string | number) => string;
+  renderStars: (rating: number) => React.ReactNode[];
+}
+
+const FeaturedProductsPanel = React.memo(({
+  productLinks,
+  isMobile,
+  productImageIndexes,
+  onImageNavigate,
+  onBuyNow,
+  onAddToCart,
+  formatPrice,
+  renderStars,
+}: FeaturedProductsPanelProps) => {
+  const activeProducts = useMemo(
+    () => (productLinks ?? [])
+      .filter((link: ProductLink) => link.isActive)
+      .sort((a: ProductLink, b: ProductLink) => (a.displayOrder || 0) - (b.displayOrder || 0)),
+    [productLinks]
+  );
+
+  return (
+    <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
+      <View style={styles.featuredProductsHeader}>
+        <MaterialIcons name="storefront" size={24} color="#374151" />
+        <Text style={styles.featuredProductsTitle}>Featured Products</Text>
+      </View>
+      <ScrollView
+        style={styles.featuredProductsContent}
+        showsVerticalScrollIndicator={true}
+        contentContainerStyle={styles.productsListContent}
+      >
+        {activeProducts.length > 0 ? (
+          activeProducts.map((link: ProductLink) => {
+            const images = link.images && link.images.length > 0 ? link.images : [link.imageUrl].filter(Boolean);
+            const currentImageIndex = productImageIndexes[link.id] || 0;
+            const currentImage = images[currentImageIndex];
+
+            return (
+              <View key={link.id} style={styles.enhancedProductCard}>
+                <View style={styles.productImageContainer}>
+                  {currentImage ? (
+                    <>
+                      <MobileCompatibleImage
+                        uri={currentImage}
+                        style={styles.enhancedProductImage}
+                        resizeMode="cover"
+                      />
+                      {images.length > 1 && (
+                        <>
+                          <TouchableOpacity
+                            style={[styles.imageNavButton, styles.imageNavLeft]}
+                            onPress={() => onImageNavigate(link.id.toString(), 'prev', images.length)}
+                          >
+                            <Ionicons name="chevron-back" size={20} color="#fff" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.imageNavButton, styles.imageNavRight]}
+                            onPress={() => onImageNavigate(link.id.toString(), 'next', images.length)}
+                          >
+                            <Ionicons name="chevron-forward" size={20} color="#fff" />
+                          </TouchableOpacity>
+                          <View style={styles.imageIndicators}>
+                            {images.map((_: string | undefined, index: number) => (
+                              <View
+                                key={`image-indicator-${link.id}-${index}`}
+                                style={[
+                                  styles.imageIndicator,
+                                  index === currentImageIndex && styles.activeImageIndicator
+                                ]}
+                              />
+                            ))}
+                          </View>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <View style={styles.enhancedProductPlaceholder}>
+                      <MaterialIcons name="shopping-bag" size={40} color="#9ca3af" />
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.enhancedProductContent}>
+                  <Text style={styles.enhancedProductTitle} numberOfLines={2}>
+                    {link.title}
+                  </Text>
+
+                  {link.rating && (
+                    <View style={styles.ratingContainer}>
+                      <View style={styles.starsContainer}>
+                        {renderStars(link.rating)}
+                      </View>
+                      <Text style={styles.ratingText}>
+                        {link.rating.toFixed(1)}
+                      </Text>
+                      {link.reviewCount && (
+                        <Text style={styles.reviewCount}>
+                          ({link.reviewCount} reviews)
+                        </Text>
+                      )}
+                    </View>
+                  )}
+
+                  {link.price && (
+                    <View style={styles.priceContainer}>
+                      <Text style={styles.currentPrice}>{formatPrice(link.price)}</Text>
+                      {link.originalPrice && link.originalPrice !== link.price && (
+                        <Text style={styles.originalPrice}>{formatPrice(link.originalPrice)}</Text>
+                      )}
+                    </View>
+                  )}
+
+                  {link.description && (
+                    <Text style={styles.enhancedProductDescription} numberOfLines={2}>
+                      {link.description}
+                    </Text>
+                  )}
+
+                  <View style={styles.productActionButtons}>
+                    <TouchableOpacity
+                      style={styles.buyNowButton}
+                      onPress={() => onBuyNow(link)}
+                    >
+                      <MaterialIcons name="flash-on" size={16} color="#fff" />
+                      <Text style={styles.buyNowButtonText}>Buy Now</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.addToCartButton}
+                      onPress={() => onAddToCart(link)}
+                    >
+                      <MaterialIcons name="add-shopping-cart" size={16} color="#3b82f6" />
+                      <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.noProductsContainer}>
+            <MaterialIcons name="shopping-bag" size={48} color="#d1d5db" />
+            <Text style={styles.noProductsText}>No products available</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+});
+
+interface QuickPayOverlayProps {
+  activeProducts: ProductLink[];
+  isFullscreen: boolean;
+  isPlaying: boolean;
+  isCheckoutLoading: boolean;
+  onBuyNow: (productLink: ProductLink) => void;
+  formatPrice: (price: string | number) => string;
+}
+
+const QuickPayOverlay = React.memo(({
+  activeProducts,
+  isFullscreen,
+  isPlaying,
+  isCheckoutLoading,
+  onBuyNow,
+  formatPrice,
+}: QuickPayOverlayProps) => {
+  const QUICK_PAY_ITEM_WIDTH = 230;
+  const quickPayScrollRef = useRef<ScrollView>(null);
+  const [quickPayIndex, setQuickPayIndex] = useState(0);
+  const [pulseStep, setPulseStep] = useState(0);
+
+  useEffect(() => {
+    setQuickPayIndex(0);
+    quickPayScrollRef.current?.scrollTo({ x: 0, animated: false });
+  }, [activeProducts.length]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPulseStep((prev) => prev + (isPlaying ? 0.35 : 0.2));
+    }, 220);
+    return () => clearInterval(interval);
+  }, [isPlaying]);
+
+  const scrollQuickPay = useCallback((direction: 'prev' | 'next') => {
+    if (activeProducts.length <= 1) return;
+    const nextIndex =
+      direction === 'next'
+        ? Math.min(quickPayIndex + 1, activeProducts.length - 1)
+        : Math.max(quickPayIndex - 1, 0);
+    quickPayScrollRef.current?.scrollTo({
+      x: nextIndex * QUICK_PAY_ITEM_WIDTH,
+      animated: true,
+    });
+    setQuickPayIndex(nextIndex);
+  }, [quickPayIndex, activeProducts.length]);
+
+  if (activeProducts.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={[
+      styles.quickPayOverlay,
+      isFullscreen && styles.quickPayOverlayFullscreen,
+    ]}>
+      {activeProducts.length > 1 && (
+        <TouchableOpacity
+          style={[styles.quickPayNavButton, styles.quickPayNavButtonLeft]}
+          onPress={() => scrollQuickPay('prev')}
+          disabled={quickPayIndex === 0}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={16}
+            color={quickPayIndex === 0 ? 'rgba(255,255,255,0.4)' : '#fff'}
+          />
+        </TouchableOpacity>
+      )}
+      <ScrollView
+        ref={quickPayScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.quickPayScrollContent}
+        snapToInterval={QUICK_PAY_ITEM_WIDTH}
+        decelerationRate="fast"
+        onScroll={(event) => {
+          const x = event.nativeEvent.contentOffset.x;
+          setQuickPayIndex(Math.round(x / QUICK_PAY_ITEM_WIDTH));
+        }}
+        scrollEventThrottle={16}
+      >
+        {activeProducts.map((link: ProductLink, idx: number) => {
+          const intensity = isPlaying ? 0.8 : 0.25;
+          const phase = idx * 1.1 + pulseStep;
+          const wave = Math.sin((intensity * 10) + phase);
+          const animScale = 1 + intensity * 0.06 * wave;
+          const animOpacity = 0.84 + intensity * 0.16;
+          const animTranslateY = -intensity * 4 * Math.cos((intensity * 8) + phase);
+          return (
+            <TouchableOpacity
+              key={link.id}
+              style={[
+                styles.quickPayButton,
+                {
+                  opacity: animOpacity,
+                  transform: [{ scale: animScale }, { translateY: animTranslateY }],
+                },
+              ]}
+              onPress={() => onBuyNow(link)}
+              disabled={isCheckoutLoading}
+              activeOpacity={0.8}
+            >
+              {isCheckoutLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <View style={styles.quickPayTextBlock}>
+                  <Text style={styles.quickPayButtonText} numberOfLines={1}>
+                    {link.title}
+                  </Text>
+                  <Text style={styles.quickPayPriceText} numberOfLines={1}>
+                    {link.price ? formatPrice(link.price) : ' '}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      {activeProducts.length > 1 && (
+        <TouchableOpacity
+          style={[styles.quickPayNavButton, styles.quickPayNavButtonRight]}
+          onPress={() => scrollQuickPay('next')}
+          disabled={quickPayIndex >= activeProducts.length - 1}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={16}
+            color={quickPayIndex >= activeProducts.length - 1 ? 'rgba(255,255,255,0.4)' : '#fff'}
+          />
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+});
+
 const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay = false }: PlaylistPlayerProps) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [playlistData, setPlaylistData] = useState<any>(playlist);
@@ -86,11 +386,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-  const [audioIntensity, setAudioIntensity] = useState(0);
-  const [quickPayIndex, setQuickPayIndex] = useState(0);
   
   const videoRef = useRef<Video>(null);
-  const quickPayScrollRef = useRef<ScrollView>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
@@ -124,131 +421,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const estimatedVideoHeight = useMemo(() => {
     return Math.max(200, Math.round(500 * zoomLevel));
   }, [zoomLevel]);
-
-  // Audio-reactive intensity for Quick Pay button animation
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaSourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastIntensityUpdateRef = useRef<number>(0);
-  const THROTTLE_MS = 220;
-  const QUICK_PAY_ITEM_WIDTH = 230;
-
-  const scrollQuickPay = useCallback((direction: 'prev' | 'next', total: number) => {
-    if (total <= 1) return;
-    const nextIndex =
-      direction === 'next'
-        ? Math.min(quickPayIndex + 1, total - 1)
-        : Math.max(quickPayIndex - 1, 0);
-    quickPayScrollRef.current?.scrollTo({
-      x: nextIndex * QUICK_PAY_ITEM_WIDTH,
-      animated: true,
-    });
-    setQuickPayIndex(nextIndex);
-  }, [quickPayIndex]);
-
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      let cancelled = false;
-      let fallbackInterval: ReturnType<typeof setInterval> | null = null;
-
-      const setupAnalyser = async () => {
-        if (!userHasInteracted || !isPlaying) {
-          setAudioIntensity(0);
-          return;
-        }
-
-        const video = html5VideoRef.current;
-        const audio = html5AudioRef.current;
-        const mediaEl = video || audio;
-        if (!mediaEl || !mediaEl.src) {
-          setAudioIntensity(0);
-          return;
-        }
-
-        // Avoid WebAudio routing for cross-origin streams. The browser log shows
-        // CORS-restricted MediaElementAudioSource outputting zeros, which can mute audio.
-        let mediaOrigin = '';
-        try {
-          mediaOrigin = new URL(mediaEl.currentSrc || mediaEl.src, window.location.href).origin;
-        } catch (_) {
-          mediaOrigin = '';
-        }
-        const isSameOriginMedia = mediaOrigin === window.location.origin;
-        if (!isSameOriginMedia) {
-          fallbackInterval = setInterval(() => {
-            setAudioIntensity(isPlaying ? 0.34 + Math.sin(Date.now() / 420) * 0.14 : 0.14);
-          }, 220);
-          return;
-        }
-
-        try {
-          const ctx = audioContextRef.current || new (window.AudioContext || (window as any).webkitAudioContext)();
-          if (audioContextRef.current !== ctx) audioContextRef.current = ctx;
-
-          // Never route media into a suspended context; that can mute playback.
-          if (ctx.state !== 'running') {
-            await ctx.resume();
-          }
-          if (cancelled || ctx.state !== 'running') {
-            setAudioIntensity(0);
-            return;
-          }
-
-          const analyser = analyserRef.current || ctx.createAnalyser();
-          if (analyserRef.current !== analyser) analyserRef.current = analyser;
-          analyser.fftSize = 256;
-          analyser.smoothingTimeConstant = 0.8;
-
-          let source = mediaSourceRef.current;
-          if (!source || source.mediaElement !== mediaEl) {
-            if (source) {
-              try { source.disconnect(); } catch (_) {}
-            }
-            source = ctx.createMediaElementSource(mediaEl);
-            mediaSourceRef.current = source;
-            source.connect(analyser);
-            analyser.connect(ctx.destination);
-          }
-
-          const dataArray = new Uint8Array(analyser.frequencyBinCount);
-          const sample = () => {
-            if (cancelled || !analyserRef.current) return;
-            analyser.getByteFrequencyData(dataArray);
-            let sum = 0;
-            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            const avg = sum / dataArray.length / 255;
-            const now = Date.now();
-            if (now - lastIntensityUpdateRef.current >= THROTTLE_MS) {
-              lastIntensityUpdateRef.current = now;
-              setAudioIntensity(Math.min(1, avg * 2));
-            }
-            rafRef.current = requestAnimationFrame(sample);
-          };
-          rafRef.current = requestAnimationFrame(sample);
-        } catch (e) {
-          setAudioIntensity(0);
-        }
-      };
-
-      setupAnalyser();
-      return () => {
-        cancelled = true;
-        if (rafRef.current) cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-        if (fallbackInterval) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = null;
-        }
-      };
-    }
-
-    // Native fallback: gentle pulse from playback state
-    const id = setInterval(() => {
-      setAudioIntensity(isPlaying ? 0.3 + Math.sin(Date.now() / 400) * 0.2 : 0.2);
-    }, 220);
-    return () => clearInterval(id);
-  }, [currentIndex, isPlaying, userHasInteracted, Platform.OS]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -366,14 +538,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     });
   };
 
-  const formatPrice = (price: string | number): string => {
+  const formatPrice = useCallback((price: string | number): string => {
     if (typeof price === 'number') {
       return `$${price.toFixed(2)}`;
     }
     return price.toString();
-  };
+  }, []);
 
-  const renderStars = (rating: number) => {
+  const renderStars = useCallback((rating: number) => {
     const stars = [];
     const fullStars = Math.floor(rating);
     const hasHalfStar = rating % 1 !== 0;
@@ -392,7 +564,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
     
     return stars;
-  };
+  }, []);
+
+  const activeProducts = useMemo(
+    () => (playlistData?.productLinks ?? [])
+      .filter((link: ProductLink) => link.isActive)
+      .sort((a: ProductLink, b: ProductLink) => (a.displayOrder || 0) - (b.displayOrder || 0)),
+    [playlistData?.productLinks]
+  );
 
   const fetchPlaylist = useCallback(async () => {
     if (externalMedia || playlist) {
@@ -1056,6 +1235,56 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
   };
 
+  const startTrackingForCurrentMedia = useCallback(() => {
+    const mediaItem = currentMediaItemRef.current;
+    const trackFn = startPlayTrackingRef.current;
+    const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
+    if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
+      trackFn(mediaItem);
+    }
+  }, []);
+
+  const handleNativeMediaPlaying = useCallback(() => {
+    setIsPlaying(true);
+    startTrackingForCurrentMedia();
+  }, [startTrackingForCurrentMedia]);
+
+  const handleNativeMediaPause = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  const handleNativeMediaEnded = useCallback(() => {
+    resumeOnAdvanceRef.current = true;
+    goToNextVideo();
+  }, [goToNextVideo]);
+
+  const attachMediaController = useCallback((ref: HTMLMediaElement | null, kind: 'video' | 'audio') => {
+    if (!ref) {
+      if (kind === 'video') {
+        html5VideoRef.current = null;
+      } else {
+        html5AudioRef.current = null;
+      }
+      return;
+    }
+    if (kind === 'video') {
+      html5VideoRef.current = ref as HTMLVideoElement;
+    } else {
+      html5AudioRef.current = ref as HTMLAudioElement;
+    }
+
+    (videoRef as any).current = {
+      playAsync: () => ref.play(),
+      pauseAsync: () => {
+        ref.pause();
+        return Promise.resolve();
+      },
+      setPositionAsync: (position: number) => {
+        ref.currentTime = position / 1000;
+      },
+    };
+  }, []);
+
   const renderCurrentMedia = () => {
     const currentItem = media[currentIndex];
     if (!currentItem) return null;
@@ -1081,14 +1310,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
       // Try to use the current domain as a proxy to avoid CORS issues
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '';
       if (currentOrigin && !currentOrigin.includes('merchtech5-production.up.railway.app')) {
-        console.log('🎵 CORS_WORKAROUND: Attempting same-origin proxy for media:', currentItem.id);
-        // Keep the original URL but add a flag for debugging
-        console.log('🎵 CORS_WORKAROUND: Original URL:', itemUri);
-        console.log('🎵 CORS_WORKAROUND: Current origin:', currentOrigin);
+        debugLog('🎵 CORS_WORKAROUND: Attempting same-origin proxy for media:', currentItem.id);
+        debugLog('🎵 CORS_WORKAROUND: Original URL:', itemUri);
+        debugLog('🎵 CORS_WORKAROUND: Current origin:', currentOrigin);
       }
     }
 
-    console.log('🎵 MEDIA_DETECTION:', {
+    debugLog('🎵 MEDIA_DETECTION:', {
       title: currentItem.title,
       media_type: currentItem.media_type,
       fileType: currentItem.fileType,
@@ -1166,11 +1394,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     };
 
     if (isVideo) {
-      console.log('🎵 VIDEO_COMPONENT: Rendering video with URI:', itemUri);
+      debugLog('🎵 VIDEO_COMPONENT: Rendering video with URI:', itemUri);
       
       // Use native HTML5 video for web, expo-av Video for mobile
       if (Platform.OS === 'web') {
-        console.log('🎵 HTML5_VIDEO: About to render video element with:', {
+        debugLog('🎵 HTML5_VIDEO: About to render video element with:', {
           src: itemUri,
           isPlaying,
           isMuted,
@@ -1180,94 +1408,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         return (
           <video
             key={`video-${currentIndex}-${currentItem.id}`}
-            ref={(ref) => {
-              console.log('🎵 HTML5_VIDEO: Video ref callback called:', !!ref);
-              // Store the native HTML5 video element ref
-              html5VideoRef.current = ref;
-              if (ref) {
-                // Store reference for play/pause control
-                (videoRef as any).current = {
-                  playAsync: () => {
-                    console.log('🎵 HTML5_VIDEO: playAsync called');
-                    return ref.play();
-                  },
-                  pauseAsync: () => {
-                    console.log('🎵 HTML5_VIDEO: pauseAsync called');
-                    ref.pause();
-                    return Promise.resolve(); // Return resolved promise
-                  },
-                  setPositionAsync: (position: number) => { 
-                    console.log('🎵 HTML5_VIDEO: setPositionAsync called:', position);
-                    ref.currentTime = position / 1000; 
-                  },
-                };
-                
-                // Add comprehensive event listeners
-                ref.addEventListener('loadstart', () => {
-                  console.log('🎵 HTML5_VIDEO: loadstart - browser started loading');
-                });
-                
-                ref.addEventListener('durationchange', () => {
-                  console.log('🎵 HTML5_VIDEO: durationchange - duration:', ref.duration);
-                });
-                
-                ref.addEventListener('loadedmetadata', () => {
-                  console.log('🎵 HTML5_VIDEO: loadedmetadata - metadata loaded');
-                });
-                
-                ref.addEventListener('loadeddata', () => {
-                  console.log('🎵 HTML5_VIDEO: loadeddata - first frame loaded');
-                });
-                
-                ref.addEventListener('progress', () => {
-                  console.log('🎵 HTML5_VIDEO: progress - downloading');
-                });
-                
-                ref.addEventListener('canplay', () => {
-                  console.log('🎵 HTML5_VIDEO: canplay - can start playing');
-                });
-                
-                  ref.addEventListener('canplaythrough', () => {
-                    console.log('🎵 HTML5_VIDEO: canplaythrough - can play without stopping');
-                  });
-                  
-                  // Track when video actually starts playing (native event)
-                  ref.addEventListener('playing', () => {
-                    console.log('🎵 HTML5_VIDEO: Native playing event - video is playing');
-                    console.log('📊 TRACKING: Native playing event, ensuring tracking starts');
-                    setIsPlaying(true);
-                    // Ensure tracking starts even if state wasn't updated
-                    const mediaItem = currentMediaItemRef.current;
-                    const trackFn = startPlayTrackingRef.current;
-      const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
-      if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
-        console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
-        trackFn(mediaItem);
-      } else {
-        console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
-          hasMediaItem: !!mediaItem,
-          hasTrackFn: !!trackFn,
-          mediaType: mediaType
-        });
-      }
-                  });
-                  
-                  ref.addEventListener('pause', () => {
-                    console.log('🎵 HTML5_VIDEO: Native pause event - video paused');
-                    setIsPlaying(false);
-                  });
-                  
-                  ref.addEventListener('error', (e) => {
-                    console.error('🎵 HTML5_VIDEO: Native error event:', {
-                      error: ref.error,
-                      networkState: ref.networkState,
-                      readyState: ref.readyState,
-                      src: ref.src,
-                      currentSrc: ref.currentSrc
-                    });
-                  });
-              }
-            }}
+            ref={(ref) => attachMediaController(ref, 'video')}
             src={itemUri}
             style={{
               width: videoDimensions ? (videoDimensions.width / videoDimensions.height) * (500 * zoomLevel) : width * 0.9,
@@ -1282,6 +1423,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
             muted={isMuted}
+            onLoadedMetadata={() => debugLog('🎵 HTML5_VIDEO: loadedmetadata')}
+            onCanPlay={() => debugLog('🎵 HTML5_VIDEO: canplay')}
+            onPlaying={handleNativeMediaPlaying}
+            onPause={handleNativeMediaPause}
             onError={(e) => {
               const video = e.target as HTMLVideoElement;
               const errorCode = video.error?.code;
@@ -1314,10 +1459,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               handleVideoError(e);
             }}
             onEnded={() => {
-              console.log('🎵 HTML5_VIDEO: Video ended, going to next');
-              // Preserve play state across auto-advance
-              resumeOnAdvanceRef.current = true;
-              goToNextVideo();
+              debugLog('🎵 HTML5_VIDEO: Video ended, going to next');
+              handleNativeMediaEnded();
             }}
             onLoadStart={() => {
               console.log('🎵 HTML5_VIDEO: onLoadStart - React event');
@@ -1492,106 +1635,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
             <audio
               key={`audio-${currentIndex}-${currentItem.id}`}
               crossOrigin="anonymous"
-              ref={(ref) => {
-                console.log('🎵 HTML5_AUDIO: Audio ref callback called:', !!ref);
-                html5AudioRef.current = ref;
-                if (ref) {
-                  // Store reference for play/pause control
-                  (videoRef as any).current = {
-                    playAsync: () => {
-                      console.log('🎵 HTML5_AUDIO: playAsync called');
-                      return ref.play();
-                    },
-                    pauseAsync: () => {
-                      console.log('🎵 HTML5_AUDIO: pauseAsync called');
-                      ref.pause();
-                      return Promise.resolve(); // Return resolved promise
-                    },
-                    setPositionAsync: (position: number) => { 
-                      console.log('🎵 HTML5_AUDIO: setPositionAsync called:', position);
-                      ref.currentTime = position / 1000; 
-                    },
-                  };
-                  
-                  // Add comprehensive event listeners
-                  ref.addEventListener('loadstart', () => {
-                    console.log('🎵 HTML5_AUDIO: loadstart - browser started loading');
-                  });
-                  
-                  ref.addEventListener('durationchange', () => {
-                    console.log('🎵 HTML5_AUDIO: durationchange - duration:', ref.duration);
-                  });
-                  
-                  ref.addEventListener('loadedmetadata', () => {
-                    console.log('🎵 HTML5_AUDIO: loadedmetadata - metadata loaded');
-                  });
-                  
-                  ref.addEventListener('loadeddata', () => {
-                    console.log('🎵 HTML5_AUDIO: loadeddata - first frame loaded');
-                  });
-                  
-                  ref.addEventListener('progress', () => {
-                    console.log('🎵 HTML5_AUDIO: progress - downloading');
-                  });
-                  
-                  ref.addEventListener('canplay', () => {
-                    console.log('🎵 HTML5_AUDIO: canplay - can start playing');
-                  });
-                  
-                  ref.addEventListener('canplaythrough', () => {
-                    console.log('🎵 HTML5_AUDIO: canplaythrough - can play without stopping');
-                  });
-                  
-                  // Track when audio actually starts playing (native event)
-                  ref.addEventListener('playing', () => {
-                    console.log('🎵 HTML5_AUDIO: Native playing event - audio is playing');
-                    console.log('📊 TRACKING: Native playing event, ensuring tracking starts');
-                    setIsPlaying(true);
-                    // Ensure tracking starts even if state wasn't updated
-                    const mediaItem = currentMediaItemRef.current;
-                    const trackFn = startPlayTrackingRef.current;
-      const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
-      if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
-        console.log('📊 TRACKING: Starting tracking from native playing event for media:', mediaItem.id);
-        trackFn(mediaItem);
-      } else {
-        console.log('📊 TRACKING: Cannot start tracking - missing media item or tracking function', {
-          hasMediaItem: !!mediaItem,
-          hasTrackFn: !!trackFn,
-          mediaType: mediaType
-        });
-      }
-                  });
-                  
-                  ref.addEventListener('pause', () => {
-                    console.log('🎵 HTML5_AUDIO: Native pause event - audio paused');
-                    setIsPlaying(false);
-                  });
-                  
-                  ref.addEventListener('error', (e) => {
-                    console.error('🎵 HTML5_AUDIO: Native error event:', {
-                      error: ref.error,
-                      networkState: ref.networkState,
-                      readyState: ref.readyState,
-                      src: ref.src,
-                      currentSrc: ref.currentSrc
-                    });
-                  });
-                  
-                  ref.addEventListener('ended', () => {
-                    console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
-                    // Preserve play state across auto-advance
-                    resumeOnAdvanceRef.current = true;
-                    goToNextVideo();
-                  });
-                }
-              }}
+              ref={(ref) => attachMediaController(ref, 'audio')}
               src={itemUri}
               style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
               controls={false}
               controlsList="nodownload noplaybackrate noremoteplayback"
               onContextMenu={(e) => e.preventDefault()}
               muted={isMuted}
+              onLoadedMetadata={() => debugLog('🎵 HTML5_AUDIO: loadedmetadata')}
+              onCanPlay={() => debugLog('🎵 HTML5_AUDIO: canplay')}
+              onPlaying={handleNativeMediaPlaying}
+              onPause={handleNativeMediaPause}
               onError={(e) => {
                 const audio = e.target as HTMLAudioElement;
                 const errorCode = audio.error?.code;
@@ -1654,12 +1708,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 console.log('🎵 HTML5_AUDIO: onPause - React event');
                 setIsPlaying(false);
               }}
-              onEnded={() => {
-                console.log('🎵 HTML5_AUDIO: Audio ended, going to next');
-                // Preserve play state across auto-advance
-                resumeOnAdvanceRef.current = true;
-                goToNextVideo();
-              }}
+              onEnded={handleNativeMediaEnded}
             />
           </View>
         );
@@ -1815,21 +1864,21 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                       setTimeout(() => {
                         // Try HTML5 video first
                         if (html5VideoRef.current) {
-                          console.log('🎵 OVERLAY: Playing via HTML5 video ref');
+                          debugLog('🎵 OVERLAY: Playing via HTML5 video ref');
                           html5VideoRef.current.play().catch((err) => {
                             console.warn('Initial video play failed:', err);
                           });
                         } 
                         // Try HTML5 audio
                         else if (html5AudioRef.current) {
-                          console.log('🎵 OVERLAY: Playing via HTML5 audio ref');
+                          debugLog('🎵 OVERLAY: Playing via HTML5 audio ref');
                           html5AudioRef.current.play().catch((err) => {
                             console.warn('Initial audio play failed:', err);
                           });
                         }
                         // Fallback to videoRef shim
                         else {
-                          console.log('🎵 OVERLAY: Playing via videoRef shim');
+                          debugLog('🎵 OVERLAY: Playing via videoRef shim');
                           videoRef.current?.playAsync()?.catch((err) => {
                             console.warn('Initial play failed:', err);
                           });
@@ -1856,99 +1905,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 )}
             </View>
             
-            {/* Quick Pay Overlay - visible in both standard and fullscreen when products exist.
-                Validation: (1) Chips render and are tappable in standard mode.
-                (2) Enter fullscreen and verify chips remain reachable and do not block controls.
-                (3) Buy Now launches checkout from both standard and fullscreen.
-                (4) No chips when no active playlist products. (5) Playback controls unchanged. */}
-            {(() => {
-              const activeProducts = playlistData?.productLinks
-                ?.filter((link: ProductLink) => link.isActive)
-                .sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder) ?? [];
-              if (activeProducts.length === 0) return null;
-              return (
-                <View style={[
-                  styles.quickPayOverlay,
-                  isFullscreen && styles.quickPayOverlayFullscreen,
-                ]}>
-                  {activeProducts.length > 1 && (
-                    <TouchableOpacity
-                      style={[styles.quickPayNavButton, styles.quickPayNavButtonLeft]}
-                      onPress={() => scrollQuickPay('prev', activeProducts.length)}
-                      disabled={quickPayIndex === 0}
-                    >
-                      <Ionicons
-                        name="chevron-back"
-                        size={16}
-                        color={quickPayIndex === 0 ? 'rgba(255,255,255,0.4)' : '#fff'}
-                      />
-                    </TouchableOpacity>
-                  )}
-                  <ScrollView
-                    ref={quickPayScrollRef}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.quickPayScrollContent}
-                    snapToInterval={QUICK_PAY_ITEM_WIDTH}
-                    decelerationRate="fast"
-                    onScroll={(event) => {
-                      const x = event.nativeEvent.contentOffset.x;
-                      setQuickPayIndex(Math.round(x / QUICK_PAY_ITEM_WIDTH));
-                    }}
-                    scrollEventThrottle={16}
-                  >
-                    {activeProducts.map((link: ProductLink, idx: number) => {
-                      const phase = idx * 1.1;
-                      const wave = Math.sin((audioIntensity * 10) + phase);
-                      const animScale = 1 + audioIntensity * 0.06 * wave;
-                      const animOpacity = 0.84 + audioIntensity * 0.16;
-                      const animTranslateY = -audioIntensity * 4 * Math.cos((audioIntensity * 8) + phase);
-                      return (
-                        <TouchableOpacity
-                          key={link.id}
-                          style={[
-                            styles.quickPayButton,
-                            {
-                              opacity: animOpacity,
-                              transform: [{ scale: animScale }, { translateY: animTranslateY }],
-                            },
-                          ]}
-                          onPress={() => handleBuyNow(link)}
-                          disabled={isCheckoutLoading}
-                          activeOpacity={0.8}
-                        >
-                          {isCheckoutLoading ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                          ) : (
-                            <View style={styles.quickPayTextBlock}>
-                              <Text style={styles.quickPayButtonText} numberOfLines={1}>
-                                {link.title}
-                              </Text>
-                              <Text style={styles.quickPayPriceText} numberOfLines={1}>
-                                {link.price ? formatPrice(link.price) : ' '}
-                              </Text>
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                  {activeProducts.length > 1 && (
-                    <TouchableOpacity
-                      style={[styles.quickPayNavButton, styles.quickPayNavButtonRight]}
-                      onPress={() => scrollQuickPay('next', activeProducts.length)}
-                      disabled={quickPayIndex >= activeProducts.length - 1}
-                    >
-                      <Ionicons
-                        name="chevron-forward"
-                        size={16}
-                        color={quickPayIndex >= activeProducts.length - 1 ? 'rgba(255,255,255,0.4)' : '#fff'}
-                      />
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })()}
+            <QuickPayOverlay
+              activeProducts={activeProducts}
+              isFullscreen={isFullscreen}
+              isPlaying={isPlaying}
+              isCheckoutLoading={isCheckoutLoading}
+              onBuyNow={handleBuyNow}
+              formatPrice={formatPrice}
+            />
 
             {/* CONTROLS MOVED HERE */}
             <View style={styles.controls}>
@@ -2007,135 +1971,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         </View>
 
         {!isFullscreen && (
-        <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
-          <View style={styles.featuredProductsHeader}>
-            <MaterialIcons name="storefront" size={24} color="#374151" />
-            <Text style={styles.featuredProductsTitle}>Featured Products</Text>
-          </View>
-          <ScrollView
-            style={styles.featuredProductsContent}
-            showsVerticalScrollIndicator={true}
-            contentContainerStyle={styles.productsListContent}
-          >
-            {playlistData?.productLinks && playlistData.productLinks.length > 0 ? (
-              playlistData.productLinks
-                .filter((link: ProductLink) => link.isActive)
-                .sort((a: ProductLink, b: ProductLink) => a.displayOrder - b.displayOrder)
-                .map((link: ProductLink) => {
-                  const images = link.images && link.images.length > 0 ? link.images : [link.imageUrl].filter(Boolean);
-                  const currentImageIndex = productImageIndexes[link.id] || 0;
-                  const currentImage = images[currentImageIndex];
-
-                  return (
-                    <View key={link.id} style={styles.enhancedProductCard}>
-                      <View style={styles.productImageContainer}>
-                        {currentImage ? (
-                          <>
-                            <MobileCompatibleImage
-                              uri={currentImage}
-                              style={styles.enhancedProductImage}
-                              resizeMode="cover"
-                            />
-                            {images.length > 1 && (
-                              <>
-                                <TouchableOpacity
-                                  style={[styles.imageNavButton, styles.imageNavLeft]}
-                                  onPress={() => handleImageNavigation(link.id.toString(), 'prev', images.length)}
-                                >
-                                  <Ionicons name="chevron-back" size={20} color="#fff" />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  style={[styles.imageNavButton, styles.imageNavRight]}
-                                  onPress={() => handleImageNavigation(link.id.toString(), 'next', images.length)}
-                                >
-                                  <Ionicons name="chevron-forward" size={20} color="#fff" />
-                                </TouchableOpacity>
-                                <View style={styles.imageIndicators}>
-                                  {images.map((_: string | undefined, index: number) => (
-                                    <View
-                                      key={`image-indicator-${link.id}-${index}`}
-                                      style={[
-                                        styles.imageIndicator,
-                                        index === currentImageIndex && styles.activeImageIndicator
-                                      ]}
-                                    />
-                                  ))}
-                                </View>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          <View style={styles.enhancedProductPlaceholder}>
-                            <MaterialIcons name="shopping-bag" size={40} color="#9ca3af" />
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.enhancedProductContent}>
-                        <Text style={styles.enhancedProductTitle} numberOfLines={2}>
-                          {link.title}
-                        </Text>
-
-                        {link.rating && (
-                          <View style={styles.ratingContainer}>
-                            <View style={styles.starsContainer}>
-                              {renderStars(link.rating)}
-                            </View>
-                            <Text style={styles.ratingText}>
-                              {link.rating.toFixed(1)}
-                            </Text>
-                            {link.reviewCount && (
-                              <Text style={styles.reviewCount}>
-                                ({link.reviewCount} reviews)
-                              </Text>
-                            )}
-                          </View>
-                        )}
-
-                        {link.price && (
-                          <View style={styles.priceContainer}>
-                            <Text style={styles.currentPrice}>{formatPrice(link.price)}</Text>
-                            {link.originalPrice && link.originalPrice !== link.price && (
-                              <Text style={styles.originalPrice}>{formatPrice(link.originalPrice)}</Text>
-                            )}
-                          </View>
-                        )}
-
-                        {link.description && (
-                          <Text style={styles.enhancedProductDescription} numberOfLines={2}>
-                            {link.description}
-                          </Text>
-                        )}
-
-                        <View style={styles.productActionButtons}>
-                          <TouchableOpacity
-                            style={styles.buyNowButton}
-                            onPress={() => handleBuyNow(link)}
-                          >
-                            <MaterialIcons name="flash-on" size={16} color="#fff" />
-                            <Text style={styles.buyNowButtonText}>Buy Now</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.addToCartButton}
-                            onPress={() => handleAddToCart(link)}
-                          >
-                            <MaterialIcons name="add-shopping-cart" size={16} color="#3b82f6" />
-                            <Text style={styles.addToCartButtonText}>Add to Cart</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
-                  );
-                })
-            ) : (
-              <View style={styles.noProductsContainer}>
-                <MaterialIcons name="shopping-bag" size={48} color="#d1d5db" />
-                <Text style={styles.noProductsText}>No products available</Text>
-              </View>
-            )}
-          </ScrollView>
-        </View>
+          <FeaturedProductsPanel
+            productLinks={playlistData?.productLinks}
+            isMobile={isMobile}
+            productImageIndexes={productImageIndexes}
+            onImageNavigate={handleImageNavigation}
+            onBuyNow={handleBuyNow}
+            onAddToCart={handleAddToCart}
+            formatPrice={formatPrice}
+            renderStars={renderStars}
+          />
         )}
       </View>
 
@@ -2165,6 +2010,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
           <PlaylistChat
             playlistId={playlistData?.id?.toString() || playlistId || ''}
             playlistName={playlistData?.name || playlistTitle || 'Playlist'}
+            isVisible={!isFullscreen}
+            enablePolling={!isPlaying}
           />
         </View>
         )}

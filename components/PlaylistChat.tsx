@@ -19,9 +19,16 @@ import { ChatMessage } from '@/shared/media-schema';
 interface PlaylistChatProps {
   playlistId: string;
   playlistName: string;
+  enablePolling?: boolean;
+  isVisible?: boolean;
 }
 
-export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatProps) {
+export default function PlaylistChat({
+  playlistId,
+  playlistName,
+  enablePolling = true,
+  isVisible = true,
+}: PlaylistChatProps) {
   const { user, isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -30,33 +37,41 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
   const [isRefreshing, setIsRefreshing] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const isSendingRef = useRef(false);
 
   useEffect(() => {
-    if (playlistId) {
-      loadMessages();
-      
-      // Set up auto-refresh for real-time feel (every 5 seconds)
-      refreshIntervalRef.current = setInterval(() => {
-        if (!isSending) {
-          refreshMessages();
-        }
-      }, 5000);
-    }
+    isSendingRef.current = isSending;
+  }, [isSending]);
+
+  useEffect(() => {
+    if (!playlistId || !isVisible) return;
+
+    loadMessages();
+  }, [playlistId, isVisible]);
+
+  useEffect(() => {
+    if (!playlistId || !isVisible || !enablePolling) return;
+
+    // Poll only when explicitly enabled by parent.
+    refreshIntervalRef.current = setInterval(() => {
+      if (!isSendingRef.current) {
+        refreshMessages();
+      }
+    }, 5000);
 
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
       }
     };
-  }, [playlistId]);
+  }, [playlistId, isVisible, enablePolling]);
 
   const loadMessages = async () => {
     try {
       setIsLoading(true);
-      console.log('🔴 CHAT: Loading messages for playlist:', playlistId);
       const response = await chatAPI.getMessages(playlistId);
       const fetchedMessages = response.messages || [];
-      console.log('🔴 CHAT: Loaded', fetchedMessages.length, 'messages');
       setMessages(fetchedMessages);
       
       // Scroll to bottom after loading
@@ -101,10 +116,8 @@ export default function PlaylistChat({ playlistId, playlistName }: PlaylistChatP
     setIsSending(true);
 
     try {
-      console.log('🔴 CHAT: Sending message:', messageText);
       const response = await chatAPI.sendMessage(playlistId, messageText);
       const sentMessage = response.message;
-      console.log('🔴 CHAT: Message sent:', sentMessage);
       
       // Add the new message to the list
       setMessages(prev => [...prev, sentMessage]);

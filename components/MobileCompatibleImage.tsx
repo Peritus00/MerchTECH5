@@ -23,6 +23,11 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   onError,
   ...props
 }) => {
+  const debugLog = (...args: unknown[]) => {
+    if (__DEV__) {
+      console.log(...args);
+    }
+  };
   const [imageLoadError, setImageLoadError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 2;
@@ -31,10 +36,10 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   const getImageSource = () => {
     let imageUrl = uri;
     
-    console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Original URI:`, uri);
+    debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: Original URI:`, uri);
     
     if (imageLoadError || !imageUrl) {
-      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Using fallback (error: ${imageLoadError})`);
+      debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: Using fallback (error: ${imageLoadError})`);
       imageUrl = fallbackUri;
     }
     
@@ -45,7 +50,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     if (imageUrl && !imageUrl.startsWith('http') && !isDataLikeUrl) {
       const apiBase = env.apiBaseUrl?.replace(/\/$/, '') || '';
       const apiOrigin = apiBase.replace(/\/api$/, '');
-      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: API origin:`, apiOrigin);
+      debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: API origin:`, apiOrigin);
       
       if (imageUrl.startsWith('/')) {
         imageUrl = `${apiOrigin}${imageUrl}`;
@@ -57,11 +62,11 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
 
     // Ensure HTTPS for all platforms (mobile requires HTTPS)
     if (imageUrl.startsWith('http://')) {
-      console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Converting HTTP to HTTPS`);
+      debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: Converting HTTP to HTTPS`);
       imageUrl = imageUrl.replace('http://', 'https://');
     }
 
-    console.log(`🖼️ MobileCompatibleImage [${Platform.OS}]: Final URL:`, imageUrl);
+    debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: Final URL:`, imageUrl);
 
     // For mobile devices, use simple URI without custom headers
     // Custom headers can cause CORS issues on mobile
@@ -76,7 +81,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   };
 
   const handleImageError = (error: any) => {
-    console.log('🖼️ MobileCompatibleImage error:', {
+    debugLog('🖼️ MobileCompatibleImage error:', {
       uri,
       error: error.nativeEvent?.error || error,
       platform: Platform.OS,
@@ -90,7 +95,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     
     // Retry logic for mobile devices
     if (retryCount < maxRetries && Platform.OS !== 'web') {
-      console.log(`🔄 MobileCompatibleImage: Retrying image load (${retryCount + 1}/${maxRetries})`);
+      debugLog(`🔄 MobileCompatibleImage: Retrying image load (${retryCount + 1}/${maxRetries})`);
       setRetryCount(prev => prev + 1);
       // Force re-render with a small delay
       setTimeout(() => {
