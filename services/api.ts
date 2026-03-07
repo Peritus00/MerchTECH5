@@ -311,6 +311,11 @@ export const authAPI = {
     return response.data;
   },
 
+  async googleSignInWeb(code: string, redirectUri: string) {
+    const response = await api.post('/auth/google/web', { code, redirectUri });
+    return response.data;
+  },
+
   async appleSignIn(identityToken: string, nonce?: string) {
     const response = await api.post('/auth/apple', { identityToken, nonce });
     return response.data;
@@ -331,6 +336,11 @@ export const authAPI = {
 export const profileAPI = {
   async linkGoogle(idToken: string) {
     const response = await api.post('/profile/link-google', { idToken });
+    return response.data;
+  },
+
+  async linkGoogleWeb(code: string, redirectUri: string) {
+    const response = await api.post('/profile/link-google-web', { code, redirectUri });
     return response.data;
   },
 

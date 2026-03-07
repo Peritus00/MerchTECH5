@@ -5,24 +5,19 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { profileAPI } from '@/services/api';
+import { env } from '@/config/environment';
 import { Platform } from 'react-native';
 
-// Capture the hash fragment synchronously at module load time, before any SPA
-// routing can clear window.location.  This is the fallback for the redirect flow.
-const _capturedHash: string =
-  Platform.OS === 'web' && typeof window !== 'undefined'
-    ? window.location.hash
-    : '';
+const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
 
 /**
- * Google OAuth callback handler
- * Primary path: GIS JS callback (no redirect) – this page only loads if the
- * redirect fallback was used instead.
+ * Google OAuth callback handler (web authorization code flow)
+ * Handles ?code=...&state=... or ?error=... from Google redirect.
  */
 export default function GoogleAuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { socialLogin, refreshUser } = useAuth();
+  const { socialLoginWithCode, refreshUser } = useAuth();
   const [status, setStatus] = useState<'processing' | 'success' | 'error'>('processing');
   const [errorMessage, setErrorMessage] = useState('');
   const processed = useRef(false);
@@ -34,7 +29,8 @@ export default function GoogleAuthCallback() {
       try {
         processed.current = true;
 
-        const idToken = params.id_token as string | undefined;
+        const code = params.code as string | undefined;
+        const state = params.state as string | undefined;
         const error = params.error as string | undefined;
 
         if (error) {
@@ -46,38 +42,40 @@ export default function GoogleAuthCallback() {
           return;
         }
 
-        // Try query params first, then the hash captured at module load time
-        let tokenToUse = idToken;
-        if (!tokenToUse && Platform.OS === 'web') {
-          const hashParams = new URLSearchParams(_capturedHash.substring(1));
-          tokenToUse = hashParams.get('id_token') || undefined;
-          if (tokenToUse) {
-            console.log('🔑 Found ID token in captured hash fragment');
-          }
-        }
-
-        if (!tokenToUse) {
-          console.error('❌ No ID token found in callback');
+        if (!code) {
+          console.error('❌ No authorization code in callback');
           setStatus('error');
-          setErrorMessage('No authentication token received from Google');
+          setErrorMessage('No authentication code received from Google');
           return;
         }
 
         if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
-          sessionStorage.removeItem('google_oauth_nonce');
-          const isLinkMode = sessionStorage.getItem('google_oauth_mode') === 'link';
-          sessionStorage.removeItem('google_oauth_mode');
-
-          if (isLinkMode) {
-            await profileAPI.linkGoogle(tokenToUse);
-            await refreshUser();
-            setStatus('success');
-            setTimeout(() => router.replace('/(tabs)/settings/profile'), 1000);
+          const storedState = sessionStorage.getItem(GOOGLE_OAUTH_STATE_KEY);
+          sessionStorage.removeItem(GOOGLE_OAUTH_STATE_KEY);
+          if (!state || state !== storedState) {
+            console.error('❌ Google OAuth state mismatch');
+            setStatus('error');
+            setErrorMessage('Invalid authentication state. Please try again.');
             return;
           }
         }
 
-        await socialLogin('google', tokenToUse);
+        const redirectUri = `${env.oauthCallbackHost.replace(/\/+$/, '')}/auth/google`;
+        const isLinkMode = Platform.OS === 'web' && typeof sessionStorage !== 'undefined' &&
+          sessionStorage.getItem('google_oauth_mode') === 'link';
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem('google_oauth_mode');
+        }
+
+        if (isLinkMode) {
+          await profileAPI.linkGoogleWeb(code, redirectUri);
+          await refreshUser();
+          setStatus('success');
+          setTimeout(() => router.replace('/(tabs)/settings/profile'), 1000);
+          return;
+        }
+
+        await socialLoginWithCode('google', code, redirectUri);
         setStatus('success');
         setTimeout(() => router.replace('/(tabs)'), 1000);
       } catch (error: any) {
@@ -88,7 +86,7 @@ export default function GoogleAuthCallback() {
     };
 
     processCallback();
-  }, [params, socialLogin, refreshUser, router]);
+  }, [params, socialLoginWithCode, refreshUser, router]);
 
   return (
     <ThemedView style={styles.container}>

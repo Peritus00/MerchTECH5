@@ -6076,6 +6076,60 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
   }
 });
 
+// Google Sign-In web endpoint (OAuth authorization code flow - no prompt/FedCM dependency)
+app.post('/api/auth/google/web', authLimiter, async (req, res) => {
+  try {
+    const { code, redirectUri } = req.body;
+
+    if (!code) {
+      return res.status(400).json({ error: 'Authorization code is required' });
+    }
+    if (!redirectUri) {
+      return res.status(400).json({ error: 'Redirect URI is required' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const expectedRedirect = `${frontendUrl.replace(/\/+$/, '')}/auth/google`;
+    if (redirectUri !== expectedRedirect) {
+      console.error('🔴 Google web auth: redirect_uri mismatch', { received: redirectUri, expected: expectedRedirect });
+      return res.status(400).json({ error: 'Invalid redirect URI' });
+    }
+
+    const googleUser = await socialAuthService.exchangeGoogleCode(code, redirectUri);
+
+    const dbUser = await socialAuthService.findOrCreateSocialUser(
+      db,
+      'google',
+      googleUser.googleId,
+      googleUser.email,
+      {
+        name: googleUser.name,
+        picture: googleUser.picture,
+        givenName: googleUser.givenName,
+        familyName: googleUser.familyName,
+        emailVerified: googleUser.emailVerified,
+      }
+    );
+
+    const user = transformUser(dbUser);
+
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        isAdmin: user.isAdmin
+      },
+      JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({ user, token, provider: 'google' });
+  } catch (error) {
+    console.error('🔴 GOOGLE WEB AUTH ERROR:', error);
+    res.status(401).json({ error: error.message || 'Google authentication failed' });
+  }
+});
+
 // Helper function to generate Apple client secret JWT for OAuth code exchange
 function generateAppleClientSecret() {
   const teamId = process.env.APPLE_TEAM_ID;
@@ -6288,7 +6342,7 @@ app.post('/api/auth/apple/callback', async (req, res) => {
   }
 });
 
-// Link Google account to existing user
+// Link Google account to existing user (native - uses ID token)
 app.post('/api/profile/link-google', authenticateToken, async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -6323,6 +6377,48 @@ app.post('/api/profile/link-google', authenticateToken, async (req, res) => {
     res.json({ user, message: 'Google account linked successfully' });
   } catch (error) {
     console.error('🔴 LINK GOOGLE ERROR:', error);
+    res.status(400).json({ error: error.message || 'Failed to link Google account' });
+  }
+});
+
+// Link Google account via web OAuth code flow (user must be authenticated)
+app.post('/api/profile/link-google-web', authenticateToken, async (req, res) => {
+  try {
+    const { code, redirectUri } = req.body;
+    const userId = req.user.userId;
+
+    if (!code || !redirectUri) {
+      return res.status(400).json({ error: 'Authorization code and redirect URI are required' });
+    }
+
+    const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+    const expectedRedirect = `${frontendUrl.replace(/\/+$/, '')}/auth/google`;
+    if (redirectUri !== expectedRedirect) {
+      return res.status(400).json({ error: 'Invalid redirect URI' });
+    }
+
+    const googleUser = await socialAuthService.exchangeGoogleCode(code, redirectUri);
+
+    await socialAuthService.linkSocialProvider(
+      db,
+      userId,
+      'google',
+      googleUser.googleId,
+      {
+        name: googleUser.name,
+        picture: googleUser.picture,
+        givenName: googleUser.givenName,
+        familyName: googleUser.familyName,
+        emailVerified: googleUser.emailVerified,
+      }
+    );
+
+    const result = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(result.rows[0]);
+
+    res.json({ user, message: 'Google account linked successfully' });
+  } catch (error) {
+    console.error('🔴 LINK GOOGLE WEB ERROR:', error);
     res.status(400).json({ error: error.message || 'Failed to link Google account' });
   }
 });

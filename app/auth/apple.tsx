@@ -68,7 +68,7 @@ export default function AppleAuthCallback() {
           }
           
           // Exchange code for tokens via backend
-          await socialLoginWithCode('apple', code, nonce);
+          await socialLoginWithCode('apple', code, undefined, nonce);
           setStatus('success');
           
           // Redirect to main app after short delay
@@ -134,7 +134,7 @@ export default function AppleAuthCallback() {
               sessionStorage.removeItem('apple_oauth_nonce');
             }
             
-            await socialLoginWithCode('apple', hashCode, nonce);
+            await socialLoginWithCode('apple', hashCode, undefined, nonce);
             setStatus('success');
             redirectTimerRef.current = setTimeout(() => {
               try {

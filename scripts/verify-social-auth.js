@@ -37,6 +37,11 @@ async function main() {
   } else {
     ok('GOOGLE_CLIENT_ID configured');
   }
+  if (!process.env.GOOGLE_CLIENT_SECRET) {
+    fail('GOOGLE_CLIENT_SECRET not set (required for web Google sign-in)');
+  } else {
+    ok('GOOGLE_CLIENT_SECRET configured');
+  }
 
   const appleOk = (process.env.APPLE_CLIENT_ID || process.env.APPLE_SERVICE_ID) &&
     process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY;

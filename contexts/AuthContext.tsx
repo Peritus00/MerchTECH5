@@ -13,7 +13,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; user?: User; error?: string }>;
   socialLogin: (provider: 'google' | 'apple', token: string, nonce?: string) => Promise<void>;
-  socialLoginWithCode: (provider: 'apple', code: string, nonce?: string) => Promise<void>;
+  socialLoginWithCode: (provider: 'apple' | 'google', code: string, redirectUri?: string, nonce?: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (updates: Partial<User>) => Promise<{ success: boolean; error?: string }>;
@@ -108,10 +108,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const socialLoginWithCode = async (provider: 'apple', code: string, nonce?: string) => {
+  const socialLoginWithCode = async (provider: 'apple' | 'google', code: string, redirectUri?: string, nonce?: string) => {
     try {
       setIsLoading(true);
-      const response = await authService.socialLoginWithCode(provider, code, nonce);
+      const response = await authService.socialLoginWithCode(provider, code, redirectUri, nonce);
       globalAuthState.user = response.user;
       setUser(response.user);
     } catch (error: any) {

@@ -540,13 +540,16 @@ class AuthService {
     }
   }
 
-  async socialLoginWithCode(provider: 'apple', code: string, nonce?: string): Promise<AuthResponse> {
+  async socialLoginWithCode(provider: 'apple' | 'google', code: string, redirectUri?: string, nonce?: string): Promise<AuthResponse> {
     try {
-      if (provider !== 'apple') {
-        throw new Error('Code flow is only supported for Apple');
+      let response;
+      if (provider === 'apple') {
+        response = await authAPI.appleSignInWeb(code, nonce);
+      } else if (provider === 'google' && redirectUri) {
+        response = await authAPI.googleSignInWeb(code, redirectUri);
+      } else {
+        throw new Error(`Code flow for ${provider} requires redirectUri`);
       }
-
-      const response = await authAPI.appleSignInWeb(code, nonce);
 
       if (!response.token || !response.user) {
         throw new Error('Invalid response from server');

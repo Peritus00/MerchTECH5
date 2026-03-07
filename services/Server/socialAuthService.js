@@ -2,11 +2,17 @@ const { OAuth2Client } = require('google-auth-library');
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
-// Google OAuth2 client
+// Google OAuth2 client (for ID token verification - native/mobile)
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 console.log('🔧 Google OAuth Client ID configured:', googleClientId ? `${googleClientId.substring(0, 30)}...` : 'NOT SET');
+console.log('🔧 Google OAuth Client Secret configured:', googleClientSecret ? 'yes' : 'no (required for web code flow)');
 const googleClient = googleClientId 
   ? new OAuth2Client(googleClientId)
+  : null;
+// OAuth2 client with secret for server-side code exchange (web)
+const googleOAuth2Client = googleClientId && googleClientSecret
+  ? new OAuth2Client(googleClientId, googleClientSecret)
   : null;
 
 // Apple JWKS client for verifying tokens
@@ -55,6 +61,33 @@ async function verifyGoogleToken(idToken) {
   } catch (error) {
     console.error('Google token verification error:', error);
     throw new Error('Invalid Google token');
+  }
+}
+
+/**
+ * Exchange Google authorization code for tokens and return user info
+ * Used by web OAuth flow - requires GOOGLE_CLIENT_SECRET
+ * @param {string} code - Authorization code from Google redirect
+ * @param {string} redirectUri - Must match the redirect_uri used in the auth request
+ * @returns {Promise<{googleId: string, email: string, name?: string, picture?: string}>}
+ */
+async function exchangeGoogleCode(code, redirectUri) {
+  if (!googleOAuth2Client) {
+    throw new Error('Google OAuth web flow not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+  }
+
+  try {
+    const { tokens } = await googleOAuth2Client.getToken({ code, redirect_uri: redirectUri });
+    const idToken = tokens.id_token;
+
+    if (!idToken) {
+      throw new Error('No ID token in Google token response');
+    }
+
+    return verifyGoogleToken(idToken);
+  } catch (error) {
+    console.error('Google code exchange error:', error);
+    throw new Error('Invalid or expired Google authorization code');
   }
 }
 
@@ -297,6 +330,7 @@ async function unlinkSocialProvider(db, userId, provider) {
 
 module.exports = {
   verifyGoogleToken,
+  exchangeGoogleCode,
   verifyAppleToken,
   findOrCreateSocialUser,
   linkSocialProvider,
