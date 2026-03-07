@@ -1,23 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
-import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import { saveUserAge } from '@/utils/ageStorage';
 import { saveUserGender } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
+import { usePlaylistAccess } from '@/hooks/usePlaylistAccess';
 
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
-  const [playlist, setPlaylist] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { user, isAuthenticated } = useAuth();
+  const { data: playlist, isLoading: loading, isError, error, refetch } = usePlaylistAccess(id);
+  const { isAuthenticated } = useAuth();
   
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
@@ -25,10 +23,6 @@ export default function PlaylistPlayerScreen() {
   
   // Guard to prevent multiple scan tracking calls
   const hasTrackedScanRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    fetchPlaylist();
-  }, [id]);
 
   // Fetch user demographics if authenticated
   useEffect(() => {
@@ -139,59 +133,31 @@ export default function PlaylistPlayerScreen() {
     checkAndShowSurvey();
   }, [playlist, loading, isAuthenticated, userDemographics]);
 
-  const fetchPlaylist = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await api.get(`/playlist-access/${id}`);
-      
-      if (response.data) {
-        setPlaylist(response.data);
-        
-        // Track QR scan with demographics if available (only once per component mount)
-        // Check and set ref synchronously to prevent race conditions
-        const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
-        if (qrId && !hasTrackedScanRef.current) {
-          hasTrackedScanRef.current = true; // Mark as tracked BEFORE async call to prevent race conditions
-          try {
-            // Get demographics from user profile or localStorage
-            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-            
-            console.log('📊 PLAYER: Tracking scan with demographics:', demographics);
-            
-            await analyticsService.trackQRScan(Number(qrId), {
-              // Send user demographics if available
-              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-            });
-          } catch (e) {
-            console.warn('Analytics track scan failed (playlist-player):', e);
-            // Reset ref on error so it can retry
-            hasTrackedScanRef.current = false;
-          }
-        } else if (qrId && hasTrackedScanRef.current) {
-          console.log('📊 PLAYER: Skipping duplicate scan tracking (already tracked)');
-        }
-      } else {
-        setError('Playlist not found');
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch playlist:', err);
-      
-      if (err.response?.status === 403) {
-        setError('Access denied. Please check your activation code.');
-      } else if (err.response?.status === 404) {
-        setError('Playlist not found');
-      } else {
-        setError(err.response?.data?.message || 'Failed to load playlist');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Track QR scan when playlist loads (only once per mount)
+  useEffect(() => {
+    if (!playlist || hasTrackedScanRef.current) return;
+    const qrId = playlist?.qr_code_id || playlist?.qrCodeId;
+    if (!qrId) return;
+    hasTrackedScanRef.current = true;
+    const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+    analyticsService.trackQRScan(Number(qrId), {
+      ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+      ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+    }).catch((e) => {
+      console.warn('Analytics track scan failed (playlist-player):', e);
+      hasTrackedScanRef.current = false;
+    });
+  }, [playlist, isAuthenticated, userDemographics]);
 
-  if (loading) {
+  const errorMessage = isError && error
+    ? (error as any)?.response?.status === 403
+      ? 'Access denied. Please check your activation code.'
+      : (error as any)?.response?.status === 404
+        ? 'Playlist not found'
+        : (error as any)?.response?.data?.message || 'Failed to load playlist'
+    : null;
+
+  if (loading && !playlist) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -200,13 +166,20 @@ export default function PlaylistPlayerScreen() {
     );
   }
 
-  if (error) {
+  if (errorMessage && !playlist) {
     return (
       <View style={styles.center}>
         <MaterialIcons name="error-outline" size={60} color="#ff5555" />
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorText}>{errorMessage}</Text>
+        <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 16 }}>
+          <MaterialIcons name="refresh" size={32} color="#3b82f6" />
+        </TouchableOpacity>
       </View>
     );
+  }
+
+  if (!playlist) {
+    return null;
   }
 
   // Demographics survey handler

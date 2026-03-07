@@ -1,24 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ActivityIndicator, Text, StyleSheet, Alert } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
-import { api } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import { saveUserAge } from '@/utils/ageStorage';
 import { saveUserGender } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
+import { useSlideshowAccess } from '@/hooks/useSlideshowAccess';
 
 export default function SlideshowPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
-  const [slideshow, setSlideshow] = useState<any>(null);
+  const { data: slideshow, isLoading: loading, isError, error, refetch } = useSlideshowAccess(id);
   const [presignedAudioUrl, setPresignedAudioUrl] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
@@ -28,12 +26,7 @@ export default function SlideshowPlayerScreen() {
   const hasTrackedScanRef = useRef<boolean>(false);
 
   useEffect(() => {
-    fetchSlideshow();
-  }, [id]);
-
-  useEffect(() => {
     if (slideshow?.audio_url) {
-      // Use the signed URL directly from the slideshow data
       setPresignedAudioUrl(slideshow.audio_url);
     }
   }, [slideshow]);
@@ -147,59 +140,31 @@ export default function SlideshowPlayerScreen() {
     checkAndShowSurvey();
   }, [slideshow, loading, isAuthenticated, userDemographics]);
 
-  const fetchSlideshow = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await api.get(`/slideshow-access/${id}`);
-      
-      if (response.data) {
-        setSlideshow(response.data);
-        
-        // Track QR scan with demographics if available (only once per component mount)
-        // Check and set ref synchronously to prevent race conditions
-        const qrId = response.data?.qr_code_id || response.data?.qrCodeId;
-        if (qrId && !hasTrackedScanRef.current) {
-          hasTrackedScanRef.current = true; // Mark as tracked BEFORE async call to prevent race conditions
-          try {
-            // Get demographics from user profile or localStorage
-            const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
-            
-            console.log('📊 SLIDESHOW_PLAYER: Tracking scan with demographics:', demographics);
-            
-            await analyticsService.trackQRScan(Number(qrId), {
-              // Send user demographics if available
-              ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
-              ...(demographics?.gender ? { userGender: demographics.gender } : {}),
-            });
-          } catch (e) {
-            console.warn('Analytics track scan failed (slideshow-player):', e);
-            // Reset ref on error so it can retry
-            hasTrackedScanRef.current = false;
-          }
-        } else if (qrId && hasTrackedScanRef.current) {
-          console.log('📊 SLIDESHOW_PLAYER: Skipping duplicate scan tracking (already tracked)');
-        }
-      } else {
-        setError('Slideshow not found');
-      }
-    } catch (err: any) {
-      console.error('Failed to fetch slideshow:', err);
-      
-      if (err.response?.status === 403) {
-        setError('Access denied. Please check your activation code.');
-      } else if (err.response?.status === 404) {
-        setError('Slideshow not found');
-      } else {
-        setError(err.response?.data?.message || 'Failed to load slideshow');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Track QR scan when slideshow loads (only once per mount)
+  useEffect(() => {
+    if (!slideshow || hasTrackedScanRef.current) return;
+    const qrId = slideshow?.qr_code_id || slideshow?.qrCodeId;
+    if (!qrId) return;
+    hasTrackedScanRef.current = true;
+    const demographics = getDemographicsForTracking(isAuthenticated, userDemographics);
+    analyticsService.trackQRScan(Number(qrId), {
+      ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
+      ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+    }).catch((e) => {
+      console.warn('Analytics track scan failed (slideshow-player):', e);
+      hasTrackedScanRef.current = false;
+    });
+  }, [slideshow, isAuthenticated, userDemographics]);
 
-  if (loading) {
+  const errorMessage = isError && error
+    ? (error as any)?.response?.status === 403
+      ? 'Access denied. Please check your activation code.'
+      : (error as any)?.response?.status === 404
+        ? 'Slideshow not found'
+        : (error as any)?.response?.data?.message || 'Failed to load slideshow'
+    : null;
+
+  if (loading && !slideshow) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -208,13 +173,20 @@ export default function SlideshowPlayerScreen() {
     );
   }
 
-  if (error) {
+  if (errorMessage && !slideshow) {
     return (
       <View style={styles.center}>
         <MaterialIcons name="error-outline" size={60} color="#ff5555" />
-        <Text style={styles.errorText}>{error}</Text>
+        <Text style={styles.errorText}>{errorMessage}</Text>
+        <TouchableOpacity onPress={() => refetch()} style={{ marginTop: 16 }}>
+          <MaterialIcons name="refresh" size={32} color="#3b82f6" />
+        </TouchableOpacity>
       </View>
     );
+  }
+
+  if (!slideshow) {
+    return null;
   }
 
   // Demographics survey handler

@@ -4,18 +4,21 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
 import 'react-native-reanimated';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { NetworkProvider } from '@/contexts/NetworkContext';
+import { queryClient, persistOptions } from '@/lib/queryClient';
 import { CartProvider } from '@/contexts/CartContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { UploadProvider } from '@/contexts/UploadContext';
 import { UploadProgressIndicator } from '@/components/UploadProgressIndicator';
+import { OfflineBanner } from '@/components/OfflineBanner';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { useAppVersion } from '@/hooks/useAppVersion';
 import { UpdateNotificationModal } from '@/components/UpdateNotificationModal';
@@ -26,8 +29,6 @@ import '@/utils/debugLogger';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
-
-const queryClient = new QueryClient();
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -157,6 +158,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <View style={{ flex: 1 }}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(public)" options={{ headerShown: false }} />
@@ -174,6 +176,7 @@ function RootLayoutNav() {
         <Stack.Screen name="shop" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+      <OfflineBanner />
       <ConsentBanner onConsentGiven={(consent) => {
         console.log('User consent:', consent ? 'accepted' : 'declined');
       }} />
@@ -186,6 +189,7 @@ function RootLayoutNav() {
         onDismiss={() => setShowUpdateModal(false)}
         onDownload={() => setShowUpdateModal(false)}
       />
+      </View>
     </ThemeProvider>
   );
 }
@@ -230,19 +234,21 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <QueryClientProvider client={queryClient}>
-          <ActionSheetProvider>
-            <AuthProvider>
-              <CartProvider>
-                <NotificationProvider>
-                  <UploadProvider>
-                    <RootLayoutNav />
-                  </UploadProvider>
-                </NotificationProvider>
-              </CartProvider>
-            </AuthProvider>
-          </ActionSheetProvider>
-        </QueryClientProvider>
+        <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
+          <NetworkProvider>
+            <ActionSheetProvider>
+              <AuthProvider>
+                <CartProvider>
+                  <NotificationProvider>
+                    <UploadProvider>
+                      <RootLayoutNav />
+                    </UploadProvider>
+                  </NotificationProvider>
+                </CartProvider>
+              </AuthProvider>
+            </ActionSheetProvider>
+          </NetworkProvider>
+        </PersistQueryClientProvider>
       </SafeAreaProvider>
     </ErrorBoundary>
   );

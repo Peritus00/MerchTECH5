@@ -39,6 +39,7 @@ import PlaylistChat from './PlaylistChat';
 import { Alert } from 'react-native';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 import { analyticsService } from '@/services/analyticsService';
+import { useMediaPrefetch } from '@/hooks/useMediaPrefetch';
 import { getSessionId } from '@/utils/sessionTracking';
 import { useAuth } from '@/contexts/AuthContext';
 import { getAgeForTracking } from '@/utils/ageStorage';
@@ -626,6 +627,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const currentMediaItem = useMemo(() => {
     return media.length > 0 ? media[currentIndex] : null;
   }, [media, currentIndex]);
+
+  useMediaPrefetch(media, currentIndex, 2);
 
   // Update refs when values change
   useEffect(() => {

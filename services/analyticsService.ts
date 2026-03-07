@@ -92,7 +92,7 @@ export const analyticsService = {
     }
   },
 
-  // Track QR code scan
+  // Track QR code scan - queues for replay on network failure
   async trackQRScan(qrCodeId: number, scanData: {
     location?: string;
     device?: string;
@@ -107,32 +107,29 @@ export const analyticsService = {
     userGender?: string;
   }): Promise<void> {
     try {
-      // Import visitor ID utility dynamically to avoid SSR issues
       const { getOrCreateVisitorId } = await import('@/utils/visitorId');
       const visitorId = getOrCreateVisitorId();
-      
-      const response = await api.post('/analytics/track-scan', {
-        qrCodeId,
-        visitorId, // Include visitor ID as fallback when cookies don't work
-        ...scanData,
-      });
-      
-      // Store the visitor ID returned from server (in case server generated a new one)
+      const payload = { qrCodeId, visitorId, ...scanData };
+      const response = await api.post('/analytics/track-scan', payload);
       if (response.data?.visitorId && typeof window !== 'undefined') {
         try {
           const { getOrCreateVisitorId: getVisitorId } = await import('@/utils/visitorId');
           const currentId = getVisitorId();
-          // Only update if server returned a different ID (shouldn't happen, but be safe)
           if (response.data.visitorId !== currentId) {
             localStorage.setItem('qr_visitor_id', response.data.visitorId);
-            console.log('🍪 VISITOR_ID: Updated from server response');
           }
-        } catch (e) {
-          // Ignore localStorage errors
-        }
+        } catch (e) {}
       }
     } catch (error) {
-      console.error('Error tracking QR scan:', error);
+      console.warn('QR scan tracking failed, queuing for replay:', error);
+      const { enqueue } = await import('@/services/pendingActionsQueue');
+      const { getOrCreateVisitorId } = await import('@/utils/visitorId');
+      await enqueue({
+        type: 'analytics',
+        endpoint: '/analytics/track-scan',
+        method: 'POST',
+        payload: { qrCodeId, visitorId: getOrCreateVisitorId(), ...scanData },
+      });
     }
   },
 
@@ -170,7 +167,7 @@ export const analyticsService = {
     }
   },
 
-  // Track media play (all durations - no restriction)
+  // Track media play (all durations) - queues for replay on network failure
   async trackMediaPlay(
     mediaId: number,
     playDuration: number,
@@ -181,38 +178,32 @@ export const analyticsService = {
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
+    const payload = {
+      mediaId,
+      playDuration,
+      sessionId,
+      userId,
+      userAge: ageRange,
+      userGender: gender,
+      userLocation: location,
+      locationSource,
+    };
     try {
-      console.log(`📊 ANALYTICS_SERVICE: Attempting to track media play - ID: ${mediaId}, Duration: ${playDuration}s, Session: ${sessionId?.substring(0, 20)}...`);
-      
-      // Track all plays regardless of duration
-      // Total Plays counts all plays, Unique Plays requires >30 seconds
-      const response = await api.post('/analytics/track-media-play', {
-        mediaId,
-        playDuration,
-        sessionId,
-        userId,
-        userAge: ageRange,
-        userGender: gender,
-        userLocation: location,
-        locationSource,
-      });
-      
-      console.log(`📊 ANALYTICS_SERVICE: Successfully tracked media play - ID: ${mediaId}, Duration: ${playDuration}s, Response:`, response.data);
+      await api.post('/analytics/track-media-play', payload);
     } catch (error: any) {
-      console.error('📊 ANALYTICS_SERVICE: Error tracking media play:', {
-        error: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        mediaId,
-        playDuration,
-        sessionId: sessionId?.substring(0, 20) + '...'
+      console.warn('Media play tracking failed, queuing for replay:', error?.message);
+      const { enqueue } = await import('@/services/pendingActionsQueue');
+      await enqueue({
+        type: 'analytics',
+        endpoint: '/analytics/track-media-play',
+        method: 'POST',
+        payload,
       });
-      // Re-throw so caller knows it failed
       throw error;
     }
   },
 
-  // Track playlist play (only counts plays >= 30 seconds)
+  // Track playlist play (only counts plays >= 30 seconds) - queues for replay on failure
   async trackPlaylistPlay(
     playlistId: number,
     playDuration: number,
@@ -223,29 +214,32 @@ export const analyticsService = {
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
+    if (playDuration < 30) return;
+    const payload = {
+      playlistId,
+      playDuration,
+      sessionId,
+      userId,
+      userAge: ageRange,
+      userGender: gender,
+      userLocation: location,
+      locationSource,
+    };
     try {
-      if (playDuration < 30) {
-        console.log('📊 ANALYTICS: Playlist play duration < 30s, not tracking');
-        return;
-      }
-
-      await api.post('/analytics/track-playlist-play', {
-        playlistId,
-        playDuration,
-        sessionId,
-        userId,
-        userAge: ageRange,
-        userGender: gender,
-        userLocation: location,
-        locationSource,
-      });
-      console.log(`📊 ANALYTICS: Tracked playlist play - ID: ${playlistId}, Duration: ${playDuration}s`);
+      await api.post('/analytics/track-playlist-play', payload);
     } catch (error) {
-      console.error('Error tracking playlist play:', error);
+      console.warn('Playlist play tracking failed, queuing for replay:', error);
+      const { enqueue } = await import('@/services/pendingActionsQueue');
+      await enqueue({
+        type: 'analytics',
+        endpoint: '/analytics/track-playlist-play',
+        method: 'POST',
+        payload,
+      });
     }
   },
 
-  // Track slideshow play (only counts plays >= 30 seconds)
+  // Track slideshow play (only counts plays >= 30 seconds) - queues for replay on failure
   async trackSlideshowPlay(
     slideshowId: number,
     playDuration: number,
@@ -256,25 +250,28 @@ export const analyticsService = {
     location?: { city: string; state: string; zip?: string },
     locationSource?: string
   ): Promise<void> {
+    if (playDuration < 30) return;
+    const payload = {
+      slideshowId,
+      playDuration,
+      sessionId,
+      userId,
+      userAge: ageRange,
+      userGender: gender,
+      userLocation: location,
+      locationSource,
+    };
     try {
-      if (playDuration < 30) {
-        console.log('📊 ANALYTICS: Slideshow play duration < 30s, not tracking');
-        return;
-      }
-
-      await api.post('/analytics/track-slideshow-play', {
-        slideshowId,
-        playDuration,
-        sessionId,
-        userId,
-        userAge: ageRange,
-        userGender: gender,
-        userLocation: location,
-        locationSource,
-      });
-      console.log(`📊 ANALYTICS: Tracked slideshow play - ID: ${slideshowId}, Duration: ${playDuration}s`);
+      await api.post('/analytics/track-slideshow-play', payload);
     } catch (error) {
-      console.error('Error tracking slideshow play:', error);
+      console.warn('Slideshow play tracking failed, queuing for replay:', error);
+      const { enqueue } = await import('@/services/pendingActionsQueue');
+      await enqueue({
+        type: 'analytics',
+        endpoint: '/analytics/track-slideshow-play',
+        method: 'POST',
+        payload,
+      });
     }
   },
 

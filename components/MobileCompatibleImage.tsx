@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
-import { Image, ImageProps, Platform, View, Text, StyleSheet } from 'react-native';
+import { Platform, View, Text, StyleSheet } from 'react-native';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { env } from '@/config/environment';
 
-interface MobileCompatibleImageProps extends Omit<ImageProps, 'source'> {
+interface MobileCompatibleImageProps {
+  uri: string;
+  fallbackUri?: string;
+  showErrorIcon?: boolean;
+  errorText?: string;
+  style?: any;
+  onError?: (e: any) => void;
+  resizeMode?: 'cover' | 'contain' | 'stretch' | 'center' | 'repeat';
+  [key: string]: any;
   uri: string;
   fallbackUri?: string;
   showErrorIcon?: boolean;
@@ -21,6 +30,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
   errorText = 'Image not available',
   style,
   onError,
+  resizeMode = 'cover',
   ...props
 }) => {
   const debugLog = (...args: unknown[]) => {
@@ -68,16 +78,7 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
 
     debugLog(`🖼️ MobileCompatibleImage [${Platform.OS}]: Final URL:`, imageUrl);
 
-    // For mobile devices, use simple URI without custom headers
-    // Custom headers can cause CORS issues on mobile
-    if (Platform.OS !== 'web') {
-      return {
-        uri: imageUrl
-      };
-    }
-    
-    // Web can use the URL directly
-    return { uri: imageUrl };
+    return imageUrl;
   };
 
   const handleImageError = (error: any) => {
@@ -116,14 +117,16 @@ export const MobileCompatibleImage: React.FC<MobileCompatibleImageProps> = ({
     );
   }
 
+  const source = getImageSource();
   return (
     <Image
       {...props}
-      source={getImageSource()}
+      source={source}
       style={[styles.image, style]}
       onError={handleImageError}
-      defaultSource={{ uri: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="18">Loading…</text></svg>' }}
-      resizeMode={props.resizeMode || 'cover'}
+      placeholder={{ uri: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="18">Loading…</text></svg>' }}
+      contentFit={resizeMode === 'cover' ? 'cover' : resizeMode === 'contain' ? 'contain' : 'cover'}
+      cachePolicy="disk"
     />
   );
 };

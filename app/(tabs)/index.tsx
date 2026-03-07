@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -14,44 +14,10 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import { analyticsService } from '@/services/analyticsService';
-import { AnalyticsSummary } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { CartHeader } from '@/components/CartHeader';
-import { api } from '@/services/api';
-
-interface DashboardData {
-  summary: {
-    totalScans: number;
-    scansToday: number;
-    totalQRCodes: number;
-    totalPlaylists: number;
-    totalSlideshows: number;
-    totalProducts: number;
-    activationCodes: number;
-    revenue: number;
-  };
-  recentActivity: Array<{
-    id: number;
-    type: 'scan' | 'playlist' | 'qrcode' | 'product' | 'achievement';
-    description: string;
-    timestamp: string;
-    metadata?: any;
-  }>;
-  analytics: {
-    scanHistory: Array<{ date: string; count: number }>;
-    topQRCodes: Array<{ name: string; scans: number }>;
-    deviceBreakdown: Array<{ device: string; count: number }>;
-  };
-  achievements: Array<{
-    id: number;
-    name: string;
-    description: string;
-    isUnlocked: boolean;
-    progress?: number;
-  }>;
-}
+import { useDashboardData } from '@/hooks/useDashboardData';
 
 const { width } = Dimensions.get('window');
 
@@ -59,10 +25,13 @@ export default function DashboardScreen() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
   const insets = useSafeAreaInsets();
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<'7d' | '30d' | '90d'>('7d');
+  const {
+    data: dashboardData,
+    isLoading,
+    isError,
+    refetch,
+    isRefetching,
+  } = useDashboardData(user?.id);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -72,12 +41,6 @@ export default function DashboardScreen() {
       return;
     }
   }, [user, authLoading, router]);
-
-  useEffect(() => {
-    if (user && !authLoading) {
-      fetchDashboardData();
-    }
-  }, [selectedTimeframe, user, authLoading]);
 
   // Show loading while checking authentication
   if (authLoading) {
@@ -96,135 +59,8 @@ export default function DashboardScreen() {
     return null;
   }
 
-  const fetchDashboardData = async () => {
-    try {
-      setIsLoading(true);
-      
-      // Fetch real analytics data
-      const analytics = await analyticsService.getAnalyticsSummary();
-      
-      // Fetch user's actual content counts
-      let userCounts = {
-        totalQRCodes: 0,
-        totalPlaylists: 0,
-        totalSlideshows: 0,
-        totalProducts: 0,
-        activationCodes: 0,
-      };
-
-      if (user) {
-        try {
-          // Fetch real counts from API
-          const [qrCodes, playlists, slideshows, products, activationCodes] = await Promise.all([
-            api.get('/qr-codes'),
-            api.get('/playlists'),
-            api.get('/slideshows'),
-            api.get('/products'),
-            api.get('/activation-codes'),
-          ]);
-
-          userCounts = {
-            totalQRCodes: qrCodes.data?.qrCodes?.length || qrCodes.data?.length || 0,
-            totalPlaylists: playlists.data?.playlists?.length || playlists.data?.length || 0,
-            totalSlideshows: slideshows.data?.slideshows?.length || slideshows.data?.length || 0,
-            totalProducts: products.data?.products?.length || products.data?.length || 0,
-            activationCodes: activationCodes.data?.activationCodes?.length || activationCodes.data?.length || 0,
-          };
-        } catch (error) {
-          console.error('Error fetching user content counts:', error);
-        }
-      }
-
-      // Create recent activity from real data
-      const recentActivity: Array<{
-        id: number;
-        type: 'scan' | 'playlist' | 'qrcode' | 'product' | 'achievement';
-        description: string;
-        timestamp: string;
-        metadata?: any;
-      }> = [];
-
-      // Add recent scans from analytics
-      if (analytics.recentScans && analytics.recentScans.length > 0) {
-        analytics.recentScans.forEach((scan, index) => {
-          recentActivity.push({
-            id: index + 1,
-            type: 'scan',
-            description: `QR Code scanned: ${scan.qrName || 'Unknown QR Code'}`,
-            timestamp: scan.timestamp,
-            metadata: scan,
-          });
-        });
-      }
-
-      // If no real activity, show empty state
-      if (recentActivity.length === 0) {
-        recentActivity.push({
-          id: 1,
-          type: 'scan',
-          description: 'No recent activity - create your first QR code to get started!',
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      setDashboardData({
-        summary: {
-          totalScans: analytics.totalScans || 0,
-          scansToday: analytics.todayScans || 0,
-          totalQRCodes: userCounts.totalQRCodes,
-          totalPlaylists: userCounts.totalPlaylists,
-          totalSlideshows: userCounts.totalSlideshows,
-          totalProducts: userCounts.totalProducts,
-          activationCodes: userCounts.activationCodes,
-          revenue: 0, // Will be populated from real sales data when implemented
-        },
-        recentActivity,
-        analytics: {
-          scanHistory: analytics.hourlyData ? analytics.hourlyData.map((count, hour) => ({
-            date: new Date(Date.now() - (23 - hour) * 60 * 60 * 1000).toISOString(),
-            count: count || 0,
-          })) : [],
-          topQRCodes: [], // Will be populated from real QR code analytics
-          deviceBreakdown: analytics.topDevices || [],
-        },
-        achievements: [], // Will be populated when achievement system is implemented
-      });
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      // Set empty state instead of mock data
-      setDashboardData({
-        summary: {
-          totalScans: 0,
-          scansToday: 0,
-          totalQRCodes: 0,
-          totalPlaylists: 0,
-          totalSlideshows: 0,
-          totalProducts: 0,
-          activationCodes: 0,
-          revenue: 0,
-        },
-        recentActivity: [{
-          id: 1,
-          type: 'scan',
-          description: 'Unable to load activity data',
-          timestamp: new Date().toISOString(),
-        }],
-        analytics: {
-          scanHistory: [],
-          topQRCodes: [],
-          deviceBreakdown: [],
-        },
-        achievements: [],
-      });
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
-
   const onRefresh = () => {
-    setRefreshing(true);
-    fetchDashboardData();
+    refetch();
   };
 
   const quickActions = [
@@ -254,7 +90,7 @@ export default function DashboardScreen() {
     },
   ];
 
-  if (isLoading) {
+  if (isLoading && !dashboardData) {
     return (
       <View style={[styles.container, styles.centered]}>
         <ActivityIndicator size="large" color="#3b82f6" />
@@ -263,16 +99,22 @@ export default function DashboardScreen() {
     );
   }
 
-  if (!dashboardData) {
+  if (isError && !dashboardData) {
     return (
       <View style={styles.errorContainer}>
         <MaterialIcons name="error-outline" size={64} color="#ef4444" />
         <Text style={styles.errorText}>Failed to load dashboard</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={fetchDashboardData}>
+        <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
     );
+  }
+
+  // Show cached data when available (offline or error with previous data)
+  const displayData = dashboardData;
+  if (!displayData) {
+    return null;
   }
 
   const DashboardStatsCard = ({ title, value, icon, color, trend }: {
@@ -442,7 +284,7 @@ export default function DashboardScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >
@@ -502,27 +344,27 @@ export default function DashboardScreen() {
           <View style={styles.statsGrid}>
             <DashboardStatsCard
               title="Total Scans"
-              value={dashboardData.summary.totalScans}
+              value={displayData.summary.totalScans}
               icon="visibility"
               color="#3b82f6"
               trend="+12%"
             />
             <DashboardStatsCard
               title="Last 24 Hours"
-              value={dashboardData.summary.scansToday}
+              value={displayData.summary.scansToday}
               icon="today"
               color="#10b981"
               trend="+5%"
             />
             <DashboardStatsCard
               title="QR Codes"
-              value={dashboardData.summary.totalQRCodes}
+              value={displayData.summary.totalQRCodes}
               icon="qr-code"
               color="#8b5cf6"
             />
             <DashboardStatsCard
               title="Playlists"
-              value={dashboardData.summary.totalPlaylists}
+              value={displayData.summary.totalPlaylists}
               icon="queue-music"
               color="#f59e0b"
             />
@@ -554,7 +396,7 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
           <View style={styles.activityList}>
-            {dashboardData.recentActivity.slice(0, 5).map((activity) => (
+            {displayData.recentActivity.slice(0, 5).map((activity) => (
               <RecentActivityCard
                 key={activity.id}
                 activity={activity}
@@ -569,17 +411,17 @@ export default function DashboardScreen() {
           <View style={styles.contentGrid}>
             <View style={styles.contentCard}>
               <MaterialIcons name="photo-library" size={24} color="#8b5cf6" />
-              <Text style={styles.contentValue}>{dashboardData.summary.totalSlideshows}</Text>
+              <Text style={styles.contentValue}>{displayData.summary.totalSlideshows}</Text>
               <Text style={styles.contentLabel}>Slideshows</Text>
             </View>
             <View style={styles.contentCard}>
               <MaterialIcons name="shopping-bag" size={24} color="#f59e0b" />
-              <Text style={styles.contentValue}>{dashboardData.summary.totalProducts}</Text>
+              <Text style={styles.contentValue}>{displayData.summary.totalProducts}</Text>
               <Text style={styles.contentLabel}>Products</Text>
             </View>
             <View style={styles.contentCard}>
               <MaterialIcons name="vpn-key" size={24} color="#ef4444" />
-              <Text style={styles.contentValue}>{dashboardData.summary.activationCodes}</Text>
+              <Text style={styles.contentValue}>{displayData.summary.activationCodes}</Text>
               <Text style={styles.contentLabel}>Access Codes</Text>
             </View>
           </View>

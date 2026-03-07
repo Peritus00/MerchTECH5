@@ -3846,6 +3846,36 @@ app.get('/api/analytics/summary', authenticateToken,
   }
 });
 
+// Dashboard counts - single round trip for content counts (reduces cellular request fan-out)
+app.get('/api/dashboard/counts', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const [qrRes, playlistsRes, slideshowsRes, productsRes, codesRes] = await Promise.all([
+      db.query('SELECT COUNT(*) AS c FROM qr_codes WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM products WHERE user_id = $1 AND (is_deleted IS NULL OR is_deleted = false)', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM activation_codes WHERE user_id = $1', [userId]),
+    ]);
+    res.json({
+      totalQRCodes: parseInt(qrRes.rows[0]?.c || 0),
+      totalPlaylists: parseInt(playlistsRes.rows[0]?.c || 0),
+      totalSlideshows: parseInt(slideshowsRes.rows[0]?.c || 0),
+      totalProducts: parseInt(productsRes.rows[0]?.c || 0),
+      activationCodes: parseInt(codesRes.rows[0]?.c || 0),
+    });
+  } catch (error) {
+    console.error('Dashboard counts error:', error);
+    res.status(500).json({
+      totalQRCodes: 0,
+      totalPlaylists: 0,
+      totalSlideshows: 0,
+      totalProducts: 0,
+      activationCodes: 0,
+    });
+  }
+});
+
 // Admin-only: Backfill geo for historical scans using stored IPs
 app.post('/api/analytics/backfill-geo', authenticateToken, isAdmin, async (req, res) => {
   try {
