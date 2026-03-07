@@ -9,11 +9,11 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useShareIntentContext } from 'expo-share-intent';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMediaUpload, IncomingUploadAsset } from '@/hooks/useMediaUpload';
 import { MediaFile } from '@/shared/media-schema';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
+import { useShareIntentContext } from '@/services/shareIntent';
 import {
   getPendingWebShare,
   clearPendingWebShare,
