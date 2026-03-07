@@ -5,6 +5,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
+import { hasPendingShareResume, clearPendingShareResume } from '@/services/webShareTarget';
 
 /**
  * Apple Sign-In callback handler
@@ -71,11 +72,13 @@ export default function AppleAuthCallback() {
           await socialLoginWithCode('apple', code, undefined, nonce);
           setStatus('success');
           
-          // Redirect to main app after short delay
+          const redirectTo = Platform.OS === 'web' && hasPendingShareResume()
+            ? (() => { clearPendingShareResume(); return '/handle-share'; })()
+            : '/(tabs)';
           redirectTimerRef.current = setTimeout(() => {
             try {
               if (router && typeof router.replace === 'function') {
-                router.replace('/(tabs)');
+                router.replace(redirectTo);
               } else {
                 console.warn('⚠️ Router not available, using window.location');
                 window.location.href = '/';

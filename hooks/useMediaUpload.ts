@@ -19,8 +19,20 @@ interface UploadProgress {
   stage: 'selecting' | 'reading' | 'uploading' | 'processing' | 'complete';
 }
 
+/** Asset shape for upload - from DocumentPicker, expo-sharing, or web share target */
+export interface IncomingUploadAsset {
+  /** File URI (mobile) or placeholder when file is provided (web) */
+  uri?: string;
+  name: string;
+  mimeType?: string;
+  size?: number;
+  /** Native browser File object for web share target uploads */
+  file?: File;
+}
+
 interface UseMediaUploadResult {
-  uploadFile: (fileUri: string, fileType: string, fileName: string) => Promise<MediaFile | null>;
+  uploadFile: (file: DocumentPicker.DocumentPickerResult) => Promise<MediaFile>;
+  uploadIncomingAsset: (asset: IncomingUploadAsset) => Promise<MediaFile>;
   selectAndUploadFile: () => Promise<MediaFile | null>;
 }
 
@@ -228,10 +240,11 @@ export const useMediaUpload = (): UseMediaUploadResult => {
               'video/flv', 'video/mkv', 'video/3gpp', 'video/3gp2', 'video/quicktime',
               'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv', 'video/x-matroska',
               'video/mp2t', 'video/x-ms-asf', 'video/x-m4v', 'video/x-ms-wmx',
-              'video/x-ms-wvx', 'video/x-ms-wm', 'video/x-ms-wmp'
+              'video/x-ms-wvx', 'video/x-ms-wm', 'video/x-ms-wmp',
+              'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic'
             ]
           : [
-              'audio/*', 'video/*',
+              'audio/*', 'video/*', 'image/*',
               'video/3gpp', 'video/3gp2', 'video/mp4', 'video/webm', 'video/ogg',
               'video/avi', 'video/mov', 'video/wmv', 'video/flv', 'video/mkv',
               'video/quicktime', 'video/x-msvideo', 'video/x-ms-wmv', 'video/x-flv',
@@ -296,11 +309,27 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   const getFileType = (mimeType: string): string => {
     if (mimeType.startsWith('audio/')) return 'audio';
     if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('image/')) return 'image';
     return 'unknown';
+  };
+
+  const uploadIncomingAsset = async (asset: IncomingUploadAsset): Promise<MediaFile> => {
+    const docPickerShape = {
+      canceled: false as const,
+      assets: [{
+        uri: asset.uri ?? (asset.file ? 'blob:web-share' : ''),
+        name: asset.name,
+        mimeType: asset.mimeType || 'application/octet-stream',
+        size: asset.size,
+        ...(asset.file && { file: asset.file }),
+      }],
+    } as DocumentPicker.DocumentPickerResult;
+    return uploadFile(docPickerShape);
   };
 
   return {
     uploadFile,
+    uploadIncomingAsset,
     selectAndUploadFile,
   };
 };

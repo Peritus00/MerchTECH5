@@ -9,6 +9,7 @@ import 'react-native-reanimated';
 import { ActionSheetProvider } from '@expo/react-native-action-sheet';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ShareIntentProvider, useShareIntentContext } from 'expo-share-intent';
 
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
@@ -29,6 +30,40 @@ import '@/utils/debugLogger';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
+
+/** Web PWA: inject manifest link and register service worker for share target */
+function WebPWAHead() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    if (!document.querySelector('link[rel="manifest"]')) {
+      const link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = '/manifest.webmanifest';
+      document.head.appendChild(link);
+    }
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then(() => console.log('[MerchTrader] Service worker registered'))
+        .catch((err) => console.warn('[MerchTrader] Service worker registration failed:', err));
+    }
+  }, []);
+  return null;
+}
+
+/** Redirects to handle-share when app is opened from OS share sheet */
+function ShareIntentRedirect() {
+  const router = useRouter();
+  const { hasShareIntent, isReady } = useShareIntentContext();
+
+  useEffect(() => {
+    if (isReady && hasShareIntent) {
+      router.replace('/handle-share');
+    }
+  }, [isReady, hasShareIntent, router]);
+
+  return null;
+}
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
@@ -90,6 +125,7 @@ function RootLayoutNav() {
     // Determine if the current route is one that should be publicly accessible
     const isPublicRoute = 
       segments[0] === '(public)' || // All routes under (public) group
+      segments[0] === 'handle-share' || // Share import (user may need to log in)
       segments[0] === 'slideshow-access' || 
       segments[0] === 'playlist-access' ||
       segments[0] === 'media-player' ||
@@ -158,7 +194,10 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <View style={{ flex: 1 }}>
+      <ShareIntentProvider>
+        <WebPWAHead />
+        <ShareIntentRedirect />
+        <View style={{ flex: 1 }}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(public)" options={{ headerShown: false }} />
@@ -174,6 +213,7 @@ function RootLayoutNav() {
         <Stack.Screen name="product-links/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="demo-players" options={{ headerShown: false }} />
         <Stack.Screen name="shop" options={{ headerShown: false }} />
+        <Stack.Screen name="handle-share" options={{ headerShown: false }} />
         <Stack.Screen name="+not-found" />
       </Stack>
       <OfflineBanner />
@@ -190,6 +230,7 @@ function RootLayoutNav() {
         onDownload={() => setShowUpdateModal(false)}
       />
       </View>
+      </ShareIntentProvider>
     </ThemeProvider>
   );
 }

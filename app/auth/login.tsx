@@ -22,6 +22,7 @@ import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback'
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
 import { useAppleSignIn } from '@/hooks/useAppleSignIn';
+import { hasPendingShareResume, clearPendingShareResume } from '@/services/webShareTarget';
 
 interface FormErrors {
   email?: string;
@@ -95,8 +96,12 @@ export default function LoginScreen() {
       console.log('🔄 Login Screen: Calling auth context login...');
       await login(email.trim(), password);
       console.log('✅ Login Screen: Login successful, navigating to tabs');
-      // If login succeeds, it will not throw an error
-      router.replace('/(tabs)');
+      if (Platform.OS === 'web' && hasPendingShareResume()) {
+        clearPendingShareResume();
+        router.replace('/handle-share');
+      } else {
+        router.replace('/(tabs)');
+      }
     } catch (error: any) {
       console.error('❌ Login Screen: Login error caught:', error);
       console.error('❌ Error message:', error.message);
@@ -166,7 +171,12 @@ export default function LoginScreen() {
       console.log('🔄 Login Screen: Google sign-in result:', result);
       if (result.success) {
         console.log('✅ Login Screen: Google sign-in successful, navigating to tabs');
-        router.replace('/(tabs)');
+        if (Platform.OS === 'web' && hasPendingShareResume()) {
+          clearPendingShareResume();
+          router.replace('/handle-share');
+        } else {
+          router.replace('/(tabs)');
+        }
       } else {
         console.error('❌ Login Screen: Google sign-in failed:', result.error);
         Alert.alert('Sign In Failed', result.error || 'Google sign-in failed');
@@ -192,7 +202,12 @@ export default function LoginScreen() {
           return;
         }
         console.log('✅ Apple Sign-In successful, navigating to tabs');
-        router.replace('/(tabs)');
+        if (Platform.OS === 'web' && hasPendingShareResume()) {
+          clearPendingShareResume();
+          router.replace('/handle-share');
+        } else {
+          router.replace('/(tabs)');
+        }
       } else {
         console.error('❌ Apple Sign-In failed:', result.error);
         const errorMessage = result.error || 'Apple sign-in failed';

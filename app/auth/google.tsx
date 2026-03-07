@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { profileAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import { Platform } from 'react-native';
+import { hasPendingShareResume, clearPendingShareResume } from '@/services/webShareTarget';
 
 const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
 
@@ -77,7 +78,10 @@ export default function GoogleAuthCallback() {
 
         await socialLoginWithCode('google', code, redirectUri);
         setStatus('success');
-        setTimeout(() => router.replace('/(tabs)'), 1000);
+        const redirectTo = Platform.OS === 'web' && hasPendingShareResume()
+          ? (() => { clearPendingShareResume(); return '/handle-share'; })()
+          : '/(tabs)';
+        setTimeout(() => router.replace(redirectTo), 1000);
       } catch (error: any) {
         console.error('❌ Error processing Google OAuth callback:', error);
         setStatus('error');
