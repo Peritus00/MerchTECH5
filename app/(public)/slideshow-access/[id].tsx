@@ -29,6 +29,7 @@ import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import PreviewGateModal from '@/components/PreviewGateModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -44,6 +45,7 @@ export default function SlideshowAccessScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isValidating, setIsValidating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showPreviewGateModal, setShowPreviewGateModal] = useState(false);
   const [previewTimeLeft, setPreviewTimeLeft] = useState(30);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -644,8 +646,14 @@ export default function SlideshowAccessScreen() {
     }
   };
 
-  const handlePreviewStart = async () => {
+  const handlePreviewStart = () => {
+    console.log('🎬 SLIDESHOW_ACCESS: Showing preview gate modal');
+    setShowPreviewGateModal(true);
+  };
+
+  const handlePreviewGateStart = async () => {
     console.log('🎬 SLIDESHOW_ACCESS: Starting slideshow preview');
+    setShowPreviewGateModal(false);
     try {
       setIsLoading(true);
       const { slideshowAccessAPI } = await import('@/services/api');
@@ -937,6 +945,16 @@ export default function SlideshowAccessScreen() {
         </View>
       </View>
       </ScrollView>
+
+      {/* Preview Gate Modal (phone + consent before preview) */}
+      <PreviewGateModal
+        visible={showPreviewGateModal}
+        onClose={() => setShowPreviewGateModal(false)}
+        onStartPreview={handlePreviewGateStart}
+        contentType="slideshow"
+        contentId={id}
+        contentName={slideshow?.name}
+      />
 
       {/* Demographics Survey Overlay */}
       <DemographicsSurveyOverlay

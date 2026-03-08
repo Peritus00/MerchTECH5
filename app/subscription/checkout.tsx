@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  TextInput,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -23,6 +24,7 @@ export default function SubscriptionCheckoutScreen() {
   const { tier } = useLocalSearchParams();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
   const tierInfo = SUBSCRIPTION_TIERS[tier as string];
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function SubscriptionCheckoutScreen() {
       const requestBody = {
         subscriptionTier: tier,
         amount: tierInfo.price,
+        couponCode: couponCode?.trim() || undefined,
         successUrl: Platform.OS === 'web' 
           ? `${window.location.origin}/subscription/success?tier=${tier}`
           : `yourappscheme://subscription/success?tier=${tier}`,
@@ -95,6 +98,14 @@ export default function SubscriptionCheckoutScreen() {
            <ThemedText type="title">{tierInfo.name} Plan</ThemedText>
            <ThemedText style={styles.price}>${tierInfo.price}/month</ThemedText>
          </ThemedView>
+         <TextInput
+           style={styles.couponInput}
+           placeholder="Coupon code"
+           placeholderTextColor="#9ca3af"
+           value={couponCode}
+           onChangeText={setCouponCode}
+           autoCapitalize="characters"
+         />
          <TouchableOpacity style={styles.payButton} onPress={handlePayment} disabled={isLoading}>
            {isLoading ? <ActivityIndicator color="#fff" /> : <ThemedText style={styles.payButtonText}>Subscribe</ThemedText>}
          </TouchableOpacity>
@@ -108,6 +119,15 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 24 },
   planHeader: { alignItems: 'center', marginBottom: 32 },
   price: { fontSize: 28, fontWeight: 'bold' },
+  couponInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 16,
+    color: '#1f2937',
+  },
   payButton: { backgroundColor: '#3b82f6', padding: 16, borderRadius: 12, alignItems: 'center' },
   payButtonText: { color: '#fff', fontSize: 18, fontWeight: '600' },
 });

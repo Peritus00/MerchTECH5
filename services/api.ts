@@ -554,11 +554,17 @@ export const salesAPI = {
 };
 
 export const paymentAPI = {
-  async createSession(items: { productId: string | number; quantity: number }[], successUrl: string, cancelUrl: string) {
+  async createSession(
+    items: { productId: string | number; quantity: number }[],
+    successUrl: string,
+    cancelUrl: string,
+    couponCode?: string
+  ) {
     const response = await api.post('/checkout/session', {
       items,
       successUrl,
       cancelUrl,
+      couponCode: couponCode?.trim() || undefined,
     });
     return response.data;
   },
@@ -566,6 +572,33 @@ export const paymentAPI = {
 
 // Alias for backward compatibility
 export const checkoutAPI = paymentAPI;
+
+export const couponAPI = {
+  async list() {
+    const response = await api.get('/coupons');
+    return response.data;
+  },
+  async create(data: { code: string; discountType?: string; discountValue: number; maxRedemptions?: number; expiresAt?: string; itemIds?: { productId?: number; playlistId?: number; slideshowId?: number }[] }) {
+    const response = await api.post('/coupons', data);
+    return response.data;
+  },
+  async update(id: number, data: { discountType?: string; discountValue?: number; maxRedemptions?: number; expiresAt?: string }) {
+    const response = await api.patch(`/coupons/${id}`, data);
+    return response.data;
+  },
+  async validate(code: string, productId?: number, playlistId?: number, slideshowId?: number) {
+    const response = await api.post('/coupons/validate', { code, productId, playlistId, slideshowId });
+    return response.data;
+  },
+  async getPreviewGateSettings() {
+    const response = await api.get('/coupons/preview-gate-settings');
+    return response.data;
+  },
+  async getSmsStatus() {
+    const response = await api.get('/coupons/sms-status');
+    return response.data;
+  },
+};
 
 export const mediaAPI = {
   async getAll() {

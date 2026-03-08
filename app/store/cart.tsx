@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Linking,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ThemedText } from '@/components/ThemedText';
@@ -24,6 +25,7 @@ export default function CartScreen() {
   const router = useRouter();
   const { cart, updateQuantity, removeFromCart, clearCart, getTotalPrice } = useCart();
   const [base, setBase] = useState('');
+  const [couponCode, setCouponCode] = useState('');
 
   useEffect(() => {
     // Determine absolute base URL for web and native
@@ -69,7 +71,7 @@ export default function CartScreen() {
       console.log('🔗 CHECKOUT: Success URL:', successUrl);
       console.log('🔗 CHECKOUT: Cancel URL:', cancelUrl);
 
-      const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
+      const response = await checkoutAPI.createSession(items, successUrl, cancelUrl, couponCode || undefined);
       console.log('🔗 CHECKOUT: API response:', response);
 
       const checkoutUrl = response.url;
@@ -234,8 +236,16 @@ export default function CartScreen() {
         ))}
       </ScrollView>
 
-      {/* Total and Checkout */}
+      {/* Coupon and Total */}
       <ThemedView style={styles.footer}>
+        <TextInput
+          style={styles.couponInput}
+          placeholder="Coupon code"
+          placeholderTextColor="#9ca3af"
+          value={couponCode}
+          onChangeText={setCouponCode}
+          autoCapitalize="characters"
+        />
         <ThemedView style={styles.totalContainer}>
           <ThemedText style={styles.totalLabel}>Total:</ThemedText>
           <ThemedText style={styles.totalAmount}>{formatPrice(getTotalPrice())}</ThemedText>
@@ -391,6 +401,15 @@ const styles = StyleSheet.create({
     padding: 20,
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
+  },
+  couponInput: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    marginBottom: 12,
+    color: '#1f2937',
   },
   totalContainer: {
     flexDirection: 'row',

@@ -18,13 +18,14 @@ const axios = require('axios');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 const socialAuthService = require('./socialAuthService');
+const smsService = require('./services/smsService');
 
 // Add console logging immediately for startup debugging
 console.log('🚀 Server startup initiated...');
 console.log('📦 Loading middleware modules...');
 
 // Phase 1 Security Middleware - wrap in try-catch to catch initialization errors
-let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter;
+let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter;
 let validate, validators;
 let errorHandler, errorLogger;
 let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
@@ -32,7 +33,7 @@ let validateFileMagic, clamavScanner;
 
 try {
   console.log('📦 Loading rate limiter...');
-  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter } = require('./middleware/rateLimiter'));
+  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter } = require('./middleware/rateLimiter'));
   
   console.log('📦 Loading validator...');
   ({ validate, validators } = require('./middleware/validator'));
@@ -546,6 +547,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// SMS send rate limiting (abuse protection)
+app.use('/api/coupons/sms/send', smsSendLimiter);
 
 // General API rate limiting (applies to all other /api/ routes)
 app.use('/api/', generalApiLimiter);
@@ -9991,7 +9995,7 @@ app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res
 // Stripe create checkout session (subscription endpoint)
 app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, res) => {
   try {
-    const { tier, newUser, subscriptionTier, amount } = req.body;
+    const { tier, newUser, subscriptionTier, amount, couponCode } = req.body;
     
     // Handle both old and new parameter formats
     const selectedTier = tier || subscriptionTier;
@@ -10006,7 +10010,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
     }
     const user = userResult.rows[0];
 
-    // Define subscription tiers with pricing
+    // Define subscription tiers with pricing (amount in cents)
     const tiers = {
       basic: { price: amount || 999, name: 'Basic Plan' },
       pro: { price: amount || 1999, name: 'Pro Plan' },
@@ -10019,6 +10023,41 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
       return res.status(400).json({ error: 'Invalid tier' });
     }
 
+    let unitAmount = tierInfo.price;
+    let coupon = null;
+
+    // Validate and apply coupon if provided
+    if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const tablesExist = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'coupons' LIMIT 1`);
+      if (tablesExist.rows.length > 0) {
+        const { rows: couponRows } = await db.query(
+          `SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 AND (is_signup_offer = true OR is_signup_offer IS NULL) LIMIT 1`,
+          [couponCode.toUpperCase().trim()]
+        );
+        if (couponRows.length) {
+          const c = couponRows[0];
+          if (!c.expires_at || new Date(c.expires_at) >= new Date()) {
+            if (c.max_redemptions == null) {
+              coupon = c;
+            } else {
+              const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [c.id]);
+              if (parseInt(red.rows[0].n, 10) < c.max_redemptions) coupon = c;
+            }
+          }
+        }
+      }
+      if (coupon) {
+        if (coupon.discount_type === 'percent') {
+          unitAmount = Math.round(unitAmount * (1 - Number(coupon.discount_value) / 100));
+        } else {
+          unitAmount = Math.max(0, unitAmount - Math.round(Number(coupon.discount_value) * 100));
+        }
+      }
+    }
+
+    const metadata = { userId: user.id.toString(), tier: selectedTier, newUser: newUser || 'false' };
+    if (coupon) metadata.couponId = String(coupon.id);
+
     // Create Stripe checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -10029,7 +10068,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
             name: tierInfo.name,
             description: `Subscription to ${tierInfo.name}`,
           },
-          unit_amount: tierInfo.price,
+          unit_amount: unitAmount,
         },
         quantity: 1,
       }],
@@ -10037,11 +10076,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
       success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/subscription`,
       customer_email: user.email,
-      metadata: {
-        userId: user.id.toString(),
-        tier: selectedTier,
-        newUser: newUser || 'false',
-      },
+      metadata,
     });
 
     console.log('✅ SUBSCRIPTION CHECKOUT: Session created successfully. Session ID:', session.id);
@@ -10055,7 +10090,7 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
 // ---------- CHECKOUT ROUTE ----------
 app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) => {
   try {
-    const { items, successUrl, cancelUrl } = req.body;
+    const { items, successUrl, cancelUrl, couponCode } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'No items provided' });
@@ -10070,6 +10105,29 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     rows.forEach((p) => productsMap.set(String(p.id), p));
 
     const line_items = [];
+    let coupon = null;
+
+    // Validate coupon if provided
+    if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
+      const tablesExist = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'coupons' LIMIT 1`);
+      if (tablesExist.rows.length > 0) {
+        const { rows: couponRows } = await db.query(
+          `SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 LIMIT 1`,
+          [couponCode.toUpperCase().trim()]
+        );
+        if (couponRows.length) {
+          const c = couponRows[0];
+          if (!c.expires_at || new Date(c.expires_at) >= new Date()) {
+            if (c.max_redemptions == null) {
+              coupon = c;
+            } else {
+              const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [c.id]);
+              if (parseInt(red.rows[0].n, 10) < c.max_redemptions) coupon = c;
+            }
+          }
+        }
+      }
+    }
 
     for (const it of items) {
       const prod = productsMap.get(String(it.productId));
@@ -10090,6 +10148,16 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
         unitAmount = Number(prod.metadata.unit_amount || prod.metadata.price);
       }
       if (unitAmount <= 0) continue;
+
+      // Apply coupon discount to unit amount
+      if (coupon) {
+        if (coupon.discount_type === 'percent') {
+          unitAmount = Math.round(unitAmount * (1 - Number(coupon.discount_value) / 100));
+        } else {
+          const off = Math.round(Number(coupon.discount_value) * 100); // fixed in dollars -> cents
+          unitAmount = Math.max(0, unitAmount - Math.floor(off / it.quantity));
+        }
+      }
 
       // Handle product images
       let productImages = [];
@@ -10120,15 +10188,16 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
       return res.status(400).json({ error: 'All items are out of stock or have invalid prices' });
     }
     
+    const metadata = { userId: req.user?.userId ? String(req.user.userId) : 'guest' };
+    if (coupon) metadata.couponId = String(coupon.id);
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
       success_url: successUrl || `${process.env.FRONTEND_URL}/store/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/store/checkout-cancel`,
-      metadata: {
-        userId: req.user?.userId ? String(req.user.userId) : 'guest',
-      }
+      metadata,
     });
 
     console.log('✅ CHECKOUT: Stripe session created successfully. Session ID:', session.id);
@@ -10138,6 +10207,190 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     console.error('🔴 CHECKOUT ERROR:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
+});
+
+// ---------- COUPON API ROUTES ----------
+const COUPON_CONSENT_COPY = 'I agree to receive marketing texts including coupons and offers.';
+
+// Helper: ensure coupon tables exist
+async function ensureCouponTables() {
+  const r = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'coupons' LIMIT 1`);
+  return r.rows.length > 0;
+}
+
+// POST /api/coupons - create coupon (authenticated)
+app.post('/api/coupons', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available. Run migration 033_coupons_and_sms_gate.sql' });
+    }
+    const { code, discountType, discountValue, maxRedemptions, expiresAt, itemIds } = req.body;
+    const userId = req.user.userId;
+    if (!code || !discountType || discountValue == null) {
+      return res.status(400).json({ error: 'code, discountType, and discountValue required' });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO coupons (owner_id, code, discount_type, discount_value, max_redemptions, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [userId, code.toUpperCase().trim(), discountType || 'percent', Number(discountValue), maxRedemptions || null, expiresAt || null]
+    );
+    const coupon = rows[0];
+    if (itemIds && Array.isArray(itemIds) && itemIds.length) {
+      for (const it of itemIds) {
+        await db.query(
+          `INSERT INTO coupon_item_map (coupon_id, product_id, playlist_id, slideshow_id)
+           VALUES ($1, $2, $3, $4)`,
+          [coupon.id, it.productId || null, it.playlistId || null, it.slideshowId || null]
+        );
+      }
+    }
+    res.status(201).json(coupon);
+  } catch (e) {
+    if (e.code === '23505') return res.status(409).json({ error: 'Coupon code already exists' });
+    console.error('Coupon create error:', e);
+    res.status(500).json({ error: 'Failed to create coupon' });
+  }
+});
+
+// GET /api/coupons - list user's coupons
+app.get('/api/coupons', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    const { rows } = await db.query(
+      `SELECT * FROM coupons WHERE owner_id = $1 ORDER BY created_at DESC`,
+      [req.user.userId]
+    );
+    res.json(rows);
+  } catch (e) {
+    console.error('Coupon list error:', e);
+    res.status(500).json({ error: 'Failed to list coupons' });
+  }
+});
+
+// PATCH /api/coupons/:id
+app.patch('/api/coupons/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
+    const id = parseInt(req.params.id, 10);
+    const { discountType, discountValue, maxRedemptions, expiresAt } = req.body;
+    const { rows } = await db.query(
+      `UPDATE coupons SET discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value),
+        max_redemptions = COALESCE($4, max_redemptions), expires_at = $5, updated_at = NOW()
+       WHERE id = $1 AND owner_id = $6 RETURNING *`,
+      [id, discountType, discountValue, maxRedemptions, expiresAt, req.user.userId]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Coupon not found' });
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('Coupon update error:', e);
+    res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+// POST /api/coupons/validate - validate coupon for checkout
+app.post('/api/coupons/validate', async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
+    const { code, productId, playlistId, slideshowId } = req.body;
+    if (!code) return res.status(400).json({ error: 'code required' });
+    const c = code.toUpperCase().trim();
+    const { rows } = await db.query(
+      `SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 LIMIT 1`,
+      [c]
+    );
+    if (!rows.length) return res.json({ valid: false, error: 'Invalid coupon' });
+    const coupon = rows[0];
+    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+      return res.json({ valid: false, error: 'Coupon expired' });
+    }
+    if (coupon.max_redemptions != null) {
+      const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [coupon.id]);
+      if (parseInt(red.rows[0].n, 10) >= coupon.max_redemptions) {
+        return res.json({ valid: false, error: 'Coupon limit reached' });
+      }
+    }
+    const { rows: maps } = await db.query(`SELECT * FROM coupon_item_map WHERE coupon_id = $1`, [coupon.id]);
+    if (maps.length) {
+      const applies = maps.some(m =>
+        (productId && m.product_id === Number(productId)) ||
+        (playlistId && m.playlist_id === Number(playlistId)) ||
+        (slideshowId && m.slideshow_id === Number(slideshowId))
+      );
+      if (!applies) return res.json({ valid: false, error: 'Coupon does not apply to this item' });
+    }
+    res.json({ valid: true, coupon: { id: coupon.id, code: coupon.code, discountType: coupon.discount_type, discountValue: coupon.discount_value, introPeriodMonths: coupon.intro_period_months } });
+  } catch (e) {
+    console.error('Coupon validate error:', e);
+    res.status(500).json({ error: 'Validation failed' });
+  }
+});
+
+// POST /api/coupons/sms/send - send coupon via SMS (consent required, rate limited)
+app.post('/api/coupons/sms/send', async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
+    const { phone, consent, couponId, consentCopyVersion } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    if (!consent) return res.status(400).json({ error: 'Marketing consent is required to receive coupon via SMS' });
+    const phoneE164 = phone.replace(/\D/g, '');
+    if (phoneE164.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+    const e164 = phoneE164.startsWith('1') && phoneE164.length === 11 ? `+${phoneE164}` : `+1${phoneE164}`;
+
+    let coupon = null;
+    if (couponId) {
+      const { rows } = await db.query(`SELECT * FROM coupons WHERE id = $1`, [couponId]);
+      coupon = rows[0] || null;
+    }
+    const code = coupon ? coupon.code : (req.body.code || 'WELCOME10');
+    const body = `Your coupon: ${code}. Use at checkout.`;
+
+    const copyVer = consentCopyVersion || COUPON_CONSENT_COPY;
+    await db.query(
+      `INSERT INTO marketing_sms_consents (phone_e164, consent_copy_version) VALUES ($1, $2)
+       ON CONFLICT (phone_e164) DO UPDATE SET consent_copy_version = $2, consented_at = NOW()`,
+      [e164, copyVer]
+    );
+    const { rows: cons } = await db.query(`SELECT id FROM marketing_sms_consents WHERE phone_e164 = $1`, [e164]);
+    const consentId = cons[0]?.id;
+
+    const result = await smsService.sendCouponSms(e164, body);
+    await db.query(
+      `INSERT INTO marketing_sms_events (phone_e164, consent_id, coupon_id, provider_message_id, provider_response, status)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [e164, consentId, coupon?.id || null, result.messageId || null, JSON.stringify(result.providerResponse || {}), result.error ? 'failed' : 'sent']
+    );
+
+    if (result.error) {
+      return res.status(502).json({ error: result.error, sent: false });
+    }
+    res.json({ sent: true, message: 'Coupon sent via SMS' });
+  } catch (e) {
+    console.error('Coupon SMS send error:', e);
+    res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+// GET /api/coupons/preview-gate-settings - public settings for preview gate (skip allowed, etc.)
+app.get('/api/coupons/preview-gate-settings', async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.json({ skipAllowed: true, smsConfigured: false });
+    }
+    const { rows } = await db.query(
+      `SELECT setting_value FROM system_feature_settings WHERE setting_key = 'preview_gate_skip_allowed' LIMIT 1`
+    );
+    const skipAllowed = rows[0] ? (rows[0].setting_value?.skipAllowed !== false) : true;
+    res.json({ skipAllowed, smsConfigured: smsService.isSmsConfigured() });
+  } catch (e) {
+    res.json({ skipAllowed: true, smsConfigured: false });
+  }
+});
+
+// GET /api/coupons/sms-status - admin: check if Brevo SMS is configured
+app.get('/api/coupons/sms-status', authenticateToken, isAdmin, async (req, res) => {
+  res.json({ configured: smsService.isSmsConfigured() });
 });
 
 // ---------- STRIPE WEBHOOK HANDLER ----------
@@ -10221,6 +10474,21 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
              ON CONFLICT (stripe_session_id) DO NOTHING`,
             [session.id, userId, session.amount_total, JSON.stringify(items)]
           );
+
+          // Record coupon redemption if coupon was used
+          const couponId = session.metadata?.couponId ? parseInt(session.metadata.couponId, 10) : null;
+          if (couponId && !isNaN(couponId)) {
+            try {
+              await db.query(
+                `INSERT INTO coupon_redemptions (coupon_id, user_id, stripe_session_id) VALUES ($1, $2, $3)`,
+                [couponId, userId, session.id]
+              );
+              console.log('💳 STRIPE_WEBHOOK: Coupon redemption recorded');
+            } catch (redErr) {
+              console.warn('💳 STRIPE_WEBHOOK: Coupon redemption insert failed (table may not exist):', redErr?.message);
+            }
+          }
+
           console.log('💳 STRIPE_WEBHOOK: Order recorded and events mirrored');
 
           // Notify merchant via email (best-effort)

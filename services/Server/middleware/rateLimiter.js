@@ -68,6 +68,16 @@ const mediaStreamLimiter = rateLimit({
   validate: { trustProxy: false }, // Suppress warning - Railway proxy is trusted and correctly configured
 });
 
+// Rate limiter for coupon SMS send (abuse protection)
+const smsSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 5, // 5 SMS sends per IP per hour
+  message: { error: 'Too many SMS requests. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   authLimiter,
   uploadLimiter,
@@ -75,5 +85,6 @@ module.exports = {
   mediaCreationLimiter,
   mediaReadLimiter,
   mediaStreamLimiter,
+  smsSendLimiter,
 };
 

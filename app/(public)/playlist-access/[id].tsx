@@ -25,6 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import PreviewGateModal from '@/components/PreviewGateModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -40,6 +41,7 @@ export default function PlaylistAccessScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isValidating, setIsValidating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showPreviewGateModal, setShowPreviewGateModal] = useState(false);
   const [previewCompleted, setPreviewCompleted] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -576,7 +578,13 @@ export default function PlaylistAccessScreen() {
   };
 
   const handlePreviewStart = () => {
+    console.log('🔴 PLAYLIST_ACCESS: Showing preview gate modal');
+    setShowPreviewGateModal(true);
+  };
+
+  const handlePreviewGateStart = () => {
     console.log('🔴 PLAYLIST_ACCESS: Starting 30-second preview');
+    setShowPreviewGateModal(false);
     setShowPreview(true);
   };
 
@@ -1095,6 +1103,16 @@ export default function PlaylistAccessScreen() {
         </View>
       </View>
       </ScrollView>
+
+      {/* Preview Gate Modal (phone + consent before preview) */}
+      <PreviewGateModal
+        visible={showPreviewGateModal}
+        onClose={() => setShowPreviewGateModal(false)}
+        onStartPreview={handlePreviewGateStart}
+        contentType="playlist"
+        contentId={id}
+        contentName={playlist?.name}
+      />
 
       {/* Demographics Survey Overlay */}
       <DemographicsSurveyOverlay
