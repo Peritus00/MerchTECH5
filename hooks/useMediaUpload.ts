@@ -11,6 +11,23 @@ import { useQueryClient } from '@tanstack/react-query';
 const MAX_FILE_SIZE_WEB = 1024 * 1024 * 1024; // 1GB for web
 const MAX_FILE_SIZE_MOBILE = 200 * 1024 * 1024; // 200MB for mobile
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks (under Vercel's 6MB limit)
+const MIME_TYPE_EXTENSIONS: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+  'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+  'audio/mpeg': 'mp3',
+  'audio/mp3': 'mp3',
+  'audio/wav': 'wav',
+  'audio/aac': 'aac',
+  'audio/ogg': 'ogg',
+  'audio/flac': 'flac',
+};
 
 interface UploadProgress {
   loaded: number;
@@ -64,6 +81,53 @@ export const useMediaUpload = (): UseMediaUploadResult => {
   };
 
   let uploadStartTime = Date.now();
+
+  const sanitizeFilename = (filename: string) =>
+    filename.replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '');
+
+  const getFileExtension = (filename: string, mimeType?: string) => {
+    const extensionMatch = filename.match(/\.([A-Za-z0-9]+)$/);
+    if (extensionMatch) {
+      return extensionMatch[1];
+    }
+
+    if (!mimeType) return '';
+
+    const mappedExtension = MIME_TYPE_EXTENSIONS[mimeType.toLowerCase()];
+    if (mappedExtension) {
+      return mappedExtension;
+    }
+
+    const subtype = mimeType.split('/')[1];
+    return subtype ? subtype.replace(/[^A-Za-z0-9]+/g, '') : '';
+  };
+
+  const ensureUploadableUri = async (uri: string, filename: string, mimeType?: string) => {
+    if (Platform.OS === 'web' || !uri || !uri.startsWith('content://')) {
+      return uri;
+    }
+
+    if (!FileSystem.cacheDirectory) {
+      throw new Error('Temporary storage is unavailable for shared media uploads.');
+    }
+
+    const safeFilename = sanitizeFilename(filename.replace(/\.[A-Za-z0-9]+$/, '')) || 'shared-media';
+    const extension = getFileExtension(filename, mimeType);
+    const cachedUri = `${FileSystem.cacheDirectory}${safeFilename}-${Date.now()}${extension ? `.${extension}` : ''}`;
+
+    console.log('📥 SHARE_IMPORT: Copying Android content URI to cache before upload', {
+      from: uri,
+      to: cachedUri,
+      mimeType,
+    });
+
+    await FileSystem.copyAsync({
+      from: uri,
+      to: cachedUri,
+    });
+
+    return cachedUri;
+  };
 
   const uploadFile = async (file: DocumentPicker.DocumentPickerResult): Promise<MediaFile> => {
     if (file.canceled || !file.assets || file.assets.length === 0) {
@@ -150,9 +214,11 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         }
       } else {
         // Mobile platforms (iOS/Android) - use URI directly
+        const uploadableUri = await ensureUploadableUri(asset.uri, asset.name, asset.mimeType);
+
         // Create a File-like object that works with React Native
         fileToUpload = {
-          uri: asset.uri,
+          uri: uploadableUri,
           name: asset.name,
           type: asset.mimeType || 'application/octet-stream'
         } as any;
