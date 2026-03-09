@@ -65,6 +65,18 @@
       "expo-notifications",
       "expo-document-picker",
       [
+        "expo-share-intent",
+        {
+          "iosActivationRules": {
+            "NSExtensionActivationSupportsImageWithMaxCount": 5,
+            "NSExtensionActivationSupportsMovieWithMaxCount": 5,
+            "NSExtensionActivationSupportsFileWithMaxCount": 5
+          },
+          "androidIntentFilters": ["image/*", "video/*", "audio/*"],
+          "androidMultiIntentFilters": ["image/*", "video/*", "audio/*"]
+        }
+      ],
+      [
         "expo-apple-authentication",
         {
           "appleTeamId": "4F996CU4LJ"
