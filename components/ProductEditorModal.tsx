@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
 import { Colors } from '@/constants/Colors';
 import * as ImagePicker from 'expo-image-picker';
-import { api, uploadAPI } from '@/services/api';
+import { api, mediaAPI } from '@/services/api';
 
 interface Props {
   visible: boolean;
@@ -132,7 +132,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
           };
         }
 
-        console.log('📤 PRODUCT: Uploading image to S3...', {
+        console.log('📤 PRODUCT: Uploading image to S3 via presigned flow...', {
           name: filePayload.name || filePayload.uri?.split('/').pop(),
           type: filePayload.type,
           isFile: filePayload instanceof File,
@@ -144,15 +144,13 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
           }
         });
 
-        // Upload directly to S3 using the existing /upload endpoint which already uses S3
-        const formData = new FormData();
-        formData.append('image', filePayload);
-        
-        const uploadResponse = await uploadAPI.post('/upload', formData);
-
-        const imageUrl = uploadResponse.data.imageUrl;
+        const uploadedMedia = await mediaAPI.uploadFile(filePayload);
+        const imageUrl = uploadedMedia?.url;
+        if (!imageUrl) {
+          throw new Error('Upload succeeded but no URL returned');
+        }
         console.log('📤 PRODUCT: S3 upload successful:', imageUrl);
-        
+
         setImages([...images, imageUrl]);
       } catch (error) {
         console.error('📤 PRODUCT: Upload failed:', error);

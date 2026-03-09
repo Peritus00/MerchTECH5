@@ -37,7 +37,7 @@ try {
   ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter } = require('./middleware/rateLimiter'));
   
   console.log('📦 Loading validator...');
-  ({ validate, validators } = require('./middleware/validator'));
+  ({ validate, validators, normalizeConfirmUploadBody } = require('./middleware/validator'));
   
   console.log('📦 Loading error handler...');
   ({ errorHandler, errorLogger } = require('./middleware/errorHandler'));
@@ -8790,10 +8790,11 @@ app.get('/api/images/local/:filename', async (req, res) => {
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media/confirm-upload',
   authenticateToken,
+  normalizeConfirmUploadBody,
   validators.title,
-  validators.fileName,
+  validators.filename,
   validators.contentType,
-  validators.fileSize,
+  validators.filesize,
   validators.s3Key,
   validators.optionalString('fileUrl', 2048),
   validators.optionalString('fileType', 50),

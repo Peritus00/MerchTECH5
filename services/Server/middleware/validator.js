@@ -78,6 +78,26 @@ const validators = {
     .matches(/^users\/\d+\/media\/[\d]+-[a-zA-Z0-9._-]+$/)
     .withMessage('Invalid S3 key format'),
 
+  // Filename validation for confirm-upload (canonical: lowercase)
+  filename: body('filename')
+    .notEmpty()
+    .withMessage('Filename is required')
+    .isLength({ max: 255 })
+    .withMessage('Filename must be less than 255 characters')
+    .trim()
+    .custom((value) => {
+      if (value.includes('..') || value.includes('/') || value.includes('\\')) {
+        throw new Error('Filename cannot contain path separators');
+      }
+      return true;
+    }),
+
+  // File size for confirm-upload (canonical: lowercase, optional)
+  filesize: body('filesize')
+    .optional()
+    .isInt({ min: 1, max: 5368709120 })
+    .withMessage('File size must be between 1 byte and 5GB'),
+
   // Title validation
   title: body('title')
     .optional()
@@ -93,8 +113,20 @@ const validators = {
       .withMessage(`${field} must be less than ${maxLength} characters`),
 };
 
+// Normalize confirm-upload body: accept fileName->filename, fileSize->filesize for backward compatibility
+const normalizeConfirmUploadBody = (req, res, next) => {
+  if (req.body.fileName && !req.body.filename) {
+    req.body.filename = req.body.fileName;
+  }
+  if (req.body.fileSize !== undefined && req.body.filesize === undefined) {
+    req.body.filesize = req.body.fileSize;
+  }
+  next();
+};
+
 module.exports = {
   validate,
   validators,
+  normalizeConfirmUploadBody,
 };
 
