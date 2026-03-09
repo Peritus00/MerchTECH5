@@ -132,34 +132,28 @@ export const AudioMediaPicker: React.FC<AudioMediaPickerProps> = ({
         fileToUpload = {
           uri: file.uri,
           name: filename,
-          type: file.mimeType || 'audio/mpeg'
+          type: file.mimeType || 'audio/mpeg',
+          size: file.size,
         } as any;
       }
       
       // Upload the file
-      const uploadResult = await mediaAPI.uploadFile(fileToUpload);
-      console.log('🎵 AUDIO_PICKER: Upload successful:', uploadResult);
-
-      // Create media record
-      const mediaData = {
-        title: file.name || 'Untitled Audio',
-        url: uploadResult.url,
-        proxy_url: uploadResult.proxy_url,
-        s3_key: uploadResult.key,
-        filename: filename,
-        fileType: 'audio',
-        contentType: file.mimeType,
-        filesize: file.size,
-      };
-      
-      const newMediaFile = await mediaAPI.create(mediaData);
+      const newMediaFile = await mediaAPI.uploadFile(fileToUpload);
       console.log('🎵 AUDIO_PICKER: Media record created:', newMediaFile);
 
       // Add to local list and select it
       setAudioFiles(prev => [newMediaFile, ...prev]);
-      setSelectedFile(newMediaFile);
+      const uploadStatus = newMediaFile?.uploadStatus || newMediaFile?.upload_status;
+      if (uploadStatus === 'ready') {
+        setSelectedFile(newMediaFile);
+      }
       
-      Alert.alert('Success', 'Audio file uploaded successfully');
+      Alert.alert(
+        uploadStatus === 'ready' ? 'Success' : 'Upload Pending',
+        uploadStatus === 'ready'
+          ? 'Audio file uploaded successfully'
+          : 'Audio file uploaded and is awaiting a security scan before it can be played.'
+      );
     } catch (error) {
       console.error('🎵 AUDIO_PICKER: Upload error:', error);
       Alert.alert('Error', 'Failed to upload audio file');

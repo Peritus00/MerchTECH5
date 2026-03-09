@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '@/config/environment';
 import { MediaFile } from '@/shared/media-schema';
 import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 
 // Use centralized environment configuration
 const API_BASE_URL = env.apiBaseUrl;
@@ -623,34 +624,87 @@ export const mediaAPI = {
     file: File | any,
     onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
   ) {
-    const formData = new FormData();
-    
-    // Handle different platforms
-    if (Platform.OS === 'web') {
-      // Web platform - file is a File object
-      formData.append('image', file);
-    } else {
-      // Mobile platforms (iOS/Android) - file has uri, name, type properties
-      formData.append('image', {
-        uri: file.uri,
-        name: file.name,
-        type: file.type
-      } as any);
+    const fileName = file.name || `upload_${Date.now()}`;
+    const contentType = file.type || 'application/octet-stream';
+
+    let fileSize = file.size || file.fileSize;
+    if (!fileSize && file.uri && Platform.OS !== 'web') {
+      const fileInfo = await FileSystem.getInfoAsync(file.uri);
+      if (fileInfo.exists && 'size' in fileInfo) {
+        fileSize = fileInfo.size;
+      }
     }
 
-    const config = {
-      onUploadProgress: (progressEvent: any) => {
-        if (onProgress && progressEvent.total) {
-          const loaded = progressEvent.loaded || 0;
-          const total = progressEvent.total || 0;
-          const percentage = total > 0 ? Math.round((loaded * 100) / total) : 0;
-          onProgress({ loaded, total, percentage });
-        }
-      },
-    };
+    if (!fileSize) {
+      throw new Error('Unable to determine file size before upload.');
+    }
 
-    const response = await uploadAPI.post('/upload', formData, config);
-    return response.data;
+    const fileType =
+      contentType.startsWith('video/')
+        ? 'video'
+        : contentType.startsWith('image/')
+          ? 'image'
+          : 'audio';
+
+    const presignedResponse = await api.post('/upload/presigned', {
+      fileName,
+      contentType,
+      fileSize,
+    });
+
+    const { uploadUrl, fileUrl, key } = presignedResponse.data;
+
+    if (Platform.OS === 'web') {
+      await axios.put(uploadUrl, file, {
+        headers: {
+          'Content-Type': contentType,
+        },
+        onUploadProgress: (progressEvent: any) => {
+          if (onProgress && progressEvent.total) {
+            const loaded = progressEvent.loaded || 0;
+            const total = progressEvent.total || 0;
+            const percentage = total > 0 ? Math.round((loaded * 100) / total) : 0;
+            onProgress({ loaded, total, percentage });
+          }
+        },
+      });
+    } else {
+      const uploadAsync = (FileSystem as any).uploadAsync;
+      if (typeof uploadAsync !== 'function') {
+        throw new Error('Direct mobile upload is not available on this device.');
+      }
+
+      const uploadResult = await uploadAsync(uploadUrl, file.uri, {
+        httpMethod: 'PUT',
+        headers: {
+          'Content-Type': contentType,
+        },
+        uploadType: (FileSystem as any).FileSystemUploadType?.BINARY_CONTENT,
+      });
+
+      const statusCode = uploadResult?.status ?? uploadResult?.statusCode;
+      if (statusCode < 200 || statusCode >= 300) {
+        throw new Error(`Presigned upload failed with status ${statusCode}`);
+      }
+
+      if (onProgress) {
+        onProgress({
+          loaded: fileSize,
+          total: fileSize,
+          percentage: 100,
+        });
+      }
+    }
+
+    return this.confirmUpload({
+      title: fileName,
+      fileUrl,
+      filename: fileName,
+      fileType,
+      contentType,
+      filesize: fileSize,
+      s3Key: key,
+    });
   },
 
   async create(mediaData: Partial<MediaFile>) {

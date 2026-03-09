@@ -222,11 +222,12 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         fileToUpload = {
           uri: uploadableUri,
           name: asset.name,
-          type: asset.mimeType || 'application/octet-stream'
+          type: asset.mimeType || 'application/octet-stream',
+          size: asset.size,
         } as any;
       }
 
-      const uploadResult = await mediaAPI.uploadFile(fileToUpload, (progress) => {
+      const uploadedFile = await mediaAPI.uploadFile(fileToUpload, (progress) => {
         if (progress.percentage >= 100) {
           updateProgress(progress.total, progress.total, 'verifying');
           return;
@@ -235,33 +236,22 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         updateProgress(progress.loaded, progress.total, 'uploading');
       });
 
-      const completedBytes = uploadResult.filesize || asset.size || 0;
-      updateProgress(completedBytes, completedBytes, 'creating');
-
-      const mediaData = {
-        title: asset.name || 'Untitled',
-        url: uploadResult.url,
-        proxy_url: uploadResult.proxy_url,
-        s3_key: uploadResult.key,  // Fixed: use s3_key instead of key
-        filename: asset.name,
-        fileType: getFileType(asset.mimeType || ''),
-        contentType: asset.mimeType,
-        // Use actual uploaded file size from S3 instead of original file size
-        // This prevents validation failures if the file was truncated during upload
-        filesize: uploadResult.filesize || asset.size,
-      };
-      
-      const uploadedFile = await mediaAPI.create(mediaData);
-
       console.log('🔴 UPLOAD: Upload successful:', uploadedFile);
 
       await queryClient.invalidateQueries({ queryKey: ['media'] });
       console.log('✅ invalidated media query');
 
-      updateProgress(100, 100, 'complete');
-      
-      // Show success notification
-      showUploadSuccess(asset.name);
+      const uploadStatus = uploadedFile?.uploadStatus || uploadedFile?.upload_status;
+      if (uploadStatus === 'pending_scan' || uploadStatus === 'scanning') {
+        updateProgress(100, 100, 'pending_scan');
+        showUploadWarning(
+          'Upload complete. The file is awaiting a security scan before it becomes available.',
+          asset.name
+        );
+      } else {
+        updateProgress(100, 100, 'complete');
+        showUploadSuccess(asset.name);
+      }
 
       await new Promise(resolve => setTimeout(resolve, 500));
 

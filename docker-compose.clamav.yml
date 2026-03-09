@@ -6,7 +6,9 @@ version: '3.8'
 
 services:
   clamav:
+    # Keep image current to avoid legacy 0.102.x engines that are blocked from updates.
     image: clamav/clamav:latest
+    pull_policy: always
     container_name: merchtech-clamav
     ports:
       - "3310:3310"
@@ -15,7 +17,7 @@ services:
     environment:
       - CLAMAV_NO_FRESHCLAM=false
     healthcheck:
-      test: ["CMD", "clamdscan", "--ping", "3"]
+      test: ["CMD", "clamdscan", "--ping"]
       interval: 60s
       timeout: 10s
       retries: 3

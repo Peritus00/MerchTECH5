@@ -36,6 +36,26 @@ class S3Service {
     }
   }
 
+  async send(command, { abortSignal, timeoutMs } = {}) {
+    let timeoutId = null;
+    let controller = null;
+
+    if (!abortSignal && timeoutMs) {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
+
+    try {
+      return await s3Client.send(command, {
+        abortSignal: abortSignal || controller?.signal,
+      });
+    } finally {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    }
+  }
+
   async getPresignedUploadUrl(fileName, contentType, userId, fileSize) {
     try {
       // Always use structured key for all uploads
@@ -129,13 +149,13 @@ class S3Service {
     }
   }
 
-  async deleteFile(key) {
+  async deleteFile(key, options = {}) {
     try {
       const command = new DeleteObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      await s3Client.send(command);
+      await this.send(command, options);
       console.log(`🗑️  File deleted from S3: ${key}`);
     } catch (error) {
       console.error('❌ Failed to delete file from S3:', error);
@@ -143,13 +163,13 @@ class S3Service {
     }
   }
 
-  async fileExists(key) {
+  async fileExists(key, options = {}) {
     try {
       const command = new HeadObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      await s3Client.send(command);
+      await this.send(command, options);
       return true;
     } catch (error) {
       if (error?.name === 'NotFound') {
@@ -159,13 +179,13 @@ class S3Service {
     }
   }
 
-  async getFileMetadata(key) {
+  async getFileMetadata(key, options = {}) {
     try {
       const command = new HeadObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      const metadata = await s3Client.send(command);
+      const metadata = await this.send(command, options);
       return metadata;
     } catch (error) {
       console.error('❌ Failed to get file metadata from S3:', error);
@@ -173,13 +193,13 @@ class S3Service {
     }
   }
 
-  async getMetadata(key) {
+  async getMetadata(key, options = {}) {
     try {
       const command = new HeadObjectCommand({
         Bucket: this.bucketName,
         Key: key,
       });
-      const { ContentLength, ContentType, ETag, LastModified } = await s3Client.send(command);
+      const { ContentLength, ContentType, ETag, LastModified } = await this.send(command, options);
       return { ContentLength, ContentType, ETag, LastModified };
     } catch (error) {
       console.error(`❌ Failed to get metadata for ${key}:`, error);
@@ -187,7 +207,7 @@ class S3Service {
     }
   }
 
-  async getStream(key, range = null) {
+  async getStream(key, range = null, options = {}) {
     const params = {
       Bucket: this.bucketName,
       Key: key,
@@ -198,7 +218,7 @@ class S3Service {
     const command = new GetObjectCommand(params);
     
     try {
-      const response = await s3Client.send(command);
+      const response = await this.send(command, options);
       return {
         stream: response.Body,
         metadata: {
@@ -212,6 +232,17 @@ class S3Service {
       console.error('❌ Failed to get S3 stream:', error);
       throw new Error(`Failed to get S3 stream: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  async getObjectBuffer(key, options = {}) {
+    const { stream } = await this.getStream(key, null, options);
+    const chunks = [];
+
+    for await (const chunk of stream) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+
+    return Buffer.concat(chunks);
   }
 
   extractKeyFromUrl(url) {

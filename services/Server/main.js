@@ -13,6 +13,7 @@ const multer = require('multer');
 const fs = require('fs');
 const os = require('os');
 const { Readable } = require('stream');
+const { pipeline } = require('stream/promises');
 const s3Service = require('./s3Service');
 const axios = require('axios');
 const helmet = require('helmet');
@@ -8164,6 +8165,187 @@ function buildUploadFailureError(uploadErr, requestId) {
     };
 }
 
+let mediaUploadWorkflowSchemaPromise = null;
+
+async function ensureMediaUploadWorkflowSchema() {
+    if (!mediaUploadWorkflowSchemaPromise) {
+        mediaUploadWorkflowSchemaPromise = (async () => {
+            const statements = [
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS upload_status VARCHAR(32) NOT NULL DEFAULT 'ready'`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS scan_status VARCHAR(32)`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS scan_details JSONB`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS scan_started_at TIMESTAMP`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS scanned_at TIMESTAMP`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP`,
+                `ALTER TABLE media ADD COLUMN IF NOT EXISTS rejected_at TIMESTAMP`,
+                `CREATE INDEX IF NOT EXISTS idx_media_upload_status ON media(upload_status)`,
+                `CREATE INDEX IF NOT EXISTS idx_media_scan_status ON media(scan_status)`
+            ];
+
+            for (const sql of statements) {
+                await db.query(sql);
+            }
+        })().catch((error) => {
+            mediaUploadWorkflowSchemaPromise = null;
+            throw error;
+        });
+    }
+
+    return mediaUploadWorkflowSchemaPromise;
+}
+
+function getMediaUploadStatus(media) {
+    return media?.upload_status || 'ready';
+}
+
+function getMediaScanStatus(media) {
+    return media?.scan_status || (getMediaUploadStatus(media) === 'ready' ? 'clean' : null);
+}
+
+function isMediaReadyForPublicAccess(media) {
+    return getMediaUploadStatus(media) === 'ready';
+}
+
+function getMediaType(media) {
+    if (media.content_type) {
+        if (media.content_type.startsWith('video/')) return 'video';
+        if (media.content_type.startsWith('audio/')) return 'audio';
+        if (media.content_type.startsWith('image/')) return 'image';
+    }
+
+    if (media.file_type) {
+        const fileTypeUpper = media.file_type.toUpperCase();
+        if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
+            return 'video';
+        }
+        if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
+            return 'image';
+        }
+    }
+
+    return 'audio';
+}
+
+function getPublicMediaBaseUrl() {
+    return process.env.NODE_ENV === 'production'
+        ? 'https://merchtech5-production.up.railway.app'
+        : `http://localhost:${PORT}`;
+}
+
+function serializeMediaRecord(media, properUrl) {
+    return {
+        ...media,
+        url: properUrl,
+        title: media.title,
+        fileType: media.file_type,
+        contentType: media.content_type,
+        type: getMediaType(media),
+        uploadStatus: getMediaUploadStatus(media),
+        scanStatus: getMediaScanStatus(media),
+    };
+}
+
+async function markMediaScanResult(mediaId, fields) {
+    await ensureMediaUploadWorkflowSchema();
+
+    const keys = Object.keys(fields);
+    if (keys.length === 0) return;
+
+    const assignments = keys.map((key, index) => `${key} = $${index + 2}`);
+    const values = keys.map((key) => fields[key]);
+    await db.query(
+        `UPDATE media SET ${assignments.join(', ')} WHERE id = $1`,
+        [mediaId, ...values]
+    );
+}
+
+async function queuePendingMediaScan(media) {
+    if (!clamavScanner.isConfigured() || !media?.s3_key) {
+        return;
+    }
+
+    setImmediate(async () => {
+        try {
+            await markMediaScanResult(media.id, {
+                upload_status: 'scanning',
+                scan_status: 'pending',
+                scan_started_at: new Date(),
+            });
+
+            const objectBuffer = await s3Service.getObjectBuffer(media.s3_key, { timeoutMs: 300000 });
+            const scanResult = await clamavScanner.scanBuffer(objectBuffer, media.filename || media.title || media.s3_key);
+
+            if (scanResult.infected) {
+                try {
+                    await s3Service.deleteFile(media.s3_key, { timeoutMs: 120000 });
+                } catch (cleanupError) {
+                    console.error(`❌ MEDIA_SCAN: Failed to delete infected S3 object ${media.s3_key}:`, cleanupError.message);
+                }
+
+                try {
+                    const { securityAuditLogger } = require('./config/security');
+                    securityAuditLogger.log({
+                        type: 'upload_malware_detected',
+                        severity: 'high',
+                        userId: media.user_id,
+                        action: 'Upload rejected after asynchronous malware scan',
+                        resource: '/api/media/confirm-upload',
+                        success: false,
+                        details: {
+                            mediaId: media.id,
+                            filename: media.filename,
+                            viruses: scanResult.viruses || [],
+                            s3Key: media.s3_key,
+                        }
+                    });
+                } catch (_) {}
+
+                try {
+                    await db.query(
+                        `INSERT INTO quarantined_files (filename, mime_type, file_size, user_id, scan_result, upload_endpoint, virus_names, s3_key)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                        [
+                            media.filename || media.title || 'unknown',
+                            media.content_type,
+                            media.filesize || null,
+                            media.user_id,
+                            JSON.stringify(scanResult),
+                            '/api/media/confirm-upload',
+                            scanResult.viruses || [],
+                            media.s3_key,
+                        ]
+                    );
+                } catch (_) {}
+
+                await markMediaScanResult(media.id, {
+                    upload_status: 'rejected',
+                    scan_status: 'infected',
+                    scan_details: JSON.stringify(scanResult),
+                    scanned_at: new Date(),
+                    rejected_at: new Date(),
+                });
+                return;
+            }
+
+            await markMediaScanResult(media.id, {
+                upload_status: 'ready',
+                scan_status: scanResult.skipped ? 'skipped' : 'clean',
+                scan_details: JSON.stringify(scanResult),
+                scanned_at: new Date(),
+                approved_at: new Date(),
+            });
+        } catch (error) {
+            console.error(`❌ MEDIA_SCAN: Async scan failed for media ${media?.id}:`, error.message);
+            await markMediaScanResult(media.id, {
+                upload_status: 'pending_scan',
+                scan_status: 'failed',
+                scan_details: JSON.stringify({ error: getSafeErrorMessage(error) }),
+                scanned_at: new Date(),
+            });
+        }
+    });
+}
+
 app.post('/api/upload', authenticateToken, (req, res, next) => {
     const requestId = `req_${Date.now()}`;
     console.log(`📤 UPLOAD [${requestId}]: Starting upload request for user ${req.user?.userId}`);
@@ -8487,7 +8669,7 @@ app.get('/api/images/s3/*', async (req, res) => {
             }
         }
         
-        const { stream, metadata } = await s3Service.getStream(s3Key);
+        const { stream, metadata } = await s3Service.getStream(s3Key, null, { timeoutMs: 60000 });
         
         console.log(`🔍 IMAGE_PROXY: S3 metadata for "${s3Key}":`, metadata);
         
@@ -8519,9 +8701,10 @@ app.get('/api/images/s3/*', async (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-        stream.pipe(res);
+        await pipeline(stream, res);
         
         console.log(`✅ IMAGE_PROXY: Successfully streamed "${s3Key}" with content type "${contentType}"`);
+        return;
         
     } catch (error) {
         console.error(`🔴 IMAGE_PROXY_ERROR: Failed to stream image for key "${key}":`, error);
@@ -8530,11 +8713,11 @@ app.get('/api/images/s3/*', async (req, res) => {
         if (!key.startsWith('users/')) {
             try {
                 console.log(`🔗 IMAGE_PROXY: Trying original key as fallback: "${key}"`);
-                const { stream, metadata } = await s3Service.getStream(key);
+                const { stream, metadata } = await s3Service.getStream(key, null, { timeoutMs: 60000 });
                 res.setHeader('Content-Type', metadata.ContentType);
                 res.setHeader('Content-Length', metadata.ContentLength);
                 res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-                stream.pipe(res);
+                await pipeline(stream, res);
                 console.log(`✅ IMAGE_PROXY: Successfully streamed original key "${key}"`);
                 return;
             } catch (fallbackError) {
@@ -8605,6 +8788,143 @@ app.get('/api/images/local/:filename', async (req, res) => {
     }
 });
 // ---------- MEDIA ROUTES ----------
+app.post('/api/media/confirm-upload',
+  authenticateToken,
+  validators.title,
+  validators.fileName,
+  validators.contentType,
+  validators.fileSize,
+  validators.s3Key,
+  validators.optionalString('fileUrl', 2048),
+  validators.optionalString('fileType', 50),
+  validate,
+  async (req, res) => {
+    try {
+      await ensureMediaUploadWorkflowSchema();
+
+      const {
+        title,
+        fileUrl,
+        filename,
+        fileType,
+        contentType,
+        filesize,
+        duration,
+        s3Key,
+      } = req.body;
+
+      if (!s3Key.startsWith(`users/${req.user.userId}/media/`)) {
+        return res.status(403).json({ error: 'Forbidden: invalid upload ownership' });
+      }
+
+      const existingResult = await db.query(
+        'SELECT * FROM media WHERE user_id = $1 AND s3_key = $2 ORDER BY id DESC LIMIT 1',
+        [req.user.userId, s3Key]
+      );
+
+      if (existingResult.rows[0]) {
+        const existingMedia = existingResult.rows[0];
+        if (getMediaUploadStatus(existingMedia) !== 'ready') {
+          await queuePendingMediaScan(existingMedia);
+        }
+
+        return res.status(isMediaReadyForPublicAccess(existingMedia) ? 200 : 202).json(
+          serializeMediaRecord(existingMedia, `${getPublicMediaBaseUrl()}/api/media/${existingMedia.id}/stream`)
+        );
+      }
+
+      const metadata = await s3Service.getMetadata(s3Key, { timeoutMs: 30000 });
+      const actualSize = metadata.ContentLength;
+      if (filesize && actualSize !== filesize) {
+        return res.status(400).json({
+          error: 'File validation failed: File size mismatch on S3. The file may be corrupted or incomplete.',
+          code: 'FILE_SIZE_MISMATCH',
+          details: {
+            expectedSize: filesize,
+            actualSize,
+            s3Key,
+          }
+        });
+      }
+
+      const userResult = await db.query('SELECT subscription_tier, max_audio_files FROM users WHERE id = $1', [req.user.userId]);
+      const user = userResult.rows[0];
+      const userTier = user?.subscription_tier || 'free';
+      const countResult = await db.query('SELECT COUNT(*) FROM media WHERE user_id = $1', [req.user.userId]);
+      const currentCount = parseInt(countResult.rows[0].count);
+
+      let maxAudioFiles;
+      if (user?.max_audio_files !== null && user?.max_audio_files !== undefined) {
+        maxAudioFiles = user.max_audio_files;
+      } else {
+        const limits = {
+          free: { maxAudioFiles: 3 },
+          basic: { maxAudioFiles: 10 },
+          premium: { maxAudioFiles: 20 }
+        };
+        maxAudioFiles = (limits[userTier] || limits.free).maxAudioFiles;
+      }
+
+      if (currentCount >= maxAudioFiles) {
+        return res.status(403).json({
+          error: `Audio file limit reached. You have reached your limit of ${maxAudioFiles} audio files. Please contact support if you need to increase your limit.`,
+          limit: maxAudioFiles,
+          current: currentCount,
+          subscriptionTier: userTier,
+          isCustomLimit: user?.max_audio_files !== null && user?.max_audio_files !== undefined
+        });
+      }
+
+      const initialUploadStatus = clamavScanner.isConfigured() ? 'pending_scan' : 'ready';
+      const initialScanStatus = clamavScanner.isConfigured() ? 'pending' : 'skipped';
+      const persistedFileUrl = fileUrl || `https://${s3Service.bucketName}.s3.${s3Service.region}.amazonaws.com/${s3Key}`;
+      const resolvedFileType =
+        fileType ||
+        (contentType.startsWith('video/')
+          ? 'video'
+          : contentType.startsWith('image/')
+            ? 'image'
+            : 'audio');
+
+      const insertResult = await db.query(
+        `INSERT INTO media (
+          user_id, title, file_path, url, filename, file_type, content_type, filesize, duration, s3_key,
+          upload_status, scan_status, approved_at
+        )
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         RETURNING *`,
+        [
+          req.user.userId,
+          title,
+          persistedFileUrl,
+          persistedFileUrl,
+          filename,
+          resolvedFileType,
+          contentType,
+          actualSize || filesize,
+          duration || null,
+          s3Key,
+          initialUploadStatus,
+          initialScanStatus,
+          initialUploadStatus === 'ready' ? new Date() : null,
+        ]
+      );
+
+      const media = insertResult.rows[0];
+      if (initialUploadStatus === 'pending_scan') {
+        await queuePendingMediaScan(media);
+      }
+
+      return res.status(initialUploadStatus === 'ready' ? 201 : 202).json(
+        serializeMediaRecord(media, `${getPublicMediaBaseUrl()}/api/media/${media.id}/stream`)
+      );
+    } catch (error) {
+      console.error('Media confirm upload error:', error);
+      res.status(500).json({ error: 'Failed to confirm uploaded media' });
+    }
+  }
+);
+
 app.post('/api/media', 
   authenticateToken,
   validators.optionalString('title', 255),
@@ -8756,34 +9076,7 @@ app.get('/api/media', authenticateToken, async (req, res) => {
         properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/uploads/${media.filename}`;
       }
       
-      // Map content_type to media type (video, audio, or image)
-      let mediaType = 'audio'; // default
-      if (media.content_type) {
-        if (media.content_type.startsWith('video/')) {
-          mediaType = 'video';
-        } else if (media.content_type.startsWith('audio/')) {
-          mediaType = 'audio';
-        } else if (media.content_type.startsWith('image/')) {
-          mediaType = 'image';
-        }
-      } else if (media.file_type) {
-        // Fallback: try to infer from file_type
-        const fileTypeUpper = media.file_type.toUpperCase();
-        if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
-          mediaType = 'video';
-        } else if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
-          mediaType = 'image';
-        }
-      }
-      
-      return {
-        ...media,
-        url: properUrl,
-        title: media.title,
-        fileType: media.file_type,
-        contentType: media.content_type,
-        type: mediaType // Map content_type to 'video', 'audio', or 'image'
-      };
+      return serializeMediaRecord(media, properUrl);
     }));
     
     res.json({ media: processedMedia });
@@ -8854,7 +9147,9 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
       : 'https://merchtech5-production.up.railway.app';
     
     let properUrl = media.url;
-    if (media.url && media.url.startsWith('data:')) {
+    if (media.s3_key && s3Service) {
+      properUrl = `${getPublicMediaBaseUrl()}/api/media/${id}/stream`;
+    } else if (media.url && media.url.startsWith('data:')) {
       // If it's base64 data, serve it through our audio streaming endpoint
       properUrl = `${baseUrl}/api/media/${id}/stream`;
     } else if (media.filename) {
@@ -8862,35 +9157,7 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
       properUrl = `${baseUrl}/uploads/${media.filename}`;
     }
     
-    // Map content_type to media type (video, audio, or image)
-    let mediaType = 'audio'; // default
-    if (media.content_type) {
-      if (media.content_type.startsWith('video/')) {
-        mediaType = 'video';
-      } else if (media.content_type.startsWith('audio/')) {
-        mediaType = 'audio';
-      } else if (media.content_type.startsWith('image/')) {
-        mediaType = 'image';
-      }
-    } else if (media.file_type) {
-      // Fallback: try to infer from file_type
-      const fileTypeUpper = media.file_type.toUpperCase();
-      if (fileTypeUpper.includes('VIDEO') || fileTypeUpper.includes('MOV') || fileTypeUpper.includes('MP4')) {
-        mediaType = 'video';
-      } else if (fileTypeUpper.includes('IMAGE') || fileTypeUpper.includes('JPG') || fileTypeUpper.includes('PNG')) {
-        mediaType = 'image';
-      }
-    }
-    
-    // Return media with the proper URL structure expected by the frontend
-    const mediaResponse = {
-      ...media,
-      url: properUrl,
-      title: media.title,
-      fileType: media.file_type,
-      contentType: media.content_type,
-      type: mediaType // Map content_type to 'video', 'audio', or 'image'
-    };
+    const mediaResponse = serializeMediaRecord(media, properUrl);
     
     res.json({ media: mediaResponse });
   } catch (error) {
@@ -8967,8 +9234,14 @@ app.get('/api/media/:id/stream', async (req, res) => {
     
     const media = result.rows[0];
     
-    // Public access is allowed for streaming, so no further auth checks are needed here.
-    // The original file was more permissive, and we need to restore that for QR code scans.
+    if (!isMediaReadyForPublicAccess(media)) {
+      return res.status(423).json({
+        error: 'Media is still being security scanned and is not yet available.',
+        code: 'MEDIA_PENDING_SCAN',
+        uploadStatus: getMediaUploadStatus(media),
+        scanStatus: getMediaScanStatus(media),
+      });
+    }
     
     // Handle S3 files
     let s3Key = media.s3_key;
@@ -9019,12 +9292,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
         // Get file metadata from S3 with timeout
         let metadata;
         try {
-          metadata = await Promise.race([
-            s3Service.getMetadata(s3Key),
-            new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('S3 metadata fetch timeout')), METADATA_TIMEOUT)
-            )
-          ]);
+          metadata = await s3Service.getMetadata(s3Key, { timeoutMs: METADATA_TIMEOUT });
         } catch (metaError) {
           if (!res.headersSent) {
             console.error(`❌ MEDIA_STREAM[${correlationId}]: Metadata fetch failed for media ${id}:`, metaError.message);
@@ -9127,12 +9395,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
           // Stream the range from S3 with timeout
           let streamResponse;
           try {
-            streamResponse = await Promise.race([
-              s3Service.getStream(s3Key, { start, end }),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('S3 stream start timeout')), STREAM_TIMEOUT)
-              )
-            ]);
+            streamResponse = await s3Service.getStream(s3Key, { start, end }, { timeoutMs: STREAM_TIMEOUT });
           } catch (streamStartError) {
             if (!res.headersSent) {
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream start failed for media ${id}, range ${start}-${end}:`, streamStartError.message);
@@ -9159,7 +9422,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
           });
           
           // Pipe with error handling
-          s3Stream.pipe(res);
+          await pipeline(s3Stream, res);
           
           // Only log summary if verbose mode enabled
           if (verboseLogging) {
@@ -9172,12 +9435,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
           
           let streamResponse;
           try {
-            streamResponse = await Promise.race([
-              s3Service.getStream(s3Key),
-              new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('S3 stream start timeout')), STREAM_TIMEOUT)
-              )
-            ]);
+            streamResponse = await s3Service.getStream(s3Key, null, { timeoutMs: STREAM_TIMEOUT });
           } catch (streamStartError) {
             if (!res.headersSent) {
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream start failed for media ${id}:`, streamStartError.message);
@@ -9202,7 +9460,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
             }
           });
           
-          s3Stream.pipe(res);
+          await pipeline(s3Stream, res);
           
           if (verboseLogging) {
             console.log(`📺 MEDIA_STREAM[${correlationId}]: Streaming full file (${fileSize} bytes) for media ${id}`);
@@ -13801,7 +14059,7 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
         console.log('🎬 SLIDESHOW_IMAGE_STREAM: Extracted S3 key:', key);
         
         // Stream the image through our S3 service
-        const { stream, metadata } = await s3Service.getStream(key);
+        const { stream, metadata } = await s3Service.getStream(key, null, { timeoutMs: 60000 });
         
         // Set appropriate headers for image streaming
         res.setHeader('Content-Type', metadata.ContentType || 'image/jpeg');
@@ -13810,7 +14068,7 @@ app.get('/api/slideshow-images/:id/stream', async (req, res) => {
         res.setHeader('Cache-Control', 'public, max-age=3600');
         
         // Pipe the response stream directly
-        stream.pipe(res);
+        await pipeline(stream, res);
         console.log('🎬 SLIDESHOW_IMAGE_STREAM: Successfully streaming S3 image');
         return;
         
@@ -14087,7 +14345,7 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
         console.log('🎵 SLIDESHOW_AUDIO_STREAM: Extracted S3 key:', key);
         
         // Stream the audio through our S3 service
-        const { stream, metadata } = await s3Service.getStream(key);
+        const { stream, metadata } = await s3Service.getStream(key, null, { timeoutMs: 60000 });
         
         // Set appropriate headers for audio streaming
         res.setHeader('Content-Type', metadata.ContentType || 'audio/mpeg');
@@ -14102,7 +14360,7 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
         }
         
         // Pipe the response stream directly
-        stream.pipe(res);
+        await pipeline(stream, res);
         console.log('🎵 SLIDESHOW_AUDIO_STREAM: Successfully streaming S3 audio');
         return;
         
