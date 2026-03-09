@@ -33,7 +33,7 @@ export default function MediaScreen() {
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video'>('all');
+  const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video' | 'image'>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<{ id: number; name: string } | null>(null);
 
@@ -214,6 +214,7 @@ export default function MediaScreen() {
     if (selectedTab === 'all') return true;
     if (selectedTab === 'audio') return file.fileType === 'audio' || file.contentType?.startsWith('audio/');
     if (selectedTab === 'video') return file.fileType === 'video' || file.contentType?.startsWith('video/');
+    if (selectedTab === 'image') return file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image';
     return true;
   });
 
@@ -252,7 +253,7 @@ export default function MediaScreen() {
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
-        {['all', 'audio', 'video'].map((tab) => (
+        {['all', 'audio', 'video', 'image'].map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[

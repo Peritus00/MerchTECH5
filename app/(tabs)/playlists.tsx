@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -22,6 +22,7 @@ import { CartHeader } from '@/components/CartHeader';
 import { Playlist, MediaFile } from '@/shared/media-schema';
 import PlaylistCard from '@/components/PlaylistCard';
 import CreatePlaylistModal from '@/components/CreatePlaylistModal';
+import { AddToPlaylistModal } from '@/components/AddToPlaylistModal';
 import CustomAlert from '@/components/CustomAlert';
 import EditPlaylistModal from '@/components/EditPlaylistModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,11 +36,13 @@ import {
 export default function PlaylistsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const params = useLocalSearchParams<{ fromShare?: string; addToPlaylist?: string; mediaIds?: string }>();
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAddToPlaylistModal, setShowAddToPlaylistModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [selectedTab, setSelectedTab] = useState<'my-playlists' | 'public'>('my-playlists');
@@ -63,6 +66,18 @@ export default function PlaylistsScreen() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (params.fromShare === '1' && params.mediaIds && mediaFiles.length > 0) {
+      setShowCreateModal(true);
+    }
+  }, [params.fromShare, params.mediaIds, mediaFiles.length]);
+
+  useEffect(() => {
+    if (params.addToPlaylist === '1' && params.mediaIds) {
+      setShowAddToPlaylistModal(true);
+    }
+  }, [params.addToPlaylist, params.mediaIds]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -558,9 +573,33 @@ export default function PlaylistsScreen() {
       {/* Create Playlist Modal */}
       <CreatePlaylistModal
         visible={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
+        onClose={() => {
+          setShowCreateModal(false);
+          router.setParams({ fromShare: undefined, mediaIds: undefined });
+        }}
         onCreatePlaylist={handleCreatePlaylist}
         mediaFiles={mediaFiles}
+        initialMediaIds={
+          params.mediaIds
+            ? params.mediaIds.split(',').map((id) => parseInt(id.trim(), 10)).filter((id) => !isNaN(id))
+            : undefined
+        }
+      />
+
+      {/* Add to Playlist Modal (from share import) */}
+      <AddToPlaylistModal
+        visible={showAddToPlaylistModal}
+        onClose={() => {
+          setShowAddToPlaylistModal(false);
+          router.setParams({ addToPlaylist: undefined, mediaIds: undefined });
+        }}
+        playlists={playlists.filter((p) => !p.isPublic)}
+        mediaIds={
+          params.mediaIds
+            ? params.mediaIds.split(',').map((id) => parseInt(id.trim(), 10)).filter((id) => !isNaN(id))
+            : []
+        }
+        onAddComplete={() => fetchData()}
       />
 
       {/* Edit Playlist Modal */}

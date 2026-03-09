@@ -23,7 +23,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
   onToggleSelection,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'audio' | 'video'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'audio' | 'video' | 'image'>('all');
 
   const filteredMediaFiles = mediaFiles.filter(file => {
     const matchesSearch = file.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
@@ -34,6 +34,9 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
     }
     if (filterType === 'video') {
       return (file.fileType === 'video' || file.contentType?.startsWith('video/')) && matchesSearch;
+    }
+    if (filterType === 'image') {
+      return (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') && matchesSearch;
     }
     
     return matchesSearch;
@@ -46,6 +49,9 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
     if (file.fileType === 'video' || file.contentType?.startsWith('video/')) {
       return 'videocam';
     }
+    if (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') {
+      return 'image';
+    }
     return 'insert-drive-file';
   };
 
@@ -55,6 +61,9 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
     }
     if (file.fileType === 'video' || file.contentType?.startsWith('video/')) {
       return '#ef4444';
+    }
+    if (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') {
+      return '#10b981';
     }
     return '#6b7280';
   };
@@ -90,7 +99,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
             </Text>
             <View style={styles.mediaMetadata}>
               <Text style={styles.fileType}>
-                {item.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || item.fileType?.toUpperCase() || 'UNKNOWN'}
+                {item.contentType?.replace(/^(audio|video|image)\//, '').toUpperCase() || item.fileType?.toUpperCase() || 'UNKNOWN'}
               </Text>
               {item.filesize && (
                 <>
@@ -127,7 +136,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
           />
         </View>
         <View style={styles.filterContainer}>
-          {['all', 'audio', 'video'].map((type) => (
+          {['all', 'audio', 'video', 'image'].map((type) => (
             <TouchableOpacity
               key={type}
               style={[

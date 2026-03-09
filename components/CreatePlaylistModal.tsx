@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ interface CreatePlaylistModalProps {
   onClose: () => void;
   onCreatePlaylist: (playlist: Playlist) => void;
   mediaFiles: MediaFile[];
+  /** Pre-select these media IDs when opening (e.g. from share import) */
+  initialMediaIds?: number[];
 }
 
 const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
@@ -26,6 +28,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   onClose,
   onCreatePlaylist,
   mediaFiles,
+  initialMediaIds,
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -35,6 +38,13 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const [requiresActivationCode, setRequiresActivationCode] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const { canCreate } = useSubscriptionLimits();
+
+  useEffect(() => {
+    if (visible && initialMediaIds?.length) {
+      setSelectedMediaIds(initialMediaIds);
+      setStep('media');
+    }
+  }, [visible, initialMediaIds]);
 
   const handleCreate = async () => {
     if (!name.trim()) {

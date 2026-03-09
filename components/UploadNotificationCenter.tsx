@@ -10,7 +10,7 @@ import {
   Dimensions,
   Platform,
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useUpload } from '@/contexts/UploadContext';
 import * as Progress from 'react-native-progress';
 
@@ -45,7 +45,7 @@ export const UploadNotificationCenter: React.FC = () => {
         useNativeDriver: true,
       }).start();
     }
-  }, [isUploading]);
+  }, [isUploading, slideAnim]);
 
   // Auto-show notifications when there are new ones
   useEffect(() => {
@@ -62,8 +62,12 @@ export const UploadNotificationCenter: React.FC = () => {
         return 'Preparing file...';
       case 'uploading':
         return `Uploading${currentFileName ? ` ${currentFileName}` : ''}...`;
-      case 'processing':
-        return 'Processing upload...';
+      case 'verifying':
+        return 'Upload complete. Verifying file...';
+      case 'pending_scan':
+        return 'Uploaded, awaiting security scan...';
+      case 'creating':
+        return 'Saving media record...';
       case 'complete':
         return 'Upload complete!';
       case 'error':
@@ -81,7 +85,11 @@ export const UploadNotificationCenter: React.FC = () => {
         return <MaterialIcons name="description" size={20} color="#3b82f6" />;
       case 'uploading':
         return <MaterialCommunityIcons name="cloud-upload" size={20} color="#3b82f6" />;
-      case 'processing':
+      case 'verifying':
+        return <MaterialIcons name="verified" size={20} color="#3b82f6" />;
+      case 'pending_scan':
+        return <MaterialCommunityIcons name="shield-search" size={20} color="#f59e0b" />;
+      case 'creating':
         return <MaterialIcons name="settings" size={20} color="#3b82f6" />;
       case 'complete':
         return <MaterialIcons name="check-circle" size={20} color="#10b981" />;
@@ -158,7 +166,10 @@ export const UploadNotificationCenter: React.FC = () => {
           )}
         </View>
 
-        {uploadProgress.stage === 'uploading' && (
+        {(uploadProgress.stage === 'uploading' ||
+          uploadProgress.stage === 'verifying' ||
+          uploadProgress.stage === 'pending_scan' ||
+          uploadProgress.stage === 'creating') && (
           <View style={styles.progressDetails}>
             <Progress.Bar
               progress={uploadProgress.percentage / 100}
@@ -175,7 +186,7 @@ export const UploadNotificationCenter: React.FC = () => {
                   ? `${(uploadProgress.loaded / 1024 / 1024).toFixed(1)}MB / ${(uploadProgress.total / 1024 / 1024).toFixed(1)}MB`
                   : 'Calculating...'}
               </Text>
-              {estimatedTimeRemaining && (
+              {uploadProgress.stage === 'uploading' && estimatedTimeRemaining && (
                 <Text style={styles.progressText}>
                   {formatTime(estimatedTimeRemaining)} remaining
                 </Text>

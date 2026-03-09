@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system';
 import { Alert, Platform } from 'react-native';
@@ -33,7 +32,7 @@ interface UploadProgress {
   loaded: number;
   total: number;
   percentage: number;
-  stage: 'selecting' | 'reading' | 'uploading' | 'processing' | 'complete';
+  stage: 'selecting' | 'reading' | 'uploading' | 'verifying' | 'pending_scan' | 'creating' | 'complete';
 }
 
 /** Asset shape for upload - from DocumentPicker, expo-sharing, or web share target */
@@ -63,6 +62,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     showUploadError,
     showUploadSuccess,
     showUploadWarning,
+    resetUploadState,
   } = useUpload();
   const { canCreate } = useSubscriptionLimits();
   const queryClient = useQueryClient();
@@ -77,6 +77,8 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       const remainingBytes = total - loaded;
       const estimatedSeconds = Math.round(remainingBytes / uploadSpeed);
       setEstimatedTimeRemaining(estimatedSeconds);
+    } else {
+      setEstimatedTimeRemaining(null);
     }
   };
 
@@ -225,10 +227,16 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       }
 
       const uploadResult = await mediaAPI.uploadFile(fileToUpload, (progress) => {
-        updateProgress(progress, 100, 'uploading');
+        if (progress.percentage >= 100) {
+          updateProgress(progress.total, progress.total, 'verifying');
+          return;
+        }
+
+        updateProgress(progress.loaded, progress.total, 'uploading');
       });
 
-      updateProgress(100, 100, 'processing');
+      const completedBytes = uploadResult.filesize || asset.size || 0;
+      updateProgress(completedBytes, completedBytes, 'creating');
 
       const mediaData = {
         title: asset.name || 'Untitled',
@@ -266,8 +274,11 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       let errorCode = 'UNKNOWN_ERROR';
       
       if (error.response?.data) {
-        errorMessage = error.response.data.error || error.response.data.message || errorMessage;
+        errorMessage = error.response.data.message || error.response.data.error || errorMessage;
         errorCode = error.response.data.code || errorCode;
+      } else if (error.rateLimitInfo?.message) {
+        errorMessage = error.rateLimitInfo.message;
+        errorCode = 'RATE_LIMITED';
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -283,10 +294,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
     } finally {
       // Hide the indicator after a short delay
       setTimeout(() => {
-        setIsUploading(false);
-        setCurrentFileName(null);
-        setEstimatedTimeRemaining(null);
-        updateProgress(0, 0, 'selecting');
+        resetUploadState();
       }, 2000);
     }
   };
@@ -327,7 +335,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
       
       if (result.canceled) {
         console.log('🔴 UPLOAD: File selection canceled');
-        setIsUploading(false);
+        resetUploadState();
         return null;
       }
 
@@ -367,7 +375,7 @@ export const useMediaUpload = (): UseMediaUploadResult => {
         platform: Platform.OS,
         stack: error.stack
       });
-      setIsUploading(false);
+      resetUploadState();
       throw error;
     }
   };

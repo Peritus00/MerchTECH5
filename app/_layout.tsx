@@ -18,7 +18,7 @@ import { queryClient, persistOptions } from '@/lib/queryClient';
 import { CartProvider } from '@/contexts/CartContext';
 import { NotificationProvider } from '@/contexts/NotificationContext';
 import { UploadProvider } from '@/contexts/UploadContext';
-import { UploadProgressIndicator } from '@/components/UploadProgressIndicator';
+import { UploadNotificationCenter } from '@/components/UploadNotificationCenter';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { useAppVersion } from '@/hooks/useAppVersion';
@@ -221,7 +221,7 @@ function RootLayoutNav() {
         console.log('User consent:', consent ? 'accepted' : 'declined');
       }} />
       <StatusBar style="auto" />
-      <UploadProgressIndicator />
+      <UploadNotificationCenter />
       <UpdateNotificationModal
         visible={showUpdateModal}
         currentVersion={currentVersion}

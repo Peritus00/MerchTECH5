@@ -100,7 +100,10 @@ api.interceptors.response.use(
       // Rate limit exceeded - provide user-friendly error
       console.error('⏱️ Rate limit exceeded - too many requests');
       const retryAfter = error.response?.headers['retry-after'] || error.response?.headers['Retry-After'];
-      const errorMessage = error.response?.data?.error || 'Too many requests. Please wait a moment and try again.';
+      const errorMessage =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        'Too many requests. Please wait a moment and try again.';
       
       // Enhance error with retry information
       error.rateLimitInfo = {
@@ -616,7 +619,10 @@ export const mediaAPI = {
     return response.data;
   },
 
-  async uploadFile(file: File | any, onProgress?: (progress: number) => void) {
+  async uploadFile(
+    file: File | any,
+    onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
+  ) {
     const formData = new FormData();
     
     // Handle different platforms
@@ -635,8 +641,10 @@ export const mediaAPI = {
     const config = {
       onUploadProgress: (progressEvent: any) => {
         if (onProgress && progressEvent.total) {
-          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          onProgress(percentCompleted);
+          const loaded = progressEvent.loaded || 0;
+          const total = progressEvent.total || 0;
+          const percentage = total > 0 ? Math.round((loaded * 100) / total) : 0;
+          onProgress({ loaded, total, percentage });
         }
       },
     };

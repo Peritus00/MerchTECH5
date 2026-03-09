@@ -236,6 +236,24 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
     file.contentType?.startsWith('video/') ||
     hasVideoExtension;
 
+  const isImage =
+    file.type === 'image' ||
+    file.fileType === 'image' ||
+    file.contentType?.startsWith('image/') ||
+    /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
+
+  if (isImage) {
+    return (
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => router.push(`/media-player/${file.id}`)}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons name="image" size={size} color={color} />
+      </TouchableOpacity>
+    );
+  }
+
   if (isVideo) {
     return (
       <TouchableOpacity

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { useUpload } from '@/contexts/UploadContext';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
@@ -20,8 +20,12 @@ export const UploadProgressIndicator: React.FC = () => {
         return 'Preparing file for upload...';
       case 'uploading':
         return `Uploading... ${uploadProgress.percentage}%`;
-      case 'processing':
-        return 'Processing...';
+      case 'verifying':
+        return 'Upload complete. Verifying file...';
+      case 'pending_scan':
+        return 'Uploaded. Awaiting security scan...';
+      case 'creating':
+        return 'Saving media details...';
       case 'complete':
         return 'Upload complete!';
       default:

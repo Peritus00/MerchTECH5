@@ -56,6 +56,20 @@ class AuthService {
         }
         throw new Error('Invalid email or password. Please check your credentials and try again.');
       }
+
+      if (error.response?.status === 429 || error.rateLimitInfo?.isRateLimit) {
+        const retryAfter = error.rateLimitInfo?.retryAfter;
+        const serverMessage =
+          error.rateLimitInfo?.message ||
+          error.response?.data?.message ||
+          error.response?.data?.error;
+
+        if (retryAfter && Number.isFinite(retryAfter)) {
+          throw new Error(`${serverMessage || 'Too many requests.'} Please try again in about ${retryAfter} seconds.`);
+        }
+
+        throw new Error(serverMessage || 'Too many requests. Please wait a moment and try again.');
+      }
       
       // Network errors
       if (error.code === 'NETWORK_ERROR' || error.message.includes('Network Error')) {

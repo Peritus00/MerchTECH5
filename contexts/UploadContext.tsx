@@ -4,7 +4,7 @@ interface UploadProgress {
   loaded: number;
   total: number;
   percentage: number;
-  stage: 'selecting' | 'reading' | 'uploading' | 'processing' | 'complete' | 'error';
+  stage: 'selecting' | 'reading' | 'uploading' | 'verifying' | 'pending_scan' | 'creating' | 'complete' | 'error';
 }
 
 interface UploadError {
@@ -45,6 +45,7 @@ interface UploadContextType {
   showUploadError: (error: UploadError, fileName?: string) => void;
   showUploadSuccess: (fileName: string) => void;
   showUploadWarning: (message: string, fileName?: string) => void;
+  resetUploadState: () => void;
 }
 
 const UploadContext = createContext<UploadContextType | undefined>(undefined);
@@ -158,6 +159,19 @@ export const UploadProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     });
   };
 
+  const resetUploadState = () => {
+    setIsUploading(false);
+    setUploadError(null);
+    setCurrentFileName(null);
+    setEstimatedTimeRemaining(null);
+    setUploadProgress({
+      loaded: 0,
+      total: 0,
+      percentage: 0,
+      stage: 'selecting',
+    });
+  };
+
   return (
     <UploadContext.Provider value={{ 
       uploadProgress, 
@@ -177,6 +191,7 @@ export const UploadProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       showUploadError,
       showUploadSuccess,
       showUploadWarning,
+      resetUploadState,
     }}>
       {children}
     </UploadContext.Provider>

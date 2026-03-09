@@ -112,7 +112,7 @@ export default function LoginScreen() {
       if (error.message.includes('Account suspended')) {
         Alert.alert(
           'Account Suspended',
-          'Your account has been temporarily suspended due to unverified email. Please contact help@merchtrader.net for assistance.',
+          'Your account has been temporarily suspended due to unverified email. Please contact help@merchtrader.org for assistance.',
           [
             { text: 'Contact Support', onPress: () => {} },
             { text: 'OK', style: 'cancel' }

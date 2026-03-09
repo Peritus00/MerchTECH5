@@ -518,8 +518,13 @@ if (process.env.BREVO_SMTP_KEY) {
 
 // Rate limiting middleware (apply before routes)
 app.use('/api/auth/', authLimiter);
-app.use('/api/upload/presigned', uploadLimiter);
-app.use('/api/upload', uploadLimiter);
+app.use((req, res, next) => {
+  // Match upload routes exactly so /api/upload/presigned is not counted twice.
+  if (req.path === '/api/upload/presigned' || req.path === '/api/upload') {
+    return uploadLimiter(req, res, next);
+  }
+  next();
+});
 
 // Media stream endpoints - very lenient rate limiting (streaming is expected to be frequent)
 // Apply to paths matching /api/media/*/stream pattern
@@ -3855,11 +3860,11 @@ app.get('/api/dashboard/counts', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.userId;
     const [qrRes, playlistsRes, slideshowsRes, productsRes, codesRes] = await Promise.all([
-      db.query('SELECT COUNT(*) AS c FROM qr_codes WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM qr_codes WHERE user_id = $1 AND is_active = true', [userId]),
       db.query('SELECT COUNT(*) AS c FROM playlists WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
       db.query('SELECT COUNT(*) AS c FROM slideshows WHERE user_id = $1 AND deleted_at IS NULL', [userId]),
       db.query('SELECT COUNT(*) AS c FROM products WHERE user_id = $1 AND (is_deleted IS NULL OR is_deleted = false)', [userId]),
-      db.query('SELECT COUNT(*) AS c FROM activation_codes WHERE user_id = $1', [userId]),
+      db.query('SELECT COUNT(*) AS c FROM activation_codes WHERE created_by = $1 AND is_active = true', [userId]),
     ]);
     res.json({
       totalQRCodes: parseInt(qrRes.rows[0]?.c || 0),
@@ -8309,11 +8314,13 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
             const key = `users/${req.user.userId}/media/${Date.now()}-${req.file.originalname}`;
             
             const result = await s3Service.uploadFile(req.file.buffer, key, req.file.mimetype);
+            let uploadedMetadata = null;
             
             // 🔍 VALIDATION: Verify upload was successful and complete
             console.log(`🔍 UPLOAD_VALIDATION [${requestId}]: Verifying S3 upload...`);
             try {
                 const metadata = await s3Service.getMetadata(result.Key);
+                uploadedMetadata = metadata;
                 const expectedSize = req.file.size;
                 const actualSize = metadata.ContentLength;
                 
@@ -8366,9 +8373,7 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
             console.log(`✅ UPLOAD_SUCCESS [${requestId}]: S3 URL: ${result.Location}`);
             console.log(`✅ UPLOAD_SUCCESS [${requestId}]: Proxy URL: ${proxyUrl}`);
 
-            // Get actual uploaded file size from S3 metadata
-            const metadata = await s3Service.getMetadata(result.Key);
-            const actualUploadedSize = metadata.ContentLength;
+            const actualUploadedSize = uploadedMetadata?.ContentLength ?? req.file.size;
 
             res.status(200).json({
                 message: 'File uploaded successfully',

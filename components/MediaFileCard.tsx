@@ -32,6 +32,9 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
     if (file.fileType === 'video' || file.contentType?.startsWith('video/')) {
       return 'videocam';
     }
+    if (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') {
+      return 'image';
+    }
     return 'insert-drive-file';
   };
 
@@ -41,6 +44,9 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
     }
     if (file.fileType === 'video' || file.contentType?.startsWith('video/')) {
       return '#ef4444';
+    }
+    if (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') {
+      return '#10b981';
     }
     return '#6b7280';
   };
@@ -82,7 +88,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
 
           <View style={styles.metadata}>
             <Text style={styles.fileType}>
-              {file.contentType?.replace(/^(audio|video)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN'}
+              {file.contentType?.replace(/^(audio|video|image)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN'}
             </Text>
             <Text style={styles.separator}>•</Text>
             <Text style={styles.fileSize}>

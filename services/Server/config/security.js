@@ -335,7 +335,13 @@ const apiSecurityMiddleware = (req, res, next) => {
  * Rate limiting violation handler
  * Logs rate limit violations for security monitoring
  */
-const rateLimitViolationHandler = (req, res) => {
+const rateLimitViolationHandler = (req, res, _next, options = {}) => {
+  const retryAfterSeconds = res.getHeader('Retry-After');
+  const responseMessage =
+    typeof options.message === 'string'
+      ? options.message
+      : options.message?.error || options.message?.message || 'Rate limit exceeded. Please try again later.';
+
   securityAuditLogger.log({
     type: 'security_rate_limit_exceeded',
     severity: 'medium',
@@ -347,13 +353,16 @@ const rateLimitViolationHandler = (req, res) => {
     success: false,
     details: {
       method: req.method,
-      path: req.path
+      path: req.path,
+      retryAfterSeconds: retryAfterSeconds ? Number(retryAfterSeconds) : null,
+      limit: options.limit ?? null,
+      windowMs: options.windowMs ?? null
     }
   });
 
   res.status(429).json({
     error: 'Too Many Requests',
-    message: 'Rate limit exceeded. Please try again later.'
+    message: responseMessage
   });
 };
 
