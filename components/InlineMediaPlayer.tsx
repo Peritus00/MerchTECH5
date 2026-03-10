@@ -24,6 +24,7 @@ interface InlineMediaPlayerProps {
 // Separate component for the Audio Player to ensure hooks are not conditional
 const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) => {
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(false);
   const player = useAudioPlayer();
   const audioStatus = useAudioPlayerStatus(player);
   
@@ -39,13 +40,6 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
   } : audioStatus;
 
   useEffect(() => {
-    if (!isInitialized && file.id) {
-      initializeAudio();
-      setIsInitialized(true);
-    }
-  }, [file.id, isInitialized]);
-
-  useEffect(() => {
     return () => {
       if (Platform.OS === 'web' && webAudioRef.current) {
         webAudioRef.current.pause();
@@ -58,6 +52,9 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
   }, []);
 
   const initializeAudio = async () => {
+    if (isInitialized || isInitializing) return;
+
+    setIsInitializing(true);
     try {
       // Construct streaming URL more reliably
       let baseUrl: string;
@@ -163,31 +160,33 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
         audio.crossOrigin = 'anonymous';
         audio.preload = 'metadata';
         audio.src = streamingUrl;
-        
-        // Try to load the audio
-        audio.load();
       } else {
         await player.replace(streamingUrl);
       }
+      setIsInitialized(true);
     } catch (error) {
       console.error('🔴 INLINE_PLAYER: Error initializing audio:', error);
       // Fail silently to user but log error
+    } finally {
+      setIsInitializing(false);
     }
   };
 
   const togglePlayPause = async () => {
     try {
+      if (!isInitialized) {
+        await initializeAudio();
+      }
+
       if (Platform.OS === 'web' && webAudioRef.current) {
         const audio = webAudioRef.current;
         if (webAudioPlaying) {
           audio.pause();
-        } else if (audio.readyState >= 3) {
-          await audio.play();
         } else {
-          console.log('⏳ INLINE_PLAYER: Audio is still loading...');
+          await audio.play();
         }
       } else if (player) {
-        if (!status.isLoaded) {
+        if (!status.isLoaded && !isInitialized) {
           console.log('⏳ INLINE_PLAYER: Audio is still loading...');
           return;
         }
@@ -199,13 +198,13 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
   };
 
   const isPlaying = status.playing;
-  const isLoading = !status.isLoaded;
+  const isLoading = isInitializing || (isInitialized && !status.isLoaded);
 
   return (
     <TouchableOpacity
       style={[styles.button, { opacity: isLoading ? 0.6 : 1 }]}
       onPress={togglePlayPause}
-      disabled={isLoading}
+      disabled={isInitializing}
       activeOpacity={0.7}
     >
       {isLoading ? (

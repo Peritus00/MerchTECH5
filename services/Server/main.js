@@ -9311,6 +9311,8 @@ app.get('/api/media/:id/stream', async (req, res) => {
       res.on('finish', enhancedCleanup);
       
       try {
+        const isClientAbortError = (err) => /premature close|aborted|econnreset|err_stream_premature_close/i.test(String(err?.message || ''));
+
         // Get file metadata from S3 with timeout
         let metadata;
         try {
@@ -9433,6 +9435,13 @@ app.get('/api/media/:id/stream', async (req, res) => {
           s3Stream.on('error', (streamErr) => {
             if (!streamEnded) {
               streamEnded = true;
+              if (isClientAbortError(streamErr)) {
+                if (verboseLogging) {
+                  console.warn(`⚠️ MEDIA_STREAM[${correlationId}]: Client aborted stream for media ${id}, range ${start}-${end}:`, streamErr.message);
+                }
+                abortStream();
+                return;
+              }
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}, range ${start}-${end}:`, streamErr.message);
               if (!res.headersSent) {
                 res.status(500).json({ error: 'Stream error' });
@@ -9473,6 +9482,13 @@ app.get('/api/media/:id/stream', async (req, res) => {
           s3Stream.on('error', (streamErr) => {
             if (!streamEnded) {
               streamEnded = true;
+              if (isClientAbortError(streamErr)) {
+                if (verboseLogging) {
+                  console.warn(`⚠️ MEDIA_STREAM[${correlationId}]: Client aborted stream for media ${id}:`, streamErr.message);
+                }
+                abortStream();
+                return;
+              }
               console.error(`❌ MEDIA_STREAM[${correlationId}]: Stream error for media ${id}:`, streamErr.message);
               if (!res.headersSent) {
                 res.status(500).json({ error: 'Stream error' });
@@ -9490,6 +9506,13 @@ app.get('/api/media/:id/stream', async (req, res) => {
           return; // Important: return after starting the stream
         }
       } catch (error) {
+        const isClientAbort = /premature close|aborted|econnreset|err_stream_premature_close/i.test(String(error?.message || ''));
+        if (isClientAbort) {
+          if (verboseLogging) {
+            console.warn(`⚠️ MEDIA_STREAM[${correlationId}]: Client disconnected while streaming ${s3Key}:`, error.message);
+          }
+          return;
+        }
         console.error(`❌ MEDIA_STREAM[${correlationId}]: Failed to stream S3 file ${s3Key}:`, error.message);
         if (!res.headersSent) {
           return res.status(500).json({ error: 'Failed to stream S3 file' });
