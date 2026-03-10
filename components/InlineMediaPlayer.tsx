@@ -17,6 +17,8 @@ interface InlineMediaPlayerProps {
   file: MediaFile;
   size?: number;
   color?: string;
+  /** When true, show scanning state and disable playback (e.g. pending_scan, scanning) */
+  disabled?: boolean;
 }
 
 // Separate component for the Audio Player to ensure hooks are not conditional
@@ -223,7 +225,8 @@ const AudioPlayer: React.FC<InlineMediaPlayerProps> = ({ file, size, color }) =>
 const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({ 
   file, 
   size = 20, 
-  color = '#3b82f6' 
+  color = '#3b82f6',
+  disabled = false,
 }) => {
   const router = useRouter();
   
@@ -235,6 +238,15 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
     file.fileType === 'video' || 
     file.contentType?.startsWith('video/') ||
     hasVideoExtension;
+
+  // When disabled (e.g. pending scan), show scanning indicator
+  if (disabled) {
+    return (
+      <View style={[styles.button, { opacity: 0.6 }]}>
+        <MaterialIcons name="hourglass-empty" size={size} color="#9ca3af" />
+      </View>
+    );
+  }
 
   const isImage =
     file.type === 'image' ||

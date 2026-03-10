@@ -17,6 +17,9 @@ interface MediaFileCardProps {
 }
 
 const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay }) => {
+  const uploadStatus = file.uploadStatus ?? (file as any).upload_status;
+  const isPendingOrScanning = uploadStatus === 'pending_scan' || uploadStatus === 'scanning';
+
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'Unknown size';
     const sizes = ['Bytes', 'KB', 'MB', 'GB'];
@@ -92,8 +95,16 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
             </Text>
             <Text style={styles.separator}>•</Text>
             <Text style={styles.fileSize}>
-              {formatFileSize(file.filesize)}
+              {formatFileSize((file as any).filesize)}
             </Text>
+            {isPendingOrScanning && (
+              <View style={styles.statusBadge}>
+                <MaterialIcons name="hourglass-empty" size={12} color="#f59e0b" />
+                <Text style={styles.statusBadgeText}>
+                  {uploadStatus === 'scanning' ? 'Scanning...' : 'Pending scan'}
+                </Text>
+              </View>
+            )}
           </View>
           <Text style={styles.createdAt}>
             {new Date(file.createdAt).toLocaleDateString()}
@@ -106,6 +117,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
               file={file}
               size={20}
               color="#3b82f6"
+              disabled={isPendingOrScanning}
             />
           </View>
           <TouchableOpacity
@@ -159,7 +171,9 @@ const styles = StyleSheet.create({
   metadata: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     marginBottom: 4,
+    gap: 4,
   },
   fileType: {
     fontSize: 12,
@@ -174,6 +188,21 @@ const styles = StyleSheet.create({
   fileSize: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    backgroundColor: '#fef3c7',
+    borderRadius: 4,
+    gap: 4,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    color: '#b45309',
+    fontWeight: '500',
   },
   createdAt: {
     fontSize: 12,

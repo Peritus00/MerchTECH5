@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,54 +11,29 @@ import {
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import HeaderWithLogo from '@/components/HeaderWithLogo';
 import { MediaFile } from '@/shared/media-schema';
 import { useMediaUpload } from '@/hooks/useMediaUpload';
-import { useUpload } from '@/contexts/UploadContext';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { mediaAPI } from '@/services/api';
 import MediaFileCard from '@/components/MediaFileCard';
 import {
   performOptimisticUpdate,
-  createOptimisticUpdater,
   deleteOptimisticUpdater,
 } from '@/utils/optimisticUpdates';
 
 export default function MediaScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { selectAndUploadFile } = useMediaUpload();
-  const { isUploading } = useUpload();
-  const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { mediaFiles, isLoading, refetch, isRefetching } = useMediaQuery();
   const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video' | 'image'>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [fileToDelete, setFileToDelete] = useState<{ id: number; name: string } | null>(null);
-
-  useEffect(() => {
-    fetchMediaFiles();
-  }, []);
-
-  const fetchMediaFiles = async () => {
-    try {
-      console.log('🔴 MEDIA: Fetching media files from database...');
-      const filesResponse = await mediaAPI.getAll();
-      console.log('🔴 MEDIA: Media API response:', filesResponse);
-      
-      // Extract media array from response
-      const files = filesResponse?.media || filesResponse || [];
-      console.log('🔴 MEDIA: Loaded media files:', files.length);
-      setMediaFiles(files);
-    } catch (error) {
-      console.error('🔴 MEDIA: Error fetching media files:', error);
-      Alert.alert('Error', 'Failed to load media files');
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
+  const [fileToDelete, setFileToDelete] = useState<{ id: number | string; name: string } | null>(null);
 
   const handleUpload = async () => {
     try {
@@ -66,50 +41,11 @@ export default function MediaScreen() {
       const uploadedFile = await selectAndUploadFile();
       if (uploadedFile) {
         console.log('🔴 MEDIA: File uploaded successfully:', uploadedFile);
-        
-        // Optimistic update: immediately add to UI, then refresh in background
-        const updatedState = await performOptimisticUpdate({
-          currentState: mediaFiles,
-          mutationType: 'create',
-          optimisticUpdate: createOptimisticUpdater(uploadedFile),
-          serverMutation: async () => uploadedFile,
-          getItemId: (f) => f.id,
-          refreshState: fetchMediaFiles,
-          onError: (error: any) => {
-            console.error('🔴 MEDIA: Upload error:', error);
-            // Provide specific error messages based on error type
-            let errorMessage = 'Please try again';
-            
-            if (error.message?.includes('File too large')) {
-              errorMessage = error.message;
-            } else if (error.response?.status === 413) {
-              errorMessage = 'File too large for upload. Please use a smaller file (under 4MB) or contact support for assistance.';
-            } else if (error.message?.includes('Network Error') || error.code === 'NETWORK_ERROR') {
-              errorMessage = 'Network error. Please check your connection and try again.';
-            } else if (error.response?.status === 403) {
-              errorMessage = 'Upload limit reached. Please upgrade your plan or contact support.';
-            } else if (error.message?.includes('Unable to read file')) {
-              errorMessage = 'Unable to read the selected file. Please try a different file.';
-            } else if (error.message) {
-              errorMessage = error.message;
-            }
-            
-            Alert.alert('Upload Failed', errorMessage);
-          },
-          onSuccess: () => {
-            Alert.alert('Success', 'File uploaded successfully');
-          },
-        });
-        
-        setMediaFiles(updatedState);
         Alert.alert('Success', 'File uploaded successfully');
       }
     } catch (error: any) {
       console.error('🔴 MEDIA: Upload error:', error);
-      
-      // Provide specific error messages based on error type
       let errorMessage = 'Please try again';
-      
       if (error.message?.includes('File too large')) {
         errorMessage = error.message;
       } else if (error.response?.status === 413) {
@@ -123,12 +59,11 @@ export default function MediaScreen() {
       } else if (error.message) {
         errorMessage = error.message;
       }
-      
       Alert.alert('Upload Failed', errorMessage);
     }
   };
 
-  const handleDelete = async (id: number) => {
+  const handleDelete = async (id: number | string) => {
     console.log('🔴 MEDIA: handleDelete called with ID:', id);
     console.log('🔴 MEDIA: Current media files count:', mediaFiles.length);
     
@@ -157,20 +92,18 @@ export default function MediaScreen() {
     try {
       console.log('🔴 MEDIA: Starting delete with optimistic update:', fileToDelete);
       
-      // Optimistic update: immediately remove from UI, then delete on server
       const updatedState = await performOptimisticUpdate({
         currentState: mediaFiles,
         mutationType: 'delete',
-        optimisticUpdate: deleteOptimisticUpdater(fileToDelete.id, (f) => f.id),
+        optimisticUpdate: deleteOptimisticUpdater(String(fileToDelete.id), (f) => String(f.id)),
         serverMutation: async () => {
-          await mediaAPI.delete(fileToDelete.id);
+          await mediaAPI.delete(String(fileToDelete.id));
           return { success: true };
         },
         getItemId: (f) => f.id,
-        refreshState: fetchMediaFiles,
+        refreshState: () => refetch(),
         onError: (error: any) => {
           console.error('🔴 MEDIA: Delete error:', error);
-          
           let errorMessage = 'Failed to delete file';
           if (error.response?.status === 404) {
             errorMessage = 'File not found or already deleted';
@@ -181,7 +114,6 @@ export default function MediaScreen() {
           } else if (error.message) {
             errorMessage = error.message;
           }
-          
           Alert.alert('Delete Failed', `${errorMessage}. The file has been restored.`);
         },
         onSuccess: () => {
@@ -189,7 +121,7 @@ export default function MediaScreen() {
         },
       });
       
-      setMediaFiles(updatedState);
+      queryClient.setQueryData(['media'], updatedState);
       
     } catch (error: any) {
       console.error('🔴 MEDIA: Delete error:', error);
@@ -219,8 +151,7 @@ export default function MediaScreen() {
   });
 
   const onRefresh = () => {
-    setRefreshing(true);
-    fetchMediaFiles();
+    refetch();
   };
 
   if (isLoading) {
@@ -279,7 +210,7 @@ export default function MediaScreen() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl refreshing={isRefetching} onRefresh={onRefresh} />
         }
         showsVerticalScrollIndicator={false}
       >

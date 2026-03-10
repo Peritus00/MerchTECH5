@@ -207,6 +207,37 @@ class S3Service {
     }
   }
 
+  /**
+   * Get S3 object metadata with retries and extended timeout for large-file propagation.
+   * Large uploads can take time to become visible; retries handle eventual consistency.
+   */
+  async getMetadataWithRetry(key, options = {}) {
+    const timeoutMs = options.timeoutMs ?? 120000; // 2 min default for large files
+    const maxAttempts = options.maxAttempts ?? 3;
+    let lastError;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const result = await this.getMetadata(key, { timeoutMs });
+        if (attempt > 1) {
+          console.log(`✅ getMetadata succeeded for ${key} on attempt ${attempt}`);
+        }
+        return result;
+      } catch (err) {
+        lastError = err;
+        const isRetryable = err?.name === 'AbortError' || err?.code === 'TimeoutError' || (err?.message && /timeout|abort/i.test(err.message));
+        if (attempt < maxAttempts && isRetryable) {
+          const delayMs = Math.min(2000 * attempt, 10000);
+          console.warn(`⚠️ getMetadata attempt ${attempt}/${maxAttempts} failed for ${key}, retrying in ${delayMs}ms:`, err?.message);
+          await new Promise((r) => setTimeout(r, delayMs));
+        } else {
+          break;
+        }
+      }
+    }
+    throw lastError;
+  }
+
   async getStream(key, range = null, options = {}) {
     const params = {
       Bucket: this.bucketName,

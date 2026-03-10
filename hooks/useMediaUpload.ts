@@ -238,8 +238,10 @@ export const useMediaUpload = (): UseMediaUploadResult => {
 
       console.log('🔴 UPLOAD: Upload successful:', uploadedFile);
 
+      // Add new file to media cache immediately so it appears without waiting for refetch
+      queryClient.setQueryData<MediaFile[]>(['media'], (old) => [uploadedFile, ...(old ?? [])]);
       await queryClient.invalidateQueries({ queryKey: ['media'] });
-      console.log('✅ invalidated media query');
+      console.log('✅ updated media cache and invalidated query');
 
       const uploadStatus = uploadedFile?.uploadStatus || uploadedFile?.upload_status;
       if (uploadStatus === 'pending_scan' || uploadStatus === 'scanning') {

@@ -8076,6 +8076,27 @@ function getSafeErrorMessage(error) {
     return message.length > 300 ? `${message.slice(0, 300)}...` : message;
 }
 
+/**
+ * Sanitize an object for safe JSONB storage. Removes control characters and invalid
+ * Unicode that PostgreSQL JSONB rejects (e.g. unsupported Unicode escape sequence).
+ */
+function sanitizeForJsonb(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'string') {
+        return obj.replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => {
+            if (c === '\n' || c === '\r' || c === '\t') return c;
+            return '';
+        });
+    }
+    if (Array.isArray(obj)) return obj.map(sanitizeForJsonb);
+    if (typeof obj === 'object') {
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) out[k] = sanitizeForJsonb(v);
+        return out;
+    }
+    return obj;
+}
+
 function buildScanServiceError(scanErr, requestId) {
     const raw = getSafeErrorMessage(scanErr);
     const lower = raw.toLowerCase();
@@ -8320,7 +8341,7 @@ async function queuePendingMediaScan(media) {
                 await markMediaScanResult(media.id, {
                     upload_status: 'rejected',
                     scan_status: 'infected',
-                    scan_details: JSON.stringify(scanResult),
+                    scan_details: JSON.stringify(sanitizeForJsonb(scanResult)),
                     scanned_at: new Date(),
                     rejected_at: new Date(),
                 });
@@ -8330,7 +8351,7 @@ async function queuePendingMediaScan(media) {
             await markMediaScanResult(media.id, {
                 upload_status: 'ready',
                 scan_status: scanResult.skipped ? 'skipped' : 'clean',
-                scan_details: JSON.stringify(scanResult),
+                scan_details: JSON.stringify(sanitizeForJsonb(scanResult)),
                 scanned_at: new Date(),
                 approved_at: new Date(),
             });
@@ -8339,7 +8360,7 @@ async function queuePendingMediaScan(media) {
             await markMediaScanResult(media.id, {
                 upload_status: 'pending_scan',
                 scan_status: 'failed',
-                scan_details: JSON.stringify({ error: getSafeErrorMessage(error) }),
+                scan_details: JSON.stringify(sanitizeForJsonb({ error: getSafeErrorMessage(error) })),
                 scanned_at: new Date(),
             });
         }
@@ -8834,7 +8855,7 @@ app.post('/api/media/confirm-upload',
         );
       }
 
-      const metadata = await s3Service.getMetadata(s3Key, { timeoutMs: 30000 });
+      const metadata = await s3Service.getMetadataWithRetry(s3Key, { timeoutMs: 120000, maxAttempts: 3 });
       const actualSize = metadata.ContentLength;
       if (filesize && actualSize !== filesize) {
         return res.status(400).json({
