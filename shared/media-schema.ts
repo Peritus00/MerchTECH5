@@ -9,6 +9,9 @@ export interface MediaFile {
   contentType?: string; // Retain for backward compatibility if needed
   filename?: string;
   s3_key?: string;
+  filesize?: number;
+  createdAt?: string;
+  updatedAt?: string;
   uploadStatus?: 'pending_scan' | 'scanning' | 'ready' | 'rejected';
   scanStatus?: 'pending' | 'clean' | 'infected' | 'failed' | 'skipped';
 }

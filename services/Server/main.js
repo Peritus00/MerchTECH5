@@ -8258,6 +8258,8 @@ function serializeMediaRecord(media, properUrl) {
         ...media,
         url: properUrl,
         title: media.title,
+        createdAt: media.created_at,
+        updatedAt: media.updated_at,
         fileType: media.file_type,
         contentType: media.content_type,
         type: getMediaType(media),
@@ -8293,8 +8295,12 @@ async function queuePendingMediaScan(media) {
                 scan_started_at: new Date(),
             });
 
-            const objectBuffer = await s3Service.getObjectBuffer(media.s3_key, { timeoutMs: 300000 });
-            const scanResult = await clamavScanner.scanBuffer(objectBuffer, media.filename || media.title || media.s3_key);
+            const streamResponse = await s3Service.getStream(media.s3_key, null, { timeoutMs: 300000 });
+            const scanResult = await clamavScanner.scanReadableStream(
+                streamResponse.stream,
+                media.filename || media.title || media.s3_key,
+                { sizeBytes: media.filesize || 0 }
+            );
 
             if (scanResult.infected) {
                 try {

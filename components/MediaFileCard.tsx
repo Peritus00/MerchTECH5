@@ -18,7 +18,11 @@ interface MediaFileCardProps {
 
 const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay }) => {
   const uploadStatus = file.uploadStatus ?? (file as any).upload_status;
+  const scanStatus = file.scanStatus ?? (file as any).scan_status;
+  const createdAt = file.createdAt ?? (file as any).created_at;
   const isPendingOrScanning = uploadStatus === 'pending_scan' || uploadStatus === 'scanning';
+  const isScanFailed = scanStatus === 'failed';
+  const isBlocked = isPendingOrScanning || isScanFailed;
 
   const formatFileSize = (bytes?: number) => {
     if (!bytes) return 'Unknown size';
@@ -26,6 +30,12 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
     if (bytes === 0) return '0 Bytes';
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const formatCreatedAt = (value?: string) => {
+    if (!value) return 'Unknown date';
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? 'Unknown date' : parsed.toLocaleDateString();
   };
 
   const getFileIcon = () => {
@@ -97,17 +107,25 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
             <Text style={styles.fileSize}>
               {formatFileSize((file as any).filesize)}
             </Text>
-            {isPendingOrScanning && (
-              <View style={styles.statusBadge}>
-                <MaterialIcons name="hourglass-empty" size={12} color="#f59e0b" />
-                <Text style={styles.statusBadgeText}>
-                  {uploadStatus === 'scanning' ? 'Scanning...' : 'Pending scan'}
+            {isBlocked && (
+              <View style={[styles.statusBadge, isScanFailed && styles.statusBadgeError]}>
+                <MaterialIcons
+                  name={isScanFailed ? 'error-outline' : 'hourglass-empty'}
+                  size={12}
+                  color={isScanFailed ? '#dc2626' : '#f59e0b'}
+                />
+                <Text style={[styles.statusBadgeText, isScanFailed && styles.statusBadgeTextError]}>
+                  {isScanFailed
+                    ? 'Scan failed'
+                    : uploadStatus === 'scanning'
+                      ? 'Scanning...'
+                      : 'Pending scan'}
                 </Text>
               </View>
             )}
           </View>
           <Text style={styles.createdAt}>
-            {new Date(file.createdAt).toLocaleDateString()}
+            {formatCreatedAt(createdAt)}
           </Text>
         </View>
         <View style={styles.actions}>
@@ -117,7 +135,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
               file={file}
               size={20}
               color="#3b82f6"
-              disabled={isPendingOrScanning}
+              disabled={isBlocked}
             />
           </View>
           <TouchableOpacity
@@ -199,10 +217,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     gap: 4,
   },
+  statusBadgeError: {
+    backgroundColor: '#fee2e2',
+  },
   statusBadgeText: {
     fontSize: 11,
     color: '#b45309',
     fontWeight: '500',
+  },
+  statusBadgeTextError: {
+    color: '#b91c1c',
   },
   createdAt: {
     fontSize: 12,

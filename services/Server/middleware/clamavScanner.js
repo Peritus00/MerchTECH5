@@ -28,6 +28,41 @@ function isTimeoutError(err) {
   return message.includes('timeout');
 }
 
+function buildScanResult(responseData, scanTime) {
+  const response = String(responseData || '').trim();
+
+  if (response.includes('FOUND')) {
+    const match = response.match(/stream:\s*(.+?)\s+FOUND/);
+    const virusName = match ? match[1].trim() : 'Unknown';
+    return {
+      infected: true,
+      viruses: [virusName],
+      scanTime,
+      raw: response,
+    };
+  }
+
+  if (response.includes('OK')) {
+    return {
+      infected: false,
+      viruses: [],
+      scanTime,
+      raw: response,
+    };
+  }
+
+  if (response.includes('ERROR')) {
+    throw new Error(`ClamAV error: ${response}`);
+  }
+
+  return {
+    infected: false,
+    viruses: [],
+    scanTime,
+    raw: response,
+  };
+}
+
 /**
  * Parse ClamAV URL - supports:
  * - tcp://host:port (default 3310)
@@ -88,34 +123,10 @@ function scanViaClamd(buffer, filename) {
     });
 
     client.on('close', () => {
-      const scanTime = Date.now() - startTime;
-      const response = responseData.trim();
-
-      if (response.includes('FOUND')) {
-        const match = response.match(/stream:\s*(.+?)\s+FOUND/);
-        const virusName = match ? match[1].trim() : 'Unknown';
-        resolve({
-          infected: true,
-          viruses: [virusName],
-          scanTime,
-          raw: response
-        });
-      } else if (response.includes('OK')) {
-        resolve({
-          infected: false,
-          viruses: [],
-          scanTime,
-          raw: response
-        });
-      } else if (response.includes('ERROR')) {
-        reject(new Error(`ClamAV error: ${response}`));
-      } else {
-        resolve({
-          infected: false,
-          viruses: [],
-          scanTime,
-          raw: response
-        });
+      try {
+        resolve(buildScanResult(responseData, Date.now() - startTime));
+      } catch (err) {
+        reject(err);
       }
     });
 
@@ -145,6 +156,73 @@ function scanViaClamd(buffer, filename) {
       endBuf.writeUInt32BE(0, 0);
       client.write(endBuf);
       client.end();
+    });
+  });
+}
+
+function scanReadableStreamViaClamd(readableStream, filename, streamLength = 0) {
+  return new Promise((resolve, reject) => {
+    const startTime = Date.now();
+    const { host, port } = config;
+    const timeoutMs = getScanTimeoutMs(streamLength);
+    const client = new net.Socket();
+    client.setTimeout(timeoutMs);
+
+    let responseData = '';
+    let settled = false;
+
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      try {
+        readableStream.destroy?.();
+      } catch (_) {}
+      try {
+        client.destroy();
+      } catch (_) {}
+      reject(err);
+    };
+
+    client.on('data', (data) => {
+      responseData += data.toString();
+    });
+
+    client.on('close', () => {
+      if (settled) return;
+      settled = true;
+      try {
+        resolve(buildScanResult(responseData, Date.now() - startTime));
+      } catch (err) {
+        reject(err);
+      }
+    });
+
+    client.on('error', fail);
+    client.on('timeout', () => fail(new Error('ClamAV scan timeout')));
+    readableStream.on('error', fail);
+
+    client.connect(port, host, () => {
+      client.write('zINSTREAM\0');
+
+      readableStream.on('data', (chunk) => {
+        const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const sizeBuf = Buffer.alloc(4);
+        sizeBuf.writeUInt32BE(bufferChunk.length, 0);
+
+        const sizeOk = client.write(sizeBuf);
+        const chunkOk = client.write(bufferChunk);
+        if (!sizeOk || !chunkOk) {
+          readableStream.pause();
+          client.once('drain', () => readableStream.resume());
+        }
+      });
+
+      readableStream.on('end', () => {
+        const endBuf = Buffer.alloc(4);
+        endBuf.writeUInt32BE(0, 0);
+        client.write(endBuf);
+        client.end();
+      });
     });
   });
 }
@@ -183,6 +261,40 @@ async function scanViaRest(buffer, filename) {
     viruses: infected ? [data] : [],
     scanTime,
     raw: data
+  };
+}
+
+async function scanReadableStreamViaRest(readableStream, filename, streamLength = 0) {
+  const startTime = Date.now();
+  const timeoutMs = getScanTimeoutMs(streamLength);
+  const form = new FormData();
+  form.append('file', readableStream, { filename: filename || 'scan.bin' });
+
+  const response = await axios.post(`${config.url}/scan`, form, {
+    headers: form.getHeaders(),
+    timeout: timeoutMs,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+  });
+
+  const scanTime = Date.now() - startTime;
+  const data = response.data;
+
+  if (typeof data === 'object') {
+    return {
+      infected: data.infected || data.status === ' virus' || false,
+      viruses: data.viruses || data.details || [],
+      scanTime,
+      raw: data,
+    };
+  }
+
+  const infected = typeof data === 'string' && data.includes('FOUND');
+  return {
+    infected,
+    viruses: infected ? [data] : [],
+    scanTime,
+    raw: data,
   };
 }
 
@@ -225,6 +337,38 @@ async function scanBuffer(fileBuffer, filename = 'unknown') {
       }
     }
     console.error('ClamAV scan error:', err.message);
+    throw err;
+  }
+}
+
+async function scanReadableStream(readableStream, filename = 'unknown', options = {}) {
+  if (!config.enabled || !config.mode) {
+    return { infected: false, viruses: [], scanTime: 0, skipped: true };
+  }
+
+  if (!readableStream || typeof readableStream.on !== 'function') {
+    throw new Error('Invalid readable stream');
+  }
+
+  const sizeBytes = Number(options.sizeBytes || 0);
+  const scanOnce = async () => {
+    if (config.mode === 'tcp') {
+      return scanReadableStreamViaClamd(readableStream, filename, sizeBytes);
+    }
+    if (config.mode === 'rest') {
+      return scanReadableStreamViaRest(readableStream, filename, sizeBytes);
+    }
+    return { infected: false, viruses: [], scanTime: 0, skipped: true };
+  };
+
+  try {
+    return await scanOnce();
+  } catch (err) {
+    if (isTimeoutError(err)) {
+      console.warn('ClamAV stream scan timeout:', err.message);
+    } else {
+      console.error('ClamAV stream scan error:', err.message);
+    }
     throw err;
   }
 }
@@ -277,6 +421,7 @@ async function scanUploadMiddleware(req, res, next) {
 
 module.exports = {
   scanBuffer,
+  scanReadableStream,
   scanUploadMiddleware,
   isConfigured,
   getConfig: () => ({ ...config })
