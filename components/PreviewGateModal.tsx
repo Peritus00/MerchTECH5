@@ -23,6 +23,8 @@ interface PreviewGateModalProps {
   contentId: string;
   contentName?: string;
   couponId?: number;
+  /** Content owner userId - used to resolve per-user preview gate setting */
+  ownerId?: number;
 }
 
 export default function PreviewGateModal({
@@ -33,6 +35,7 @@ export default function PreviewGateModal({
   contentId,
   contentName,
   couponId,
+  ownerId,
 }: PreviewGateModalProps) {
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
@@ -42,7 +45,8 @@ export default function PreviewGateModal({
 
   useEffect(() => {
     if (visible) {
-      api.get('/coupons/preview-gate-settings').then((r) => {
+      const params = ownerId != null ? { ownerId } : {};
+      api.get('/coupons/preview-gate-settings', { params }).then((r) => {
         setSkipAllowed(r.data?.skipAllowed !== false);
         setSmsConfigured(r.data?.smsConfigured === true);
       }).catch(() => {
@@ -50,7 +54,7 @@ export default function PreviewGateModal({
         setSmsConfigured(false);
       });
     }
-  }, [visible]);
+  }, [visible, ownerId]);
 
   const handleSendCoupon = async () => {
     if (!consent) {

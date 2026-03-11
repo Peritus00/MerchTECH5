@@ -182,6 +182,7 @@ export default function UserPermissionsScreen() {
   const [deleteRequests, setDeleteRequests] = useState<any[]>([]);
   const [deleteRequestsLoading, setDeleteRequestsLoading] = useState(false);
   const [deleteRequestStatus, setDeleteRequestStatus] = useState<'pending' | 'approved' | 'denied'>('pending');
+  const [bulkPreviewGateLoading, setBulkPreviewGateLoading] = useState(false);
 
   React.useEffect(() => {
     if (currentUser === null) {
@@ -411,6 +412,37 @@ export default function UserPermissionsScreen() {
     setRefreshing(false);
   };
 
+  const handleBulkPreviewGate = async (requirePhone: boolean, lockUsers = false) => {
+    setBulkPreviewGateLoading(true);
+    try {
+      const { couponAPI } = await import('@/services/api');
+      const result = await couponAPI.updateAllUsersPreviewGateSettings({ requirePhone, lockUsers });
+      Alert.alert(
+        'Done',
+        `Preview gate setting applied to ${result?.updatedCount ?? users.length} users.`
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to apply to all users.');
+    } finally {
+      setBulkPreviewGateLoading(false);
+    }
+  };
+
+  const confirmBulkPreviewGate = (requirePhone: boolean) => {
+    const action = requirePhone ? 'require phone number for preview' : 'allow skip to preview';
+    Alert.alert(
+      'Apply to All Users',
+      `This will ${action} for every user. Continue?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Apply',
+          onPress: () => handleBulkPreviewGate(requirePhone),
+        },
+      ]
+    );
+  };
+
   // Memoize filtered users to ensure proper re-renders when data changes
   const filteredUsers = useMemo(() => {
     let filtered = users;
@@ -490,6 +522,41 @@ export default function UserPermissionsScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
+        </View>
+
+        <View style={styles.bulkPreviewGateSection}>
+          <ThemedText style={styles.sectionTitle}>Preview Gate (Apply to All)</ThemedText>
+          <ThemedText style={styles.helperText}>One-click to set phone requirement for every user.</ThemedText>
+          <View style={styles.bulkPreviewGateButtons}>
+            <TouchableOpacity
+              style={[styles.bulkPreviewGateButton, styles.bulkRequireButton]}
+              onPress={() => confirmBulkPreviewGate(true)}
+              disabled={bulkPreviewGateLoading}
+            >
+              {bulkPreviewGateLoading ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <MaterialIcons name="phone" size={18} color="#fff" />
+                  <Text style={styles.bulkPreviewGateButtonText}>Require Phone for All</Text>
+                </>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.bulkPreviewGateButton, styles.bulkAllowButton]}
+              onPress={() => confirmBulkPreviewGate(false)}
+              disabled={bulkPreviewGateLoading}
+            >
+              {bulkPreviewGateLoading ? (
+                <ActivityIndicator size="small" color="#3b82f6" />
+              ) : (
+                <>
+                  <MaterialIcons name="play-arrow" size={18} color="#3b82f6" />
+                  <Text style={[styles.bulkPreviewGateButtonText, styles.bulkAllowButtonText]}>Allow Skip for All</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.filterTabs}>
@@ -697,6 +764,47 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
     color: '#111827',
+  },
+  bulkPreviewGateSection: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  bulkPreviewGateButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 12,
+  },
+  bulkPreviewGateButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  bulkRequireButton: {
+    backgroundColor: '#3b82f6',
+  },
+  bulkAllowButton: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  bulkPreviewGateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  bulkAllowButtonText: {
+    color: '#3b82f6',
   },
   filterTabs: {
     flexDirection: 'row',

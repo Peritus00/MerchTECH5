@@ -38,6 +38,8 @@ interface UserPermissions {
   isSuspended: boolean;
   createdAt: string;
   lastActive: string;
+  previewGateRequirePhone?: boolean | null;
+  previewGateUserCanEdit?: boolean;
 }
 
 interface EditUserPermissionsModalProps {
@@ -70,12 +72,33 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
   const [workingQrAccessSet, setWorkingQrAccessSet] = useState<Set<number>>(new Set());
   // Original assigned QR codes snapshot (to compute diff on save)
   const [originalQrAccessSet, setOriginalQrAccessSet] = useState<Set<number>>(new Set());
+  const [previewGateSettings, setPreviewGateSettings] = useState<{ requirePhone: boolean | null; userCanEdit: boolean } | null>(null);
 
   useEffect(() => {
     if (user) {
       setPermissions({ ...user });
     }
   }, [user]);
+
+  useEffect(() => {
+    const loadPreviewGate = async () => {
+      if (!visible || !user?.id) {
+        setPreviewGateSettings(null);
+        return;
+      }
+      try {
+        const { couponAPI } = await import('@/services/api');
+        const settings = await couponAPI.getUserPreviewGateSettings(user.id);
+        setPreviewGateSettings({
+          requirePhone: settings?.requirePhone ?? null,
+          userCanEdit: settings?.userCanEdit !== false,
+        });
+      } catch {
+        setPreviewGateSettings({ requirePhone: null, userCanEdit: true });
+      }
+    };
+    loadPreviewGate();
+  }, [visible, user?.id]);
 
   // Initialize working QR access set from assignedQrCodes when modal opens or assignedQrCodes changes
   useEffect(() => {
@@ -93,10 +116,27 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
 
   const handleSave = async () => {
     if (!user) return;
-    
+
     // First, update permissions
     await onUpdatePermissions(user.id, permissions);
-    
+
+    // Update preview gate settings if changed
+    if (previewGateSettings) {
+      try {
+        const { couponAPI } = await import('@/services/api');
+        const updates: { requirePhone?: boolean; userCanEdit?: boolean } = {};
+        if (typeof previewGateSettings.requirePhone === 'boolean') {
+          updates.requirePhone = previewGateSettings.requirePhone;
+        }
+        updates.userCanEdit = previewGateSettings.userCanEdit;
+        if (Object.keys(updates).length > 0) {
+          await couponAPI.updateUserPreviewGateSettings(user.id, updates);
+        }
+      } catch (e) {
+        console.error('Failed to update preview gate settings:', e);
+      }
+    }
+
     // Then, compute and apply QR code access changes
     const addedIds = Array.from(workingQrAccessSet).filter(id => !originalQrAccessSet.has(id));
     const removedIds = Array.from(originalQrAccessSet).filter(id => !workingQrAccessSet.has(id));
@@ -394,6 +434,42 @@ const EditUserPermissionsModal: React.FC<EditUserPermissionsModalProps> = ({
                 </ScrollView>
               </>
             )}
+          </View>
+
+          {/* Preview Gate */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Preview Gate</Text>
+            <Text style={styles.helperText}>Controls for the phone-number requirement when visitors preview this user&apos;s content.</Text>
+            <View style={styles.permissionRow}>
+              <View style={styles.permissionInfo}>
+                <Text style={styles.permissionLabel}>Require phone for preview</Text>
+                <Text style={styles.permissionDescription}>
+                  When on, visitors must enter a phone number to access the 30-second preview
+                </Text>
+              </View>
+              <Switch
+                value={previewGateSettings?.requirePhone === true}
+                onValueChange={(value) => setPreviewGateSettings((prev) => prev ? { ...prev, requirePhone: value } : { requirePhone: value, userCanEdit: true })}
+                disabled={!previewGateSettings}
+                trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+                thumbColor={previewGateSettings?.requirePhone ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
+            <View style={styles.permissionRow}>
+              <View style={styles.permissionInfo}>
+                <Text style={styles.permissionLabel}>Allow user to change preview requirement</Text>
+                <Text style={styles.permissionDescription}>
+                  When off, the user cannot change this setting from their Playlists page
+                </Text>
+              </View>
+              <Switch
+                value={previewGateSettings?.userCanEdit !== false}
+                onValueChange={(value) => setPreviewGateSettings((prev) => prev ? { ...prev, userCanEdit: value } : { requirePhone: null, userCanEdit: value })}
+                disabled={!previewGateSettings}
+                trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+                thumbColor={previewGateSettings?.userCanEdit !== false ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
           </View>
 
           {/* Account Status */}

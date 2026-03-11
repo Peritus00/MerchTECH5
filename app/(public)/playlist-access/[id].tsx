@@ -1112,6 +1112,7 @@ export default function PlaylistAccessScreen() {
         contentType="playlist"
         contentId={id}
         contentName={playlist?.name}
+        ownerId={playlist?.userId != null ? Number(playlist.userId) : undefined}
       />
 
       {/* Demographics Survey Overlay */}

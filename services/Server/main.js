@@ -10686,19 +10686,237 @@ app.post('/api/coupons/sms/send', async (req, res) => {
   }
 });
 
-// GET /api/coupons/preview-gate-settings - public settings for preview gate (skip allowed, etc.)
-app.get('/api/coupons/preview-gate-settings', async (req, res) => {
+// Helper: get effective preview gate setting for a user (or global if no user override)
+async function getEffectivePreviewGateForUser(userId) {
+  if (!userId) return null;
+  const { rows } = await db.query(
+    `SELECT setting_key, setting_value FROM user_feature_settings
+     WHERE user_id = $1 AND setting_key IN ('preview_gate_require_phone', 'preview_gate_user_can_edit')`,
+    [userId]
+  );
+  const map = {};
+  rows.forEach((r) => { map[r.setting_key] = r.setting_value; });
+  const requirePhone = map.preview_gate_require_phone?.value;
+  const canEdit = map.preview_gate_user_can_edit?.value;
+  return {
+    requirePhone: typeof requirePhone === 'boolean' ? requirePhone : null,
+    userCanEdit: typeof canEdit === 'boolean' ? canEdit : true,
+  };
+}
+
+// Helper: get global default
+async function getGlobalPreviewGateDefault() {
+  const { rows } = await db.query(
+    `SELECT setting_value FROM system_feature_settings WHERE setting_key = 'preview_gate_skip_allowed' LIMIT 1`
+  );
+  const skipAllowed = rows[0] ? (rows[0].setting_value?.skipAllowed !== false) : true;
+  return { skipAllowed, requirePhone: !skipAllowed };
+}
+
+// GET /api/coupons/preview-gate-settings - public/optional-auth; ownerId=content owner for gate, or self when auth+no ownerId
+app.get('/api/coupons/preview-gate-settings', authenticateTokenOptional, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) {
-      return res.json({ skipAllowed: true, smsConfigured: false });
+      return res.json({ skipAllowed: true, requirePhone: false, smsConfigured: false });
     }
-    const { rows } = await db.query(
-      `SELECT setting_value FROM system_feature_settings WHERE setting_key = 'preview_gate_skip_allowed' LIMIT 1`
-    );
-    const skipAllowed = rows[0] ? (rows[0].setting_value?.skipAllowed !== false) : true;
-    res.json({ skipAllowed, smsConfigured: smsService.isSmsConfigured() });
+    const ownerId = req.query.ownerId ? parseInt(req.query.ownerId, 10) : null;
+    const currentUserId = req.user?.userId ? parseInt(req.user.userId, 10) : null;
+
+    const globalDefault = await getGlobalPreviewGateDefault();
+    let skipAllowed = globalDefault.skipAllowed;
+    let requirePhone = globalDefault.requirePhone;
+    let userCanEdit = true;
+
+    const targetUserId = ownerId || currentUserId;
+    if (targetUserId) {
+      const userSettings = await getEffectivePreviewGateForUser(targetUserId);
+      if (userSettings.requirePhone !== null) {
+        requirePhone = userSettings.requirePhone;
+        skipAllowed = !requirePhone;
+      }
+      if (!ownerId && currentUserId) {
+        userCanEdit = userSettings.userCanEdit;
+      }
+    }
+
+    const payload = { skipAllowed, requirePhone, smsConfigured: smsService.isSmsConfigured() };
+    if (!ownerId && currentUserId) {
+      payload.userCanEdit = userCanEdit;
+    }
+    res.json(payload);
   } catch (e) {
-    res.json({ skipAllowed: true, smsConfigured: false });
+    console.error('Preview gate settings get error:', e);
+    res.json({ skipAllowed: true, requirePhone: false, smsConfigured: false });
+  }
+});
+
+// PATCH /api/coupons/preview-gate-settings - admin: update global default
+app.patch('/api/coupons/preview-gate-settings', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+
+    const { requirePhone } = req.body || {};
+    if (typeof requirePhone !== 'boolean') {
+      return res.status(400).json({ error: 'requirePhone boolean is required' });
+    }
+
+    const skipAllowed = !requirePhone;
+    await db.query(
+      `INSERT INTO system_feature_settings (setting_key, setting_value, updated_at)
+       VALUES ('preview_gate_skip_allowed', $1::jsonb, NOW())
+       ON CONFLICT (setting_key)
+       DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [JSON.stringify({ skipAllowed })]
+    );
+
+    res.json({ ok: true, requirePhone, skipAllowed });
+  } catch (e) {
+    console.error('Preview gate settings update error:', e);
+    res.status(500).json({ error: 'Failed to update preview gate settings' });
+  }
+});
+
+// PATCH /api/coupons/preview-gate-settings/me - authenticated user: update own setting
+app.patch('/api/coupons/preview-gate-settings/me', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    const userId = req.user.userId;
+    const { requirePhone } = req.body || {};
+    if (typeof requirePhone !== 'boolean') {
+      return res.status(400).json({ error: 'requirePhone boolean is required' });
+    }
+
+    const userSettings = await getEffectivePreviewGateForUser(userId);
+    if (userSettings.userCanEdit === false) {
+      return res.status(403).json({ error: 'You cannot change this setting; it is locked by an administrator.' });
+    }
+
+    await db.query(
+      `INSERT INTO user_feature_settings (user_id, setting_key, setting_value, updated_at)
+       VALUES ($1, 'preview_gate_require_phone', $2::jsonb, NOW())
+       ON CONFLICT (user_id, setting_key)
+       DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [userId, JSON.stringify({ value: requirePhone })]
+    );
+
+    res.json({ ok: true, requirePhone, skipAllowed: !requirePhone });
+  } catch (e) {
+    console.error('Preview gate settings me update error:', e);
+    res.status(500).json({ error: 'Failed to update preview gate settings' });
+  }
+});
+
+// GET /api/coupons/preview-gate-settings/user/:id - admin: get raw per-user preview gate settings
+app.get('/api/coupons/preview-gate-settings/user/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    const targetUserId = parseInt(req.params.id, 10);
+    if (isNaN(targetUserId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+    const { rows } = await db.query(
+      `SELECT setting_key, setting_value FROM user_feature_settings
+       WHERE user_id = $1 AND setting_key IN ('preview_gate_require_phone', 'preview_gate_user_can_edit')`,
+      [targetUserId]
+    );
+    const map = {};
+    rows.forEach((r) => { map[r.setting_key] = r.setting_value; });
+    const requirePhone = map.preview_gate_require_phone?.value;
+    const userCanEdit = map.preview_gate_user_can_edit?.value;
+    res.json({
+      requirePhone: typeof requirePhone === 'boolean' ? requirePhone : null,
+      userCanEdit: typeof userCanEdit === 'boolean' ? userCanEdit : true,
+    });
+  } catch (e) {
+    console.error('Preview gate settings user get error:', e);
+    res.status(500).json({ error: 'Failed to get user preview gate settings' });
+  }
+});
+
+// PATCH /api/coupons/preview-gate-settings/user/:id - admin: set per-user requirePhone and/or userCanEdit
+app.patch('/api/coupons/preview-gate-settings/user/:id', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    const targetUserId = parseInt(req.params.id, 10);
+    if (isNaN(targetUserId)) return res.status(400).json({ error: 'Invalid user ID' });
+
+    const { requirePhone, userCanEdit } = req.body || {};
+    if (typeof requirePhone !== 'boolean' && typeof userCanEdit !== 'boolean') {
+      return res.status(400).json({ error: 'At least one of requirePhone or userCanEdit is required' });
+    }
+
+    if (typeof requirePhone === 'boolean') {
+      await db.query(
+        `INSERT INTO user_feature_settings (user_id, setting_key, setting_value, updated_at)
+         VALUES ($1, 'preview_gate_require_phone', $2::jsonb, NOW())
+         ON CONFLICT (user_id, setting_key)
+         DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+        [targetUserId, JSON.stringify({ value: requirePhone })]
+      );
+    }
+    if (typeof userCanEdit === 'boolean') {
+      await db.query(
+        `INSERT INTO user_feature_settings (user_id, setting_key, setting_value, updated_at)
+         VALUES ($1, 'preview_gate_user_can_edit', $2::jsonb, NOW())
+         ON CONFLICT (user_id, setting_key)
+         DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+        [targetUserId, JSON.stringify({ value: userCanEdit })]
+      );
+    }
+
+    res.json({
+      ok: true,
+      requirePhone: typeof requirePhone === 'boolean' ? requirePhone : undefined,
+      userCanEdit: typeof userCanEdit === 'boolean' ? userCanEdit : undefined,
+    });
+  } catch (e) {
+    console.error('Preview gate settings user update error:', e);
+    res.status(500).json({ error: 'Failed to update user preview gate settings' });
+  }
+});
+
+// PATCH /api/coupons/preview-gate-settings/all - admin: bulk apply to all users
+app.patch('/api/coupons/preview-gate-settings/all', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    const { requirePhone, lockUsers } = req.body || {};
+    if (typeof requirePhone !== 'boolean') {
+      return res.status(400).json({ error: 'requirePhone boolean is required' });
+    }
+
+    const { rows: users } = await db.query('SELECT id FROM users');
+    const userCanEdit = typeof lockUsers === 'boolean' ? !lockUsers : true;
+
+    for (const u of users) {
+      await db.query(
+        `INSERT INTO user_feature_settings (user_id, setting_key, setting_value, updated_at)
+         VALUES ($1, 'preview_gate_require_phone', $2::jsonb, NOW())
+         ON CONFLICT (user_id, setting_key)
+         DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+        [u.id, JSON.stringify({ value: requirePhone })]
+      );
+      await db.query(
+        `INSERT INTO user_feature_settings (user_id, setting_key, setting_value, updated_at)
+         VALUES ($1, 'preview_gate_user_can_edit', $2::jsonb, NOW())
+         ON CONFLICT (user_id, setting_key)
+         DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+        [u.id, JSON.stringify({ value: userCanEdit })]
+      );
+    }
+
+    res.json({ ok: true, updatedCount: users.length, requirePhone, lockUsers: !!lockUsers });
+  } catch (e) {
+    console.error('Preview gate settings all update error:', e);
+    res.status(500).json({ error: 'Failed to update all users preview gate settings' });
   }
 });
 

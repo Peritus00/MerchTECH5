@@ -47,6 +47,10 @@ export default function PlaylistsScreen() {
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [selectedTab, setSelectedTab] = useState<'my-playlists' | 'public'>('my-playlists');
   const [searchQuery, setSearchQuery] = useState('');
+  const [requirePhoneForPreview, setRequirePhoneForPreview] = useState(false);
+  const [previewGateUserCanEdit, setPreviewGateUserCanEdit] = useState(true);
+  const [previewGateLoading, setPreviewGateLoading] = useState(false);
+  const [previewGateSaving, setPreviewGateSaving] = useState(false);
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -96,6 +100,27 @@ export default function PlaylistsScreen() {
     fetchData().catch((error) => {
       console.error('🔴 PLAYLISTS: Error fetching data after user change:', error);
     });
+  }, [user?.id]);
+
+  const isAdmin = !!(user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel'));
+
+  useEffect(() => {
+    const loadPreviewGateSettings = async () => {
+      if (!user?.id) return;
+      setPreviewGateLoading(true);
+      try {
+        const { couponAPI } = await import('@/services/api');
+        const settings = await couponAPI.getPreviewGateSettings();
+        setRequirePhoneForPreview(settings?.requirePhone === true || settings?.skipAllowed === false);
+        setPreviewGateUserCanEdit(settings?.userCanEdit !== false);
+      } catch (error) {
+        console.error('🔴 PLAYLISTS: Failed to load preview gate settings:', error);
+      } finally {
+        setPreviewGateLoading(false);
+      }
+    };
+
+    loadPreviewGateSettings();
   }, [user?.id]);
 
   const fetchData = async () => {
@@ -408,6 +433,22 @@ export default function PlaylistsScreen() {
     }
   };
 
+  const handleToggleRequirePhoneForPreview = async () => {
+    if (previewGateSaving || !previewGateUserCanEdit) return;
+    const nextValue = !requirePhoneForPreview;
+    setRequirePhoneForPreview(nextValue);
+    setPreviewGateSaving(true);
+    try {
+      const { couponAPI } = await import('@/services/api');
+      await couponAPI.updateMyPreviewGateSettings({ requirePhone: nextValue });
+    } catch (error: any) {
+      setRequirePhoneForPreview(!nextValue);
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview gate setting');
+    } finally {
+      setPreviewGateSaving(false);
+    }
+  };
+
   const filteredPlaylists = playlists.filter(playlist => {
     // Skip playlists that don't have a name (defensive programming)
     if (!playlist || !playlist.name) {
@@ -498,6 +539,32 @@ export default function PlaylistsScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {user?.id && (
+        <View style={styles.previewGateToggleContainer}>
+          <TouchableOpacity
+            style={styles.previewGateToggleRow}
+            onPress={handleToggleRequirePhoneForPreview}
+            disabled={previewGateSaving || previewGateLoading || !previewGateUserCanEdit}
+          >
+            {previewGateSaving || previewGateLoading ? (
+              <ActivityIndicator size="small" color="#3b82f6" />
+            ) : (
+              <MaterialIcons
+                name={requirePhoneForPreview ? 'check-box' : 'check-box-outline-blank'}
+                size={22}
+                color={previewGateUserCanEdit ? (requirePhoneForPreview ? '#3b82f6' : '#6b7280') : '#9ca3af'}
+              />
+            )}
+            <Text style={[styles.previewGateToggleText, !previewGateUserCanEdit && styles.previewGateToggleTextDisabled]}>
+              Require phone number for preview
+            </Text>
+          </TouchableOpacity>
+          {!previewGateUserCanEdit && (
+            <Text style={styles.previewGateLockedHint}>Your administrator has locked this setting.</Text>
+          )}
+        </View>
+      )}
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
@@ -727,6 +794,35 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1f2937',
+  },
+  previewGateToggleContainer: {
+    backgroundColor: '#fff',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  previewGateToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  previewGateToggleText: {
+    fontSize: 14,
+    color: '#1f2937',
+    fontWeight: '500',
+  },
+  previewGateToggleTextDisabled: {
+    color: '#9ca3af',
+  },
+  previewGateLockedHint: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 6,
+    marginLeft: 30,
   },
   tabContainer: {
     flexDirection: 'row',

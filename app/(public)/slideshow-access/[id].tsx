@@ -954,6 +954,7 @@ export default function SlideshowAccessScreen() {
         contentType="slideshow"
         contentId={id}
         contentName={slideshow?.name}
+        ownerId={slideshow?.userId != null ? Number(slideshow.userId) : undefined}
       />
 
       {/* Demographics Survey Overlay */}

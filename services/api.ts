@@ -594,8 +594,29 @@ export const couponAPI = {
     const response = await api.post('/coupons/validate', { code, productId, playlistId, slideshowId });
     return response.data;
   },
-  async getPreviewGateSettings() {
-    const response = await api.get('/coupons/preview-gate-settings');
+  async getPreviewGateSettings(ownerId?: number) {
+    const params = ownerId != null ? { ownerId } : {};
+    const response = await api.get('/coupons/preview-gate-settings', { params });
+    return response.data;
+  },
+  async updatePreviewGateSettings(data: { requirePhone: boolean }) {
+    const response = await api.patch('/coupons/preview-gate-settings', data);
+    return response.data;
+  },
+  async updateMyPreviewGateSettings(data: { requirePhone: boolean }) {
+    const response = await api.patch('/coupons/preview-gate-settings/me', data);
+    return response.data;
+  },
+  async getUserPreviewGateSettings(userId: number) {
+    const response = await api.get(`/coupons/preview-gate-settings/user/${userId}`);
+    return response.data;
+  },
+  async updateUserPreviewGateSettings(userId: number, data: { requirePhone?: boolean; userCanEdit?: boolean }) {
+    const response = await api.patch(`/coupons/preview-gate-settings/user/${userId}`, data);
+    return response.data;
+  },
+  async updateAllUsersPreviewGateSettings(data: { requirePhone: boolean; lockUsers?: boolean }) {
+    const response = await api.patch('/coupons/preview-gate-settings/all', data);
     return response.data;
   },
   async getSmsStatus() {
