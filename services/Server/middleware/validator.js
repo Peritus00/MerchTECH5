@@ -72,10 +72,12 @@ const validators = {
     .withMessage('File size must be between 1 byte and 5GB'),
 
   // S3 key validation
+  // Keep strict ownership path format, but allow broader filename chars
+  // because presigned keys are generated from original filenames.
   s3Key: body('s3Key')
     .notEmpty()
     .withMessage('S3 key is required')
-    .matches(/^users\/\d+\/media\/[\d]+-[a-zA-Z0-9._-]+$/)
+    .matches(/^users\/\d+\/media\/\d+-[^/\\]+$/)
     .withMessage('Invalid S3 key format'),
 
   // Filename validation for confirm-upload (canonical: lowercase)
