@@ -401,6 +401,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const stallStartTimeRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const STALL_THRESHOLD_MS = 10000; // 10 seconds of buffering = stall
+  const MIN_AUTOPLAY_RETRY_MS = 1500; // avoid autoplay thrash on repeated canplaythrough events
+  const lastAutoPlayAttemptAtRef = useRef<number>(0);
+  const stallRecoveryInProgressRef = useRef<boolean>(false);
   const html5VideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Analytics tracking state
@@ -850,6 +853,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
         clearTimeout(stallTimeoutRef.current);
         stallTimeoutRef.current = null;
       }
+      stallRecoveryInProgressRef.current = false;
     };
   }, []);
 
@@ -868,6 +872,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
 
   // Stop any currently playing media before switching tracks to avoid overlap
   const stopCurrentMedia = useCallback(() => {
+    if (stallTimeoutRef.current) {
+      clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    stallStartTimeRef.current = null;
+    stallRecoveryInProgressRef.current = false;
+    setIsStalled(false);
+
     // Pause HTML5 video if present
     if (html5VideoRef.current) {
       try {
@@ -964,6 +976,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     }
     setIsStalled(false);
     stallStartTimeRef.current = null;
+    stallRecoveryInProgressRef.current = false;
     
     // Check if we should retry automatically
     if (retryAttempt < maxRetriesRef.current) {
@@ -1478,14 +1491,26 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
               console.log('🎵 HTML5_VIDEO: onCanPlayThrough - React event');
               // Auto-play when media is ready and user has interacted
               if (userHasInteracted && isPlaying && html5VideoRef.current) {
+                const video = html5VideoRef.current;
+                const now = Date.now();
+                if (!video.paused) {
+                  return; // already playing; avoid duplicate play() calls
+                }
+                if (now - lastAutoPlayAttemptAtRef.current < MIN_AUTOPLAY_RETRY_MS) {
+                  return; // debounce rapid canplaythrough bursts
+                }
+                lastAutoPlayAttemptAtRef.current = now;
                 console.log('🎵 HTML5_VIDEO: Auto-playing on canplaythrough');
-                html5VideoRef.current.play().catch((err) => {
+                video.play().catch((err) => {
                   console.warn('🎵 HTML5_VIDEO: Auto-play on canplaythrough failed:', err);
                 });
               }
             }}
             onWaiting={() => {
               console.log('🎵 HTML5_VIDEO: onWaiting - React event');
+              if (stallRecoveryInProgressRef.current) {
+                return;
+              }
               // Stall detection: track when video is waiting/buffering
               if (!stallStartTimeRef.current) {
                 // Buffering just started
@@ -1501,17 +1526,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                   console.warn(`⏸️ STALL_DETECTED: Media "${currentMediaItem?.title || 'media file'}" stalled for ${STALL_THRESHOLD_MS}ms. Attempting recovery.`);
                   setIsStalled(true);
                   
-                  // Try to recover: pause and resume
+                  // Try a single non-disruptive recovery; avoid repeated pause/play thrash.
                   const video = html5VideoRef.current;
                   if (video) {
-                    video.pause();
-                    setTimeout(() => {
-                      video.play().catch(() => {
-                        // If resume fails, trigger retry logic
-                        console.warn('⏸️ STALL_RECOVERY_FAILED: Triggering retry');
-                        handleVideoError({ code: 2, message: 'Stall recovery failed' });
-                      });
-                    }, 500);
+                    stallRecoveryInProgressRef.current = true;
+                    video.play().catch(() => {
+                      // If resume fails, trigger retry logic
+                      console.warn('⏸️ STALL_RECOVERY_FAILED: Triggering retry');
+                      handleVideoError({ code: 2, message: 'Stall recovery failed' });
+                    }).finally(() => {
+                      stallRecoveryInProgressRef.current = false;
+                    });
                   }
                   
                   // Clear stall tracking
@@ -1541,9 +1566,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 clearTimeout(stallTimeoutRef.current);
                 stallTimeoutRef.current = null;
               }
+              stallRecoveryInProgressRef.current = false;
             }}
             onPause={() => {
               console.log('🎵 HTML5_VIDEO: onPause - React event');
+              // Ignore transient pause events while buffering/recovering to prevent play-state flapping.
+              if (stallStartTimeRef.current || stallRecoveryInProgressRef.current) {
+                return;
+              }
               setIsPlaying(false);
             }}
             onLoadedMetadata={(e) => {
@@ -1693,8 +1723,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
                 console.log('🎵 HTML5_AUDIO: onCanPlayThrough - React event');
                 // Auto-play when media is ready and user has interacted
                 if (userHasInteracted && isPlaying && html5AudioRef.current) {
+                  const audio = html5AudioRef.current;
+                  const now = Date.now();
+                  if (!audio.paused) {
+                    return;
+                  }
+                  if (now - lastAutoPlayAttemptAtRef.current < MIN_AUTOPLAY_RETRY_MS) {
+                    return;
+                  }
+                  lastAutoPlayAttemptAtRef.current = now;
                   console.log('🎵 HTML5_AUDIO: Auto-playing on canplaythrough');
-                  html5AudioRef.current.play().catch((err) => {
+                  audio.play().catch((err) => {
                     console.warn('🎵 HTML5_AUDIO: Auto-play on canplaythrough failed:', err);
                   });
                 }
