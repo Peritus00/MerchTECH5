@@ -2,6 +2,27 @@ const winston = require('winston');
 const fs = require('fs');
 const path = require('path');
 
+const buildConsoleFormatter = () => winston.format.printf((info) => {
+  const { level, timestamp, message, stack, ...meta } = info;
+  const payload = {};
+
+  if (typeof message === 'object' && message !== null) {
+    Object.assign(payload, message);
+  } else if (message !== undefined) {
+    payload.message = message;
+  }
+
+  if (stack) {
+    payload.stack = stack;
+  }
+
+  if (Object.keys(meta).length > 0) {
+    Object.assign(payload, meta);
+  }
+
+  return `${timestamp} ${level}: ${JSON.stringify(payload)}`;
+});
+
 // Ensure logs directory exists (gracefully handle if it doesn't)
 let logsDirExists = false;
 try {
@@ -19,8 +40,9 @@ try {
 const errorLoggerTransports = [
   new winston.transports.Console({
     format: winston.format.combine(
+      winston.format.timestamp(),
       winston.format.colorize(),
-      winston.format.simple()
+      buildConsoleFormatter()
     )
   })
 ];

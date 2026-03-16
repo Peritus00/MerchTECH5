@@ -3,6 +3,27 @@ const { v4: uuidv4 } = require('uuid');
 const fs = require('fs');
 const path = require('path');
 
+const buildConsoleFormatter = () => winston.format.printf((info) => {
+  const { level, timestamp, message, stack, ...meta } = info;
+  const payload = {};
+
+  if (typeof message === 'object' && message !== null) {
+    Object.assign(payload, message);
+  } else if (message !== undefined) {
+    payload.message = message;
+  }
+
+  if (stack) {
+    payload.stack = stack;
+  }
+
+  if (Object.keys(meta).length > 0) {
+    Object.assign(payload, meta);
+  }
+
+  return `${timestamp} ${level}: ${JSON.stringify(payload)}`;
+});
+
 // Reduce log noise from extremely high-frequency endpoints (streaming, preflight, static assets).
 // This prevents stdout/backpressure issues that can stall the Node event loop under load.
 const shouldSkipRequestResponseLog = (req) => {
@@ -38,8 +59,9 @@ try {
 const loggerTransports = [
   new winston.transports.Console({
     format: winston.format.combine(
+      winston.format.timestamp(),
       winston.format.colorize(),
-      winston.format.simple()
+      buildConsoleFormatter()
     )
   })
 ];
