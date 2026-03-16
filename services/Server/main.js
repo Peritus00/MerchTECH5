@@ -558,7 +558,15 @@ app.use((req, res, next) => {
 app.use('/api/coupons/sms/send', smsSendLimiter);
 
 // General API rate limiting (applies to all other /api/ routes)
-app.use('/api/', generalApiLimiter);
+// IMPORTANT: Exclude streaming endpoints to avoid 429s during media playback,
+// since browsers can issue frequent range/open requests while buffering.
+app.use('/api/', (req, res, next) => {
+  const isStreamEndpoint = /^\/api\/.+\/stream$/.test(req.path);
+  if (isStreamEndpoint) {
+    return next();
+  }
+  return generalApiLimiter(req, res, next);
+});
 
 app.use('/uploads', express.static(uploadsDir));
 
