@@ -561,7 +561,9 @@ app.use('/api/coupons/sms/send', smsSendLimiter);
 // IMPORTANT: Exclude streaming endpoints to avoid 429s during media playback,
 // since browsers can issue frequent range/open requests while buffering.
 app.use('/api/', (req, res, next) => {
-  const isStreamEndpoint = /^\/api\/.+\/stream$/.test(req.path);
+  // req.path here excludes the "/api" mount prefix, so stream paths look like
+  // "/media/:id/stream" rather than "/api/media/:id/stream".
+  const isStreamEndpoint = /^\/.+\/stream$/.test(req.path);
   if (isStreamEndpoint) {
     return next();
   }
