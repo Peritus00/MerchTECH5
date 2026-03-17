@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -16,6 +17,8 @@ interface PlaylistCardProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onToggleProtection?: () => void;
+  onToggleRequirePhone?: () => void;
+  requirePhoneSaving?: boolean;
   showActions?: boolean;
 }
 
@@ -25,6 +28,8 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   onEdit,
   onDelete,
   onToggleProtection,
+  onToggleRequirePhone,
+  requirePhoneSaving = false,
   showActions = true,
 }) => {
   const formatDate = (dateString: string) => {
@@ -151,6 +156,23 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                   size={20} 
                   color={(playlist.requiresActivationCode ?? false) ? "#f59e0b" : "#9ca3af"} 
                 />
+              </TouchableOpacity>
+            )}
+            {onToggleRequirePhone && (
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={requirePhoneSaving ? undefined : onToggleRequirePhone}
+                disabled={requirePhoneSaving}
+              >
+                {requirePhoneSaving ? (
+                  <ActivityIndicator size="small" color="#3b82f6" />
+                ) : (
+                  <MaterialIcons 
+                    name={(playlist.requirePhoneForPreview ?? false) ? "check-box" : "check-box-outline-blank"} 
+                    size={20} 
+                    color={(playlist.requirePhoneForPreview ?? false) ? "#3b82f6" : "#9ca3af"} 
+                  />
+                )}
               </TouchableOpacity>
             )}
             <TouchableOpacity

@@ -47,10 +47,7 @@ export default function PlaylistsScreen() {
   const [editingPlaylist, setEditingPlaylist] = useState<Playlist | null>(null);
   const [selectedTab, setSelectedTab] = useState<'my-playlists' | 'public'>('my-playlists');
   const [searchQuery, setSearchQuery] = useState('');
-  const [requirePhoneForPreview, setRequirePhoneForPreview] = useState(false);
-  const [previewGateUserCanEdit, setPreviewGateUserCanEdit] = useState(true);
-  const [previewGateLoading, setPreviewGateLoading] = useState(false);
-  const [previewGateSaving, setPreviewGateSaving] = useState(false);
+  const [savingPreviewGatePlaylistIds, setSavingPreviewGatePlaylistIds] = useState<Set<string>>(new Set());
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -103,25 +100,6 @@ export default function PlaylistsScreen() {
   }, [user?.id]);
 
   const isAdmin = !!(user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel'));
-
-  useEffect(() => {
-    const loadPreviewGateSettings = async () => {
-      if (!user?.id) return;
-      setPreviewGateLoading(true);
-      try {
-        const { couponAPI } = await import('@/services/api');
-        const settings = await couponAPI.getPreviewGateSettings();
-        setRequirePhoneForPreview(settings?.requirePhone === true || settings?.skipAllowed === false);
-        setPreviewGateUserCanEdit(settings?.userCanEdit !== false);
-      } catch (error) {
-        console.error('🔴 PLAYLISTS: Failed to load preview gate settings:', error);
-      } finally {
-        setPreviewGateLoading(false);
-      }
-    };
-
-    loadPreviewGateSettings();
-  }, [user?.id]);
 
   const fetchData = async () => {
     try {
@@ -433,19 +411,38 @@ export default function PlaylistsScreen() {
     }
   };
 
-  const handleToggleRequirePhoneForPreview = async () => {
-    if (previewGateSaving || !previewGateUserCanEdit) return;
-    const nextValue = !requirePhoneForPreview;
-    setRequirePhoneForPreview(nextValue);
-    setPreviewGateSaving(true);
+  const handleToggleRequirePhoneForPreview = async (playlist: Playlist) => {
+    const playlistId = String(playlist.id);
+    if (savingPreviewGatePlaylistIds.has(playlistId)) return;
+    const nextValue = !(playlist.requirePhoneForPreview ?? false);
+    setSavingPreviewGatePlaylistIds((prev) => new Set(prev).add(playlistId));
+    const updatedPlaylist = { ...playlist, requirePhoneForPreview: nextValue };
     try {
-      const { couponAPI } = await import('@/services/api');
-      await couponAPI.updateMyPreviewGateSettings({ requirePhone: nextValue });
+      const { playlistsAPI } = await import('@/services/api');
+      const updatedState = await performOptimisticUpdate({
+        currentState: playlists,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updatedPlaylist, (p) => p.id),
+        serverMutation: async () => {
+          const res = await playlistsAPI.update(playlistId, { requirePhoneForPreview: nextValue });
+          return res?.playlist ?? updatedPlaylist;
+        },
+        getItemId: (p) => p.id,
+        refreshState: fetchData,
+        onError: (error: any) => {
+          Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview gate setting');
+        },
+      });
+      setPlaylists(updatedState);
     } catch (error: any) {
-      setRequirePhoneForPreview(!nextValue);
+      console.error('🔴 PLAYLISTS: Error toggling require phone for preview:', error);
       Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview gate setting');
     } finally {
-      setPreviewGateSaving(false);
+      setSavingPreviewGatePlaylistIds((prev) => {
+        const next = new Set(prev);
+        next.delete(playlistId);
+        return next;
+      });
     }
   };
 
@@ -540,32 +537,6 @@ export default function PlaylistsScreen() {
         )}
       </View>
 
-      {user?.id && (
-        <View style={styles.previewGateToggleContainer}>
-          <TouchableOpacity
-            style={styles.previewGateToggleRow}
-            onPress={handleToggleRequirePhoneForPreview}
-            disabled={previewGateSaving || previewGateLoading || !previewGateUserCanEdit}
-          >
-            {previewGateSaving || previewGateLoading ? (
-              <ActivityIndicator size="small" color="#3b82f6" />
-            ) : (
-              <MaterialIcons
-                name={requirePhoneForPreview ? 'check-box' : 'check-box-outline-blank'}
-                size={22}
-                color={previewGateUserCanEdit ? (requirePhoneForPreview ? '#3b82f6' : '#6b7280') : '#9ca3af'}
-              />
-            )}
-            <Text style={[styles.previewGateToggleText, !previewGateUserCanEdit && styles.previewGateToggleTextDisabled]}>
-              Require phone number for preview
-            </Text>
-          </TouchableOpacity>
-          {!previewGateUserCanEdit && (
-            <Text style={styles.previewGateLockedHint}>Your administrator has locked this setting.</Text>
-          )}
-        </View>
-      )}
-
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         {['my-playlists', 'public'].map((tab) => (
@@ -631,6 +602,8 @@ export default function PlaylistsScreen() {
               onEdit={() => handleEditPlaylist(playlist)}
               onDelete={() => handleDeletePlaylist(playlist.id)}
               onToggleProtection={() => handleToggleProtection(playlist)}
+              onToggleRequirePhone={() => handleToggleRequirePhoneForPreview(playlist)}
+              requirePhoneSaving={savingPreviewGatePlaylistIds.has(String(playlist.id))}
               showActions={selectedTab === 'my-playlists'}
             />
           ))
@@ -794,35 +767,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1f2937',
-  },
-  previewGateToggleContainer: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-  },
-  previewGateToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  previewGateToggleText: {
-    fontSize: 14,
-    color: '#1f2937',
-    fontWeight: '500',
-  },
-  previewGateToggleTextDisabled: {
-    color: '#9ca3af',
-  },
-  previewGateLockedHint: {
-    fontSize: 12,
-    color: '#9ca3af',
-    marginTop: 6,
-    marginLeft: 30,
   },
   tabContainer: {
     flexDirection: 'row',

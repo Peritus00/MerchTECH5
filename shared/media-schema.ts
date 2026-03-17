@@ -53,6 +53,7 @@ export interface Playlist {
   name: string;
   requiresActivationCode: boolean;
   isPublic: boolean;
+  requirePhoneForPreview?: boolean;
   instagramUrl?: string;
   twitterUrl?: string;
   facebookUrl?: string;

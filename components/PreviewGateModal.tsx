@@ -25,6 +25,8 @@ interface PreviewGateModalProps {
   couponId?: number;
   /** Content owner userId - used to resolve per-user preview gate setting */
   ownerId?: number;
+  /** Per-playlist/slideshow: when true, phone+consent required before preview (no skip) */
+  requirePhoneForPreview?: boolean;
 }
 
 export default function PreviewGateModal({
@@ -36,6 +38,7 @@ export default function PreviewGateModal({
   contentName,
   couponId,
   ownerId,
+  requirePhoneForPreview = false,
 }: PreviewGateModalProps) {
   const [phone, setPhone] = useState('');
   const [consent, setConsent] = useState(false);
@@ -45,6 +48,11 @@ export default function PreviewGateModal({
 
   useEffect(() => {
     if (visible) {
+      if (requirePhoneForPreview) {
+        setSkipAllowed(false);
+        setSmsConfigured(true);
+        return;
+      }
       const params = ownerId != null ? { ownerId } : {};
       api.get('/coupons/preview-gate-settings', { params }).then((r) => {
         setSkipAllowed(r.data?.skipAllowed !== false);
@@ -54,7 +62,7 @@ export default function PreviewGateModal({
         setSmsConfigured(false);
       });
     }
-  }, [visible, ownerId]);
+  }, [visible, ownerId, requirePhoneForPreview]);
 
   const handleSendCoupon = async () => {
     if (!consent) {
@@ -101,9 +109,13 @@ export default function PreviewGateModal({
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          <Text style={styles.title}>Get a Coupon</Text>
+          <Text style={styles.title}>
+            {requirePhoneForPreview ? 'Phone Required for Preview' : 'Get a Coupon'}
+          </Text>
           <Text style={styles.subtitle}>
-            Enter your phone number to receive a discount coupon via text, or skip to start the preview.
+            {requirePhoneForPreview
+              ? 'Enter your phone number and agree to receive marketing texts to start the preview.'
+              : 'Enter your phone number to receive a discount coupon via text, or skip to start the preview.'}
           </Text>
 
           <TextInput
@@ -138,17 +150,21 @@ export default function PreviewGateModal({
               {sending ? (
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
-                <Text style={styles.btnPrimaryText}>Send Coupon Now</Text>
+                <Text style={styles.btnPrimaryText}>
+                  {requirePhoneForPreview ? 'Continue to Preview' : 'Send Coupon Now'}
+                </Text>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.btn, styles.btnSecondary]}
-              onPress={handleSkip}
-              disabled={sending}
-            >
-              <Text style={styles.btnSecondaryText}>Skip</Text>
-            </TouchableOpacity>
+            {skipAllowed && (
+              <TouchableOpacity
+                style={[styles.btn, styles.btnSecondary]}
+                onPress={handleSkip}
+                disabled={sending}
+              >
+                <Text style={styles.btnSecondaryText}>Skip</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {!smsConfigured && (

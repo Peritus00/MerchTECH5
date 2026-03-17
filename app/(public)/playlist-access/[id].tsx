@@ -1113,6 +1113,7 @@ export default function PlaylistAccessScreen() {
         contentId={id}
         contentName={playlist?.name}
         ownerId={playlist?.userId != null ? Number(playlist.userId) : undefined}
+        requirePhoneForPreview={playlist?.requirePhoneForPreview === true}
       />
 
       {/* Demographics Survey Overlay */}

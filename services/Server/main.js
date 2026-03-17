@@ -9899,7 +9899,7 @@ app.get('/api/playlists/:id', async (req, res) => {
 app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, requiresActivationCode, isPublic } = req.body;
+    const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview } = req.body;
 
     if (VERBOSE_PLAYLIST_LOGGING) {
       logger.debug({
@@ -9907,7 +9907,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
         message: 'Updating playlist',
         playlistId: id,
         userId: req.user.userId,
-        body: { name, description, requiresActivationCode, isPublic }
+        body: { name, description, requiresActivationCode, isPublic, requirePhoneForPreview }
       });
     }
 
@@ -9955,9 +9955,10 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description), 
            requires_activation_code = COALESCE($3, requires_activation_code), 
-           is_public = COALESCE($4, is_public)
-       WHERE id = $5 RETURNING *`,
-      [name, description, requiresActivationCode, isPublic, id]
+           is_public = COALESCE($4, is_public),
+           require_phone_for_preview = COALESCE($5, require_phone_for_preview)
+       WHERE id = $6 RETURNING *`,
+      [name, description, requiresActivationCode, isPublic, requirePhoneForPreview, id]
     );
 
     if (VERBOSE_PLAYLIST_LOGGING) {
@@ -10193,6 +10194,7 @@ async function getPlaylistWithMedia(playlistId) {
     username: playlistData.username,
     requiresActivationCode: playlistData.requires_activation_code,
     isPublic: playlistData.is_public,
+    requirePhoneForPreview: !!playlistData.require_phone_for_preview,
     createdAt: playlistData.created_at,
     updatedAt: playlistData.updated_at,
     mediaFiles: mediaFiles,
@@ -13206,6 +13208,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
             description: fallbackPlaylist.description,
             requiresActivationCode: fallbackPlaylist.requiresActivationCode,
             isPublic: fallbackPlaylist.isPublic,
+            requirePhoneForPreview: !!fallbackPlaylist.requirePhoneForPreview,
             createdAt: fallbackPlaylist.createdAt,
             updatedAt: fallbackPlaylist.updatedAt,
             mediaFiles: fallbackPlaylist.mediaFiles || [],
@@ -13230,6 +13233,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       description: playlist.description,
       requiresActivationCode: playlist.requiresActivationCode,
       isPublic: playlist.isPublic,
+      requirePhoneForPreview: !!playlist.requirePhoneForPreview,
       createdAt: playlist.createdAt,
       updatedAt: playlist.updatedAt,
       mediaFiles: playlist.mediaFiles || [],
