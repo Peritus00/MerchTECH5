@@ -83,7 +83,9 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,       // 30 seconds to release idle clients (increased from 20s)
   max: getPoolMax(),              // Increased from 10 to 20-50 based on environment
   min: 2,                         // Minimum connections to maintain
-  allowExitOnIdle: false          // Keep pool alive even when idle
+  allowExitOnIdle: false,         // Keep pool alive even when idle
+  keepAlive: true,                // TCP keepalive to prevent load balancer from dropping idle connections
+  keepAliveInitialDelayMillis: 10000
 });
 
 // Pool event handlers for monitoring

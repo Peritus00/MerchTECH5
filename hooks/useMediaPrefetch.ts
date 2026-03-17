@@ -50,9 +50,13 @@ export function useMediaPrefetch(
         if (isImg) {
           urlsToPrefetch.push(url);
         }
-        // For video/audio on web, trigger cache via fetch (lightweight HEAD or range request)
+        // For video/audio on web, pre-buffer first 256KB so playback starts immediately on track change
         if (Platform.OS === 'web' && !isImg) {
-          fetch(url, { method: 'HEAD' }).catch(() => {});
+          fetch(url, {
+            method: 'GET',
+            headers: { Range: 'bytes=0-262143' },
+            cache: 'force-cache',
+          }).catch(() => {});
         }
       }
     }

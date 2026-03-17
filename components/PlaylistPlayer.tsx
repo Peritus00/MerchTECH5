@@ -400,7 +400,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const [isStalled, setIsStalled] = useState(false);
   const stallStartTimeRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const STALL_THRESHOLD_MS = 10000; // 10 seconds of buffering = stall
+  const STALL_THRESHOLD_MS = 4000; // 4 seconds of buffering = stall (faster recovery)
   const MIN_AUTOPLAY_RETRY_MS = 1500; // avoid autoplay thrash on repeated canplaythrough events
   const lastAutoPlayAttemptAtRef = useRef<number>(0);
   const stallRecoveryInProgressRef = useRef<boolean>(false);
