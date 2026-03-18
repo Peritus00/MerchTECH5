@@ -83,11 +83,14 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
           setUploadingIndex(i);
           const asset = result.assets[i] as any;
           let filePayload;
-          if (asset.file) {
-            // Web returns actual File instance
+          if (asset.file instanceof File) {
+            // Web: expo-image-picker provides a proper File with correct MIME type
             filePayload = asset.file;
           } else {
-            filePayload = { uri: asset.uri, name: asset.uri.split('/').pop() || `image_${Date.now()}.jpg`, type: 'image/jpeg' };
+            const mimeType = asset.mimeType || 'image/jpeg';
+            const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            const name = asset.fileName || `image_${Date.now()}.${extension}`;
+            filePayload = { uri: asset.uri, name, type: mimeType };
           }
           await uploadImage(filePayload, images.length + i);
         }

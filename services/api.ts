@@ -646,7 +646,13 @@ export const mediaAPI = {
     onProgress?: (progress: { loaded: number; total: number; percentage: number }) => void
   ) {
     const fileName = file.name || `upload_${Date.now()}`;
-    const contentType = file.type || 'application/octet-stream';
+
+    // Validate that the content type is a proper MIME type (e.g. 'image/jpeg').
+    // expo-image-picker's `asset.type` is a media category ('image'/'video'), NOT a MIME
+    // type — callers must pass `asset.mimeType` instead. Guard here as a last resort.
+    const rawType: string = file.type || '';
+    const VALID_MIME = /^(image|audio|video|application)\/[a-zA-Z0-9.+\-]+$/;
+    const contentType = VALID_MIME.test(rawType) ? rawType : 'application/octet-stream';
 
     let fileSize = file.size || file.fileSize;
     if (!fileSize && file.uri && Platform.OS !== 'web') {

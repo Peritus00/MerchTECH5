@@ -99,48 +99,46 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
 
     if (!result.canceled) {
       try {
-        // Use the modern S3 upload approach instead of legacy uploadService
-        const file = result.assets[0];
+        const asset = result.assets[0];
         let filePayload;
-        
+
+        // file.mimeType is the actual MIME type (e.g. 'image/jpeg').
+        // file.type is only the media category ('image' | 'video') and must NOT be used as a MIME type.
+        const mimeType = asset.mimeType || 'image/jpeg';
+        const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        const timestamp = Date.now();
+        const filename = asset.fileName || `product_${timestamp}.${extension}`;
+
         if (typeof window !== 'undefined') {
-          // Web environment - convert URI to File object
-          const response = await fetch(file.uri);
-          const blob = await response.blob();
-          
-          // Generate a proper filename with timestamp
-          const timestamp = Date.now();
-          const extension = file.type?.split('/')[1] || 'jpg';
-          const filename = `product_${timestamp}.${extension}`;
-          
-          // Ensure proper MIME type
-          const mimeType = file.type || blob.type || 'image/jpeg';
-          
-          filePayload = new File([blob], filename, { 
-            type: mimeType 
-          });
+          // On web, expo-image-picker v16+ exposes asset.file — use it directly
+          // to preserve the correct MIME type without an extra fetch/re-encode.
+          if (asset.file instanceof File) {
+            filePayload = new File([asset.file], filename, { type: mimeType });
+          } else {
+            const response = await fetch(asset.uri);
+            const blob = await response.blob();
+            const resolvedMime = blob.type?.startsWith('image/') ? blob.type : mimeType;
+            filePayload = new File([blob], filename, { type: resolvedMime });
+          }
         } else {
           // React Native environment
-          const timestamp = Date.now();
-          const extension = file.type?.split('/')[1] || 'jpg';
-          const filename = `product_${timestamp}.${extension}`;
-          
-          filePayload = { 
-            uri: file.uri, 
-            name: filename, 
-            type: file.type || 'image/jpeg' 
+          filePayload = {
+            uri: asset.uri,
+            name: filename,
+            type: mimeType,
           };
         }
 
         console.log('📤 PRODUCT: Uploading image to S3 via presigned flow...', {
-          name: filePayload.name || filePayload.uri?.split('/').pop(),
+          name: filePayload.name || (filePayload as any).uri?.split('/').pop(),
           type: filePayload.type,
           isFile: filePayload instanceof File,
           originalFile: {
-            uri: file.uri.substring(0, 50) + '...',
-            type: file.type,
-            width: file.width,
-            height: file.height
+            uri: asset.uri.substring(0, 50) + '...',
+            mimeType: asset.mimeType,
+            type: asset.type,
+            width: asset.width,
+            height: asset.height
           }
         });
 
