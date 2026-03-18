@@ -7690,7 +7690,7 @@ app.patch('/api/admin/app/versions/:id', authenticateToken, isAdmin, async (req,
 });
 
 // --- Helper Functions ---
-const sanitizeImageUrls = (urls) => {
+const sanitizeImageUrls = async (urls) => {
   if (!Array.isArray(urls)) return [];
   
   // Define the production base URL for sanitization
@@ -7702,7 +7702,7 @@ const sanitizeImageUrls = (urls) => {
       ? productionBase
       : `http://localhost:${PORT}`);
 
-  return urls.map(url => {
+  return (await Promise.all(urls.map(async (url) => {
     if (typeof url !== 'string') return null;
     
     let finalUrl = url;
@@ -7726,6 +7726,30 @@ const sanitizeImageUrls = (urls) => {
       }
       
       return finalUrl; // Already absolute
+    }
+
+    // If it's a media stream URL, resolve the backing S3 key and rewrite it to the
+    // image proxy endpoint. Product thumbnails should use the image proxy instead of
+    // the generic media stream route because the proxy has image-specific fixes and
+    // compatibility handling (including HEIC/HEIF conversion).
+    const mediaStreamMatch = finalUrl.match(/\/api\/media\/(\d+)\/stream$/);
+    if (mediaStreamMatch) {
+      try {
+        const mediaId = mediaStreamMatch[1];
+        const mediaResult = await db.query(
+          'SELECT s3_key, url FROM media WHERE id = $1 LIMIT 1',
+          [mediaId]
+        );
+        const media = mediaResult.rows[0];
+        if (media?.s3_key) {
+          return `${computedBase}/api/images/s3/${media.s3_key}`;
+        }
+        if (typeof media?.url === 'string') {
+          finalUrl = media.url;
+        }
+      } catch (error) {
+        console.error(`🖼️ SANITIZE: Failed to resolve media stream URL ${finalUrl}:`, error.message);
+      }
     }
     
     // If it's a direct S3 URL, convert to proxy URL for guaranteed mobile compatibility
@@ -7754,7 +7778,7 @@ const sanitizeImageUrls = (urls) => {
     }
     
     return finalUrl;
-  }).filter(Boolean);
+  }))).filter(Boolean);
 };
 
 const mapProductFields = (product) => {
@@ -7800,7 +7824,7 @@ app.get('/api/products', authenticateToken, async (req, res) => {
          ORDER BY p.created_at DESC`
       );
     }
-    const productsWithPrices = result.rows.map(p => {
+    const productsWithPrices = await Promise.all(result.rows.map(async (p) => {
       let pricesArr = p.prices;
       if (!pricesArr || !pricesArr.length) {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
@@ -7808,14 +7832,14 @@ app.get('/api/products', authenticateToken, async (req, res) => {
       }
       
       // Process images through sanitizeImageUrls
-      if (p.images) p.images = sanitizeImageUrls(p.images);
+      if (p.images) p.images = await sanitizeImageUrls(p.images);
       
       return mapProductFields({ 
         ...p, 
         prices: pricesArr,
         inStock: p.in_stock // Map database field to frontend field
       });
-    });
+    }));
     res.json({ products: productsWithPrices });
   } catch (err) {
     console.error('Error fetching products:', err);
@@ -7833,7 +7857,7 @@ app.get('/api/products/all', async (req, res) => {
        WHERE p.is_deleted = false 
        ORDER BY p.created_at DESC`
     );
-    const productsWithPrices = result.rows.map(p => {
+    const productsWithPrices = await Promise.all(result.rows.map(async (p) => {
       let pricesArr = p.prices;
       if (!pricesArr || !pricesArr.length) {
         const amount = p.price || (p.metadata && (p.metadata.price || p.metadata.unit_amount)) || 0;
@@ -7841,14 +7865,14 @@ app.get('/api/products/all', async (req, res) => {
       }
       
       // Process images through sanitizeImageUrls
-      if (p.images) p.images = sanitizeImageUrls(p.images);
+      if (p.images) p.images = await sanitizeImageUrls(p.images);
       
       return mapProductFields({ 
         ...p, 
         prices: pricesArr,
         inStock: p.in_stock // Map database field to frontend field
       });
-    });
+    }));
     res.json({ products: productsWithPrices });
   } catch (err) {
     console.error('Error fetching all products:', err);
@@ -7897,7 +7921,7 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
     }
 
     // Process images through sanitizeImageUrls
-    if (product.images) product.images = sanitizeImageUrls(product.images);
+    if (product.images) product.images = await sanitizeImageUrls(product.images);
 
     const productWithPrices = mapProductFields({ 
       ...product, 
