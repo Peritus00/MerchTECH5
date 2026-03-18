@@ -9410,6 +9410,34 @@ app.get('/api/media/:id/stream', async (req, res) => {
           }
         }
         
+        // HEIC/HEIF cannot be rendered by Chrome or Firefox.
+        // Transcode to JPEG on-the-fly using sharp so any browser can display it.
+        if (contentType === 'image/heic' || contentType === 'image/heif') {
+          try {
+            const sharp = require('sharp');
+            const streamResponse = await s3Service.getStream(s3Key, null, { timeoutMs: STREAM_TIMEOUT });
+            s3Stream = streamResponse.stream;
+            streamStarted = true;
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
+            // No Content-Length — JPEG size differs from stored HEIC size
+            const transcoder = sharp().toFormat('jpeg', { quality: 90 });
+            s3Stream.on('error', (err) => {
+              if (!streamEnded) {
+                streamEnded = true;
+                console.error(`❌ MEDIA_STREAM[${correlationId}]: HEIC source stream error:`, err.message);
+              }
+            });
+            console.log(`🔧 MEDIA_STREAM[${correlationId}]: Transcoding HEIC→JPEG for media ${id}`);
+            await pipeline(s3Stream, transcoder, res);
+            console.log(`✅ MEDIA_STREAM[${correlationId}]: HEIC→JPEG transcode complete for media ${id}`);
+            return;
+          } catch (heicErr) {
+            console.error(`❌ MEDIA_STREAM[${correlationId}]: HEIC→JPEG transcode failed, serving raw:`, heicErr.message);
+            // Fall through — serve as-is (Safari can still render it)
+          }
+        }
+
         res.setHeader('Content-Type', contentType);
         res.setHeader('Accept-Ranges', 'bytes');
         res.setHeader('Cache-Control', 'public, max-age=3600');
