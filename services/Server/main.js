@@ -8734,7 +8734,26 @@ app.get('/api/images/s3/*', async (req, res) => {
           }
           console.log(`🔧 IMAGE_PROXY: Corrected content type from "${metadata.ContentType}" to "${contentType}"`);
         }
-        
+
+        // HEIC/HEIF is not displayable in Chrome or Firefox.
+        // Re-encode to JPEG on-the-fly so any browser can render the image.
+        if (contentType === 'image/heic' || contentType === 'image/heif') {
+          console.log(`🔧 IMAGE_PROXY: Converting HEIC/HEIF → JPEG for browser compatibility`);
+          try {
+            const sharp = require('sharp');
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.setHeader('Cache-Control', 'public, max-age=31536000');
+            // Remove Content-Length — transcoded size differs from stored size
+            const transcoder = sharp().toFormat('jpeg', { quality: 90 });
+            stream.pipe(transcoder).pipe(res);
+            console.log(`✅ IMAGE_PROXY: Transcoded HEIC → JPEG for "${s3Key}"`);
+            return;
+          } catch (sharpErr) {
+            console.error(`🔴 IMAGE_PROXY: sharp transcoding failed, falling back to raw stream:`, sharpErr);
+            // Fall through and serve as-is; at least Safari can display it.
+          }
+        }
+
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Length', metadata.ContentLength);
         res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year

@@ -102,26 +102,54 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         const asset = result.assets[0];
         let filePayload;
 
-        // file.mimeType is the actual MIME type (e.g. 'image/jpeg').
-        // file.type is only the media category ('image' | 'video') and must NOT be used as a MIME type.
-        const mimeType = asset.mimeType || 'image/jpeg';
-        const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        // asset.mimeType is the actual MIME type (e.g. 'image/jpeg').
+        // asset.type is only the media category ('image' | 'video') and must NOT be used as a MIME type.
+        let mimeType = asset.mimeType || 'image/jpeg';
         const timestamp = Date.now();
-        const filename = asset.fileName || `product_${timestamp}.${extension}`;
 
         if (typeof window !== 'undefined') {
-          // On web, expo-image-picker v16+ exposes asset.file — use it directly
-          // to preserve the correct MIME type without an extra fetch/re-encode.
-          if (asset.file instanceof File) {
-            filePayload = new File([asset.file], filename, { type: mimeType });
+          // HEIC/HEIF is Apple's proprietary format. Most browsers (Chrome, Firefox)
+          // cannot decode or display it. Convert to JPEG via canvas before uploading.
+          const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
+
+          if (isHeic) {
+            try {
+              const source: Blob = asset.file instanceof File ? asset.file : await fetch(asset.uri).then(r => r.blob());
+              // createImageBitmap decodes the image — works on macOS (OS handles HEIC),
+              // throws on Windows/Linux Chrome where HEIC is unsupported.
+              const bitmap = await createImageBitmap(source);
+              const canvas = document.createElement('canvas');
+              canvas.width = bitmap.width;
+              canvas.height = bitmap.height;
+              canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+              const jpegBlob: Blob = await new Promise((resolve, reject) =>
+                canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Canvas export failed'))), 'image/jpeg', 0.92)
+              );
+              bitmap.close();
+              mimeType = 'image/jpeg';
+              const jpgFilename = `product_${timestamp}.jpg`;
+              filePayload = new File([jpegBlob], jpgFilename, { type: 'image/jpeg' });
+              console.log('📤 PRODUCT: Converted HEIC → JPEG for web compatibility');
+            } catch {
+              throw new Error('HEIC/HEIF images are not supported in this browser. Please convert your photo to JPEG or PNG and try again.');
+            }
           } else {
-            const response = await fetch(asset.uri);
-            const blob = await response.blob();
-            const resolvedMime = blob.type?.startsWith('image/') ? blob.type : mimeType;
-            filePayload = new File([blob], filename, { type: resolvedMime });
+            // Non-HEIC: use the File object expo-image-picker v16+ provides directly.
+            const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            const filename = asset.fileName || `product_${timestamp}.${extension}`;
+            if (asset.file instanceof File) {
+              filePayload = new File([asset.file], filename, { type: mimeType });
+            } else {
+              const response = await fetch(asset.uri);
+              const blob = await response.blob();
+              const resolvedMime = blob.type?.startsWith('image/') ? blob.type : mimeType;
+              filePayload = new File([blob], filename, { type: resolvedMime });
+            }
           }
         } else {
-          // React Native environment
+          // React Native — expo-image-picker already converts HEIC to JPEG on iOS
+          const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+          const filename = asset.fileName || `product_${timestamp}.${extension}`;
           filePayload = {
             uri: asset.uri,
             name: filename,
@@ -130,16 +158,10 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         }
 
         console.log('📤 PRODUCT: Uploading image to S3 via presigned flow...', {
-          name: filePayload.name || (filePayload as any).uri?.split('/').pop(),
-          type: filePayload.type,
+          name: (filePayload as any).name || (filePayload as any).uri?.split('/').pop(),
+          type: (filePayload as any).type,
           isFile: filePayload instanceof File,
-          originalFile: {
-            uri: asset.uri.substring(0, 50) + '...',
-            mimeType: asset.mimeType,
-            type: asset.type,
-            width: asset.width,
-            height: asset.height
-          }
+          originalMimeType: asset.mimeType,
         });
 
         const uploadedMedia = await mediaAPI.uploadFile(filePayload);
@@ -150,9 +172,9 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         console.log('📤 PRODUCT: S3 upload successful:', imageUrl);
 
         setImages([...images, imageUrl]);
-      } catch (error) {
+      } catch (error: any) {
         console.error('📤 PRODUCT: Upload failed:', error);
-        alert('Upload failed');
+        Alert.alert('Upload Failed', error?.message || 'Failed to upload image. Please try again.');
       }
     }
   };

@@ -83,11 +83,33 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
           setUploadingIndex(i);
           const asset = result.assets[i] as any;
           let filePayload;
-          if (asset.file instanceof File) {
-            // Web: expo-image-picker provides a proper File with correct MIME type
-            filePayload = asset.file;
+          let mimeType: string = asset.mimeType || 'image/jpeg';
+          const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
+
+          if (typeof window !== 'undefined' && isHeic) {
+            // Convert HEIC→JPEG: most browsers cannot display HEIC natively.
+            try {
+              const source: Blob = asset.file instanceof File ? asset.file : await fetch(asset.uri).then(r => r.blob());
+              const bitmap = await createImageBitmap(source);
+              const canvas = document.createElement('canvas');
+              canvas.width = bitmap.width;
+              canvas.height = bitmap.height;
+              canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+              const jpegBlob: Blob = await new Promise((resolve, reject) =>
+                canvas.toBlob(b => (b ? resolve(b) : reject(new Error('Canvas export failed'))), 'image/jpeg', 0.92)
+              );
+              bitmap.close();
+              mimeType = 'image/jpeg';
+              filePayload = new File([jpegBlob], `image_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            } catch {
+              Alert.alert('Unsupported Format', 'HEIC/HEIF images are not supported in this browser. Please convert to JPEG or PNG and try again.');
+              continue;
+            }
+          } else if (typeof window !== 'undefined' && asset.file instanceof File) {
+            const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+            const name = asset.fileName || `image_${Date.now()}.${extension}`;
+            filePayload = new File([asset.file], name, { type: mimeType });
           } else {
-            const mimeType = asset.mimeType || 'image/jpeg';
             const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
             const name = asset.fileName || `image_${Date.now()}.${extension}`;
             filePayload = { uri: asset.uri, name, type: mimeType };
