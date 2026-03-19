@@ -102,9 +102,9 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         const asset = result.assets[0];
         let filePayload;
 
-        // asset.mimeType is the actual MIME type (e.g. 'image/jpeg').
-        // asset.type is only the media category ('image' | 'video') and must NOT be used as a MIME type.
-        let mimeType = asset.mimeType || 'image/jpeg';
+        // asset.mimeType is preferred, but on some web picks expo-image-picker leaves it
+        // undefined while asset.file.type still contains the real MIME type.
+        let mimeType = asset.mimeType || asset.file?.type || 'image/jpeg';
         const timestamp = Date.now();
 
         if (typeof window !== 'undefined') {

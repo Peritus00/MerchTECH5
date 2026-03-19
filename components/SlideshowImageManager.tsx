@@ -83,7 +83,7 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
           setUploadingIndex(i);
           const asset = result.assets[i] as any;
           let filePayload;
-          let mimeType: string = asset.mimeType || 'image/jpeg';
+          let mimeType: string = asset.mimeType || asset.file?.type || 'image/jpeg';
           const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
 
           if (typeof window !== 'undefined' && isHeic) {
