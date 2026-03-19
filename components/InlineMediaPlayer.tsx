@@ -247,11 +247,30 @@ const InlineMediaPlayer: React.FC<InlineMediaPlayerProps> = ({
     );
   }
 
+  const isSlideshow =
+    file.type === 'slideshow' ||
+    file.fileType === 'slideshow' ||
+    (file as any).slideshowId;
+
   const isImage =
-    file.type === 'image' ||
+    !isSlideshow &&
+    (file.type === 'image' ||
     file.fileType === 'image' ||
     file.contentType?.startsWith('image/') ||
-    /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename);
+    /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(filename));
+
+  if (isSlideshow) {
+    const slideshowId = (file as any).slideshowId;
+    return (
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => slideshowId != null && router.push(`/slideshow-access/${slideshowId}`)}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons name="photo-library" size={size} color={color} />
+      </TouchableOpacity>
+    );
+  }
 
   if (isImage) {
     return (

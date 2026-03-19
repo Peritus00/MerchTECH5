@@ -1,7 +1,8 @@
 export interface MediaFile {
   id: string; // Can be a number or a string, so use string for flexibility
   url: string;
-  type: 'image' | 'audio' | 'video'; // Explicitly define the media type
+  type: 'image' | 'audio' | 'video' | 'slideshow'; // Explicitly define the media type
+  slideshowId?: number; // Present when type is 'slideshow'
   title?: string; // Optional title
   caption?: string; // Optional caption, for images
   duration?: number; // Optional duration, for images in a slideshow (in ms)

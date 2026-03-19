@@ -39,6 +39,9 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
   };
 
   const getFileIcon = () => {
+    if (file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId) {
+      return 'photo-library';
+    }
     if (file.fileType === 'audio' || file.contentType?.startsWith('audio/')) {
       return 'audiotrack';
     }
@@ -52,6 +55,9 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
   };
 
   const getFileTypeColor = () => {
+    if (file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId) {
+      return '#f59e0b';
+    }
     if (file.fileType === 'audio' || file.contentType?.startsWith('audio/')) {
       return '#8b5cf6';
     }
@@ -101,7 +107,7 @@ const MediaFileCard: React.FC<MediaFileCardProps> = ({ file, onDelete, onPlay })
 
           <View style={styles.metadata}>
             <Text style={styles.fileType}>
-              {file.contentType?.replace(/^(audio|video|image)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN'}
+              {(file.fileType === 'slideshow' || file.type === 'slideshow') ? 'SLIDESHOW' : (file.contentType?.replace(/^(audio|video|image)\//, '').toUpperCase() || file.fileType?.toUpperCase() || 'UNKNOWN')}
             </Text>
             <Text style={styles.separator}>•</Text>
             <Text style={styles.fileSize}>

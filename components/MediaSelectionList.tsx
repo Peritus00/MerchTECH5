@@ -23,7 +23,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
   onToggleSelection,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'audio' | 'video' | 'image'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'audio' | 'video' | 'image' | 'slideshow'>('all');
 
   const filteredMediaFiles = mediaFiles.filter(file => {
     const matchesSearch = file.title?.toLowerCase().includes(searchQuery.toLowerCase()) || false;
@@ -38,11 +38,17 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
     if (filterType === 'image') {
       return (file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image') && matchesSearch;
     }
+    if (filterType === 'slideshow') {
+      return (file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId) && matchesSearch;
+    }
     
     return matchesSearch;
   });
 
   const getFileIcon = (file: MediaFile) => {
+    if (file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId) {
+      return 'photo-library';
+    }
     if (file.fileType === 'audio' || file.contentType?.startsWith('audio/')) {
       return 'audiotrack';
     }
@@ -56,6 +62,9 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
   };
 
   const getFileTypeColor = (file: MediaFile) => {
+    if (file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId) {
+      return '#f59e0b';
+    }
     if (file.fileType === 'audio' || file.contentType?.startsWith('audio/')) {
       return '#8b5cf6';
     }
@@ -136,7 +145,7 @@ const MediaSelectionList: React.FC<MediaSelectionListProps> = ({
           />
         </View>
         <View style={styles.filterContainer}>
-          {['all', 'audio', 'video', 'image'].map((type) => (
+          {['all', 'audio', 'video', 'image', 'slideshow'].map((type) => (
             <TouchableOpacity
               key={type}
               style={[

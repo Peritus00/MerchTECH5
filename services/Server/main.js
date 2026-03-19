@@ -8262,6 +8262,9 @@ function isMediaReadyForPublicAccess(media) {
 }
 
 function getMediaType(media) {
+    if (media.slideshow_id || (media.file_type && media.file_type.toLowerCase() === 'slideshow')) {
+        return 'slideshow';
+    }
     if (media.content_type) {
         if (media.content_type.startsWith('video/')) return 'video';
         if (media.content_type.startsWith('audio/')) return 'audio';
@@ -8288,7 +8291,7 @@ function getPublicMediaBaseUrl() {
 }
 
 function serializeMediaRecord(media, properUrl) {
-    return {
+    const result = {
         ...media,
         url: properUrl,
         title: media.title,
@@ -8300,6 +8303,10 @@ function serializeMediaRecord(media, properUrl) {
         uploadStatus: getMediaUploadStatus(media),
         scanStatus: getMediaScanStatus(media),
     };
+    if (media.slideshow_id) {
+        result.slideshowId = media.slideshow_id;
+    }
+    return result;
 }
 
 async function markMediaScanResult(mediaId, fields) {
@@ -10148,9 +10155,11 @@ async function getPlaylistWithMedia(playlistId) {
       properUrl = `${process.env.NODE_ENV === 'production' ? 'https://merchtech5-production.up.railway.app' : `http://localhost:${PORT}`}/api/media/${media.id}/stream`;
     }
 
-    // Map content_type to media type (video, audio, or image)
+    // Map content_type to media type (video, audio, image, or slideshow)
     let mediaType = 'audio'; // default
-    if (media.content_type) {
+    if (media.slideshow_id || (media.file_type && media.file_type.toLowerCase() === 'slideshow')) {
+      mediaType = 'slideshow';
+    } else if (media.content_type) {
       if (media.content_type.startsWith('video/')) {
         mediaType = 'video';
       } else if (media.content_type.startsWith('audio/')) {
@@ -10168,7 +10177,7 @@ async function getPlaylistWithMedia(playlistId) {
       }
     }
     
-    return {
+    const mediaItem = {
     id: media.id,
     userId: media.user_id,
     title: media.title,
@@ -10180,10 +10189,14 @@ async function getPlaylistWithMedia(playlistId) {
     displayOrder: media.display_order,
     createdAt: media.created_at,
     updatedAt: media.updated_at,
-    type: mediaType, // Map content_type to 'video', 'audio', or 'image'
+    type: mediaType, // Map content_type to 'video', 'audio', 'image', or 'slideshow'
     s3_key: media.s3_key, // Include s3_key for frontend debugging
       url: properUrl, // Use direct S3 signed URLs for better compatibility
     };
+    if (media.slideshow_id) {
+      mediaItem.slideshowId = media.slideshow_id;
+    }
+    return mediaItem;
   }));
 
   // Get product links for this playlist
@@ -13411,6 +13424,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           console.log(`✅ FALLBACK: Using fallback playlist ID ${fallbackPlaylistId} for requested ID ${id}`);
           
           // Convert to access format with isFallback flag
+          const fallbackAccessRestricted = fallbackPlaylist.requiresActivationCode && !fallbackPlaylist.isPublic;
           const accessData = {
             id: fallbackPlaylist.id,
             name: fallbackPlaylist.name,
@@ -13422,10 +13436,17 @@ app.get('/api/playlist-access/:id', async (req, res) => {
             updatedAt: fallbackPlaylist.updatedAt,
             mediaFiles: fallbackPlaylist.mediaFiles || [],
             productLinks: fallbackPlaylist.productLinks || [],
-            accessRestricted: fallbackPlaylist.requiresActivationCode && !fallbackPlaylist.isPublic,
+            accessRestricted: fallbackAccessRestricted,
             isFallback: true,
             originalRequestedId: parseInt(id)
           };
+          if (!fallbackAccessRestricted) {
+            accessData.playbackToken = jwt.sign(
+              { playlistId: parseInt(fallbackPlaylist.id), purpose: 'playlist-playback' },
+              JWT_SECRET,
+              { expiresIn: '2h' }
+            );
+          }
           
           // Don't try to link QR code for fallback content
           console.log('🎵 PLAYLIST_ACCESS: Returning fallback playlist:', accessData.name);
@@ -13435,7 +13456,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       return res.status(404).json({ error: 'Playlist not found' });
     }
     
-    // Convert to access format
+    const accessRestricted = playlist.requiresActivationCode && !playlist.isPublic;
     const accessData = {
       id: playlist.id,
       name: playlist.name,
@@ -13447,10 +13468,17 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       updatedAt: playlist.updatedAt,
       mediaFiles: playlist.mediaFiles || [],
       productLinks: playlist.productLinks || [],
-      // Add access control flag
-      accessRestricted: playlist.requiresActivationCode && !playlist.isPublic,
+      accessRestricted,
       isFallback: false
     };
+    // Issue playback token for unprotected playlists (allows locked slideshows to play within playlist)
+    if (!accessRestricted) {
+      accessData.playbackToken = jwt.sign(
+        { playlistId: parseInt(id), purpose: 'playlist-playback' },
+        JWT_SECRET,
+        { expiresIn: '2h' }
+      );
+    }
     
     // Attempt to link a QR code to this playlist and record a scan (public tracking)
     try {
@@ -13559,6 +13587,173 @@ app.get('/api/playlist-access/:id', async (req, res) => {
   } catch (error) {
     console.error('🎵 PLAYLIST_ACCESS: Error fetching playlist:', error);
     res.status(500).json({ error: 'Failed to fetch playlist' });
+  }
+});
+
+// Issue playback token for protected playlists (after code validation) or for authenticated users with profile access
+app.post('/api/playlist-access/:id/issue-playback-token', authenticateTokenOptional, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code } = req.body || {};
+    const playlistRes = await db.query(
+      'SELECT id, requires_activation_code, is_public FROM playlists WHERE id = $1',
+      [id]
+    );
+    if (playlistRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+    const playlist = playlistRes.rows[0];
+    const accessRestricted = playlist.requires_activation_code && !playlist.is_public;
+    if (!accessRestricted) {
+      const token = jwt.sign(
+        { playlistId: parseInt(id), purpose: 'playlist-playback' },
+        JWT_SECRET,
+        { expiresIn: '2h' }
+      );
+      return res.json({ playbackToken: token });
+    }
+    if (req.user?.userId) {
+      const profileRes = await db.query(
+        `SELECT 1 FROM user_activation_codes uac
+         JOIN activation_codes ac ON uac.activation_code_id = ac.id
+         WHERE uac.user_id = $1 AND ac.playlist_id = $2 AND ac.deleted_at IS NULL
+         AND (ac.max_uses IS NULL OR ac.uses_count < ac.max_uses) AND (ac.expires_at IS NULL OR ac.expires_at > NOW()) AND ac.is_active = true`,
+        [req.user.userId, id]
+      );
+      if (profileRes.rows.length > 0) {
+        const token = jwt.sign(
+          { playlistId: parseInt(id), purpose: 'playlist-playback' },
+          JWT_SECRET,
+          { expiresIn: '2h' }
+        );
+        return res.json({ playbackToken: token });
+      }
+    }
+    if (!code || typeof code !== 'string') {
+      return res.status(400).json({ error: 'Activation code required' });
+    }
+    const codeRes = await db.query(
+      `SELECT id FROM activation_codes 
+       WHERE UPPER(TRIM(code)) = UPPER(TRIM($1)) AND playlist_id = $2 AND deleted_at IS NULL 
+       AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW()) AND is_active = true`,
+      [code, id]
+    );
+    if (codeRes.rows.length === 0) {
+      return res.status(403).json({ error: 'Invalid or expired activation code' });
+    }
+    const token = jwt.sign(
+      { playlistId: parseInt(id), purpose: 'playlist-playback' },
+      JWT_SECRET,
+      { expiresIn: '2h' }
+    );
+    res.json({ playbackToken: token });
+  } catch (error) {
+    console.error('🎵 PLAYLIST_ACCESS: Error issuing playback token:', error);
+    res.status(500).json({ error: 'Failed to issue playback token' });
+  }
+});
+
+// Get slideshow for playlist playback - bypasses slideshow lock when valid playlist token provided
+app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
+  const { slideshowId } = req.params;
+  const { playlistId, token } = req.query;
+  if (!playlistId || !token) {
+    return res.status(400).json({ error: 'playlistId and token are required' });
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, JWT_SECRET);
+    if (decoded.purpose !== 'playlist-playback' || decoded.playlistId !== parseInt(playlistId)) {
+      return res.status(403).json({ error: 'Invalid playback token' });
+    }
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid or expired playback token' });
+  }
+  const client = await db.getClient();
+  try {
+    const slideshowRes = await client.query(
+      `SELECT s.* FROM slideshows s WHERE s.id = $1 AND s.deleted_at IS NULL`,
+      [slideshowId]
+    );
+    if (slideshowRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Slideshow not found' });
+    }
+    const slideshow = slideshowRes.rows[0];
+    const mediaInPlaylist = await client.query(
+      `SELECT 1 FROM playlist_media pm 
+       JOIN media m ON pm.media_id = m.id 
+       WHERE pm.playlist_id = $1 AND m.slideshow_id = $2`,
+      [playlistId, slideshowId]
+    );
+    if (mediaInPlaylist.rows.length === 0) {
+      return res.status(403).json({ error: 'Slideshow is not in this playlist' });
+    }
+    const fullSlideshowResult = await client.query(
+      `SELECT s.*, u.username FROM slideshows s LEFT JOIN users u ON s.user_id = u.id WHERE s.id = $1`,
+      [slideshowId]
+    );
+    const fullSlideshow = fullSlideshowResult.rows[0];
+    const imagesResult = await client.query(
+      `SELECT si.id, si.slideshow_id AS "slideshowId", si.image_url, si.caption, si.display_order AS "displayOrder"
+       FROM slideshow_images si WHERE si.slideshow_id = $1 ORDER BY si.display_order`,
+      [slideshowId]
+    );
+    const imagesWithSignedUrls = await Promise.all(
+      imagesResult.rows.map(async (image) => {
+        try {
+          if (image.image_url && image.image_url.includes('s3.us-east-2.amazonaws.com/')) {
+            const s3Key = image.image_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+            const signedUrl = await s3Service.getSignedUrl(s3Key, 3600);
+            return { ...image, image_url: signedUrl };
+          }
+          return image;
+        } catch (e) {
+          return image;
+        }
+      })
+    );
+    fullSlideshow.images = imagesWithSignedUrls;
+    const productLinksResult = await client.query(
+      `SELECT pl.*, p.name as product_name, p.price, p.images as product_images
+       FROM product_links pl JOIN products p ON pl.product_id = p.id
+       WHERE pl.slideshow_id = $1 AND pl.is_active = true ORDER BY pl.display_order, pl.created_at`,
+      [slideshowId]
+    );
+    fullSlideshow.productLinks = productLinksResult.rows.map(link => {
+      let formattedPrice = null;
+      if (link.price) {
+        let priceInCents = link.price;
+        if (priceInCents > 10000) priceInCents = priceInCents / 100;
+        formattedPrice = `$${(priceInCents / 100).toFixed(2)}`;
+      }
+      return {
+        id: link.product_id.toString(),
+        linkId: link.id.toString(),
+        title: link.title,
+        url: link.url,
+        description: link.description,
+        imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
+        images: link.product_images || (link.image_url ? [link.image_url] : []),
+        displayOrder: link.display_order,
+        isActive: link.is_active,
+        price: formattedPrice,
+        productName: link.product_name
+      };
+    });
+    if (fullSlideshow.audio_url) {
+      try {
+        if (fullSlideshow.audio_url.includes('s3.us-east-2.amazonaws.com/')) {
+          const s3Key = fullSlideshow.audio_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
+          fullSlideshow.audio_url = await s3Service.getSignedUrl(s3Key, 3600);
+        }
+      } catch (e) {}
+    }
+    res.json(fullSlideshow);
+  } catch (err) {
+    console.error('🎬 SLIDESHOW_FOR_PLAYLIST: Error:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  } finally {
+    client.release();
   }
 });
 
@@ -13978,10 +14173,19 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
       [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false]
     );
     
+    const slideshowRow = result.rows[0];
     const slideshow = {
-      ...result.rows[0],
+      ...slideshowRow,
       images: []
     };
+    
+    // Create linked media row so slideshow appears as media item in playlists and media library
+    const mediaUrl = `slideshow:${slideshowRow.id}`;
+    await db.query(
+      `INSERT INTO media (user_id, title, url, file_type, content_type, slideshow_id) 
+       VALUES ($1, $2, $3, 'slideshow', 'application/slideshow', $4)`,
+      [req.user.userId, name, mediaUrl, slideshowRow.id]
+    );
     
     console.log('🎬 SLIDESHOWS: Slideshow created successfully:', slideshow.name);
     console.log('📊 ANALYTICS: Slideshow created, times_created incremented');
@@ -14124,6 +14328,12 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS:', JSON.stringify(responseSlideshow, null, 2));
     console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG END =====');
     
+    // Sync linked media row title
+    await db.query(
+      `UPDATE media SET title = COALESCE($1, title), updated_at = NOW() WHERE slideshow_id = $2`,
+      [name, id]
+    );
+    
     res.json({ slideshow: responseSlideshow });
     
   } catch (error) {
@@ -14154,7 +14364,8 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to delete this slideshow' });
     }
 
-    // Soft delete slideshow by setting deleted_at timestamp
+    // Delete linked media row first (cascades to playlist_media), then soft-delete slideshow
+    await db.query('DELETE FROM media WHERE slideshow_id = $1', [id]);
     await db.query(
       'UPDATE slideshows SET deleted_at = NOW(), updated_at = NOW() WHERE id = $1',
       [id]

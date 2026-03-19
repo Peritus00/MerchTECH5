@@ -22,7 +22,7 @@ import PreviewPlayer from '@/components/PreviewPlayer';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
-import { accessCodeAPI } from '@/services/api';
+import { accessCodeAPI, playlistAccessAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
@@ -253,6 +253,10 @@ export default function PlaylistAccessScreen() {
       // CRITICAL CHECK: If playlist doesn't require activation code, go directly to playlist player
       if (!playlist.requiresActivationCode) {
         console.log('🔴 PLAYLIST_ACCESS: Playlist is NOT protected, redirecting directly to playlist player');
+        const token = (playlist as any).playbackToken;
+        if (token) {
+          await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
+        }
         router.replace(`/playlist-player/${id}`);
         return;
       }
@@ -269,6 +273,10 @@ export default function PlaylistAccessScreen() {
               await accessCodeAPI.attach(pendingCode);
               await AsyncStorage.removeItem('pending_activation_code');
               await AsyncStorage.setItem(`playlist_access_${id}`, pendingCode);
+              try {
+                const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, pendingCode);
+                if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+              } catch (e) { /* non-blocking */ }
               router.replace(`/playlist-player/${id}`);
               return;
             }
@@ -308,6 +316,10 @@ export default function PlaylistAccessScreen() {
           
           if (hasValidAccess) {
             console.log('🔴 PLAYLIST_ACCESS: User has valid access code for this playlist, redirecting to playlist player');
+            try {
+              const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id);
+              if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+            } catch (e) { /* non-blocking */ }
             router.replace(`/playlist-player/${id}`);
             return;
           } else {
@@ -365,6 +377,10 @@ export default function PlaylistAccessScreen() {
       const hasPurchasedAccess = await checkPurchasedAccess(id);
       if (hasPurchasedAccess) {
         console.log('🔴 PLAYLIST_ACCESS: User has purchased access, redirecting to playlist player');
+        try {
+          const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id);
+          if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+        } catch (e) { /* non-blocking */ }
         router.replace(`/playlist-player/${id}`);
         return;
       }
@@ -478,6 +494,11 @@ export default function PlaylistAccessScreen() {
       
       // Store the activation code for future access
       await AsyncStorage.setItem(`playlist_access_${id}`, code);
+      
+      try {
+        const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, code);
+        if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+      } catch (e) { /* non-blocking */ }
       
       // Redirect to playlist player
       router.replace(`/playlist-player/${id}`);

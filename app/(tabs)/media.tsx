@@ -31,7 +31,7 @@ export default function MediaScreen() {
   const queryClient = useQueryClient();
   const { selectAndUploadFile } = useMediaUpload();
   const { mediaFiles, isLoading, refetch, isRefetching } = useMediaQuery();
-  const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video' | 'image'>('all');
+  const [selectedTab, setSelectedTab] = useState<'all' | 'audio' | 'video' | 'image' | 'slideshow'>('all');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [fileToDelete, setFileToDelete] = useState<{ id: number | string; name: string } | null>(null);
 
@@ -138,8 +138,12 @@ export default function MediaScreen() {
   };
 
   const handlePlay = (file: MediaFile) => {
-    // Navigate to media player screen with the file
-    router.push(`/media-player/${file.id}`);
+    const slideshowId = (file as any).slideshowId;
+    if (slideshowId != null) {
+      router.push(`/slideshow-access/${slideshowId}`);
+    } else {
+      router.push(`/media-player/${file.id}`);
+    }
   };
 
   const filteredFiles = mediaFiles.filter(file => {
@@ -147,6 +151,7 @@ export default function MediaScreen() {
     if (selectedTab === 'audio') return file.fileType === 'audio' || file.contentType?.startsWith('audio/');
     if (selectedTab === 'video') return file.fileType === 'video' || file.contentType?.startsWith('video/');
     if (selectedTab === 'image') return file.fileType === 'image' || file.contentType?.startsWith('image/') || file.type === 'image';
+    if (selectedTab === 'slideshow') return file.fileType === 'slideshow' || file.type === 'slideshow' || (file as any).slideshowId;
     return true;
   });
 
@@ -184,7 +189,7 @@ export default function MediaScreen() {
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
-        {['all', 'audio', 'video', 'image'].map((tab) => (
+        {['all', 'audio', 'video', 'image', 'slideshow'].map((tab) => (
           <TouchableOpacity
             key={tab}
             style={[

@@ -28,6 +28,8 @@
     "db:migrate-app-versions": "node ./scripts/run-app-versions-migration.js",
     "db:migrate-playlist-preview-gate": "node ./scripts/run-playlist-preview-gate-migration.js",
     "db:migrate-activation-code-purchase": "node ./scripts/run-activation-code-purchase-migration.js",
+    "db:migrate-slideshow-media": "node ./scripts/run-slideshow-media-migration.js",
+    "db:backfill-slideshow-media": "node ./scripts/backfill-slideshow-media.js",
     "qr:migrate-logos-to-s3": "node ./scripts/migrate-qr-logos-to-s3.js",
     "postinstall": "patch-package"
   },

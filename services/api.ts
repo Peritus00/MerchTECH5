@@ -966,6 +966,16 @@ export const playlistAccessAPI = {
       throw error;
     }
   },
+  async issuePlaybackToken(playlistId: string, code?: string) {
+    const response = await api.post(`/playlist-access/${playlistId}/issue-playback-token`, { code });
+    return response.data as { playbackToken: string };
+  },
+  async getSlideshowForPlaylist(slideshowId: string, playlistId: string, playbackToken: string) {
+    const response = await api.get(`/slideshow-for-playlist/${slideshowId}`, {
+      params: { playlistId, token: playbackToken },
+    });
+    return response.data;
+  },
 };
 
 // This is for managing products associated with playlists or slideshows.

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
@@ -133,6 +134,18 @@ export default function PlaylistPlayerScreen() {
     checkAndShowSurvey();
   }, [playlist, loading, isAuthenticated, userDemographics]);
 
+  // Store playback token when playlist has it; load from storage when not in response (e.g. after protected access)
+  const [playbackToken, setPlaybackToken] = useState<string | null>(null);
+  useEffect(() => {
+    const token = (playlist as any)?.playbackToken;
+    if (token && id) {
+      AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
+      setPlaybackToken(token);
+    } else if (id) {
+      AsyncStorage.getItem(`playlist_playback_token_${id}`).then((t) => t && setPlaybackToken((prev) => prev || t));
+    }
+  }, [playlist, id]);
+
   // Track QR scan when playlist loads (only once per mount)
   useEffect(() => {
     if (!playlist || hasTrackedScanRef.current) return;
@@ -234,6 +247,7 @@ export default function PlaylistPlayerScreen() {
       <PlaylistPlayer
         playlistId={id}
         playlist={playlist}
+        playbackToken={playbackToken || (playlist as any)?.playbackToken}
         autoPlay={false}
       />
       

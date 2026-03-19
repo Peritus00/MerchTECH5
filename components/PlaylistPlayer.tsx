@@ -31,11 +31,12 @@ import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
   IAudioPlayer,
 } from '../services/audio/AudioService';
-import { api, paymentAPI } from '../services/api';
+import { api, paymentAPI, playlistAccessAPI } from '../services/api';
 import { ProductLink } from '@/shared/media-schema';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
+import SlideshowPlayer from './SlideshowPlayer';
 import { Alert } from 'react-native';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 import { analyticsService } from '@/services/analyticsService';
@@ -53,19 +54,21 @@ interface MediaItem {
   title?: string;
   s3_key?: string;
   url?: string;
-  media_type?: 'image' | 'audio' | 'video';
+  media_type?: 'image' | 'audio' | 'video' | 'slideshow';
   type?: string;
   fileType?: string;
   contentType?: string;
   caption?: string;
   displayOrder?: number;
   productLinks?: ProductLink[];
+  slideshowId?: number;
 }
 
 interface PlaylistPlayerProps {
   playlistId?: string;
   playlist?: any;
   media?: MediaItem[];
+  playbackToken?: string;
   autoPlay?: boolean;
 }
 
@@ -369,7 +372,7 @@ const QuickPayOverlay = React.memo(({
   );
 });
 
-const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay = false }: PlaylistPlayerProps) => {
+const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackToken, autoPlay = false }: PlaylistPlayerProps) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [playlistData, setPlaylistData] = useState<any>(playlist);
   const [playlistTitle, setPlaylistTitle] = useState('');
@@ -405,6 +408,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   const lastAutoPlayAttemptAtRef = useRef<number>(0);
   const stallRecoveryInProgressRef = useRef<boolean>(false);
   const html5VideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Slideshow-in-playlist: loaded data for current slideshow media item
+  const [slideshowData, setSlideshowData] = useState<any>(null);
+  const [slideshowLoading, setSlideshowLoading] = useState(false);
+  const slideshowAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Analytics tracking state
   const playDurationRef = useRef<number>(0); // Duration in seconds
@@ -637,6 +645,43 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
   useEffect(() => {
     currentMediaItemRef.current = currentMediaItem;
   }, [currentMediaItem]);
+
+  // Fetch slideshow data when current item is a slideshow (playlist-aware)
+  useEffect(() => {
+    const item = media[currentIndex];
+    const isSlideshow = item && (item.type === 'slideshow' || item.fileType === 'slideshow' || item.slideshowId);
+    const sid = item?.slideshowId;
+    setSlideshowData(null);
+    if (slideshowAdvanceTimerRef.current) {
+      clearTimeout(slideshowAdvanceTimerRef.current);
+      slideshowAdvanceTimerRef.current = null;
+    }
+    if (!isSlideshow || !sid || !playlistId || !playbackToken) return;
+    const slideshowId = typeof sid === 'number' ? String(sid) : String(sid);
+    setSlideshowLoading(true);
+    playlistAccessAPI.getSlideshowForPlaylist(slideshowId, playlistId, playbackToken)
+      .then((data) => {
+        setSlideshowData(data);
+        const images = data?.images || [];
+        const interval = data?.autoplayInterval || data?.autoplay_interval || 5000;
+        const totalMs = images.length * interval;
+        if (totalMs > 0 && isPlaying) {
+          slideshowAdvanceTimerRef.current = setTimeout(() => {
+            resumeOnAdvanceRef.current = true;
+            goToNextVideo();
+          }, totalMs);
+        }
+      })
+      .catch((e) => {
+        console.warn('Slideshow-for-playlist fetch failed:', e);
+      })
+      .finally(() => setSlideshowLoading(false));
+    return () => {
+      if (slideshowAdvanceTimerRef.current) {
+        clearTimeout(slideshowAdvanceTimerRef.current);
+      }
+    };
+  }, [media, currentIndex, playlistId, playbackToken, isPlaying, goToNextVideo]);
 
   // Analytics: Track ALL plays (no duration restriction)
   // Also track 30-second milestone for unique plays
@@ -1307,13 +1352,51 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, autoPlay =
     
     // Enhanced media type detection
     const itemType = currentItem.media_type || currentItem.fileType || currentItem.type;
+    const isSlideshow = itemType === 'slideshow' || !!currentItem.slideshowId;
     const isVideo = itemType === 'video' ||
                    currentItem.contentType?.startsWith('video/');
     
     const isAudio = itemType === 'audio' ||
                    currentItem.contentType?.startsWith('audio/');
     
-    const isImage = !isVideo && !isAudio; // Default to image if not video or audio
+    const isImage = !isSlideshow && !isVideo && !isAudio; // Default to image if not video, audio, or slideshow
+
+    // Slideshow: render via playlist-aware fetch (bypasses lock when token valid)
+    if (isSlideshow) {
+      if (slideshowLoading) {
+        return (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+            <ActivityIndicator size="large" color="#3b82f6" />
+            <Text style={{ color: '#ccc', marginTop: 12 }}>Loading slideshow...</Text>
+          </View>
+        );
+      }
+      if (slideshowData) {
+        const mapped = {
+          ...slideshowData,
+          images: (slideshowData.images || []).map((img: any) => ({
+            id: img.id,
+            title: img.caption || img.title,
+            caption: img.caption,
+            url: img.image_url || img.url,
+            displayOrder: img.displayOrder ?? img.position ?? 0,
+          })),
+        };
+        return (
+          <View style={{ flex: 1, minHeight: 400 }}>
+            <SlideshowPlayer slideshow={mapped} autoPlay={isPlaying} />
+          </View>
+        );
+      }
+      if (!playbackToken || !playlistId) {
+        return (
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 400 }}>
+            <Text style={{ color: '#ccc' }}>Unable to load slideshow</Text>
+          </View>
+        );
+      }
+      return null;
+    }
     
     // Use streaming endpoint URLs as provided by the server
     // For web platform, use a proxy approach to avoid CORS issues with HTML5 media elements
