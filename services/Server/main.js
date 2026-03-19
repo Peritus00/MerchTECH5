@@ -8759,23 +8759,17 @@ app.get('/api/images/s3/*', async (req, res) => {
           console.log(`🔧 IMAGE_PROXY: Corrected content type from "${metadata.ContentType}" to "${contentType}"`);
         }
 
-        // HEIC/HEIF is not displayable in Chrome or Firefox.
-        // Re-encode to JPEG on-the-fly so any browser can render the image.
+        // Client uploads are expected to convert HEIC/HEIF before upload.
+        // If legacy HEIC files still exist in S3, do not attempt server-side
+        // transcoding here because sharp on Railway may not have libheif support
+        // and can crash the entire process. Serve a harmless placeholder instead.
         if (contentType === 'image/heic' || contentType === 'image/heif') {
-          console.log(`🔧 IMAGE_PROXY: Converting HEIC/HEIF → JPEG for browser compatibility`);
-          try {
-            const sharp = require('sharp');
-            res.setHeader('Content-Type', 'image/jpeg');
-            res.setHeader('Cache-Control', 'public, max-age=31536000');
-            // Remove Content-Length — transcoded size differs from stored size
-            const transcoder = sharp().toFormat('jpeg', { quality: 90 });
-            stream.pipe(transcoder).pipe(res);
-            console.log(`✅ IMAGE_PROXY: Transcoded HEIC → JPEG for "${s3Key}"`);
-            return;
-          } catch (sharpErr) {
-            console.error(`🔴 IMAGE_PROXY: sharp transcoding failed, falling back to raw stream:`, sharpErr);
-            // Fall through and serve as-is; at least Safari can display it.
-          }
+          console.warn(`⚠️ IMAGE_PROXY: Legacy HEIC/HEIF file requested; serving placeholder for "${s3Key}"`);
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="47%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial, Helvetica, sans-serif" font-size="24">Unsupported HEIC Image</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial, Helvetica, sans-serif" font-size="16">Please re-upload as JPEG or PNG</text></svg>';
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          res.status(200).send(svg);
+          return;
         }
 
         res.setHeader('Content-Type', contentType);
@@ -9434,32 +9428,15 @@ app.get('/api/media/:id/stream', async (req, res) => {
           }
         }
         
-        // HEIC/HEIF cannot be rendered by Chrome or Firefox.
-        // Transcode to JPEG on-the-fly using sharp so any browser can display it.
+        // Do not transcode HEIC/HEIF server-side here. Railway's sharp build may
+        // lack libheif support, which crashes the process. Client uploads should
+        // convert before upload; for legacy files, return a lightweight placeholder.
         if (contentType === 'image/heic' || contentType === 'image/heif') {
-          try {
-            const sharp = require('sharp');
-            const streamResponse = await s3Service.getStream(s3Key, null, { timeoutMs: STREAM_TIMEOUT });
-            s3Stream = streamResponse.stream;
-            streamStarted = true;
-            res.setHeader('Content-Type', 'image/jpeg');
-            res.setHeader('Cache-Control', 'public, max-age=31536000');
-            // No Content-Length — JPEG size differs from stored HEIC size
-            const transcoder = sharp().toFormat('jpeg', { quality: 90 });
-            s3Stream.on('error', (err) => {
-              if (!streamEnded) {
-                streamEnded = true;
-                console.error(`❌ MEDIA_STREAM[${correlationId}]: HEIC source stream error:`, err.message);
-              }
-            });
-            console.log(`🔧 MEDIA_STREAM[${correlationId}]: Transcoding HEIC→JPEG for media ${id}`);
-            await pipeline(s3Stream, transcoder, res);
-            console.log(`✅ MEDIA_STREAM[${correlationId}]: HEIC→JPEG transcode complete for media ${id}`);
-            return;
-          } catch (heicErr) {
-            console.error(`❌ MEDIA_STREAM[${correlationId}]: HEIC→JPEG transcode failed, serving raw:`, heicErr.message);
-            // Fall through — serve as-is (Safari can still render it)
-          }
+          console.warn(`⚠️ MEDIA_STREAM[${correlationId}]: Legacy HEIC/HEIF media ${id} requested; serving placeholder`);
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600"><rect width="100%" height="100%" fill="#f3f4f6"/><text x="50%" y="47%" dominant-baseline="middle" text-anchor="middle" fill="#6b7280" font-family="Arial, Helvetica, sans-serif" font-size="24">Unsupported HEIC Image</text><text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" fill="#9ca3af" font-family="Arial, Helvetica, sans-serif" font-size="16">Please re-upload as JPEG or PNG</text></svg>';
+          res.setHeader('Content-Type', 'image/svg+xml');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          return res.status(200).send(svg);
         }
 
         res.setHeader('Content-Type', contentType);

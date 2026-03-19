@@ -83,8 +83,13 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
           setUploadingIndex(i);
           const asset = result.assets[i] as any;
           let filePayload;
-          let mimeType: string = asset.mimeType || asset.file?.type || 'image/jpeg';
-          const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
+          const detectedMimeType = asset.mimeType || asset.file?.type || '';
+          const detectedName = String(asset.fileName || asset.file?.name || '').toLowerCase();
+          const isHeic =
+            detectedMimeType === 'image/heic' ||
+            detectedMimeType === 'image/heif' ||
+            /\.hei[cf]$/i.test(detectedName);
+          let mimeType: string = detectedMimeType || (isHeic ? 'image/heic' : 'image/jpeg');
 
           if (typeof window !== 'undefined' && isHeic) {
             // Convert HEIC→JPEG: most browsers cannot display HEIC natively.
@@ -110,6 +115,10 @@ const SlideshowImageManager: React.FC<SlideshowImageManagerProps> = ({
             const name = asset.fileName || `image_${Date.now()}.${extension}`;
             filePayload = new File([asset.file], name, { type: mimeType });
           } else {
+            if (isHeic) {
+              Alert.alert('Unsupported Format', 'HEIC/HEIF photos are not supported for slideshow images on this device yet. Please convert to JPEG or PNG and try again.');
+              continue;
+            }
             const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
             const name = asset.fileName || `image_${Date.now()}.${extension}`;
             filePayload = { uri: asset.uri, name, type: mimeType };

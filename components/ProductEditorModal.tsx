@@ -102,16 +102,20 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         const asset = result.assets[0];
         let filePayload;
 
-        // asset.mimeType is preferred, but on some web picks expo-image-picker leaves it
-        // undefined while asset.file.type still contains the real MIME type.
-        let mimeType = asset.mimeType || asset.file?.type || 'image/jpeg';
+        // Detect HEIC/HEIF using MIME or filename because expo-image-picker can omit
+        // mimeType on web while still exposing the real type via asset.file.type/name.
+        const detectedMimeType = asset.mimeType || asset.file?.type || '';
+        const detectedName = String(asset.fileName || asset.file?.name || '').toLowerCase();
+        const isHeic =
+          detectedMimeType === 'image/heic' ||
+          detectedMimeType === 'image/heif' ||
+          /\.hei[cf]$/i.test(detectedName);
+        let mimeType = detectedMimeType || (isHeic ? 'image/heic' : 'image/jpeg');
         const timestamp = Date.now();
 
         if (typeof window !== 'undefined') {
           // HEIC/HEIF is Apple's proprietary format. Most browsers (Chrome, Firefox)
           // cannot decode or display it. Convert to JPEG via canvas before uploading.
-          const isHeic = mimeType === 'image/heic' || mimeType === 'image/heif';
-
           if (isHeic) {
             try {
               const source: Blob = asset.file instanceof File ? asset.file : await fetch(asset.uri).then(r => r.blob());
@@ -147,7 +151,11 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
             }
           }
         } else {
-          // React Native — expo-image-picker already converts HEIC to JPEG on iOS
+          // Native uploads must never store HEIC for product images. If the picker still
+          // reports HEIC/HEIF, stop and ask the user to convert/select a JPEG/PNG.
+          if (isHeic) {
+            throw new Error('HEIC/HEIF photos are not supported for product images on this device yet. Please convert the photo to JPEG or PNG and try again.');
+          }
           const extension = mimeType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
           const filename = asset.fileName || `product_${timestamp}.${extension}`;
           filePayload = {
