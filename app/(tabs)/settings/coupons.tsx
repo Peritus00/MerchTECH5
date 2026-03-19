@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     marginBottom: 12,
-    color: '#1f2937',
+    color: 'red',
   },
   row: { flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 12 },
   typeBtn: {
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  couponCode: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  couponCode: { fontSize: 18, fontWeight: '700', marginBottom: 4, color: 'red' },
   couponDiscount: { color: '#059669', marginBottom: 4 },
   couponExpiry: { fontSize: 12, color: '#6b7280' },
 });
