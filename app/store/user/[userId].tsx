@@ -9,6 +9,11 @@ import ProductCard from '@/components/ProductCard';
 import { productsAPI, usersAPI } from '@/services/api';
 import ShareButton from '@/components/ShareButton';
 
+const normalizeProduct = (p: any): Product => ({
+  ...p,
+  in_stock: p.in_stock ?? p.inStock ?? true,
+});
+
 export default function UserStoreScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const router = useRouter();
@@ -27,9 +32,10 @@ export default function UserStoreScreen() {
   const fetchUserProducts = async () => {
     try {
       const allProducts = await productsAPI.getAllProducts();
+      const normalizedProducts = allProducts.map(normalizeProduct);
       // Filter products by user ID and only show in-stock items
       // Check both user_id (snake_case) and userId (camelCase) since API maps it
-      const userProducts = allProducts.filter(
+      const userProducts = normalizedProducts.filter(
         (product: Product) => {
           const productUserId = product.user_id ?? product.userId;
           return String(productUserId) === userId && product.in_stock;

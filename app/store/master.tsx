@@ -10,6 +10,11 @@ import CategoryFilter from '@/components/CategoryFilter';
 import { productsAPI } from '@/services/api';
 import ShareButton from '@/components/ShareButton';
 
+const normalizeProduct = (p: any): Product => ({
+  ...p,
+  in_stock: p.in_stock ?? p.inStock ?? true,
+});
+
 export default function MasterStoreScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -52,8 +57,9 @@ export default function MasterStoreScreen() {
   const fetchAllProducts = async () => {
     try {
       const allProducts = await productsAPI.getAllProducts();
+      const normalizedProducts = allProducts.map(normalizeProduct);
       // Only show in-stock products in the public store
-      const inStockProducts = allProducts.filter((product: Product) => product.in_stock);
+      const inStockProducts = normalizedProducts.filter((product: Product) => product.in_stock);
       setProducts(inStockProducts);
     } catch (error) {
       console.error('Failed to fetch products:', error);
