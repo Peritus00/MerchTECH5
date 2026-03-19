@@ -9,14 +9,19 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function CheckoutSuccess() {
   const router = useRouter();
-  const { session_id } = useLocalSearchParams();
+  const { session_id, type } = useLocalSearchParams<{ session_id?: string; type?: string }>();
   const { cart, clearCart, getTotalPrice } = useCart();
   const { user } = useAuth();
   const [purchaseTracked, setPurchaseTracked] = React.useState(false);
 
+  const isActivationCodePurchase = type === 'activation_code';
+
   React.useEffect(() => {
-    // Track purchase before clearing cart
+    // Track purchase before clearing cart (skip for activation code - no cart)
     const trackPurchase = async () => {
+      if (isActivationCodePurchase) {
+        return;
+      }
       if (purchaseTracked || !session_id || cart.length === 0) {
         return;
       }
@@ -49,17 +54,26 @@ export default function CheckoutSuccess() {
     };
 
     trackPurchase().then(() => {
-      // Clear cart after tracking
-      clearCart();
+      if (!isActivationCodePurchase) {
+        clearCart();
+      }
     });
-  }, [session_id, cart, purchaseTracked]);
+  }, [session_id, cart, purchaseTracked, isActivationCodePurchase]);
 
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title" style={styles.title}>Thank you for your purchase!</ThemedText>
-      <ThemedText style={styles.subtitle}>Your payment was successful.</ThemedText>
+      <ThemedText type="title" style={styles.title}>
+        {isActivationCodePurchase ? 'Payment successful!' : 'Thank you for your purchase!'}
+      </ThemedText>
+      <ThemedText style={styles.subtitle}>
+        {isActivationCodePurchase
+          ? 'Your activation code has been sent via text. Check your phone and enter the code to access your content.'
+          : 'Your payment was successful.'}
+      </ThemedText>
       <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)/store')}>
-        <ThemedText style={styles.homeText}>Continue Shopping</ThemedText>
+        <ThemedText style={styles.homeText}>
+          {isActivationCodePurchase ? 'Back to Store' : 'Continue Shopping'}
+        </ThemedText>
       </TouchableOpacity>
     </ThemedView>
   );

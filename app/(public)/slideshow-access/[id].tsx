@@ -30,6 +30,7 @@ import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
+import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -69,6 +70,7 @@ export default function SlideshowAccessScreen() {
   // Combined demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
+  const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -434,8 +436,23 @@ export default function SlideshowAccessScreen() {
 
       console.log('🎬 SLIDESHOW_ACCESS: Slideshow IS protected, checking for existing access');
       
-      // First check if user is authenticated and has access codes attached to their profile
+      // If user just logged in with a pending activation code, attach it and redirect
       if (isAuthenticated && user) {
+        const pendingCode = await AsyncStorage.getItem('pending_activation_code');
+        if (pendingCode) {
+          try {
+            const validationResult = await accessCodeAPI.validate(pendingCode, undefined, id);
+            if (validationResult.valid) {
+              await accessCodeAPI.attach(pendingCode);
+              await AsyncStorage.removeItem('pending_activation_code');
+              await AsyncStorage.setItem(`slideshow_access_${id}`, pendingCode);
+              router.replace(`/slideshow-player/${id}`);
+              return;
+            }
+          } catch (e) {
+            console.warn('🎬 SLIDESHOW_ACCESS: Failed to attach pending code:', e);
+          }
+        }
         console.log('🎬 SLIDESHOW_ACCESS: User is authenticated, checking profile access codes');
         console.log('🎬 SLIDESHOW_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🎬 SLIDESHOW_ACCESS: Looking for access to slideshow ID:', id, 'as number:', parseInt(id));
@@ -580,14 +597,20 @@ export default function SlideshowAccessScreen() {
           // User is logged in - attach code and redirect to slideshow player
           await handleAttachCodeAndRedirect(activationCode);
         } else {
-          // User not logged in but has valid code - grant guest access
-          console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
-          
-          // Refetch slideshow data with the validated activation code
-          console.log('🎬 SLIDESHOW_ACCESS: Refetching slideshow with validated activation code');
-          await fetchSlideshow(activationCode);
-          
-          setIsFullAccess(true);
+          // User not logged in - prompt to sign in/sign up so code attaches to profile
+          Alert.alert(
+            'Access Granted!',
+            'Sign in or create an account to save this code to your profile. Otherwise you\'ll need to enter it each time you visit.',
+            [
+              { text: 'Sign In', onPress: () => router.push('/auth/login') },
+              { text: 'Sign Up', onPress: () => router.push('/auth/register') },
+              { text: 'Continue as Guest', onPress: async () => {
+                console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
+                await fetchSlideshow(activationCode);
+                setIsFullAccess(true);
+              }},
+            ]
+          );
         }
       } else {
         console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code, attempt:', failedAttempts + 1);
@@ -863,6 +886,12 @@ export default function SlideshowAccessScreen() {
             <View style={styles.optionHeader}>
               <MaterialIcons name="vpn-key" size={24} color="#10b981" />
               <Text style={styles.optionTitle}>Enter Activation Code</Text>
+              <TouchableOpacity
+                style={styles.buyCodeButton}
+                onPress={() => setShowBuyCodeModal(true)}
+              >
+                <Text style={styles.buyCodeButtonText}>Buy Activation Code</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.optionDescription}>
               Have an activation code? Enter it below for full access to this slideshow.
@@ -962,6 +991,15 @@ export default function SlideshowAccessScreen() {
         visible={showDemographicsSurvey}
         artistName={slideshow?.creatorName || slideshow?.username}
         onSubmit={handleDemographicsSubmit}
+      />
+
+      {/* Buy Activation Code Modal */}
+      <BuyActivationCodeModal
+        visible={showBuyCodeModal}
+        onClose={() => setShowBuyCodeModal(false)}
+        contentType="slideshow"
+        contentId={id}
+        contentName={slideshow?.name}
       />
     </ThemedView>
   );
@@ -1354,6 +1392,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
     marginLeft: 8,
+    flex: 1,
+  },
+  buyCodeButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  buyCodeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   optionDescription: {
     fontSize: 14,

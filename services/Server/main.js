@@ -11015,6 +11015,60 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         const session = event.data.object;
         console.log('💳 STRIPE_WEBHOOK: Checkout completed for session:', session.id);
 
+        // Activation code purchase flow (guest, no auth)
+        if (session.metadata?.type === 'activation_code') {
+          try {
+            const tableCheck = await db.query(`
+              SELECT 1 FROM information_schema.tables WHERE table_name = 'activation_code_purchases'
+            `);
+            if (tableCheck.rows.length === 0) {
+              console.warn('💳 STRIPE_WEBHOOK: activation_code_purchases table missing, run migration 035');
+            } else {
+              const existing = await db.query(
+                `SELECT id, activation_code_id FROM activation_code_purchases WHERE stripe_session_id = $1`,
+                [session.id]
+              );
+              if (existing.rows.length > 0) {
+                console.log('💳 STRIPE_WEBHOOK: Activation code purchase already processed, skipping');
+              } else {
+                const { playlistId, slideshowId, phoneE164, createdBy, priceCents, maxUses, contentName } = session.metadata || {};
+                const playlistIdVal = playlistId ? parseInt(playlistId, 10) : null;
+                const slideshowIdVal = slideshowId ? parseInt(slideshowId, 10) : null;
+                const createdByVal = parseInt(createdBy, 10) || null;
+                const priceCentsVal = parseInt(priceCents, 10) || 500;
+                const maxUsesVal = parseInt(maxUses, 10) || 1;
+
+                const code = Math.random().toString(36).substring(2, 8).toUpperCase() +
+                  Math.random().toString(36).substring(2, 8).toUpperCase();
+
+                const codeResult = await db.query(
+                  `INSERT INTO activation_codes (code, playlist_id, slideshow_id, created_by, max_uses, expires_at, price_cents)
+                   VALUES ($1, $2, $3, $4, $5, NULL, $6)
+                   RETURNING id`,
+                  [code, playlistIdVal, slideshowIdVal, createdByVal, maxUsesVal, priceCentsVal]
+                );
+                const activationCodeId = codeResult.rows[0].id;
+
+                await db.query(
+                  `INSERT INTO activation_code_purchases (stripe_session_id, playlist_id, slideshow_id, created_by, phone_e164, price_cents, max_uses, activation_code_id, fulfilled_at, sms_sent_at)
+                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
+                  [session.id, playlistIdVal, slideshowIdVal, createdByVal, phoneE164 || '', priceCentsVal, maxUsesVal, activationCodeId]
+                );
+
+                const smsResult = await smsService.sendActivationCodeSms(phoneE164, code, contentName || 'Content');
+                if (smsResult.error) {
+                  console.error('💳 STRIPE_WEBHOOK: Failed to send activation code SMS:', smsResult.error);
+                } else {
+                  console.log('💳 STRIPE_WEBHOOK: Activation code sent via SMS to', phoneE164);
+                }
+              }
+            }
+          } catch (acErr) {
+            console.error('💳 STRIPE_WEBHOOK: Activation code fulfillment error:', acErr);
+          }
+          break;
+        }
+
         // Extract user ID from metadata
         const userId = session.metadata?.userId !== 'guest' ? parseInt(session.metadata?.userId) : null;
         
@@ -12281,7 +12335,7 @@ app.post('/api/admin/qr-codes/delete-requests/:id/deny', authenticateToken, isAd
 // Generate new activation code
 app.post('/api/activation-codes', authenticateToken, async (req, res) => {
   try {
-    const { playlistId, slideshowId, maxUses, expiresAt } = req.body;
+    const { playlistId, slideshowId, maxUses, expiresAt, priceCents } = req.body;
     
     // Validate that exactly one content type is specified
     if ((playlistId && slideshowId) || (!playlistId && !slideshowId)) {
@@ -12292,14 +12346,30 @@ app.post('/api/activation-codes', authenticateToken, async (req, res) => {
     const code = Math.random().toString(36).substring(2, 8).toUpperCase() + 
                  Math.random().toString(36).substring(2, 8).toUpperCase();
     
-    console.log('🔑 ACTIVATION_CODES: Creating new code:', { code, playlistId, slideshowId, maxUses, expiresAt });
+    const priceCentsVal = priceCents != null ? parseInt(priceCents, 10) : 500;
     
-    const result = await db.query(
-      `INSERT INTO activation_codes (code, playlist_id, slideshow_id, created_by, max_uses, expires_at) 
-       VALUES ($1, $2, $3, $4, $5, $6) 
-       RETURNING *`,
-      [code, playlistId || null, slideshowId || null, req.user.userId, maxUses || null, expiresAt || null]
-    );
+    console.log('🔑 ACTIVATION_CODES: Creating new code:', { code, playlistId, slideshowId, maxUses, expiresAt, priceCents: priceCentsVal });
+    
+    let result;
+    try {
+      result = await db.query(
+        `INSERT INTO activation_codes (code, playlist_id, slideshow_id, created_by, max_uses, expires_at, price_cents) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) 
+         RETURNING *`,
+        [code, playlistId || null, slideshowId || null, req.user.userId, maxUses || null, expiresAt || null, priceCentsVal]
+      );
+    } catch (colErr) {
+      if (colErr.code === '42703' || colErr.message?.includes('price_cents')) {
+        result = await db.query(
+          `INSERT INTO activation_codes (code, playlist_id, slideshow_id, created_by, max_uses, expires_at) 
+           VALUES ($1, $2, $3, $4, $5, $6) 
+           RETURNING *`,
+          [code, playlistId || null, slideshowId || null, req.user.userId, maxUses || null, expiresAt || null]
+        );
+      } else {
+        throw colErr;
+      }
+    }
     
     // Get the created activation code with associated content name
     const codeWithDetails = await db.query(
@@ -12596,6 +12666,91 @@ app.post('/api/activation-codes/validate', async (req, res) => {
   }
 });
 
+// Create Stripe checkout session for activation code purchase (guest, no auth required)
+app.post('/api/activation-codes/purchase-session', async (req, res) => {
+  try {
+    const { playlistId, slideshowId, phone, successUrl, cancelUrl } = req.body;
+
+    if ((playlistId && slideshowId) || (!playlistId && !slideshowId)) {
+      return res.status(400).json({ error: 'Must specify either playlistId or slideshowId, not both' });
+    }
+    if (!phone || typeof phone !== 'string') {
+      return res.status(400).json({ error: 'Phone number required' });
+    }
+
+    const phoneE164 = phone.replace(/\D/g, '');
+    if (phoneE164.length < 10) {
+      return res.status(400).json({ error: 'Invalid phone number' });
+    }
+    const e164 = phoneE164.startsWith('1') && phoneE164.length === 11 ? `+${phoneE164}` : `+1${phoneE164}`;
+
+    const contentType = playlistId ? 'playlist' : 'slideshow';
+    const contentId = playlistId || slideshowId;
+
+    let contentResult;
+    if (playlistId) {
+      contentResult = await db.query(
+        `SELECT id, name, user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL`,
+        [playlistId]
+      );
+    } else {
+      contentResult = await db.query(
+        `SELECT id, name, user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL`,
+        [slideshowId]
+      );
+    }
+
+    if (!contentResult.rows.length) {
+      return res.status(404).json({ error: 'Content not found' });
+    }
+    const content = contentResult.rows[0];
+    const createdBy = content.user_id;
+    const contentName = content.name || (contentType === 'playlist' ? 'Playlist' : 'Slideshow');
+
+    const priceCents = 500; // $5.00 default
+    const maxUses = 1;
+    const expiresAt = null;
+
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    const defaultSuccess = `${baseUrl}/store/checkout-success?type=activation_code&session_id={CHECKOUT_SESSION_ID}`;
+    const defaultCancel = `${baseUrl}/store/checkout-cancel`;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `Activation Code: ${contentName}`,
+            description: `One-time activation code for ${contentName}. Code will be sent via text.`,
+          },
+          unit_amount: priceCents,
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: successUrl || defaultSuccess,
+      cancel_url: cancelUrl || defaultCancel,
+      metadata: {
+        type: 'activation_code',
+        playlistId: playlistId ? String(playlistId) : '',
+        slideshowId: slideshowId ? String(slideshowId) : '',
+        phoneE164: e164,
+        createdBy: String(createdBy),
+        priceCents: String(priceCents),
+        maxUses: String(maxUses),
+        contentName,
+      },
+    });
+
+    console.log('🔑 ACTIVATION_CODES: Purchase session created:', { sessionId: session.id, contentType, contentId });
+    res.json({ url: session.url, sessionId: session.id, success: true });
+  } catch (error) {
+    console.error('🔑 ACTIVATION_CODES: Purchase session error:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
 // Get codes for specific playlist/slideshow (for content creators)
 app.get('/api/activation-codes/content/:contentType/:contentId', authenticateToken, async (req, res) => {
   try {
@@ -12639,13 +12794,13 @@ app.get('/api/activation-codes/content/:contentType/:contentId', authenticateTok
   }
 });
 
-// Update activation code (change expiration date, usage limits, or active status)
+// Update activation code (change expiration date, usage limits, active status, or price)
 app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) => {
   try {
     const { codeId } = req.params;
-    const { maxUses, expiresAt, isActive } = req.body;
+    const { maxUses, expiresAt, isActive, priceCents } = req.body;
     
-    console.log('🔑 ACTIVATION_CODES: Updating code:', { codeId, maxUses, expiresAt, isActive });
+    console.log('🔑 ACTIVATION_CODES: Updating code:', { codeId, maxUses, expiresAt, isActive, priceCents });
     
     // First verify the user owns this code and it's not deleted
     let ownerResult;
@@ -12690,6 +12845,12 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
     if (isActive !== undefined) {
       updates.push(`is_active = $${paramCount}`);
       values.push(isActive);
+      paramCount++;
+    }
+    
+    if (priceCents !== undefined) {
+      updates.push(`price_cents = $${paramCount}`);
+      values.push(priceCents === '' || priceCents === null ? 500 : Math.max(0, parseInt(priceCents, 10) || 500));
       paramCount++;
     }
     

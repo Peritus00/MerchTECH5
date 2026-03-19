@@ -47,6 +47,7 @@ interface ActivationCode {
   is_active: boolean;
   created_at: string;
   attached_at?: string; // For MY ACCESS CODES tab
+  price_cents?: number;
 }
 
 interface Playlist {
@@ -93,6 +94,7 @@ const ActivationCodesScreen = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [maxUses, setMaxUses] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('');
+  const [priceCents, setPriceCents] = useState('500');
   const [isCreating, setIsCreating] = useState(false);
   
   // Batch Creation
@@ -112,6 +114,7 @@ const ActivationCodesScreen = () => {
   const [editingCode, setEditingCode] = useState<ActivationCode | null>(null);
   const [editMaxUses, setEditMaxUses] = useState('');
   const [editExpiresInDays, setEditExpiresInDays] = useState('');
+  const [editPriceCents, setEditPriceCents] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -293,10 +296,12 @@ const ActivationCodesScreen = () => {
         new Date(Date.now() + parseInt(expiresInDays) * 24 * 60 * 60 * 1000).toISOString() : 
         undefined;
       const createdCodes = [];
+      const priceCentsVal = priceCents ? parseInt(priceCents, 10) || 500 : 500;
       for (let i = 0; i < quantity; i++) {
         const createParams: any = {
           maxUses: maxUses ? parseInt(maxUses) : undefined,
           expiresAt,
+          priceCents: priceCentsVal,
         };
         if (contentType === 'playlist') {
           createParams.playlistId = contentId.toString();
@@ -311,6 +316,7 @@ const ActivationCodesScreen = () => {
       setShowBatchModal(false);
       setMaxUses('1');
       setExpiresInDays('');
+      setPriceCents('500');
       setBatchQuantity('1');
       setSelectedPlaylistId(null);
       setSelectedSlideshowId(null);
@@ -327,7 +333,6 @@ const ActivationCodesScreen = () => {
   };
 
   const handleCreateCode = async () => {
-    Alert.alert('DEBUG', 'Create button pressed!');
     let contentId: number | null = null;
     let contentType: 'playlist' | 'slideshow' = selectedContentType;
     if (contentType === 'playlist') {
@@ -347,6 +352,7 @@ const ActivationCodesScreen = () => {
       const createParams: any = {
         maxUses: maxUses ? parseInt(maxUses) : undefined,
         expiresAt,
+        priceCents: priceCents ? parseInt(priceCents, 10) || 500 : 500,
       };
       if (contentType === 'playlist') {
         createParams.playlistId = contentId.toString();
@@ -359,6 +365,7 @@ const ActivationCodesScreen = () => {
       setShowCreateModal(false);
       setMaxUses('1');
       setExpiresInDays('');
+      setPriceCents('500');
       setSelectedPlaylistId(null);
       setSelectedSlideshowId(null);
       setSelectedContentType('playlist');
@@ -447,6 +454,7 @@ const ActivationCodesScreen = () => {
     setEditingCode(code);
     setEditMaxUses(code.max_uses ? code.max_uses.toString() : '');
     setEditExpiresInDays('');
+    setEditPriceCents(code.price_cents != null ? code.price_cents.toString() : '500');
     setEditIsActive(code.is_active);
     setShowEditModal(true);
   };
@@ -466,6 +474,10 @@ const ActivationCodesScreen = () => {
 
       if (editExpiresInDays) {
         updates.expiresAt = new Date(Date.now() + parseInt(editExpiresInDays) * 24 * 60 * 60 * 1000).toISOString();
+      }
+
+      if (editPriceCents) {
+        updates.priceCents = Math.max(0, parseInt(editPriceCents, 10) || 500);
       }
 
       console.log('🔑 Updating activation code:', editingCode.id, updates);
@@ -739,6 +751,15 @@ const ActivationCodesScreen = () => {
               keyboardType="numeric"
             />
 
+            <Text style={styles.label}>Price (cents, e.g. 500 = $5.00):</Text>
+            <TextInput
+              style={styles.input}
+              value={priceCents}
+              onChangeText={setPriceCents}
+              placeholder="500"
+              keyboardType="numeric"
+            />
+
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelButton}
@@ -826,6 +847,15 @@ const ActivationCodesScreen = () => {
               value={expiresInDays}
               onChangeText={setExpiresInDays}
               placeholder="Leave empty for no expiration"
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.label}>Price (cents, e.g. 500 = $5.00):</Text>
+            <TextInput
+              style={styles.input}
+              value={priceCents}
+              onChangeText={setPriceCents}
+              placeholder="500"
               keyboardType="numeric"
             />
 
@@ -923,6 +953,7 @@ const ActivationCodesScreen = () => {
               <Text style={styles.codeDetails}>
                 Uses: {code.uses_count}{code.max_uses ? `/${code.max_uses}` : ' (unlimited)'}
                 {code.expires_at && ` • Expires: ${new Date(code.expires_at).toLocaleDateString()}`}
+                {(code.price_cents != null ? ` • $${(code.price_cents / 100).toFixed(2)}` : '')}
               </Text>
               <Text style={styles.codeDate}>
                 Attached: {new Date(code.attached_at || code.created_at).toLocaleDateString()}
@@ -1001,6 +1032,7 @@ const ActivationCodesScreen = () => {
               <Text style={styles.codeDetails}>
                 Uses: {code.uses_count}{code.max_uses ? `/${code.max_uses}` : ' (unlimited)'}
                 {code.expires_at && ` • Expires: ${new Date(code.expires_at).toLocaleDateString()}`}
+                {(code.price_cents != null ? ` • $${(code.price_cents / 100).toFixed(2)}` : '')}
               </Text>
               <Text style={styles.codeDate}>
                 Created: {new Date(code.created_at).toLocaleDateString()}
@@ -1063,6 +1095,15 @@ const ActivationCodesScreen = () => {
                 value={editExpiresInDays}
                 onChangeText={setEditExpiresInDays}
                 placeholder="Leave empty for no expiration"
+                keyboardType="numeric"
+              />
+
+              <Text style={styles.label}>Price (cents, e.g. 500 = $5.00):</Text>
+              <TextInput
+                style={styles.input}
+                value={editPriceCents}
+                onChangeText={setEditPriceCents}
+                placeholder="500"
                 keyboardType="numeric"
               />
 

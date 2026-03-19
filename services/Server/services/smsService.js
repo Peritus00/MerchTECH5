@@ -8,12 +8,13 @@ const axios = require('axios');
 const BREVO_API_URL = 'https://api.brevo.com/v3/transactionalSMS/sms';
 
 /**
- * Send a coupon SMS via Brevo.
+ * Send an SMS via Brevo (generic helper).
  * @param {string} phoneE164 - Phone number in E.164 format (e.g. +15551234567)
  * @param {string} body - Message content
+ * @param {string} [type='marketing'] - 'marketing' (consent required) or 'transactional'
  * @returns {Promise<{ messageId?: string; error?: string }>}
  */
-async function sendCouponSms(phoneE164, body) {
+async function sendSms(phoneE164, body, type = 'marketing') {
   const apiKey = process.env.BREVO_API_KEY;
   const sender = process.env.BREVO_SMS_SENDER || 'MerchTech';
 
@@ -35,7 +36,7 @@ async function sendCouponSms(phoneE164, body) {
       sender: sender.substring(0, 11), // Max 11 alphanumeric
       recipient,
       content: body,
-      type: 'marketing', // Coupon SMS is marketing (consent required before send)
+      type,
     }, {
       headers: {
         'Content-Type': 'application/json',
@@ -52,6 +53,23 @@ async function sendCouponSms(phoneE164, body) {
   }
 }
 
+/** @deprecated Use sendSms(phone, body, 'marketing') - kept for backward compatibility */
+async function sendCouponSms(phoneE164, body) {
+  return sendSms(phoneE164, body, 'marketing');
+}
+
+/**
+ * Send activation code via SMS (transactional - no marketing consent required).
+ * @param {string} phoneE164 - Phone in E.164 format
+ * @param {string} code - The activation code
+ * @param {string} contentName - Playlist or slideshow name
+ * @returns {Promise<{ messageId?: string; error?: string }>}
+ */
+async function sendActivationCodeSms(phoneE164, code, contentName) {
+  const body = `Your activation code for ${contentName}: ${code}. Enter it to access your content.`;
+  return sendSms(phoneE164, body, 'transactional');
+}
+
 /**
  * Check if Brevo SMS is configured and ready.
  */
@@ -60,6 +78,8 @@ function isSmsConfigured() {
 }
 
 module.exports = {
+  sendSms,
   sendCouponSms,
+  sendActivationCodeSms,
   isSmsConfigured,
 };

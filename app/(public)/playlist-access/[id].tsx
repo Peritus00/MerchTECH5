@@ -26,6 +26,7 @@ import { accessCodeAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
+import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -63,6 +64,7 @@ export default function PlaylistAccessScreen() {
   // Combined demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
+  const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -257,8 +259,23 @@ export default function PlaylistAccessScreen() {
 
       console.log('🔴 PLAYLIST_ACCESS: ⚠️  PLAYLIST IS PROTECTED - checking for existing access');
       
-      // First check if user is authenticated and has access codes attached to their profile
+      // If user just logged in with a pending activation code, attach it and redirect
       if (isAuthenticated && user) {
+        const pendingCode = await AsyncStorage.getItem('pending_activation_code');
+        if (pendingCode) {
+          try {
+            const validationResult = await accessCodeAPI.validate(pendingCode, id, undefined);
+            if (validationResult.valid) {
+              await accessCodeAPI.attach(pendingCode);
+              await AsyncStorage.removeItem('pending_activation_code');
+              await AsyncStorage.setItem(`playlist_access_${id}`, pendingCode);
+              router.replace(`/playlist-player/${id}`);
+              return;
+            }
+          } catch (e) {
+            console.warn('🔴 PLAYLIST_ACCESS: Failed to attach pending code:', e);
+          }
+        }
         console.log('🔴 PLAYLIST_ACCESS: User is authenticated, checking profile access codes');
         console.log('🔴 PLAYLIST_ACCESS: User details:', { userId: user.id, username: user.username });
         console.log('🔴 PLAYLIST_ACCESS: Looking for access to playlist ID:', id, 'as number:', parseInt(id));
@@ -399,9 +416,19 @@ export default function PlaylistAccessScreen() {
           // User is logged in - attach code and redirect to media player
           await handleAttachCodeAndRedirect(activationCode);
         } else {
-          // User not logged in but has valid code - grant guest access
-          console.log('🎵 PLAYLIST_ACCESS: Granting guest access with valid activation code');
-          setIsFullAccess(true);
+          // User not logged in - prompt to sign in/sign up so code attaches to profile
+          Alert.alert(
+            'Access Granted!',
+            'Sign in or create an account to save this code to your profile. Otherwise you\'ll need to enter it each time you visit.',
+            [
+              { text: 'Sign In', onPress: () => router.push('/auth/login') },
+              { text: 'Sign Up', onPress: () => router.push('/auth/register') },
+              { text: 'Continue as Guest', onPress: () => {
+                console.log('🎵 PLAYLIST_ACCESS: Granting guest access with valid activation code');
+                setIsFullAccess(true);
+              }},
+            ]
+          );
         }
       } else {
         console.log('🎵 PLAYLIST_ACCESS: Invalid activation code');
@@ -1012,6 +1039,12 @@ export default function PlaylistAccessScreen() {
             <View style={styles.optionHeader}>
               <MaterialIcons name="vpn-key" size={24} color="#10b981" />
               <Text style={styles.optionTitle}>Enter Activation Code</Text>
+              <TouchableOpacity
+                style={styles.buyCodeButton}
+                onPress={() => setShowBuyCodeModal(true)}
+              >
+                <Text style={styles.buyCodeButtonText}>Buy Activation Code</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.optionDescription}>
               Have an activation code? Enter it below for full access to this playlist.
@@ -1121,6 +1154,15 @@ export default function PlaylistAccessScreen() {
         visible={showDemographicsSurvey}
         artistName={playlist?.creatorName || playlist?.username}
         onSubmit={handleDemographicsSubmit}
+      />
+
+      {/* Buy Activation Code Modal */}
+      <BuyActivationCodeModal
+        visible={showBuyCodeModal}
+        onClose={() => setShowBuyCodeModal(false)}
+        contentType="playlist"
+        contentId={id}
+        contentName={playlist?.name}
       />
     </ThemedView>
   );
@@ -1241,6 +1283,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1f2937',
     marginLeft: 8,
+    flex: 1,
+  },
+  buyCodeButton: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  buyCodeButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#fff',
   },
   optionDescription: {
     fontSize: 14,

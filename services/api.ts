@@ -1097,7 +1097,7 @@ export const adminQrCodeAPI = {
 
 export const accessCodeAPI = {
   // Create a new activation code
-  async create(data: { playlistId?: string; slideshowId?: string; maxUses?: number; expiresAt?: string }) {
+  async create(data: { playlistId?: string; slideshowId?: string; maxUses?: number; expiresAt?: string; priceCents?: number }) {
     const response = await api.post('/activation-codes', data);
     return response.data;
   },
@@ -1130,13 +1130,24 @@ export const accessCodeAPI = {
     const response = await api.post('/activation-codes/validate', { code, playlistId, slideshowId });
     return response.data;
   },
+  // Create Stripe checkout session for activation code purchase (guest, no auth)
+  async createPurchaseSession(data: {
+    playlistId?: string;
+    slideshowId?: string;
+    phone: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  }) {
+    const response = await api.post('/activation-codes/purchase-session', data);
+    return response.data;
+  },
   // Get all codes for a specific playlist or slideshow
   async getForContent(contentType: 'playlist' | 'slideshow', contentId: string) {
     const response = await api.get(`/activation-codes/content/${contentType}/${contentId}`);
     return response.data;
   },
   // Update a code
-  async update(codeId: string, updates: { maxUses?: number | null; expiresAt?: string | null; isActive?: boolean }) {
+  async update(codeId: string, updates: { maxUses?: number | null; expiresAt?: string | null; isActive?: boolean; priceCents?: number | null }) {
     const response = await api.patch(`/activation-codes/${codeId}`, updates);
     return response.data;
   },
