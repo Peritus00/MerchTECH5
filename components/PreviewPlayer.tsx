@@ -1829,6 +1829,7 @@ const styles = StyleSheet.create({
   } as any,
   mobileMainContent: {
       flexDirection: 'column',
+      alignItems: 'stretch',
   },
   leftPanel: {
     flex: 0.6, // Reduced from 1 to 0.6 (40% width)
@@ -1840,7 +1841,11 @@ const styles = StyleSheet.create({
   },
   mobileLeftPanel: {
       width: '100%',
-      minHeight: 300,
+      flex: 0,
+      flexGrow: 0,
+      flexShrink: 0,
+      flexBasis: 'auto' as any,
+      minHeight: 'auto' as any,
   },
   rightPanel: {
     flex: 1.4, // Increased from 1 to 1.4 (60% width)
@@ -1851,6 +1856,13 @@ const styles = StyleSheet.create({
   },
   mobileRightPanel: {
       width: '100%',
+      flex: 0,
+      flexGrow: 0,
+      flexShrink: 0,
+      flexBasis: 'auto' as any,
+      minHeight: 'auto' as any,
+      maxHeight: 'none' as any,
+      marginTop: 20,
   },
   // Playlist Header Styles
   playlistHeader: {
