@@ -708,6 +708,35 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 </View>
               )}
 
+              {datePickerCtx && Platform.OS === 'web' && (
+                <View style={styles.iosPickerSheet}>
+                  <View style={styles.iosPickerHeader}>
+                    <TouchableOpacity onPress={() => setDatePickerCtx(null)}>
+                      <Text style={styles.iosPickerCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.iosPickerTitle}>
+                      {datePickerCtx.mode === 'exact' ? 'Add date' : 'Set date'}
+                    </Text>
+                    <TouchableOpacity onPress={closeDatePickerIos}>
+                      <Text style={styles.iosPickerDone}>Done</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.webDateInputWrap}>
+                    <TextInput
+                      style={styles.webDateInput}
+                      value={toLocalIsoDate(datePickerValue)}
+                      onChangeText={(text) => {
+                        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+                          setDatePickerValue(parseIsoToLocalDate(text));
+                        }
+                      }}
+                      // @ts-expect-error react-native-web: DOM input type
+                      type="date"
+                    />
+                  </View>
+                </View>
+              )}
+
               {datePickerCtx && Platform.OS === 'android' && (
                 <DateTimePicker
                   value={datePickerValue}
@@ -1090,6 +1119,20 @@ const styles = StyleSheet.create({
   },
   iosPicker: {
     height: 200,
+  },
+  webDateInputWrap: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  webDateInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#1f2937',
   },
 });
 
