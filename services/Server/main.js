@@ -10734,12 +10734,19 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
   const cid = contentId != null ? parseInt(String(contentId), 10) : null;
   let coupon = null;
   let ownerId = null;
+
+  if (contentType === 'playlist' && cid && !isNaN(cid)) {
+    const ownerRows = await db.query(`SELECT user_id FROM playlists WHERE id = $1`, [cid]);
+    ownerId = ownerRows.rows[0]?.user_id ?? null;
+  } else if (contentType === 'slideshow' && cid && !isNaN(cid)) {
+    const ownerRows = await db.query(`SELECT user_id FROM slideshows WHERE id = $1`, [cid]);
+    ownerId = ownerRows.rows[0]?.user_id ?? null;
+  }
+
   if (couponId) {
     const { rows } = await db.query(`SELECT * FROM coupons WHERE id = $1`, [couponId]);
     coupon = rows[0] || null;
   } else if (contentType === 'playlist' && cid && !isNaN(cid)) {
-    const ownerRows = await db.query(`SELECT user_id FROM playlists WHERE id = $1`, [cid]);
-    ownerId = ownerRows.rows[0]?.user_id ?? null;
     const { rows } = await db.query(
       `SELECT c.* FROM coupons c
        INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.playlist_id = $1
@@ -10748,8 +10755,6 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
     );
     coupon = rows[0] || null;
   } else if (contentType === 'slideshow' && cid && !isNaN(cid)) {
-    const ownerRows = await db.query(`SELECT user_id FROM slideshows WHERE id = $1`, [cid]);
-    ownerId = ownerRows.rows[0]?.user_id ?? null;
     const { rows } = await db.query(
       `SELECT c.* FROM coupons c
        INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.slideshow_id = $1
@@ -10762,13 +10767,28 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
     coupon = await ensureDefaultPreviewCouponForUser(ownerId);
   }
   if (!coupon) return null;
-  const base = await validateCouponBase(coupon);
-  if (!base.ok) return null;
-  const ctx = await validateCouponForSingleContext(coupon, {
+
+  let base = await validateCouponBase(coupon);
+  let ctx = await validateCouponForSingleContext(coupon, {
     playlistId: contentType === 'playlist' ? cid : undefined,
     slideshowId: contentType === 'slideshow' ? cid : undefined,
   });
-  if (!ctx.ok) return null;
+
+  // If an explicit or mapped coupon no longer applies to this preview context,
+  // fall back to the owner's default preview coupon so the UI copy stays accurate.
+  if ((!base.ok || !ctx.ok) && ownerId) {
+    const fallbackCoupon = await ensureDefaultPreviewCouponForUser(ownerId);
+    base = await validateCouponBase(fallbackCoupon);
+    if (!base.ok) return null;
+    ctx = await validateCouponForSingleContext(fallbackCoupon, {
+      playlistId: contentType === 'playlist' ? cid : undefined,
+      slideshowId: contentType === 'slideshow' ? cid : undefined,
+    });
+    if (!ctx.ok) return null;
+    return fallbackCoupon;
+  }
+
+  if (!base.ok || !ctx.ok) return null;
   return coupon;
 }
 
