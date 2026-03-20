@@ -582,11 +582,29 @@ export const couponAPI = {
     const response = await api.get('/coupons');
     return response.data;
   },
-  async create(data: { code: string; discountType?: string; discountValue: number; maxRedemptions?: number; expiresAt?: string; itemIds?: { productId?: number; playlistId?: number; slideshowId?: number }[] }) {
+  async create(data: {
+    code: string;
+    discountType?: string;
+    discountValue: number;
+    maxRedemptions?: number;
+    startsAt?: string;
+    expiresAt?: string;
+    itemIds?: { productId?: number; playlistId?: number; slideshowId?: number }[];
+  }) {
     const response = await api.post('/coupons', data);
     return response.data;
   },
-  async update(id: number, data: { discountType?: string; discountValue?: number; maxRedemptions?: number; expiresAt?: string }) {
+  async update(
+    id: number,
+    data: {
+      discountType?: string;
+      discountValue?: number;
+      maxRedemptions?: number;
+      startsAt?: string | null;
+      expiresAt?: string | null;
+      itemIds?: { productId?: number; playlistId?: number; slideshowId?: number }[];
+    }
+  ) {
     const response = await api.patch(`/coupons/${id}`, data);
     return response.data;
   },

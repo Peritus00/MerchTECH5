@@ -10423,7 +10423,10 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
         );
         if (couponRows.length) {
           const c = couponRows[0];
-          if (!c.expires_at || new Date(c.expires_at) >= new Date()) {
+          const now = new Date();
+          const started = !c.starts_at || new Date(c.starts_at) <= now;
+          const notExpired = !c.expires_at || new Date(c.expires_at) >= now;
+          if (started && notExpired) {
             if (c.max_redemptions == null) {
               coupon = c;
             } else {
@@ -10474,6 +10477,184 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
   }
 });
 
+// ---------- Coupon helpers (checkout + coupon API + SMS) ----------
+async function loadCouponByCodeUpper(code) {
+  const c = String(code).toUpperCase().trim();
+  const { rows } = await db.query(`SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 LIMIT 1`, [c]);
+  return rows[0] || null;
+}
+
+async function getCouponItemMaps(couponId) {
+  const { rows } = await db.query(
+    `SELECT product_id, playlist_id, slideshow_id FROM coupon_item_map WHERE coupon_id = $1`,
+    [couponId]
+  );
+  return rows;
+}
+
+function couponWithinDateWindow(coupon, now = new Date()) {
+  if (coupon.starts_at != null && new Date(coupon.starts_at) > now) {
+    return { ok: false, error: 'Coupon not yet active' };
+  }
+  if (coupon.expires_at != null && new Date(coupon.expires_at) < now) {
+    return { ok: false, error: 'Coupon expired' };
+  }
+  return { ok: true };
+}
+
+async function couponHasRedemptionsLeft(coupon) {
+  if (coupon.max_redemptions == null) return { ok: true };
+  const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [coupon.id]);
+  if (parseInt(red.rows[0].n, 10) >= coupon.max_redemptions) {
+    return { ok: false, error: 'Coupon limit reached' };
+  }
+  return { ok: true };
+}
+
+async function validateCouponBase(coupon) {
+  if (!coupon) return { ok: false, error: 'Invalid coupon' };
+  const w = couponWithinDateWindow(coupon);
+  if (!w.ok) return w;
+  return couponHasRedemptionsLeft(coupon);
+}
+
+async function validateCouponForSingleContext(coupon, { productId, playlistId, slideshowId }) {
+  const base = await validateCouponBase(coupon);
+  if (!base.ok) return base;
+  const maps = await getCouponItemMaps(coupon.id);
+  const ownerId = Number(coupon.owner_id);
+
+  if (!maps.length) {
+    if (!productId && !playlistId && !slideshowId) {
+      return { ok: true };
+    }
+    if (productId) {
+      const { rows } = await db.query(`SELECT user_id FROM products WHERE id = $1`, [productId]);
+      if (!rows.length) return { ok: false, error: 'Invalid item' };
+      if (Number(rows[0].user_id) !== ownerId) return { ok: false, error: 'Coupon does not apply to this item' };
+      return { ok: true };
+    }
+    if (playlistId) {
+      const { rows } = await db.query(`SELECT user_id FROM playlists WHERE id = $1`, [playlistId]);
+      if (!rows.length) return { ok: false, error: 'Invalid item' };
+      if (Number(rows[0].user_id) !== ownerId) return { ok: false, error: 'Coupon does not apply to this item' };
+      return { ok: true };
+    }
+    if (slideshowId) {
+      const { rows } = await db.query(`SELECT owner_id FROM slideshows WHERE id = $1`, [slideshowId]);
+      if (!rows.length) return { ok: false, error: 'Invalid item' };
+      if (Number(rows[0].owner_id) !== ownerId) return { ok: false, error: 'Coupon does not apply to this item' };
+      return { ok: true };
+    }
+    return { ok: false, error: 'Coupon does not apply to this item' };
+  }
+
+  const applies = maps.some(
+    (m) =>
+      (productId && m.product_id === Number(productId)) ||
+      (playlistId && m.playlist_id === Number(playlistId)) ||
+      (slideshowId && m.slideshow_id === Number(slideshowId))
+  );
+  if (!applies) return { ok: false, error: 'Coupon does not apply to this item' };
+  return { ok: true };
+}
+
+async function validateCouponForCartProducts(coupon, productsRows) {
+  const base = await validateCouponBase(coupon);
+  if (!base.ok) return { ...base, coupon: null, eligibleProductIds: null };
+
+  const maps = await getCouponItemMaps(coupon.id);
+  const ownerId = Number(coupon.owner_id);
+  const eligible = new Set();
+
+  for (const prod of productsRows) {
+    const pid = Number(prod.id);
+    const pOwner = Number(prod.user_id);
+    if (pOwner !== ownerId) continue;
+    if (!maps.length) {
+      eligible.add(pid);
+    } else if (maps.some((m) => m.product_id === pid)) {
+      eligible.add(pid);
+    }
+  }
+
+  if (eligible.size === 0) {
+    return {
+      ok: false,
+      error: 'Coupon does not apply to items in your cart',
+      coupon: null,
+      eligibleProductIds: null,
+    };
+  }
+  return { ok: true, coupon, eligibleProductIds: eligible };
+}
+
+async function assertCouponItemIdsOwnedByUser(itemIds, userId) {
+  if (!Array.isArray(itemIds) || !itemIds.length) return;
+  const uid = Number(userId);
+  for (const it of itemIds) {
+    const pid = it.productId != null ? Number(it.productId) : null;
+    const plid = it.playlistId != null ? Number(it.playlistId) : null;
+    const sid = it.slideshowId != null ? Number(it.slideshowId) : null;
+    const n = (pid ? 1 : 0) + (plid ? 1 : 0) + (sid ? 1 : 0);
+    if (n !== 1) {
+      throw Object.assign(new Error('Each itemIds entry must set exactly one of productId, playlistId, slideshowId'), { status: 400 });
+    }
+    if (pid) {
+      const { rows } = await db.query(`SELECT user_id FROM products WHERE id = $1`, [pid]);
+      if (!rows.length || Number(rows[0].user_id) !== uid) {
+        throw Object.assign(new Error('Invalid or foreign product for coupon map'), { status: 400 });
+      }
+    }
+    if (plid) {
+      const { rows } = await db.query(`SELECT user_id FROM playlists WHERE id = $1`, [plid]);
+      if (!rows.length || Number(rows[0].user_id) !== uid) {
+        throw Object.assign(new Error('Invalid or foreign playlist for coupon map'), { status: 400 });
+      }
+    }
+    if (sid) {
+      const { rows } = await db.query(`SELECT owner_id FROM slideshows WHERE id = $1`, [sid]);
+      if (!rows.length || Number(rows[0].owner_id) !== uid) {
+        throw Object.assign(new Error('Invalid or foreign slideshow for coupon map'), { status: 400 });
+      }
+    }
+  }
+}
+
+async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) {
+  const cid = contentId != null ? parseInt(String(contentId), 10) : null;
+  let coupon = null;
+  if (couponId) {
+    const { rows } = await db.query(`SELECT * FROM coupons WHERE id = $1`, [couponId]);
+    coupon = rows[0] || null;
+  } else if (contentType === 'playlist' && cid && !isNaN(cid)) {
+    const { rows } = await db.query(
+      `SELECT c.* FROM coupons c
+       INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.playlist_id = $1
+       ORDER BY c.id DESC LIMIT 1`,
+      [cid]
+    );
+    coupon = rows[0] || null;
+  } else if (contentType === 'slideshow' && cid && !isNaN(cid)) {
+    const { rows } = await db.query(
+      `SELECT c.* FROM coupons c
+       INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.slideshow_id = $1
+       ORDER BY c.id DESC LIMIT 1`,
+      [cid]
+    );
+    coupon = rows[0] || null;
+  }
+  if (!coupon) return null;
+  const base = await validateCouponBase(coupon);
+  if (!base.ok) return null;
+  const ctx = await validateCouponForSingleContext(coupon, {
+    playlistId: contentType === 'playlist' ? cid : undefined,
+    slideshowId: contentType === 'slideshow' ? cid : undefined,
+  });
+  if (!ctx.ok) return null;
+  return coupon;
+}
+
 // ---------- CHECKOUT ROUTE ----------
 app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) => {
   try {
@@ -10493,26 +10674,22 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
 
     const line_items = [];
     let coupon = null;
+    let eligibleProductIds = null;
 
-    // Validate coupon if provided
+    // Validate coupon if provided (scope: storewide owner or mapped products only)
     if (couponCode && typeof couponCode === 'string' && couponCode.trim()) {
       const tablesExist = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'coupons' LIMIT 1`);
       if (tablesExist.rows.length > 0) {
-        const { rows: couponRows } = await db.query(
-          `SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 LIMIT 1`,
-          [couponCode.toUpperCase().trim()]
-        );
-        if (couponRows.length) {
-          const c = couponRows[0];
-          if (!c.expires_at || new Date(c.expires_at) >= new Date()) {
-            if (c.max_redemptions == null) {
-              coupon = c;
-            } else {
-              const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [c.id]);
-              if (parseInt(red.rows[0].n, 10) < c.max_redemptions) coupon = c;
-            }
-          }
+        const c = await loadCouponByCodeUpper(couponCode);
+        if (!c) {
+          return res.status(400).json({ error: 'Invalid coupon' });
         }
+        const v = await validateCouponForCartProducts(c, rows);
+        if (!v.ok) {
+          return res.status(400).json({ error: v.error || 'Coupon not valid for this cart' });
+        }
+        coupon = v.coupon;
+        eligibleProductIds = v.eligibleProductIds;
       }
     }
 
@@ -10536,8 +10713,10 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
       }
       if (unitAmount <= 0) continue;
 
-      // Apply coupon discount to unit amount
-      if (coupon) {
+      // Apply coupon discount only to eligible line items
+      const applyCoupon =
+        coupon && eligibleProductIds && eligibleProductIds.has(Number(it.productId));
+      if (applyCoupon) {
         if (coupon.discount_type === 'percent') {
           unitAmount = Math.round(unitAmount * (1 - Number(coupon.discount_value) / 100));
         } else {
@@ -10611,15 +10790,29 @@ app.post('/api/coupons', authenticateToken, async (req, res) => {
     if (!(await ensureCouponTables())) {
       return res.status(503).json({ error: 'Coupon feature not available. Run migration 033_coupons_and_sms_gate.sql' });
     }
-    const { code, discountType, discountValue, maxRedemptions, expiresAt, itemIds } = req.body;
+    const { code, discountType, discountValue, maxRedemptions, expiresAt, startsAt, itemIds } = req.body;
     const userId = req.user.userId;
     if (!code || !discountType || discountValue == null) {
       return res.status(400).json({ error: 'code, discountType, and discountValue required' });
     }
+    try {
+      await assertCouponItemIdsOwnedByUser(itemIds, userId);
+    } catch (assertErr) {
+      const st = assertErr.status || 400;
+      return res.status(st).json({ error: assertErr.message || 'Invalid itemIds' });
+    }
     const { rows } = await db.query(
-      `INSERT INTO coupons (owner_id, code, discount_type, discount_value, max_redemptions, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [userId, code.toUpperCase().trim(), discountType || 'percent', Number(discountValue), maxRedemptions || null, expiresAt || null]
+      `INSERT INTO coupons (owner_id, code, discount_type, discount_value, max_redemptions, starts_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [
+        userId,
+        code.toUpperCase().trim(),
+        discountType || 'percent',
+        Number(discountValue),
+        maxRedemptions || null,
+        startsAt || null,
+        expiresAt || null,
+      ]
     );
     const coupon = rows[0];
     if (itemIds && Array.isArray(itemIds) && itemIds.length) {
@@ -10634,6 +10827,9 @@ app.post('/api/coupons', authenticateToken, async (req, res) => {
     res.status(201).json(coupon);
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'Coupon code already exists' });
+    if (e.code === '42703') {
+      return res.status(503).json({ error: 'Run database migration 037_coupon_starts_at.sql for coupon start dates' });
+    }
     console.error('Coupon create error:', e);
     res.status(500).json({ error: 'Failed to create coupon' });
   }
@@ -10646,11 +10842,26 @@ app.get('/api/coupons', authenticateToken, async (req, res) => {
       return res.status(503).json({ error: 'Coupon feature not available' });
     }
     const { rows } = await db.query(
-      `SELECT * FROM coupons WHERE owner_id = $1 ORDER BY created_at DESC`,
+      `SELECT c.*, COALESCE(
+        (SELECT json_agg(json_build_object(
+          'productId', m.product_id,
+          'playlistId', m.playlist_id,
+          'slideshowId', m.slideshow_id
+        )) FROM coupon_item_map m WHERE m.coupon_id = c.id),
+        '[]'::json
+      ) AS item_maps
+       FROM coupons c WHERE c.owner_id = $1 ORDER BY c.created_at DESC`,
       [req.user.userId]
     );
     res.json(rows);
   } catch (e) {
+    if (e.code === '42703') {
+      const { rows } = await db.query(
+        `SELECT * FROM coupons WHERE owner_id = $1 ORDER BY created_at DESC`,
+        [req.user.userId]
+      );
+      return res.json(rows.map((r) => ({ ...r, item_maps: [] })));
+    }
     console.error('Coupon list error:', e);
     res.status(500).json({ error: 'Failed to list coupons' });
   }
@@ -10661,16 +10872,51 @@ app.patch('/api/coupons/:id', authenticateToken, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
     const id = parseInt(req.params.id, 10);
-    const { discountType, discountValue, maxRedemptions, expiresAt } = req.body;
+    const { discountType, discountValue, maxRedemptions, expiresAt, startsAt, itemIds } = req.body;
+    const userId = req.user.userId;
+    const existing = await db.query(`SELECT * FROM coupons WHERE id = $1 AND owner_id = $2`, [id, userId]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Coupon not found' });
+    const cur = existing.rows[0];
+    if (itemIds !== undefined) {
+      try {
+        await assertCouponItemIdsOwnedByUser(itemIds, userId);
+      } catch (assertErr) {
+        const st = assertErr.status || 400;
+        return res.status(st).json({ error: assertErr.message || 'Invalid itemIds' });
+      }
+    }
+    let nextDiscountType = cur.discount_type;
+    let nextDiscountValue = cur.discount_value;
+    let nextMaxRedemptions = cur.max_redemptions;
+    let nextExpiresAt = cur.expires_at ?? null;
+    let nextStartsAt = cur.starts_at ?? null;
+    if (discountType !== undefined) nextDiscountType = discountType;
+    if (discountValue !== undefined) nextDiscountValue = Number(discountValue);
+    if (maxRedemptions !== undefined) nextMaxRedemptions = maxRedemptions;
+    if (expiresAt !== undefined) nextExpiresAt = expiresAt;
+    if (startsAt !== undefined) nextStartsAt = startsAt;
     const { rows } = await db.query(
-      `UPDATE coupons SET discount_type = COALESCE($2, discount_type), discount_value = COALESCE($3, discount_value),
-        max_redemptions = COALESCE($4, max_redemptions), expires_at = $5, updated_at = NOW()
-       WHERE id = $1 AND owner_id = $6 RETURNING *`,
-      [id, discountType, discountValue, maxRedemptions, expiresAt, req.user.userId]
+      `UPDATE coupons SET discount_type = $1, discount_value = $2, max_redemptions = $3, expires_at = $4,
+        starts_at = $5, updated_at = NOW()
+       WHERE id = $6 AND owner_id = $7 RETURNING *`,
+      [nextDiscountType, nextDiscountValue, nextMaxRedemptions, nextExpiresAt, nextStartsAt, id, userId]
     );
-    if (!rows.length) return res.status(404).json({ error: 'Coupon not found' });
-    res.json(rows[0]);
+    const updated = rows[0];
+    if (Array.isArray(itemIds)) {
+      await db.query(`DELETE FROM coupon_item_map WHERE coupon_id = $1`, [id]);
+      for (const it of itemIds) {
+        await db.query(
+          `INSERT INTO coupon_item_map (coupon_id, product_id, playlist_id, slideshow_id)
+           VALUES ($1, $2, $3, $4)`,
+          [id, it.productId || null, it.playlistId || null, it.slideshowId || null]
+        );
+      }
+    }
+    res.json(updated);
   } catch (e) {
+    if (e.code === '42703') {
+      return res.status(503).json({ error: 'Run database migration 037_coupon_starts_at.sql for coupon start dates' });
+    }
     console.error('Coupon update error:', e);
     res.status(500).json({ error: 'Failed to update coupon' });
   }
@@ -10682,32 +10928,22 @@ app.post('/api/coupons/validate', async (req, res) => {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
     const { code, productId, playlistId, slideshowId } = req.body;
     if (!code) return res.status(400).json({ error: 'code required' });
-    const c = code.toUpperCase().trim();
-    const { rows } = await db.query(
-      `SELECT * FROM coupons WHERE UPPER(TRIM(code)) = $1 LIMIT 1`,
-      [c]
-    );
-    if (!rows.length) return res.json({ valid: false, error: 'Invalid coupon' });
-    const coupon = rows[0];
-    if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
-      return res.json({ valid: false, error: 'Coupon expired' });
-    }
-    if (coupon.max_redemptions != null) {
-      const red = await db.query(`SELECT COUNT(*) as n FROM coupon_redemptions WHERE coupon_id = $1`, [coupon.id]);
-      if (parseInt(red.rows[0].n, 10) >= coupon.max_redemptions) {
-        return res.json({ valid: false, error: 'Coupon limit reached' });
-      }
-    }
-    const { rows: maps } = await db.query(`SELECT * FROM coupon_item_map WHERE coupon_id = $1`, [coupon.id]);
-    if (maps.length) {
-      const applies = maps.some(m =>
-        (productId && m.product_id === Number(productId)) ||
-        (playlistId && m.playlist_id === Number(playlistId)) ||
-        (slideshowId && m.slideshow_id === Number(slideshowId))
-      );
-      if (!applies) return res.json({ valid: false, error: 'Coupon does not apply to this item' });
-    }
-    res.json({ valid: true, coupon: { id: coupon.id, code: coupon.code, discountType: coupon.discount_type, discountValue: coupon.discount_value, introPeriodMonths: coupon.intro_period_months } });
+    const coupon = await loadCouponByCodeUpper(code);
+    if (!coupon) return res.json({ valid: false, error: 'Invalid coupon' });
+    const v = await validateCouponForSingleContext(coupon, { productId, playlistId, slideshowId });
+    if (!v.ok) return res.json({ valid: false, error: v.error });
+    res.json({
+      valid: true,
+      coupon: {
+        id: coupon.id,
+        code: coupon.code,
+        discountType: coupon.discount_type,
+        discountValue: coupon.discount_value,
+        introPeriodMonths: coupon.intro_period_months,
+        startsAt: coupon.starts_at,
+        expiresAt: coupon.expires_at,
+      },
+    });
   } catch (e) {
     console.error('Coupon validate error:', e);
     res.status(500).json({ error: 'Validation failed' });
@@ -10718,19 +10954,16 @@ app.post('/api/coupons/validate', async (req, res) => {
 app.post('/api/coupons/sms/send', async (req, res) => {
   try {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
-    const { phone, consent, couponId, consentCopyVersion } = req.body;
+    const { phone, consent, couponId, consentCopyVersion, contentType, contentId } = req.body;
     if (!phone) return res.status(400).json({ error: 'Phone number required' });
     if (!consent) return res.status(400).json({ error: 'Marketing consent is required to receive coupon via SMS' });
     const phoneE164 = phone.replace(/\D/g, '');
     if (phoneE164.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
     const e164 = phoneE164.startsWith('1') && phoneE164.length === 11 ? `+${phoneE164}` : `+1${phoneE164}`;
 
-    let coupon = null;
-    if (couponId) {
-      const { rows } = await db.query(`SELECT * FROM coupons WHERE id = $1`, [couponId]);
-      coupon = rows[0] || null;
-    }
-    const code = coupon ? coupon.code : (req.body.code || 'WELCOME10');
+    let coupon =
+      (await resolveCouponForPreviewSms({ couponId, contentType, contentId })) || null;
+    const code = coupon ? coupon.code : req.body.code || 'WELCOME10';
     const body = `Your coupon: ${code}. Use at checkout.`;
 
     const copyVer = consentCopyVersion || COUPON_CONSENT_COPY;

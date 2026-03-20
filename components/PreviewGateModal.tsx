@@ -80,6 +80,8 @@ export default function PreviewGateModal({
         phone,
         consent: true,
         couponId: couponId || undefined,
+        contentType,
+        contentId,
         consentCopyVersion: CONSENT_COPY,
       });
       if (res.data?.sent) {
