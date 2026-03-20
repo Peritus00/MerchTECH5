@@ -14,6 +14,36 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { api } from '@/services/api';
 
 const CONSENT_COPY = 'I agree to receive marketing texts including coupons and offers.';
+const DEFAULT_COUPON_TITLE = 'Get a Coupon';
+
+type PreviewCouponDisplay = {
+  discountType?: string | null;
+  discountValue?: number | null;
+};
+
+function formatPreviewCouponOffer(couponDisplay: PreviewCouponDisplay | null) {
+  const discountType = couponDisplay?.discountType;
+  const discountValue = Number(couponDisplay?.discountValue);
+
+  if (!discountType || !Number.isFinite(discountValue) || discountValue <= 0) {
+    return null;
+  }
+
+  if (discountType === 'percent') {
+    return {
+      headline: `GET ${discountValue}% OFF!`,
+      label: `${discountValue}% off`,
+    };
+  }
+
+  const dollars =
+    Number.isInteger(discountValue) ? String(discountValue) : discountValue.toFixed(2);
+
+  return {
+    headline: `GET ${dollars} DOLLARS OFF!`,
+    label: `${dollars} dollars off`,
+  };
+}
 
 interface PreviewGateModalProps {
   visible: boolean;
@@ -45,6 +75,7 @@ export default function PreviewGateModal({
   const [sending, setSending] = useState(false);
   const [skipAllowed, setSkipAllowed] = useState(true);
   const [smsConfigured, setSmsConfigured] = useState(false);
+  const [couponDisplay, setCouponDisplay] = useState<PreviewCouponDisplay | null>(null);
 
   useEffect(() => {
     if (visible) {
@@ -63,6 +94,54 @@ export default function PreviewGateModal({
       });
     }
   }, [visible, ownerId, requirePhoneForPreview]);
+
+  useEffect(() => {
+    if (!visible || requirePhoneForPreview) {
+      setCouponDisplay(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    api.get('/coupons/preview-display', {
+      params: {
+        couponId,
+        contentType,
+        contentId,
+      },
+    }).then((response) => {
+      if (cancelled) return;
+      setCouponDisplay(response.data?.coupon ?? null);
+    }).catch(() => {
+      if (cancelled) return;
+      setCouponDisplay(null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, requirePhoneForPreview, couponId, contentType, contentId]);
+
+  const couponOffer = React.useMemo(
+    () => formatPreviewCouponOffer(couponDisplay),
+    [couponDisplay]
+  );
+
+  const titleText = requirePhoneForPreview
+    ? 'Phone Required for Preview'
+    : couponOffer?.headline || DEFAULT_COUPON_TITLE;
+
+  const subtitleText = requirePhoneForPreview
+    ? 'Enter your phone number and agree to receive marketing texts to start the preview.'
+    : couponOffer?.label
+      ? `Enter your phone number to receive ${couponOffer.label} via text, or skip to start the preview.`
+      : 'Enter your phone number to receive a discount coupon via text, or skip to start the preview.';
+
+  const primaryButtonText = requirePhoneForPreview
+    ? 'Continue to Preview'
+    : couponOffer?.label
+      ? `Send ${couponOffer.label}`
+      : 'Send Coupon Now';
 
   const handleSendCoupon = async () => {
     if (!consent) {
@@ -112,12 +191,10 @@ export default function PreviewGateModal({
       <View style={styles.overlay}>
         <View style={styles.modal}>
           <Text style={styles.title}>
-            {requirePhoneForPreview ? 'Phone Required for Preview' : 'Get a Coupon'}
+            {titleText}
           </Text>
           <Text style={styles.subtitle}>
-            {requirePhoneForPreview
-              ? 'Enter your phone number and agree to receive marketing texts to start the preview.'
-              : 'Enter your phone number to receive a discount coupon via text, or skip to start the preview.'}
+            {subtitleText}
           </Text>
 
           <TextInput
@@ -153,7 +230,7 @@ export default function PreviewGateModal({
                 <ActivityIndicator color="#fff" size="small" />
               ) : (
                 <Text style={styles.btnPrimaryText}>
-                  {requirePhoneForPreview ? 'Continue to Preview' : 'Send Coupon Now'}
+                  {primaryButtonText}
                 </Text>
               )}
             </TouchableOpacity>

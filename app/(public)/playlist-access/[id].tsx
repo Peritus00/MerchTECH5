@@ -208,7 +208,11 @@ export default function PlaylistAccessScreen() {
 
       // Normalize server response to ensure creator userId is present
       const mappedPlaylist = playlistData
-        ? { ...playlistData, userId: playlistData.user_id || playlistData.userId }
+        ? {
+            ...playlistData,
+            userId: playlistData.user_id || playlistData.userId,
+            previewCouponId: playlistData.preview_coupon_id ?? playlistData.previewCouponId ?? null,
+          }
         : null;
 
       // Log media files from server (URLs are now correct from server)

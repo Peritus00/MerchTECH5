@@ -358,7 +358,8 @@ export default function SlideshowAccessScreen() {
           requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
           autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval,
           // Ensure creator userId is available for store routing
-          userId: slideshowData.user_id || slideshowData.userId
+          userId: slideshowData.user_id || slideshowData.userId,
+          previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
         };
         setSlideshow(mappedSlideshow);
         // Don't set isFullAccess to true - user needs to enter activation code
@@ -371,7 +372,8 @@ export default function SlideshowAccessScreen() {
           requiresActivationCode: slideshowData.requires_activation_code || slideshowData.requiresActivationCode,
           autoplayInterval: slideshowData.autoplay_interval || slideshowData.autoplayInterval,
           // Ensure creator userId is available for store routing
-          userId: slideshowData.user_id || slideshowData.userId
+          userId: slideshowData.user_id || slideshowData.userId,
+          previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
         };
         setSlideshow(mappedSlideshow);
         // Access is granted, user can view slideshow
@@ -690,6 +692,7 @@ export default function SlideshowAccessScreen() {
           requiresActivationCode: previewData.requires_activation_code || previewData.requiresActivationCode,
           autoplayInterval: previewData.autoplay_interval || previewData.autoplayInterval,
           userId: previewData.user_id || previewData.userId,
+          previewCouponId: previewData.preview_coupon_id ?? previewData.previewCouponId ?? null,
         } as any;
         setSlideshow(mappedPreview);
         setShowPreview(true);

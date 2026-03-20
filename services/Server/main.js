@@ -13871,11 +13871,13 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           const fallbackAccessRestricted = fallbackPlaylist.requiresActivationCode && !fallbackPlaylist.isPublic;
           const accessData = {
             id: fallbackPlaylist.id,
+            userId: fallbackPlaylist.userId,
             name: fallbackPlaylist.name,
             description: fallbackPlaylist.description,
             requiresActivationCode: fallbackPlaylist.requiresActivationCode,
             isPublic: fallbackPlaylist.isPublic,
             requirePhoneForPreview: !!fallbackPlaylist.requirePhoneForPreview,
+            previewCouponId: fallbackPlaylist.previewCouponId ?? null,
             createdAt: fallbackPlaylist.createdAt,
             updatedAt: fallbackPlaylist.updatedAt,
             mediaFiles: fallbackPlaylist.mediaFiles || [],
@@ -13903,11 +13905,13 @@ app.get('/api/playlist-access/:id', async (req, res) => {
     const accessRestricted = playlist.requiresActivationCode && !playlist.isPublic;
     const accessData = {
       id: playlist.id,
+      userId: playlist.userId,
       name: playlist.name,
       description: playlist.description,
       requiresActivationCode: playlist.requiresActivationCode,
       isPublic: playlist.isPublic,
       requirePhoneForPreview: !!playlist.requirePhoneForPreview,
+      previewCouponId: playlist.previewCouponId ?? null,
       createdAt: playlist.createdAt,
       updatedAt: playlist.updatedAt,
       mediaFiles: playlist.mediaFiles || [],
@@ -15419,10 +15423,12 @@ app.get('/api/slideshow-preview/:id', async (req, res) => {
     
     const previewSlideshow = {
       id: slideshow.id,
+      userId: slideshow.user_id,
       name: slideshow.name,
       description: slideshow.description,
       username: slideshow.username,
       requiresActivationCode: slideshow.requires_activation_code,
+      previewCouponId: slideshow.preview_coupon_id ?? null,
       autoplayInterval: slideshow.autoplay_interval,
       audioUrl: audioUrl,
       images: imagesWithSignedUrls,
