@@ -608,6 +608,10 @@ export const couponAPI = {
     const response = await api.patch(`/coupons/${id}`, data);
     return response.data;
   },
+  async delete(id: number) {
+    const response = await api.delete(`/coupons/${id}`);
+    return response.data;
+  },
   async validate(code: string, productId?: number, playlistId?: number, slideshowId?: number) {
     const response = await api.post('/coupons/validate', { code, productId, playlistId, slideshowId });
     return response.data;

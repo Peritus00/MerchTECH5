@@ -10650,13 +10650,57 @@ async function assertCouponItemIdsOwnedByUser(itemIds, userId) {
   }
 }
 
+function getDefaultPreviewCouponCode(userId) {
+  return `MERCH5-${userId}`;
+}
+
+async function ensureDefaultPreviewCouponForUser(userId) {
+  const normalizedUserId = Number(userId);
+  const defaultCode = getDefaultPreviewCouponCode(normalizedUserId);
+  const existing = await db.query(
+    `SELECT * FROM coupons WHERE owner_id = $1 AND code = $2 LIMIT 1`,
+    [normalizedUserId, defaultCode]
+  );
+
+  let coupon = existing.rows[0] || null;
+  if (!coupon) {
+    const inserted = await db.query(
+      `INSERT INTO coupons (owner_id, code, discount_type, discount_value, max_redemptions, starts_at, expires_at)
+       VALUES ($1, $2, 'fixed', 5, NULL, NULL, NULL)
+       RETURNING *`,
+      [normalizedUserId, defaultCode]
+    );
+    coupon = inserted.rows[0];
+  } else {
+    const updated = await db.query(
+      `UPDATE coupons
+       SET discount_type = 'fixed',
+           discount_value = 5,
+           max_redemptions = NULL,
+           starts_at = NULL,
+           expires_at = NULL,
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING *`,
+      [coupon.id]
+    );
+    coupon = updated.rows[0];
+  }
+
+  await db.query(`DELETE FROM coupon_item_map WHERE coupon_id = $1`, [coupon.id]);
+  return coupon;
+}
+
 async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) {
   const cid = contentId != null ? parseInt(String(contentId), 10) : null;
   let coupon = null;
+  let ownerId = null;
   if (couponId) {
     const { rows } = await db.query(`SELECT * FROM coupons WHERE id = $1`, [couponId]);
     coupon = rows[0] || null;
   } else if (contentType === 'playlist' && cid && !isNaN(cid)) {
+    const ownerRows = await db.query(`SELECT user_id FROM playlists WHERE id = $1`, [cid]);
+    ownerId = ownerRows.rows[0]?.user_id ?? null;
     const { rows } = await db.query(
       `SELECT c.* FROM coupons c
        INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.playlist_id = $1
@@ -10665,6 +10709,8 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
     );
     coupon = rows[0] || null;
   } else if (contentType === 'slideshow' && cid && !isNaN(cid)) {
+    const ownerRows = await db.query(`SELECT user_id FROM slideshows WHERE id = $1`, [cid]);
+    ownerId = ownerRows.rows[0]?.user_id ?? null;
     const { rows } = await db.query(
       `SELECT c.* FROM coupons c
        INNER JOIN coupon_item_map m ON m.coupon_id = c.id AND m.slideshow_id = $1
@@ -10672,6 +10718,9 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
       [cid]
     );
     coupon = rows[0] || null;
+  }
+  if (!coupon && ownerId) {
+    coupon = await ensureDefaultPreviewCouponForUser(ownerId);
   }
   if (!coupon) return null;
   const base = await validateCouponBase(coupon);
@@ -10870,6 +10919,7 @@ app.get('/api/coupons', authenticateToken, async (req, res) => {
     if (!(await ensureCouponTables())) {
       return res.status(503).json({ error: 'Coupon feature not available' });
     }
+    const defaultCoupon = await ensureDefaultPreviewCouponForUser(req.user.userId);
     const { rows } = await db.query(
       `SELECT c.*, COALESCE(
         (SELECT json_agg(json_build_object(
@@ -10882,14 +10932,29 @@ app.get('/api/coupons', authenticateToken, async (req, res) => {
        FROM coupons c WHERE c.owner_id = $1 ORDER BY c.created_at DESC`,
       [req.user.userId]
     );
-    res.json(rows);
+    const enriched = rows
+      .map((row) => ({
+        ...row,
+        isDefaultPreviewCoupon: Number(row.id) === Number(defaultCoupon.id),
+      }))
+      .sort((a, b) => Number(Boolean(b.isDefaultPreviewCoupon)) - Number(Boolean(a.isDefaultPreviewCoupon)));
+    res.json(enriched);
   } catch (e) {
     if (e.code === '42703') {
+      const defaultCoupon = await ensureDefaultPreviewCouponForUser(req.user.userId);
       const { rows } = await db.query(
         `SELECT * FROM coupons WHERE owner_id = $1 ORDER BY created_at DESC`,
         [req.user.userId]
       );
-      return res.json(rows.map((r) => ({ ...r, item_maps: [] })));
+      return res.json(
+        rows
+          .map((r) => ({
+            ...r,
+            item_maps: [],
+            isDefaultPreviewCoupon: Number(r.id) === Number(defaultCoupon.id),
+          }))
+          .sort((a, b) => Number(Boolean(b.isDefaultPreviewCoupon)) - Number(Boolean(a.isDefaultPreviewCoupon)))
+      );
     }
     console.error('Coupon list error:', e);
     res.status(500).json({ error: 'Failed to list coupons' });
@@ -10948,6 +11013,26 @@ app.patch('/api/coupons/:id', authenticateToken, async (req, res) => {
     }
     console.error('Coupon update error:', e);
     res.status(500).json({ error: 'Failed to update coupon' });
+  }
+});
+
+// DELETE /api/coupons/:id
+app.delete('/api/coupons/:id', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
+    const id = parseInt(req.params.id, 10);
+    const userId = req.user.userId;
+    const existing = await db.query(`SELECT * FROM coupons WHERE id = $1 AND owner_id = $2`, [id, userId]);
+    if (!existing.rows.length) return res.status(404).json({ error: 'Coupon not found' });
+    const coupon = existing.rows[0];
+    if (coupon.code === getDefaultPreviewCouponCode(userId)) {
+      return res.status(400).json({ error: 'The default $5.00 coupon cannot be deleted.' });
+    }
+    await db.query(`DELETE FROM coupons WHERE id = $1 AND owner_id = $2`, [id, userId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('Coupon delete error:', e);
+    res.status(500).json({ error: 'Failed to delete coupon' });
   }
 });
 

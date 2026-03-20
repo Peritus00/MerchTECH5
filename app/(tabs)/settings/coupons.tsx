@@ -175,6 +175,29 @@ export default function CouponsSettingsScreen() {
     }
   };
 
+  const handleDelete = async (coupon: any) => {
+    Alert.alert(
+      'Delete Coupon',
+      `Delete coupon ${coupon.code}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await couponAPI.delete(Number(coupon.id));
+              await loadCoupons();
+            } catch (e: any) {
+              const msg = e.response?.data?.error || e.message || 'Failed to delete coupon.';
+              Alert.alert('Error', msg);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <ThemedView style={styles.container}>
@@ -315,7 +338,19 @@ export default function CouponsSettingsScreen() {
           ) : (
             coupons.map((c) => (
               <View key={c.id} style={styles.couponCard}>
-                <ThemedText style={styles.couponCode}>{c.code}</ThemedText>
+                <View style={styles.couponHeader}>
+                  <View style={styles.couponHeaderText}>
+                    <ThemedText style={styles.couponCode}>{c.code}</ThemedText>
+                    {c.isDefaultPreviewCoupon && (
+                      <ThemedText style={styles.defaultBadge}>Default $5.00 coupon</ThemedText>
+                    )}
+                  </View>
+                  {!c.isDefaultPreviewCoupon && (
+                    <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(c)}>
+                      <MaterialIcons name="delete-outline" size={18} color="#dc2626" />
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <ThemedText style={styles.couponDiscount}>
                   {c.discount_type === 'percent' ? `${c.discount_value}%` : `$${c.discount_value}`} off
                 </ThemedText>
@@ -413,7 +448,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
+  couponHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  couponHeaderText: {
+    flex: 1,
+  },
   couponCode: { fontSize: 18, fontWeight: '700', marginBottom: 4, color: '#dc2626' },
+  defaultBadge: { fontSize: 12, color: '#2563eb', marginBottom: 4 },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
   couponDiscount: { color: '#059669', marginBottom: 4 },
   couponScope: { fontSize: 13, color: '#4b5563', marginBottom: 4 },
   couponExpiry: { fontSize: 12, color: '#6b7280' },

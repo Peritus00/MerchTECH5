@@ -40,6 +40,11 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
 
+  const getDefaultCouponId = (rows: any[]) => {
+    const defaultCoupon = rows.find((row) => row?.isDefaultPreviewCoupon);
+    return defaultCoupon?.id != null ? String(defaultCoupon.id) : '';
+  };
+
   useEffect(() => {
     if (playlist && visible) {
       console.log('🔴 EDIT_PLAYLIST: Loading playlist data:', {
@@ -62,7 +67,9 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
     couponAPI.list()
       .then((rows) => {
         if (active) {
-          setCoupons(Array.isArray(rows) ? rows : []);
+          const nextCoupons = Array.isArray(rows) ? rows : [];
+          setCoupons(nextCoupons);
+          setPreviewCouponId((prev) => prev || getDefaultCouponId(nextCoupons));
         }
       })
       .catch(() => {
@@ -305,7 +312,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                       {coupons.map((coupon) => (
                         <Picker.Item
                           key={coupon.id}
-                          label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)`}
+                          label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)${coupon.isDefaultPreviewCoupon ? ' - Default' : ''}`}
                           value={String(coupon.id)}
                         />
                       ))}

@@ -30,6 +30,11 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
   const [previewCouponId, setPreviewCouponId] = useState('');
   const [coupons, setCoupons] = useState<any[]>([]);
 
+  const getDefaultCouponId = (rows: any[]) => {
+    const defaultCoupon = rows.find((row) => row?.isDefaultPreviewCoupon);
+    return defaultCoupon?.id != null ? String(defaultCoupon.id) : '';
+  };
+
   useEffect(() => {
     if (slideshow) {
       console.log('🔄 EditSlideshowModal: Loading slideshow data:', {
@@ -61,7 +66,11 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
     let active = true;
     couponAPI.list()
       .then((rows) => {
-        if (active) setCoupons(Array.isArray(rows) ? rows : []);
+        if (active) {
+          const nextCoupons = Array.isArray(rows) ? rows : [];
+          setCoupons(nextCoupons);
+          setPreviewCouponId((prev) => prev || getDefaultCouponId(nextCoupons));
+        }
       })
       .catch(() => {
         if (active) setCoupons([]);
@@ -164,7 +173,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
               {coupons.map((coupon) => (
                 <Picker.Item
                   key={coupon.id}
-                  label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)`}
+                  label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)${coupon.isDefaultPreviewCoupon ? ' - Default' : ''}`}
                   value={String(coupon.id)}
                 />
               ))}
