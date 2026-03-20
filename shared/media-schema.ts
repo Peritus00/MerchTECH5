@@ -1,3 +1,7 @@
+import type { PlaylistMediaScheduleFields, PlaylistRecurringRule } from './playlistSchedule';
+
+export type { PlaylistMediaScheduleFields, PlaylistRecurringRule };
+
 export interface MediaFile {
   id: string; // Can be a number or a string, so use string for flexibility
   url: string;
@@ -15,6 +19,13 @@ export interface MediaFile {
   updatedAt?: string;
   uploadStatus?: 'pending_scan' | 'scanning' | 'ready' | 'rejected';
   scanStatus?: 'pending' | 'clean' | 'infected' | 'failed' | 'skipped';
+  displayOrder?: number;
+  /** Set when this file is returned as part of a playlist (join row). */
+  scheduleEnabled?: boolean;
+  scheduleStartDate?: string | null;
+  scheduleEndDate?: string | null;
+  scheduleExactDates?: string[];
+  scheduleRecurringRules?: PlaylistRecurringRule[];
 }
 
 export interface ProductLink {
@@ -52,6 +63,7 @@ export interface Playlist {
   id: string;
   userId?: number;
   name: string;
+  description?: string;
   requiresActivationCode: boolean;
   isPublic: boolean;
   requirePhoneForPreview?: boolean;

@@ -20,6 +20,11 @@ const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
 const socialAuthService = require('./socialAuthService');
 const smsService = require('./services/smsService');
+const {
+  validatePlaylistMediaScheduleItems,
+  normalizePlaylistItemFromBody,
+  toIsoDateString,
+} = require('./playlistScheduleUtils');
 
 // Add console logging immediately for startup debugging
 console.log('🚀 Server startup initiated...');
@@ -10124,7 +10129,12 @@ async function getPlaylistWithMedia(playlistId) {
 
   const playlistData = playlistResult.rows[0];
   const mediaResult = await db.query(
-    `SELECT m.*, pm.display_order 
+    `SELECT m.*, pm.display_order,
+            COALESCE(pm.schedule_enabled, false) AS schedule_enabled,
+            pm.schedule_start_date,
+            pm.schedule_end_date,
+            COALESCE(pm.schedule_exact_dates, '[]'::jsonb) AS schedule_exact_dates,
+            COALESCE(pm.schedule_recurring_rules, '[]'::jsonb) AS schedule_recurring_rules
      FROM media m 
      JOIN playlist_media pm ON m.id = pm.media_id 
      WHERE pm.playlist_id = $1 
@@ -10220,6 +10230,35 @@ async function getPlaylistWithMedia(playlistId) {
     type: mediaType, // Map content_type to 'video', 'audio', 'image', or 'slideshow'
     s3_key: media.s3_key, // Include s3_key for frontend debugging
       url: properUrl, // Use direct S3 signed URLs for better compatibility
+    scheduleEnabled: !!media.schedule_enabled,
+    scheduleStartDate: media.schedule_start_date ? toIsoDateString(media.schedule_start_date) : null,
+    scheduleEndDate: media.schedule_end_date ? toIsoDateString(media.schedule_end_date) : null,
+    scheduleExactDates: (() => {
+      const v = media.schedule_exact_dates;
+      if (Array.isArray(v)) return v.map(String);
+      if (typeof v === 'string') {
+        try {
+          const p = JSON.parse(v);
+          return Array.isArray(p) ? p.map(String) : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    })(),
+    scheduleRecurringRules: (() => {
+      const v = media.schedule_recurring_rules;
+      if (Array.isArray(v)) return v;
+      if (typeof v === 'string') {
+        try {
+          const p = JSON.parse(v);
+          return Array.isArray(p) ? p : [];
+        } catch {
+          return [];
+        }
+      }
+      return [];
+    })(),
     };
     if (media.slideshow_id) {
       mediaItem.slideshowId = media.slideshow_id;
@@ -11033,6 +11072,42 @@ app.delete('/api/coupons/:id', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('Coupon delete error:', e);
     res.status(500).json({ error: 'Failed to delete coupon' });
+  }
+});
+
+// GET /api/coupons/preview-display - resolve public preview coupon details for UI copy
+app.get('/api/coupons/preview-display', async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
+    const couponId = req.query.couponId ? parseInt(String(req.query.couponId), 10) : null;
+    const contentType =
+      req.query.contentType === 'playlist' || req.query.contentType === 'slideshow'
+        ? req.query.contentType
+        : null;
+    const contentId = req.query.contentId ? String(req.query.contentId) : null;
+
+    const coupon =
+      (await resolveCouponForPreviewSms({
+        couponId: couponId && !isNaN(couponId) ? couponId : null,
+        contentType,
+        contentId,
+      })) || null;
+
+    if (!coupon) {
+      return res.json({ coupon: null });
+    }
+
+    return res.json({
+      coupon: {
+        id: coupon.id,
+        code: coupon.code,
+        discountType: coupon.discount_type,
+        discountValue: Number(coupon.discount_value),
+      },
+    });
+  } catch (e) {
+    console.error('Preview coupon display error:', e);
+    return res.status(500).json({ error: 'Failed to resolve preview coupon' });
   }
 });
 
@@ -15619,47 +15694,44 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
     res.status(500).json({ error: 'Failed to remove media from playlist' });
   }
 });
-// Update playlist media order
+// Update playlist media order (optional per-item calendar schedule via mediaItems)
 app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
   const client = await db.getClient();
   let released = false;
   try {
     await client.query('BEGIN');
-    
+
     const { id } = req.params;
-    const { mediaFileIds } = req.body; // Array of media IDs in desired order
-    
-    console.log('🔴 PLAYLIST_MEDIA_UPDATE: Updating playlist media order:', id);
-    console.log('🔴 PLAYLIST_MEDIA_UPDATE: New order:', mediaFileIds);
-    
-    // Validate mediaFileIds is an array
-    if (!Array.isArray(mediaFileIds)) {
+    const { mediaItems, mediaFileIds } = req.body;
+
+    let rowsInput = [];
+    if (Array.isArray(mediaItems)) {
+      rowsInput = mediaItems.map((raw, idx) => normalizePlaylistItemFromBody(raw, idx + 1));
+    } else if (Array.isArray(mediaFileIds)) {
+      rowsInput = mediaFileIds.map((mediaId, idx) =>
+        normalizePlaylistItemFromBody({ mediaId, scheduleEnabled: false }, idx + 1)
+      );
+    } else {
       await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'mediaFileIds must be an array' });
+      return res.status(400).json({ error: 'Provide mediaItems or mediaFileIds array' });
     }
-    
-    // Guard against accidental clearing - require explicit empty array to clear
-    if (mediaFileIds === null || mediaFileIds === undefined) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: 'mediaFileIds is required' });
-    }
-    
-    // Check if user owns the playlist
+
+    console.log('🔴 PLAYLIST_MEDIA_UPDATE: Updating playlist media:', id, 'count:', rowsInput.length);
+
     const ownerCheck = await client.query(
       'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
-    
+
     if (ownerCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: 'Playlist not found' });
     }
-    
+
     const playlistOwnerId = ownerCheck.rows[0].user_id;
     const userResult = await client.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId]);
     const isAdmin = userResult.rows[0]?.is_admin || false;
-    
-    // Check authorization using the same client to avoid pool exhaustion
+
     if (playlistOwnerId !== req.user.userId && !isAdmin) {
       const delegateAccessResult = await client.query(
         `SELECT 1
@@ -15677,69 +15749,100 @@ app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
         return res.status(403).json({ error: 'Not authorized to modify this playlist' });
       }
     }
-    
-    // Validate all media files before making any changes
+
     const validatedMedia = [];
     const seenMediaIds = new Set();
-    for (let i = 0; i < mediaFileIds.length; i++) {
-      const mediaId = mediaFileIds[i];
-      
-      // Skip invalid/null/undefined IDs
-      if (!mediaId || (typeof mediaId !== 'number' && typeof mediaId !== 'string')) {
+    for (let i = 0; i < rowsInput.length; i++) {
+      const row = rowsInput[i];
+      const mediaId = row.mediaId;
+
+      if (mediaId == null || Number.isNaN(Number(mediaId))) {
         console.warn(`🔴 PLAYLIST_MEDIA_UPDATE: Skipping invalid media ID at index ${i}:`, mediaId);
         continue;
       }
-      
+
       const mediaKey = String(mediaId);
       if (seenMediaIds.has(mediaKey)) {
-        console.warn(`🔴 PLAYLIST_MEDIA_UPDATE: Skipping duplicate media ID:`, mediaId);
+        console.warn('🔴 PLAYLIST_MEDIA_UPDATE: Skipping duplicate media ID:', mediaId);
         continue;
       }
       seenMediaIds.add(mediaKey);
-      
-      // Check if media file exists
+
       const mediaCheck = await client.query(
         'SELECT id, user_id FROM media WHERE id = $1',
         [mediaId]
       );
-      
+
       if (mediaCheck.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: `Media file ${mediaId} not found` });
       }
-      
+
       const mediaFile = mediaCheck.rows[0];
-      
-      // Allow access if: user owns the file OR playlist owner owns it OR user is admin
+
       if (mediaFile.user_id !== req.user.userId && mediaFile.user_id !== playlistOwnerId && !isAdmin) {
         await client.query('ROLLBACK');
-        return res.status(403).json({ 
-          error: `Media file ${mediaId} not authorized. Only media owned by you or the playlist owner can be used.` 
+        return res.status(403).json({
+          error: `Media file ${mediaId} not authorized. Only media owned by you or the playlist owner can be used.`,
         });
       }
-      
-      validatedMedia.push({ id: mediaId, order: validatedMedia.length + 1 });
+
+      validatedMedia.push({
+        id: mediaId,
+        order: validatedMedia.length + 1,
+        scheduleEnabled: !!row.scheduleEnabled,
+        scheduleStartDate: row.scheduleStartDate,
+        scheduleEndDate: row.scheduleEndDate,
+        scheduleExactDates: row.scheduleExactDates || [],
+        scheduleRecurringRules: row.scheduleRecurringRules || [],
+      });
     }
-    
-    // Clear existing media links
+
+    if (validatedMedia.length > 0) {
+      const scheduleValidation = validatePlaylistMediaScheduleItems(
+        validatedMedia.map((m) => ({
+          mediaId: m.id,
+          scheduleEnabled: m.scheduleEnabled,
+          scheduleStartDate: m.scheduleStartDate,
+          scheduleEndDate: m.scheduleEndDate,
+          scheduleExactDates: m.scheduleExactDates,
+          scheduleRecurringRules: m.scheduleRecurringRules,
+        }))
+      );
+      if (!scheduleValidation.ok) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ error: scheduleValidation.error });
+      }
+    }
+
     await client.query('DELETE FROM playlist_media WHERE playlist_id = $1', [id]);
-    
-    // Add validated media files in new order
+
     for (const media of validatedMedia) {
       await client.query(
-        'INSERT INTO playlist_media (playlist_id, media_id, display_order) VALUES ($1, $2, $3)',
-        [id, media.id, media.order]
+        `INSERT INTO playlist_media (
+          playlist_id, media_id, display_order,
+          schedule_enabled, schedule_start_date, schedule_end_date,
+          schedule_exact_dates, schedule_recurring_rules
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb)`,
+        [
+          id,
+          media.id,
+          media.order,
+          media.scheduleEnabled,
+          media.scheduleStartDate,
+          media.scheduleEndDate,
+          JSON.stringify(media.scheduleExactDates || []),
+          JSON.stringify(media.scheduleRecurringRules || []),
+        ]
       );
     }
-    
+
     await client.query('COMMIT');
     client.release();
     released = true;
-    
-    // Return updated playlist after releasing the client
+
     const updatedPlaylist = await getPlaylistWithMedia(id);
     return res.json({ playlist: updatedPlaylist });
-    
   } catch (error) {
     if (!released) {
       await client.query('ROLLBACK');

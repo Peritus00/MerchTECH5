@@ -33,6 +33,7 @@ import createAudioPlayer, {
 } from '../services/audio/AudioService';
 import { api, paymentAPI, playlistAccessAPI } from '../services/api';
 import { ProductLink } from '@/shared/media-schema';
+import { isPlaylistItemActiveOnDate, todayIsoDateInLocalTimezone } from '@/shared/playlistSchedule';
 import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
@@ -62,6 +63,11 @@ interface MediaItem {
   displayOrder?: number;
   productLinks?: ProductLink[];
   slideshowId?: number;
+  scheduleEnabled?: boolean;
+  scheduleStartDate?: string | null;
+  scheduleEndDate?: string | null;
+  scheduleExactDates?: string[];
+  scheduleRecurringRules?: { kind: 'weekly'; weekdays: number[] }[];
 }
 
 interface PlaylistPlayerProps {
@@ -396,6 +402,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
+  const goToNextVideoRef = useRef<() => void>(() => {});
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxRetriesRef = useRef<number>(3);
   
@@ -428,6 +435,30 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const router = useRouter();
 
   const isMobile = width < 768;
+
+  const playableMedia = useMemo(() => {
+    const today = todayIsoDateInLocalTimezone();
+    return media.filter((m) =>
+      isPlaylistItemActiveOnDate(
+        {
+          scheduleEnabled: !!m.scheduleEnabled,
+          scheduleStartDate: m.scheduleStartDate ?? null,
+          scheduleEndDate: m.scheduleEndDate ?? null,
+          scheduleExactDates: m.scheduleExactDates ?? [],
+          scheduleRecurringRules: m.scheduleRecurringRules ?? [],
+        },
+        today
+      )
+    );
+  }, [media]);
+
+  useEffect(() => {
+    if (playableMedia.length === 0) {
+      setCurrentIndex(0);
+      return;
+    }
+    setCurrentIndex((i) => Math.min(i, playableMedia.length - 1));
+  }, [playableMedia]);
 
   // Used to size containers to content height to avoid large empty space
   const estimatedVideoHeight = useMemo(() => {
@@ -636,10 +667,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   }, [fetchPlaylist]);
 
   const currentMediaItem = useMemo(() => {
-    return media.length > 0 ? media[currentIndex] : null;
-  }, [media, currentIndex]);
+    return playableMedia.length > 0 ? playableMedia[currentIndex] : null;
+  }, [playableMedia, currentIndex]);
 
-  useMediaPrefetch(media, currentIndex, 2);
+  useMediaPrefetch(playableMedia, currentIndex, 2);
 
   // Update refs when values change
   useEffect(() => {
@@ -648,7 +679,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   // Fetch slideshow data when current item is a slideshow (playlist-aware)
   useEffect(() => {
-    const item = media[currentIndex];
+    const item = playableMedia[currentIndex];
     const isSlideshow = item && (item.type === 'slideshow' || item.fileType === 'slideshow' || item.slideshowId);
     const sid = item?.slideshowId;
     setSlideshowData(null);
@@ -668,7 +699,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         if (totalMs > 0 && isPlaying) {
           slideshowAdvanceTimerRef.current = setTimeout(() => {
             resumeOnAdvanceRef.current = true;
-            goToNextVideo();
+            goToNextVideoRef.current();
           }, totalMs);
         }
       })
@@ -681,7 +712,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         clearTimeout(slideshowAdvanceTimerRef.current);
       }
     };
-  }, [media, currentIndex, playlistId, playbackToken, isPlaying, goToNextVideo]);
+  }, [playableMedia, currentIndex, playlistId, playbackToken, isPlaying]);
 
   // Analytics: Track ALL plays (no duration restriction)
   // Also track 30-second milestone for unique plays
@@ -998,13 +1029,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     
     // Small delay to let cleanup complete before switching
     setTimeout(() => {
-      if (currentIndex < media.length - 1) {
+      if (currentIndex < playableMedia.length - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
         setCurrentIndex(0);
       }
     }, 100); // 100ms for cleanup
-  }, [currentIndex, media.length, stopCurrentMedia]);
+  }, [currentIndex, playableMedia.length, stopCurrentMedia]);
+
+  useEffect(() => {
+    goToNextVideoRef.current = goToNextVideo;
+  }, [goToNextVideo]);
 
   const handleVideoError = useCallback((error: any) => {
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
@@ -1103,7 +1138,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   // Reset video position, dimensions, zoom, and fullscreen when changing videos
   useEffect(() => {
-    const currentItemMediaType = media[currentIndex]?.media_type || media[currentIndex]?.fileType || media[currentIndex]?.type;
+    const currentItemMediaType =
+      playableMedia[currentIndex]?.media_type ||
+      playableMedia[currentIndex]?.fileType ||
+      playableMedia[currentIndex]?.type;
     if (videoRef.current && currentItemMediaType === 'video') {
       videoRef.current.setPositionAsync(0);
       setVideoDimensions(null); // Reset dimensions for new video
@@ -1164,7 +1202,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       setCurrentIndex(currentIndex - 1);
     } else {
       // Go to last video
-      setCurrentIndex(media.length - 1);
+      setCurrentIndex(playableMedia.length - 1);
     }
   };
 
@@ -1212,7 +1250,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   const handleFullscreen = async () => {
     try {
-      const currentItem = media[currentIndex];
+      const currentItem = playableMedia[currentIndex];
       const itemType = currentItem?.media_type || currentItem?.fileType || currentItem?.type;
       const isVideo = itemType === 'video' ||
                      currentItem?.contentType?.startsWith('video/');
@@ -1310,6 +1348,25 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     startTrackingForCurrentMedia();
   }, [startTrackingForCurrentMedia]);
 
+  const handleHtml5VideoPlaying = useCallback(() => {
+    console.log('🎵 HTML5_VIDEO: onPlaying - React event');
+    console.log('📊 TRACKING: Video started playing, setting isPlaying to true');
+    handleNativeMediaPlaying();
+    if (stallStartTimeRef.current) {
+      const bufferingDuration = Date.now() - stallStartTimeRef.current;
+      if (bufferingDuration > STALL_THRESHOLD_MS) {
+        console.log(`✅ STALL_RECOVERED: Buffering resolved after ${bufferingDuration}ms`);
+      }
+      stallStartTimeRef.current = null;
+      setIsStalled(false);
+    }
+    if (stallTimeoutRef.current) {
+      clearTimeout(stallTimeoutRef.current);
+      stallTimeoutRef.current = null;
+    }
+    stallRecoveryInProgressRef.current = false;
+  }, [handleNativeMediaPlaying]);
+
   const handleNativeMediaPause = useCallback(() => {
     setIsPlaying(false);
   }, []);
@@ -1347,7 +1404,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   }, []);
 
   const renderCurrentMedia = () => {
-    const currentItem = media[currentIndex];
+    const currentItem = playableMedia[currentIndex];
     if (!currentItem) return null;
     
     // Enhanced media type detection
@@ -1522,10 +1579,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
             muted={isMuted}
-            onLoadedMetadata={() => debugLog('🎵 HTML5_VIDEO: loadedmetadata')}
-            onCanPlay={() => debugLog('🎵 HTML5_VIDEO: canplay')}
-            onPlaying={handleNativeMediaPlaying}
-            onPause={handleNativeMediaPause}
+            onCanPlay={() => {
+              debugLog('🎵 HTML5_VIDEO: canplay');
+              console.log('🎵 HTML5_VIDEO: onCanPlay - React event');
+            }}
+            onPlaying={handleHtml5VideoPlaying}
             onError={(e) => {
               const video = e.target as HTMLVideoElement;
               const errorCode = video.error?.code;
@@ -1567,9 +1625,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             onLoadedData={() => {
               console.log('🎵 HTML5_VIDEO: onLoadedData - React event');
             }}
-            onCanPlay={() => {
-              console.log('🎵 HTML5_VIDEO: onCanPlay - React event');
-            }}
             onCanPlayThrough={() => {
               console.log('🎵 HTML5_VIDEO: onCanPlayThrough - React event');
               // Auto-play when media is ready and user has interacted
@@ -1605,7 +1660,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                   clearTimeout(stallTimeoutRef.current);
                 }
                 stallTimeoutRef.current = setTimeout(() => {
-                  const currentMediaItem = media[currentIndex];
+                  const currentMediaItem = playableMedia[currentIndex];
                   console.warn(`⏸️ STALL_DETECTED: Media "${currentMediaItem?.title || 'media file'}" stalled for ${STALL_THRESHOLD_MS}ms. Attempting recovery.`);
                   setIsStalled(true);
                   
@@ -1631,26 +1686,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 }, STALL_THRESHOLD_MS);
               }
             }}
-            onPlaying={() => {
-              console.log('🎵 HTML5_VIDEO: onPlaying - React event');
-              console.log('📊 TRACKING: Video started playing, setting isPlaying to true');
-              setIsPlaying(true);
-              
-              // Not buffering - clear stall tracking
-              if (stallStartTimeRef.current) {
-                const bufferingDuration = Date.now() - stallStartTimeRef.current;
-                if (bufferingDuration > STALL_THRESHOLD_MS) {
-                  console.log(`✅ STALL_RECOVERED: Buffering resolved after ${bufferingDuration}ms`);
-                }
-                stallStartTimeRef.current = null;
-                setIsStalled(false);
-              }
-              if (stallTimeoutRef.current) {
-                clearTimeout(stallTimeoutRef.current);
-                stallTimeoutRef.current = null;
-              }
-              stallRecoveryInProgressRef.current = false;
-            }}
             onPause={() => {
               console.log('🎵 HTML5_VIDEO: onPause - React event');
               // Ignore transient pause events while buffering/recovering to prevent play-state flapping.
@@ -1660,6 +1695,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               setIsPlaying(false);
             }}
             onLoadedMetadata={(e) => {
+              debugLog('🎵 HTML5_VIDEO: loadedmetadata');
               const video = e.target as HTMLVideoElement;
               console.log('🎵 HTML5_VIDEO: Loaded metadata, dimensions:', video.videoWidth, 'x', video.videoHeight);
               console.log('🎵 HTML5_VIDEO: Video element state:', {
@@ -1759,7 +1795,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               onContextMenu={(e) => e.preventDefault()}
               muted={isMuted}
               onLoadedMetadata={() => debugLog('🎵 HTML5_AUDIO: loadedmetadata')}
-              onCanPlay={() => debugLog('🎵 HTML5_AUDIO: canplay')}
+              onCanPlay={() => {
+                debugLog('🎵 HTML5_AUDIO: canplay');
+                console.log('🎵 HTML5_AUDIO: onCanPlay - React event');
+              }}
               onPlaying={handleNativeMediaPlaying}
               onPause={handleNativeMediaPause}
               onError={(e) => {
@@ -1799,9 +1838,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               onLoadedData={() => {
                 console.log('🎵 HTML5_AUDIO: onLoadedData - React event');
               }}
-              onCanPlay={() => {
-                console.log('🎵 HTML5_AUDIO: onCanPlay - React event');
-              }}
               onCanPlayThrough={() => {
                 console.log('🎵 HTML5_AUDIO: onCanPlayThrough - React event');
                 // Auto-play when media is ready and user has interacted
@@ -1823,15 +1859,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               }}
               onWaiting={() => {
                 console.log('🎵 HTML5_AUDIO: onWaiting - React event');
-              }}
-              onPlaying={() => {
-                console.log('🎵 HTML5_AUDIO: onPlaying - React event');
-                console.log('📊 TRACKING: Audio started playing, setting isPlaying to true');
-                setIsPlaying(true);
-              }}
-              onPause={() => {
-                console.log('🎵 HTML5_AUDIO: onPause - React event');
-                setIsPlaying(false);
               }}
               onEnded={handleNativeMediaEnded}
             />
@@ -1921,6 +1948,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       <View style={styles.center}>
         <MaterialIcons name="queue-music" size={60} color="#aaa" />
         <Text style={styles.infoText}>No media files found in playlist.</Text>
+      </View>
+    );
+  }
+
+  if (playableMedia.length === 0) {
+    return (
+      <View style={styles.center}>
+        <MaterialIcons name="event-busy" size={60} color="#aaa" />
+        <Text style={styles.infoText}>
+          No media is scheduled for today. Try again on another date or contact the channel owner.
+        </Text>
       </View>
     );
   }
@@ -2089,7 +2127,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 </View>
                 <View style={styles.videoProgress}>
                   <Text style={styles.progressText}>
-                    {currentIndex + 1} / {media.length}
+                    {currentIndex + 1} / {playableMedia.length}
                   </Text>
                 </View>
             </View>

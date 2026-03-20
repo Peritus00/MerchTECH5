@@ -9,12 +9,76 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Switch,
+  Platform,
 } from 'react-native';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Playlist, MediaFile } from '@/shared/media-schema';
+import { Playlist, MediaFile, PlaylistRecurringRule } from '@/shared/media-schema';
+import { validatePlaylistMediaScheduleItems } from '@/shared/playlistSchedule';
 import MediaSelectionList from './MediaSelectionList';
-import { couponAPI } from '@/services/api';
+import { couponAPI, playlistMediaFilesToUpdateItems, type PlaylistMediaUpdateItem } from '@/services/api';
+
+type PlaylistLine = {
+  file: MediaFile;
+  scheduleEnabled: boolean;
+  scheduleStartDate: string | null;
+  scheduleEndDate: string | null;
+  scheduleExactDates: string[];
+  scheduleRecurringRules: PlaylistRecurringRule[];
+};
+
+const WEEKDAY_SHORT = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+function mediaFileToLine(f: MediaFile): PlaylistLine {
+  return {
+    file: f,
+    scheduleEnabled: !!f.scheduleEnabled,
+    scheduleStartDate: f.scheduleStartDate ?? null,
+    scheduleEndDate: f.scheduleEndDate ?? null,
+    scheduleExactDates: [...(f.scheduleExactDates || [])],
+    scheduleRecurringRules: (f.scheduleRecurringRules || []).map((r) => ({
+      kind: 'weekly' as const,
+      weekdays: [...(r.weekdays || [])],
+    })),
+  };
+}
+
+function lineToUpdateItem(line: PlaylistLine): PlaylistMediaUpdateItem {
+  return {
+    mediaId: Number(line.file.id),
+    scheduleEnabled: line.scheduleEnabled,
+    scheduleStartDate: line.scheduleStartDate,
+    scheduleEndDate: line.scheduleEndDate,
+    scheduleExactDates: [...line.scheduleExactDates],
+    scheduleRecurringRules: line.scheduleRecurringRules.map((r) => ({
+      kind: 'weekly',
+      weekdays: [...r.weekdays],
+    })),
+  };
+}
+
+function toLocalIsoDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function parseIsoToLocalDate(s: string | null): Date {
+  if (!s) return new Date();
+  const parts = s.split('-').map(Number);
+  const y = parts[0];
+  const mo = parts[1] || 1;
+  const d = parts[2] || 1;
+  return new Date(y, mo - 1, d);
+}
+
+function getWeeklyWeekdays(line: PlaylistLine): number[] {
+  const w = line.scheduleRecurringRules.find((r) => r.kind === 'weekly');
+  return w?.weekdays ? [...w.weekdays] : [];
+}
 
 interface EditPlaylistModalProps {
   visible: boolean;
@@ -33,12 +97,16 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [playlistMediaFiles, setPlaylistMediaFiles] = useState<MediaFile[]>([]);
+  const [playlistLines, setPlaylistLines] = useState<PlaylistLine[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'media' | 'add-media'>('details');
   const [previewCouponId, setPreviewCouponId] = useState('');
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
+  const [datePickerCtx, setDatePickerCtx] = useState<
+    { mode: 'start' | 'end' | 'exact'; lineIndex: number } | null
+  >(null);
+  const [datePickerValue, setDatePickerValue] = useState(new Date());
 
   const getDefaultCouponId = (rows: any[]) => {
     const defaultCoupon = rows.find((row) => row?.isDefaultPreviewCoupon);
@@ -55,7 +123,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       
       setName(playlist.name || '');
       setDescription(playlist.description || '');
-      setPlaylistMediaFiles(playlist.mediaFiles || []);
+      setPlaylistLines((playlist.mediaFiles || []).map(mediaFileToLine));
       setPreviewCouponId(playlist.previewCouponId != null ? String(playlist.previewCouponId) : '');
     }
   }, [playlist, visible]);
@@ -94,7 +162,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       id: playlist.id,
       name: name.trim(),
       description: description.trim(),
-      mediaFiles: playlistMediaFiles.length
+      mediaFiles: playlistLines.length
     });
 
     try {
@@ -109,28 +177,29 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
       console.log('🔴 EDIT_PLAYLIST: Playlist details updated:', updatedPlaylist);
 
-      // Update media files if changed (including order changes)
-      const currentMediaIds = playlist.mediaFiles?.map(f => f.id) || [];
-      const newMediaIds = playlistMediaFiles.map(f => f.id);
-      
-      // Compare arrays WITHOUT sorting to detect order changes
-      const mediaFilesChanged = JSON.stringify(currentMediaIds) !== JSON.stringify(newMediaIds);
-      
+      const newItems = playlistLines.map(lineToUpdateItem);
+      const oldItems = playlistMediaFilesToUpdateItems(playlist.mediaFiles || []);
+      const mediaFilesChanged =
+        JSON.stringify(newItems) !== JSON.stringify(oldItems);
+
       if (mediaFilesChanged) {
-        console.log('🔴 EDIT_PLAYLIST: Media files or order changed, updating...');
-        console.log('🔴 EDIT_PLAYLIST: Current order:', currentMediaIds);
-        console.log('🔴 EDIT_PLAYLIST: New order:', newMediaIds);
-        
-        // Guard: Ensure we have a valid array (never send undefined/null)
-        if (!Array.isArray(newMediaIds)) {
-          console.error('🔴 EDIT_PLAYLIST: Invalid media IDs array, skipping update');
-          throw new Error('Invalid media IDs array');
+        console.log('🔴 EDIT_PLAYLIST: Media files, order, or schedules changed, updating...');
+        const clientCheck = validatePlaylistMediaScheduleItems(
+          newItems.map((it) => ({
+            mediaId: it.mediaId,
+            scheduleEnabled: it.scheduleEnabled,
+            scheduleStartDate: it.scheduleStartDate,
+            scheduleEndDate: it.scheduleEndDate,
+            scheduleExactDates: it.scheduleExactDates,
+            scheduleRecurringRules: it.scheduleRecurringRules,
+          }))
+        );
+        if (!clientCheck.ok) {
+          Alert.alert('Schedule', clientCheck.error);
+          setIsUpdating(false);
+          return;
         }
-        
-        // Filter out any invalid IDs before sending
-        const validMediaIds = newMediaIds.filter(id => id != null && id !== undefined);
-        
-        await playlistsAPI.updateMedia(playlist.id, validMediaIds);
+        await playlistsAPI.updateMedia(playlist.id, newItems);
         console.log('🔴 EDIT_PLAYLIST: Media files updated');
       } else {
         console.log('🔴 EDIT_PLAYLIST: No media file changes detected');
@@ -156,36 +225,146 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const handleClose = () => {
     setName('');
     setDescription('');
-    setPlaylistMediaFiles([]);
+    setPlaylistLines([]);
     setActiveTab('details');
     setIsUpdating(false);
+    setDatePickerCtx(null);
     onClose();
   };
 
   const moveMediaFile = (fromIndex: number, toIndex: number) => {
     console.log('🔴 EDIT_PLAYLIST: Moving media file from', fromIndex, 'to', toIndex);
-    
-    const newMediaFiles = [...playlistMediaFiles];
-    const [movedFile] = newMediaFiles.splice(fromIndex, 1);
-    newMediaFiles.splice(toIndex, 0, movedFile);
-    
-    setPlaylistMediaFiles(newMediaFiles);
+
+    setPlaylistLines((prev) => {
+      const next = [...prev];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
   };
 
   const removeMediaFile = (mediaId: number) => {
     console.log('🔴 EDIT_PLAYLIST: Removing media file:', mediaId);
-    setPlaylistMediaFiles(prev => prev.filter(f => f.id !== mediaId));
+    setPlaylistLines((prev) => prev.filter((l) => Number(l.file.id) !== mediaId));
   };
 
   const addMediaFiles = (mediaIds: number[]) => {
     console.log('🔴 EDIT_PLAYLIST: Adding media files:', mediaIds);
-    
-    const newMediaFiles = allMediaFiles.filter(file => 
-      mediaIds.includes(file.id) && !playlistMediaFiles.some(pf => pf.id === file.id)
-    );
-    
-    setPlaylistMediaFiles(prev => [...prev, ...newMediaFiles]);
+
+    const newLines = allMediaFiles
+      .filter(
+        (file) =>
+          mediaIds.includes(Number(file.id)) &&
+          !playlistLines.some((l) => Number(l.file.id) === Number(file.id))
+      )
+      .map((file) => mediaFileToLine({ ...file, scheduleEnabled: false }));
+
+    setPlaylistLines((prev) => [...prev, ...newLines]);
     setActiveTab('media');
+  };
+
+  const updateLine = (index: number, patch: Partial<PlaylistLine>) => {
+    setPlaylistLines((prev) =>
+      prev.map((line, i) => (i === index ? { ...line, ...patch } : line))
+    );
+  };
+
+  const toggleWeekday = (lineIndex: number, weekday: number) => {
+    setPlaylistLines((prev) =>
+      prev.map((line, i) => {
+        if (i !== lineIndex) return line;
+        const rules = [...line.scheduleRecurringRules];
+        let idx = rules.findIndex((r) => r.kind === 'weekly');
+        let weekdays =
+          idx >= 0 ? [...rules[idx].weekdays] : [];
+        const set = new Set(weekdays);
+        if (set.has(weekday)) set.delete(weekday);
+        else set.add(weekday);
+        weekdays = Array.from(set).sort((a, b) => a - b);
+        const newRules =
+          idx >= 0
+            ? rules.map((r, j) =>
+                j === idx ? { kind: 'weekly' as const, weekdays } : r
+              )
+            : [...rules, { kind: 'weekly' as const, weekdays }];
+        return {
+          ...line,
+          scheduleRecurringRules: newRules.filter(
+            (r) => r.kind !== 'weekly' || r.weekdays.length > 0
+          ),
+        };
+      })
+    );
+  };
+
+  const openDatePicker = (
+    lineIndex: number,
+    mode: 'start' | 'end' | 'exact'
+  ) => {
+    const line = playlistLines[lineIndex];
+    let base = new Date();
+    if (mode === 'start') base = parseIsoToLocalDate(line.scheduleStartDate);
+    else if (mode === 'end') base = parseIsoToLocalDate(line.scheduleEndDate);
+    setDatePickerValue(base);
+    setDatePickerCtx({ lineIndex, mode });
+  };
+
+  const commitDatePickerValue = (date: Date) => {
+    if (!datePickerCtx) return;
+    const iso = toLocalIsoDate(date);
+    const { lineIndex, mode } = datePickerCtx;
+    if (mode === 'start') {
+      updateLine(lineIndex, { scheduleStartDate: iso });
+    } else if (mode === 'end') {
+      updateLine(lineIndex, { scheduleEndDate: iso });
+    } else {
+      setPlaylistLines((prev) =>
+        prev.map((line, i) => {
+          if (i !== lineIndex) return line;
+          if (line.scheduleExactDates.includes(iso)) return line;
+          return {
+            ...line,
+            scheduleExactDates: [...line.scheduleExactDates, iso].sort(),
+          };
+        })
+      );
+    }
+  };
+
+  const onNativeDateChange = (event: { type?: string }, selected?: Date) => {
+    if (!datePickerCtx) return;
+    if (Platform.OS === 'android') {
+      if (event?.type === 'dismissed') {
+        setDatePickerCtx(null);
+        return;
+      }
+      if (selected) {
+        setDatePickerValue(selected);
+        commitDatePickerValue(selected);
+        setDatePickerCtx(null);
+      }
+      return;
+    }
+    if (selected) setDatePickerValue(selected);
+  };
+
+  const closeDatePickerIos = () => {
+    if (!datePickerCtx) return;
+    commitDatePickerValue(datePickerValue);
+    setDatePickerCtx(null);
+  };
+
+  const removeExactDate = (lineIndex: number, iso: string) => {
+    setPlaylistLines((prev) =>
+      prev.map((line, i) =>
+        i === lineIndex
+          ? {
+              ...line,
+              scheduleExactDates: line.scheduleExactDates.filter((d) => d !== iso),
+            }
+          : line
+      )
+    );
   };
 
   const getMediaTypeIcon = (mediaFile: MediaFile) => {
@@ -195,9 +374,11 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
     return 'insert-drive-file';
   };
 
-  const availableMediaFiles = allMediaFiles.filter(file => 
-    !playlistMediaFiles.some(pf => pf.id === file.id)
+  const availableMediaFiles = allMediaFiles.filter(
+    (file) => !playlistLines.some((l) => Number(l.file.id) === Number(file.id))
   );
+
+  const mediaTabCount = playlistLines.length;
 
   if (!playlist) return null;
 
@@ -232,7 +413,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
         <View style={styles.tabContainer}>
           {[
             { key: 'details', label: 'Details', icon: 'info' },
-            { key: 'media', label: `Media (${playlistMediaFiles.length})`, icon: 'queue-music' },
+            { key: 'media', label: `Media (${mediaTabCount})`, icon: 'queue-music' },
             { key: 'add-media', label: 'Add Media', icon: 'add' },
           ].map((tab) => (
             <TouchableOpacity
@@ -329,71 +510,211 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
           {activeTab === 'media' && (
             <View style={styles.mediaTab}>
               <Text style={styles.sectionTitle}>Current Media Files</Text>
-              
-              {playlistMediaFiles.length === 0 ? (
+              <Text style={styles.scheduleHint}>
+                Turn on the calendar to play an item only on chosen dates. At least one item must stay
+                unscheduled if any item uses a schedule.
+              </Text>
+
+              {playlistLines.length === 0 ? (
                 <View style={styles.emptyContainer}>
                   <MaterialIcons name="queue-music" size={48} color="#9ca3af" />
                   <Text style={styles.emptyText}>No media files in this playlist</Text>
                   <Text style={styles.emptySubtext}>Use the "Add Media" tab to add files</Text>
                 </View>
               ) : (
-                playlistMediaFiles.map((file, index) => (
-                  <View key={file.id} style={styles.mediaItem}>
-                    <View style={styles.mediaItemLeft}>
-                      <View style={styles.dragHandle}>
-                        <MaterialIcons name="drag-handle" size={20} color="#9ca3af" />
-                      </View>
-                      <View style={styles.mediaItemContent}>
-                        <MaterialIcons
-                          name={getMediaTypeIcon(file)}
-                          size={20}
-                          color="#6b7280"
-                        />
-                        <View style={styles.mediaItemText}>
-                          <Text style={styles.mediaItemTitle} numberOfLines={1}>
-                            {file.title}
-                          </Text>
-                          <Text style={styles.mediaItemSubtitle} numberOfLines={1}>
-                            {file.contentType}
-                          </Text>
+                playlistLines.map((line, index) => {
+                  const file = line.file;
+                  const weekdays = getWeeklyWeekdays(line);
+                  return (
+                    <View key={String(file.id)} style={styles.mediaItemBlock}>
+                      <View style={styles.mediaItem}>
+                        <View style={styles.mediaItemLeft}>
+                          <View style={styles.dragHandle}>
+                            <MaterialIcons name="drag-handle" size={20} color="#9ca3af" />
+                          </View>
+                          <View style={styles.mediaItemContent}>
+                            <MaterialIcons
+                              name={getMediaTypeIcon(file)}
+                              size={20}
+                              color="#6b7280"
+                            />
+                            <View style={styles.mediaItemText}>
+                              <Text style={styles.mediaItemTitle} numberOfLines={1}>
+                                {file.title}
+                              </Text>
+                              <Text style={styles.mediaItemSubtitle} numberOfLines={1}>
+                                {file.contentType}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        <View style={styles.mediaItemActions}>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => moveMediaFile(index, Math.max(0, index - 1))}
+                            disabled={index === 0}
+                          >
+                            <MaterialIcons
+                              name="keyboard-arrow-up"
+                              size={20}
+                              color={index === 0 ? '#d1d5db' : '#6b7280'}
+                            />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() =>
+                              moveMediaFile(
+                                index,
+                                Math.min(playlistLines.length - 1, index + 1)
+                              )
+                            }
+                            disabled={index === playlistLines.length - 1}
+                          >
+                            <MaterialIcons
+                              name="keyboard-arrow-down"
+                              size={20}
+                              color={
+                                index === playlistLines.length - 1 ? '#d1d5db' : '#6b7280'
+                              }
+                            />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.actionButton, styles.removeButton]}
+                            onPress={() => removeMediaFile(Number(file.id))}
+                          >
+                            <MaterialIcons name="remove" size={20} color="#ef4444" />
+                          </TouchableOpacity>
                         </View>
                       </View>
-                    </View>
-                    
-                    <View style={styles.mediaItemActions}>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => moveMediaFile(index, Math.max(0, index - 1))}
-                        disabled={index === 0}
-                      >
-                        <MaterialIcons 
-                          name="keyboard-arrow-up" 
-                          size={20} 
-                          color={index === 0 ? '#d1d5db' : '#6b7280'} 
+
+                      <View style={styles.scheduleRow}>
+                        <Text style={styles.scheduleLabel}>Calendar</Text>
+                        <Switch
+                          value={line.scheduleEnabled}
+                          onValueChange={(v) =>
+                            updateLine(index, {
+                              scheduleEnabled: v,
+                              ...(!v
+                                ? {
+                                    scheduleStartDate: null,
+                                    scheduleEndDate: null,
+                                    scheduleExactDates: [],
+                                    scheduleRecurringRules: [],
+                                  }
+                                : {}),
+                            })
+                          }
+                          trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
+                          thumbColor={line.scheduleEnabled ? '#3b82f6' : '#9ca3af'}
                         />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => moveMediaFile(index, Math.min(playlistMediaFiles.length - 1, index + 1))}
-                        disabled={index === playlistMediaFiles.length - 1}
-                      >
-                        <MaterialIcons 
-                          name="keyboard-arrow-down" 
-                          size={20} 
-                          color={index === playlistMediaFiles.length - 1 ? '#d1d5db' : '#6b7280'} 
-                        />
-                      </TouchableOpacity>
-                      
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.removeButton]}
-                        onPress={() => removeMediaFile(file.id)}
-                      >
-                        <MaterialIcons name="remove" size={20} color="#ef4444" />
-                      </TouchableOpacity>
+                      </View>
+
+                      {line.scheduleEnabled && (
+                        <View style={styles.scheduleDetails}>
+                          <View style={styles.dateRow}>
+                            <Text style={styles.miniLabel}>Start</Text>
+                            <TouchableOpacity
+                              style={styles.dateChip}
+                              onPress={() => openDatePicker(index, 'start')}
+                            >
+                              <Text style={styles.dateChipText}>
+                                {line.scheduleStartDate || 'Set'}
+                              </Text>
+                            </TouchableOpacity>
+                            <Text style={styles.miniLabel}>Expires</Text>
+                            <TouchableOpacity
+                              style={styles.dateChip}
+                              onPress={() => openDatePicker(index, 'end')}
+                            >
+                              <Text style={styles.dateChipText}>
+                                {line.scheduleEndDate || 'Set'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <Text style={styles.subLabel}>Exact dates</Text>
+                          <View style={styles.exactDatesRow}>
+                            {line.scheduleExactDates.map((d) => (
+                              <TouchableOpacity
+                                key={d}
+                                style={styles.exactChip}
+                                onPress={() => removeExactDate(index, d)}
+                              >
+                                <Text style={styles.exactChipText}>{d}</Text>
+                                <MaterialIcons name="close" size={14} color="#6b7280" />
+                              </TouchableOpacity>
+                            ))}
+                            <TouchableOpacity
+                              style={styles.addDateBtn}
+                              onPress={() => openDatePicker(index, 'exact')}
+                            >
+                              <MaterialIcons name="add" size={18} color="#3b82f6" />
+                              <Text style={styles.addDateBtnText}>Add date</Text>
+                            </TouchableOpacity>
+                          </View>
+
+                          <Text style={styles.subLabel}>Weekly repeat</Text>
+                          <View style={styles.weekdayRow}>
+                            {WEEKDAY_SHORT.map((label, wd) => (
+                              <TouchableOpacity
+                                key={label + wd}
+                                style={[
+                                  styles.weekdayChip,
+                                  weekdays.includes(wd) && styles.weekdayChipOn,
+                                ]}
+                                onPress={() => toggleWeekday(index, wd)}
+                              >
+                                <Text
+                                  style={[
+                                    styles.weekdayChipText,
+                                    weekdays.includes(wd) && styles.weekdayChipTextOn,
+                                  ]}
+                                >
+                                  {label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      )}
                     </View>
+                  );
+                })
+              )}
+
+              {datePickerCtx && Platform.OS === 'ios' && (
+                <View style={styles.iosPickerSheet}>
+                  <View style={styles.iosPickerHeader}>
+                    <TouchableOpacity onPress={() => setDatePickerCtx(null)}>
+                      <Text style={styles.iosPickerCancel}>Cancel</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.iosPickerTitle}>
+                      {datePickerCtx.mode === 'exact' ? 'Add date' : 'Set date'}
+                    </Text>
+                    <TouchableOpacity onPress={closeDatePickerIos}>
+                      <Text style={styles.iosPickerDone}>Done</Text>
+                    </TouchableOpacity>
                   </View>
-                ))
+                  <DateTimePicker
+                    value={datePickerValue}
+                    mode="date"
+                    display="spinner"
+                    onChange={onNativeDateChange}
+                    style={styles.iosPicker}
+                  />
+                </View>
+              )}
+
+              {datePickerCtx && Platform.OS === 'android' && (
+                <DateTimePicker
+                  value={datePickerValue}
+                  mode="date"
+                  display="default"
+                  onChange={onNativeDateChange}
+                />
               )}
             </View>
           )}
@@ -617,6 +938,158 @@ const styles = StyleSheet.create({
   removeButton: {
     backgroundColor: '#fef2f2',
     borderColor: '#fecaca',
+  },
+  mediaItemBlock: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  scheduleHint: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 12,
+    lineHeight: 18,
+  },
+  scheduleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#fff',
+  },
+  scheduleLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  scheduleDetails: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    backgroundColor: '#fff',
+    gap: 8,
+  },
+  dateRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  miniLabel: {
+    fontSize: 12,
+    color: '#6b7280',
+  },
+  dateChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#eff6ff',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+  },
+  dateChipText: {
+    fontSize: 13,
+    color: '#1d4ed8',
+    fontWeight: '500',
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4b5563',
+    marginTop: 6,
+  },
+  exactDatesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    alignItems: 'center',
+  },
+  exactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 6,
+  },
+  exactChipText: {
+    fontSize: 12,
+    color: '#374151',
+  },
+  addDateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  addDateBtnText: {
+    fontSize: 13,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  weekdayChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  weekdayChipOn: {
+    backgroundColor: '#dbeafe',
+    borderColor: '#3b82f6',
+  },
+  weekdayChipText: {
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  weekdayChipTextOn: {
+    color: '#1d4ed8',
+  },
+  iosPickerSheet: {
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    marginTop: 8,
+  },
+  iosPickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  iosPickerCancel: {
+    fontSize: 16,
+    color: '#6b7280',
+  },
+  iosPickerTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  iosPickerDone: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  iosPicker: {
+    height: 200,
   },
 });
 

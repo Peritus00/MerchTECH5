@@ -2,7 +2,7 @@ import axios from 'axios';
 import { Product } from '@/shared/product-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '@/config/environment';
-import { MediaFile } from '@/shared/media-schema';
+import { MediaFile, PlaylistRecurringRule } from '@/shared/media-schema';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system';
 
@@ -780,6 +780,34 @@ export const mediaAPI = {
   },
 };
 
+/** Ordered playlist row for PUT /playlists/:id/media (replaces legacy mediaFileIds-only). */
+export type PlaylistMediaUpdateItem = {
+  mediaId: number;
+  scheduleEnabled: boolean;
+  scheduleStartDate: string | null;
+  scheduleEndDate: string | null;
+  scheduleExactDates: string[];
+  scheduleRecurringRules: PlaylistRecurringRule[];
+};
+
+export function playlistMediaFilesToUpdateItems(files: MediaFile[]): PlaylistMediaUpdateItem[] {
+  return (files || []).map((f) => ({
+    mediaId: Number(f.id),
+    scheduleEnabled: !!f.scheduleEnabled,
+    scheduleStartDate: f.scheduleStartDate ?? null,
+    scheduleEndDate: f.scheduleEndDate ?? null,
+    scheduleExactDates: Array.isArray(f.scheduleExactDates) ? [...f.scheduleExactDates] : [],
+    scheduleRecurringRules: Array.isArray(f.scheduleRecurringRules) ? [...f.scheduleRecurringRules] : [],
+  }));
+}
+
+function isPlaylistMediaUpdateItems(
+  items: PlaylistMediaUpdateItem[] | number[]
+): items is PlaylistMediaUpdateItem[] {
+  if (!items.length) return true;
+  return typeof (items as PlaylistMediaUpdateItem[])[0] === 'object' && (items as PlaylistMediaUpdateItem[])[0] != null && 'mediaId' in (items as PlaylistMediaUpdateItem[])[0];
+}
+
 export const playlistsAPI = {
   async deleteMedia(mediaId: string) {
     // This seems to be a duplicate of mediaAPI.delete, but keeping it in case of subtle differences
@@ -817,9 +845,11 @@ export const playlistsAPI = {
     const response = await api.delete(`/playlists/${playlistId}/media/${mediaId}`);
     return response.data;
   },
-  async updateMedia(playlistId: string, mediaIds: number[]) {
-    // This endpoint should handle reordering of all media items in a playlist
-    const response = await api.put(`/playlists/${playlistId}/media`, { mediaFileIds: mediaIds });
+  async updateMedia(playlistId: string, items: PlaylistMediaUpdateItem[] | number[]) {
+    const body = isPlaylistMediaUpdateItems(items)
+      ? { mediaItems: items }
+      : { mediaFileIds: items };
+    const response = await api.put(`/playlists/${playlistId}/media`, body);
     return response.data;
   },
 };

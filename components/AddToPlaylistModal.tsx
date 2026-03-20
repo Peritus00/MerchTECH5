@@ -33,10 +33,24 @@ export const AddToPlaylistModal: React.FC<AddToPlaylistModalProps> = ({
     if (mediaIds.length === 0) return;
     setAddingToId(playlist.id);
     try {
-      const { playlistsAPI } = await import('@/services/api');
-      const currentIds = (playlist.mediaFiles?.map((f) => Number(f.id)) || []).filter((id) => !isNaN(id));
-      const newIds = [...new Set([...currentIds, ...mediaIds])];
-      await playlistsAPI.updateMedia(playlist.id, newIds);
+      const { playlistsAPI, playlistMediaFilesToUpdateItems } = await import('@/services/api');
+      const full = await playlistsAPI.getById(playlist.id);
+      const items = playlistMediaFilesToUpdateItems(full.mediaFiles || []);
+      const existing = new Set(items.map((i) => i.mediaId));
+      for (const mid of mediaIds) {
+        if (!existing.has(mid)) {
+          items.push({
+            mediaId: mid,
+            scheduleEnabled: false,
+            scheduleStartDate: null,
+            scheduleEndDate: null,
+            scheduleExactDates: [],
+            scheduleRecurringRules: [],
+          });
+          existing.add(mid);
+        }
+      }
+      await playlistsAPI.updateMedia(playlist.id, items);
       Alert.alert('Success', `Added to "${playlist.name}"`);
       onAddComplete();
       onClose();
