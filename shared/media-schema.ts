@@ -55,6 +55,7 @@ export interface Playlist {
   requiresActivationCode: boolean;
   isPublic: boolean;
   requirePhoneForPreview?: boolean;
+  previewCouponId?: number | null;
   instagramUrl?: string;
   twitterUrl?: string;
   facebookUrl?: string;
@@ -79,6 +80,7 @@ export interface Slideshow {
   autoplayInterval: number;
   transition: string;
   requiresActivationCode: boolean;
+  previewCouponId?: number | null;
   createdAt: string;
   images: SlideshowImage[];
 }

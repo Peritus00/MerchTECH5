@@ -9762,9 +9762,25 @@ app.get('/api/content/:id/type', async (req, res) => {
 });
 
 // ---------- PLAYLIST ROUTES ----------
+async function validateOwnedPreviewCouponId(userId, previewCouponId) {
+  if (previewCouponId == null || previewCouponId === '') return null;
+  const numericCouponId = parseInt(String(previewCouponId), 10);
+  if (isNaN(numericCouponId)) {
+    throw new Error('Invalid preview coupon');
+  }
+  const { rows } = await db.query(
+    `SELECT id FROM coupons WHERE id = $1 AND owner_id = $2 LIMIT 1`,
+    [numericCouponId, userId]
+  );
+  if (!rows.length) {
+    throw new Error('Preview coupon must belong to this user');
+  }
+  return numericCouponId;
+}
+
 app.post('/api/playlists', authenticateToken, async (req, res) => {
   try {
-    const { name, description, mediaFileIds, requiresActivationCode, isPublic } = req.body;
+    const { name, description, mediaFileIds, requiresActivationCode, isPublic, previewCouponId } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Playlist name is required' });
@@ -9817,10 +9833,11 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     }
     // END SUBSCRIPTION CHECK
 
+    const resolvedPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
     const result = await db.query(
-      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, times_created) 
-       VALUES ($1, $2, $3, $4, $5, 1) RETURNING *`,
-      [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false]
+      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, preview_coupon_id, times_created) 
+       VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *`,
+      [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false, resolvedPreviewCouponId]
     );
 
     const playlist = result.rows[0];
@@ -9841,6 +9858,9 @@ app.post('/api/playlists', authenticateToken, async (req, res) => {
     res.status(201).json({ playlist: completePlaylist });
   } catch (error) {
     console.error('Error creating playlist:', error);
+    if (error?.message === 'Invalid preview coupon' || error?.message === 'Preview coupon must belong to this user') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create playlist' });
   }
 });
@@ -9954,7 +9974,7 @@ app.get('/api/playlists/:id', async (req, res) => {
 app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview } = req.body;
+    const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, previewCouponId } = req.body;
 
     if (VERBOSE_PLAYLIST_LOGGING) {
       logger.debug({
@@ -9962,13 +9982,13 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
         message: 'Updating playlist',
         playlistId: id,
         userId: req.user.userId,
-        body: { name, description, requiresActivationCode, isPublic, requirePhoneForPreview }
+        body: { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, previewCouponId }
       });
     }
 
     // Check if user owns the playlist
     const ownerCheck = await db.query(
-      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
+      'SELECT user_id, preview_coupon_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -10005,15 +10025,20 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
     if (VERBOSE_PLAYLIST_LOGGING) {
       logger.debug({ type: 'playlist_patch', message: 'Running UPDATE query', playlistId: id });
     }
+    const nextPreviewCouponId = previewCouponId === undefined
+      ? ownerCheck.rows[0].preview_coupon_id
+      : await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
+
     const result = await db.query(
       `UPDATE playlists 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description), 
            requires_activation_code = COALESCE($3, requires_activation_code), 
            is_public = COALESCE($4, is_public),
-           require_phone_for_preview = COALESCE($5, require_phone_for_preview)
-       WHERE id = $6 RETURNING *`,
-      [name, description, requiresActivationCode, isPublic, requirePhoneForPreview, id]
+           require_phone_for_preview = COALESCE($5, require_phone_for_preview),
+           preview_coupon_id = $6
+       WHERE id = $7 RETURNING *`,
+      [name, description, requiresActivationCode, isPublic, requirePhoneForPreview, nextPreviewCouponId, id]
     );
 
     if (VERBOSE_PLAYLIST_LOGGING) {
@@ -10029,6 +10054,9 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('🔴 PLAYLIST_PATCH: Error updating playlist:', error);
     console.error('🔴 PLAYLIST_PATCH: Error stack:', error.stack);
+    if (error?.message === 'Invalid preview coupon' || error?.message === 'Preview coupon must belong to this user') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update playlist' });
   }
 });
@@ -10256,6 +10284,7 @@ async function getPlaylistWithMedia(playlistId) {
     requiresActivationCode: playlistData.requires_activation_code,
     isPublic: playlistData.is_public,
     requirePhoneForPreview: !!playlistData.require_phone_for_preview,
+    previewCouponId: playlistData.preview_coupon_id ?? null,
     createdAt: playlistData.created_at,
     updatedAt: playlistData.updated_at,
     mediaFiles: mediaFiles,
@@ -13369,6 +13398,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
           description: slideshow.description,
           requiresActivationCode: slideshow.requires_activation_code,
           isPublic: slideshow.is_public,
+          previewCouponId: slideshow.preview_coupon_id ?? null,
           autoplayInterval: slideshow.autoplay_interval,
           transition: slideshow.transition,
           backgroundAudioUrl: slideshow.audio_url,
@@ -13559,6 +13589,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
       username: slideshow.username,
       isPublic: slideshow.is_public,
       requiresActivationCode: slideshow.requires_activation_code,
+      previewCouponId: slideshow.preview_coupon_id ?? null,
       autoplayInterval: slideshow.autoplay_interval,
       backgroundAudioUrl: signedAudioUrl,
       createdAt: slideshow.created_at,
@@ -14363,7 +14394,7 @@ app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => 
 // Create a new slideshow
 app.post('/api/slideshows', authenticateToken, async (req, res) => {
   try {
-    const { name, description, autoplayInterval, transition, requiresActivationCode } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, previewCouponId } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Slideshow name is required' });
@@ -14400,10 +14431,11 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
       });
     }
 
+    const resolvedPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
     const result = await db.query(
-      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, times_created) 
-       VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *`,
-      [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false]
+      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, preview_coupon_id, times_created) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 1) RETURNING *`,
+      [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false, resolvedPreviewCouponId]
     );
     
     const slideshowRow = result.rows[0];
@@ -14426,6 +14458,9 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
     
   } catch (error) {
     console.error('🎬 SLIDESHOWS: Error creating slideshow:', error);
+    if (error?.message === 'Invalid preview coupon' || error?.message === 'Preview coupon must belong to this user') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create slideshow' });
   }
 });
@@ -14434,7 +14469,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
 app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, autoplayInterval, transition, requiresActivationCode, audio_url } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, audio_url, previewCouponId } = req.body;
     
     console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====');
     console.log('🎬 SLIDESHOWS: Updating slideshow ID:', id);
@@ -14452,7 +14487,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     // Check if user owns the slideshow
     console.log('🎬 SLIDESHOWS: Checking slideshow ownership...');
     const ownerCheck = await db.query(
-      'SELECT user_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
+      'SELECT user_id, preview_coupon_id FROM slideshows WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -14503,6 +14538,10 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
     console.log('🎬 SLIDESHOWS:   $6 (processedAudioUrl):', processedAudioUrl);
     console.log('🎬 SLIDESHOWS:   $7 (id):', id);
 
+    const nextPreviewCouponId = previewCouponId === undefined
+      ? ownerCheck.rows[0].preview_coupon_id
+      : await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
+
     const result = await db.query(
       `UPDATE slideshows 
        SET name = COALESCE($1, name), 
@@ -14511,9 +14550,10 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
            transition = COALESCE($4, transition),
            requires_activation_code = COALESCE($5, requires_activation_code),
            audio_url = COALESCE($6, audio_url),
+           preview_coupon_id = $7,
            updated_at = NOW()
-       WHERE id = $7 RETURNING *`,
-      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, id]
+       WHERE id = $8 RETURNING *`,
+      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, nextPreviewCouponId, id]
     );
 
     const slideshow = result.rows[0];
@@ -14553,6 +14593,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
       autoplayInterval: slideshow.autoplay_interval,
       transition: slideshow.transition,
       requiresActivationCode: slideshow.requires_activation_code,
+      previewCouponId: slideshow.preview_coupon_id ?? null,
       backgroundAudioUrl: slideshow.audio_url,
       updatedAt: slideshow.updated_at
     };
@@ -14572,6 +14613,9 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('🎬 SLIDESHOWS: ❌ Error updating slideshow:', error);
     console.error('🎬 SLIDESHOWS: Error stack:', error.stack);
+    if (error?.message === 'Invalid preview coupon' || error?.message === 'Preview coupon must belong to this user') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update slideshow' });
   }
 });

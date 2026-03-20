@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
+import { couponAPI } from '@/services/api';
 
 interface Slideshow {
   id: number;
@@ -9,6 +11,7 @@ interface Slideshow {
   autoplayInterval: number;
   transition: string;
   requiresActivationCode: boolean;
+  previewCouponId?: number | null;
 }
 
 interface Props {
@@ -24,6 +27,8 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
   const [autoplayInterval, setAutoplayInterval] = useState(5000);
   const [transition, setTransition] = useState('fade');
   const [requiresActivationCode, setRequiresActivationCode] = useState(false);
+  const [previewCouponId, setPreviewCouponId] = useState('');
+  const [coupons, setCoupons] = useState<any[]>([]);
 
   useEffect(() => {
     if (slideshow) {
@@ -40,6 +45,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       setAutoplayInterval(slideshow.autoplayInterval);
       setTransition(slideshow.transition);
       setRequiresActivationCode(slideshow.requiresActivationCode);
+      setPreviewCouponId(slideshow.previewCouponId != null ? String(slideshow.previewCouponId) : '');
       
       console.log('🔄 EditSlideshowModal: State set to:', {
         name: slideshow.name,
@@ -49,6 +55,21 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       });
     }
   }, [slideshow]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    couponAPI.list()
+      .then((rows) => {
+        if (active) setCoupons(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (active) setCoupons([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   const intervalOptions = [
     { value: 2000, label: '2s' },
@@ -77,6 +98,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       autoplayInterval,
       transition,
       requiresActivationCode,
+      previewCouponId: previewCouponId ? Number(previewCouponId) : null,
     });
   };
 
@@ -130,6 +152,27 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
             <Text style={styles.label}>Require Access Code</Text>
             <Switch value={requiresActivationCode} onValueChange={(v)=>{console.log('🛡️ Edit modal require code toggle:',v); setRequiresActivationCode(v);} } />
           </View>
+
+          <Text style={styles.label}>Preview Coupon</Text>
+          <View style={styles.pickerWrap}>
+            <Picker
+              selectedValue={previewCouponId}
+              onValueChange={(value) => setPreviewCouponId(String(value))}
+              style={styles.picker}
+            >
+              <Picker.Item label="None" value="" />
+              {coupons.map((coupon) => (
+                <Picker.Item
+                  key={coupon.id}
+                  label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)`}
+                  value={String(coupon.id)}
+                />
+              ))}
+            </Picker>
+          </View>
+          <Text style={styles.helperText}>
+            This coupon will be texted when someone enters a phone number before preview.
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
@@ -145,6 +188,9 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', marginTop: 16 },
   input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12 },
   textArea: { height: 80, textAlignVertical: 'top' },
+  pickerWrap: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff', marginTop: 8 },
+  picker: { width: '100%' },
+  helperText: { fontSize: 12, color: '#6b7280', marginTop: 6 },
   optionsRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   optBtn: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, marginRight: 8, marginBottom: 8 },
   optSelected: { backgroundColor: '#eff6ff', borderColor: '#3b82f6' },

@@ -983,6 +983,7 @@ export default function SlideshowAccessScreen() {
         contentType="slideshow"
         contentId={id}
         contentName={slideshow?.name}
+        couponId={slideshow?.previewCouponId != null ? Number(slideshow.previewCouponId) : undefined}
         ownerId={slideshow?.userId != null ? Number(slideshow.userId) : undefined}
       />
 

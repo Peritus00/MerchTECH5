@@ -10,9 +10,11 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Playlist, MediaFile } from '@/shared/media-schema';
 import MediaSelectionList from './MediaSelectionList';
+import { couponAPI } from '@/services/api';
 
 interface EditPlaylistModalProps {
   visible: boolean;
@@ -34,6 +36,9 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const [playlistMediaFiles, setPlaylistMediaFiles] = useState<MediaFile[]>([]);
   const [isUpdating, setIsUpdating] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'media' | 'add-media'>('details');
+  const [previewCouponId, setPreviewCouponId] = useState('');
+  const [coupons, setCoupons] = useState<any[]>([]);
+  const [couponsLoading, setCouponsLoading] = useState(false);
 
   useEffect(() => {
     if (playlist && visible) {
@@ -46,8 +51,30 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       setName(playlist.name || '');
       setDescription(playlist.description || '');
       setPlaylistMediaFiles(playlist.mediaFiles || []);
+      setPreviewCouponId(playlist.previewCouponId != null ? String(playlist.previewCouponId) : '');
     }
   }, [playlist, visible]);
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    setCouponsLoading(true);
+    couponAPI.list()
+      .then((rows) => {
+        if (active) {
+          setCoupons(Array.isArray(rows) ? rows : []);
+        }
+      })
+      .catch(() => {
+        if (active) setCoupons([]);
+      })
+      .finally(() => {
+        if (active) setCouponsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [visible]);
 
   const handleUpdatePlaylist = async () => {
     if (!playlist || !name.trim()) {
@@ -70,6 +97,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       const updatedPlaylist = await playlistsAPI.update(playlist.id, {
         name: name.trim(),
         description: description.trim() || undefined,
+        previewCouponId: previewCouponId ? Number(previewCouponId) : null,
       });
 
       console.log('🔴 EDIT_PLAYLIST: Playlist details updated:', updatedPlaylist);
@@ -259,6 +287,35 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                   Use the Media tab to reorder tracks or the Add Media tab to add new files.
                 </Text>
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Preview Coupon</Text>
+                <View style={styles.pickerWrap}>
+                  {couponsLoading ? (
+                    <View style={styles.pickerLoading}>
+                      <ActivityIndicator size="small" color="#3b82f6" />
+                    </View>
+                  ) : (
+                    <Picker
+                      selectedValue={previewCouponId}
+                      onValueChange={(value) => setPreviewCouponId(String(value))}
+                      style={styles.picker}
+                    >
+                      <Picker.Item label="None" value="" />
+                      {coupons.map((coupon) => (
+                        <Picker.Item
+                          key={coupon.id}
+                          label={`${coupon.code} (${coupon.discount_type === 'percent' ? `${coupon.discount_value}%` : `$${coupon.discount_value}`} off)`}
+                          value={String(coupon.id)}
+                        />
+                      ))}
+                    </Picker>
+                  )}
+                </View>
+                <Text style={styles.helperText}>
+                  This coupon will be texted when someone enters a phone number before preview.
+                </Text>
+              </View>
             </View>
           )}
 
@@ -438,6 +495,26 @@ const styles = StyleSheet.create({
   textArea: {
     height: 80,
     textAlignVertical: 'top',
+  },
+  pickerWrap: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  picker: {
+    width: '100%',
+  },
+  pickerLoading: {
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  helperText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#6b7280',
   },
   infoBox: {
     flexDirection: 'row',

@@ -1166,6 +1166,7 @@ export default function PlaylistAccessScreen() {
         contentType="playlist"
         contentId={id}
         contentName={playlist?.name}
+        couponId={playlist?.previewCouponId != null ? Number(playlist.previewCouponId) : undefined}
         ownerId={playlist?.userId != null ? Number(playlist.userId) : undefined}
         requirePhoneForPreview={playlist?.requirePhoneForPreview === true}
       />

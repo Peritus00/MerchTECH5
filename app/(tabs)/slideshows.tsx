@@ -436,6 +436,7 @@ export default function SlideshowsScreen() {
             if (updates.transition !== undefined) payload.transition = updates.transition;
             if (updates.autoplayInterval !== undefined) payload.autoplayInterval = updates.autoplayInterval;
             if (updates.requiresActivationCode !== undefined) payload.requiresActivationCode = updates.requiresActivationCode;
+            if (updates.previewCouponId !== undefined) payload.previewCouponId = updates.previewCouponId;
 
             // Create optimistic updated slideshow
             const optimisticSlideshow: Slideshow = {
