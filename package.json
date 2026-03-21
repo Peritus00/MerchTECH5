@@ -29,6 +29,7 @@
     "db:migrate-playlist-preview-gate": "node ./scripts/run-playlist-preview-gate-migration.js",
     "db:migrate-coupon-starts": "node ./scripts/run-coupon-starts-migration.js",
     "db:migrate-preview-coupons": "node ./scripts/run-preview-coupon-migration.js",
+    "db:verify-preview-coupon-schema": "node ./scripts/verify-preview-coupon-schema.js",
     "db:migrate-activation-code-purchase": "node ./scripts/run-activation-code-purchase-migration.js",
     "db:migrate-slideshow-media": "node ./scripts/run-slideshow-media-migration.js",
     "db:backfill-slideshow-media": "node ./scripts/backfill-slideshow-media.js",
