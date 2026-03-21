@@ -2,18 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   Modal,
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Platform,
 } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
 import { api } from '@/services/api';
+import SmsOptInFields from '@/components/SmsOptInFields';
+import { buildSmsConsentCopyVersion } from '@/constants/smsConsent';
 
-const CONSENT_COPY = 'I agree to receive marketing texts including coupons and offers.';
 const DEFAULT_COUPON_TITLE = 'Get a Coupon';
 
 type PreviewCouponDisplay = {
@@ -71,7 +69,8 @@ export default function PreviewGateModal({
   requirePhoneForPreview = false,
 }: PreviewGateModalProps) {
   const [phone, setPhone] = useState('');
-  const [consent, setConsent] = useState(false);
+  const [smsConsent, setSmsConsent] = useState(false);
+  const [termsConsent, setTermsConsent] = useState(false);
   const [sending, setSending] = useState(false);
   const [skipAllowed, setSkipAllowed] = useState(true);
   const [smsConfigured, setSmsConfigured] = useState(false);
@@ -132,20 +131,18 @@ export default function PreviewGateModal({
     : couponOffer?.headline || DEFAULT_COUPON_TITLE;
 
   const subtitleText = requirePhoneForPreview
-    ? 'Enter your phone number and agree to receive marketing texts to start the preview.'
+    ? 'Enter your phone number, accept both consent checkboxes, and tap SEND to start the preview.'
     : couponOffer?.label
-      ? `Enter your phone number to receive ${couponOffer.label} via text, or skip to start the preview.`
-      : 'Enter your phone number to receive a discount coupon via text, or skip to start the preview.';
-
-  const primaryButtonText = requirePhoneForPreview
-    ? 'Continue to Preview'
-    : couponOffer?.label
-      ? `Send ${couponOffer.label}`
-      : 'Send Coupon Now';
+      ? `Enter your phone number to receive ${couponOffer.label} via text (tap SEND), or skip to start the preview.`
+      : 'Enter your phone number to receive a discount coupon via text (tap SEND), or skip to start the preview.';
 
   const handleSendCoupon = async () => {
-    if (!consent) {
-      Alert.alert('Consent Required', 'Please check the box to agree to receive marketing texts.');
+    if (!smsConsent) {
+      Alert.alert('Consent Required', 'Please check the first box to consent to SMS messages.');
+      return;
+    }
+    if (!termsConsent) {
+      Alert.alert('Consent Required', 'Please check the box to agree to the Terms and Conditions and Privacy Policy.');
       return;
     }
     const digits = phone.replace(/\D/g, '');
@@ -158,10 +155,11 @@ export default function PreviewGateModal({
       const res = await api.post('/coupons/sms/send', {
         phone,
         consent: true,
+        termsConsent: true,
         couponId: couponId || undefined,
         contentType,
         contentId,
-        consentCopyVersion: CONSENT_COPY,
+        consentCopyVersion: buildSmsConsentCopyVersion(),
       });
       if (res.data?.sent) {
         onClose();
@@ -182,7 +180,10 @@ export default function PreviewGateModal({
       onClose();
       onStartPreview();
     } else {
-      Alert.alert('Preview', 'Enter your phone and agree to receive a coupon to start the preview.');
+      Alert.alert(
+        'Preview',
+        'Enter your phone, accept both consent checkboxes, and tap SEND to start the preview.'
+      );
     }
   };
 
@@ -197,44 +198,19 @@ export default function PreviewGateModal({
             {subtitleText}
           </Text>
 
-          <TextInput
-            style={styles.input}
-            placeholder="Phone number"
-            placeholderTextColor="#9ca3af"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType={Platform.OS === 'web' ? 'tel' : 'phone-pad'}
-            editable={!sending}
+          <SmsOptInFields
+            phone={phone}
+            onPhoneChange={setPhone}
+            smsConsent={smsConsent}
+            onSmsConsentChange={setSmsConsent}
+            termsConsent={termsConsent}
+            onTermsConsentChange={setTermsConsent}
+            sending={sending}
+            onSend={handleSendCoupon}
+            sendButtonLabel="SEND"
           />
 
-          <TouchableOpacity
-            style={[styles.checkbox, consent && styles.checkboxChecked]}
-            onPress={() => setConsent(!consent)}
-            disabled={sending}
-          >
-            <MaterialIcons
-              name={consent ? 'check-box' : 'check-box-outline-blank'}
-              size={24}
-              color={consent ? '#3b82f6' : '#9ca3af'}
-            />
-            <Text style={styles.checkboxLabel}>{CONSENT_COPY}</Text>
-          </TouchableOpacity>
-
           <View style={styles.buttons}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnPrimary]}
-              onPress={handleSendCoupon}
-              disabled={sending}
-            >
-              {sending ? (
-                <ActivityIndicator color="#fff" size="small" />
-              ) : (
-                <Text style={styles.btnPrimaryText}>
-                  {primaryButtonText}
-                </Text>
-              )}
-            </TouchableOpacity>
-
             {skipAllowed && (
               <TouchableOpacity
                 style={[styles.btn, styles.btnSecondary]}
@@ -285,42 +261,14 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 20,
   },
-  input: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-    color: '#1f2937',
-  },
-  checkbox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  checkboxChecked: {},
-  checkboxLabel: {
-    fontSize: 14,
-    color: '#374151',
-    marginLeft: 8,
-    flex: 1,
-  },
   buttons: {
     gap: 12,
+    marginTop: 4,
   },
   btn: {
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: '#3b82f6',
-  },
-  btnPrimaryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
   },
   btnSecondary: {
     backgroundColor: '#f3f4f6',

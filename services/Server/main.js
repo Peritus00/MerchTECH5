@@ -10913,7 +10913,8 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
 });
 
 // ---------- COUPON API ROUTES ----------
-const COUPON_CONSENT_COPY = 'I agree to receive marketing texts including coupons and offers.';
+const COUPON_CONSENT_COPY =
+  'By checking this box and clicking "SEND" you consent to receive transactional text messages for notifications and alerts from MerchTrader. Reply STOP to opt out. Reply HELP for help. Message and data rates may apply. Message frequency may vary. | I agree to the Terms and Conditions and Privacy Policy.';
 
 // Helper: ensure coupon tables exist
 async function ensureCouponTables() {
@@ -11163,9 +11164,10 @@ app.post('/api/coupons/validate', async (req, res) => {
 app.post('/api/coupons/sms/send', async (req, res) => {
   try {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
-    const { phone, consent, couponId, consentCopyVersion, contentType, contentId } = req.body;
+    const { phone, consent, termsConsent, couponId, consentCopyVersion, contentType, contentId } = req.body;
     if (!phone) return res.status(400).json({ error: 'Phone number required' });
-    if (!consent) return res.status(400).json({ error: 'Marketing consent is required to receive coupon via SMS' });
+    if (!consent) return res.status(400).json({ error: 'SMS consent is required to receive messages' });
+    if (!termsConsent) return res.status(400).json({ error: 'Terms and Privacy Policy agreement is required' });
     const phoneE164 = phone.replace(/\D/g, '');
     if (phoneE164.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
     const e164 = phoneE164.startsWith('1') && phoneE164.length === 11 ? `+${phoneE164}` : `+1${phoneE164}`;

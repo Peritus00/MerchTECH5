@@ -125,6 +125,8 @@ function RootLayoutNav() {
     // Determine if the current route is one that should be publicly accessible
     const isPublicRoute = 
       segments[0] === '(public)' || // All routes under (public) group
+      segments[0] === 'sms-opt-in' || // Toll-free verification / public SMS consent page
+      segments[0] === 'legal' || // Terms & Privacy (linked from SMS opt-in)
       segments[0] === 'handle-share' || // Share import (user may need to log in)
       segments[0] === 'slideshow-access' || 
       segments[0] === 'playlist-access' ||
