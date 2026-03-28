@@ -69,6 +69,12 @@ const SlideshowPlayer = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(autoPlay);
   const [isMuted, setIsMuted] = useState(false);
+
+  // Keep playback in sync when parent drives play state (e.g. PlaylistPlayer autoPlay={isPlaying}).
+  // Without this, iOS/Safari often mounts the slideshow before the playlist is "playing", so audio never starts.
+  useEffect(() => {
+    setIsPlaying(autoPlay);
+  }, [autoPlay]);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExitButton, setShowExitButton] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);

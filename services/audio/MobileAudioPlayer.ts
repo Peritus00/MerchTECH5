@@ -10,6 +10,8 @@ import { Audio } from 'expo-av';
 class MobileAudioPlayer {
   private sound: Audio.Sound | null = null;
   private onEndedCallback: (() => void) | null = null;
+  /** play() called before createAsync finished; flushed when sound is ready */
+  private playPending = false;
 
   constructor(
     uri: string,
@@ -38,13 +40,20 @@ class MobileAudioPlayer {
       const { sound } = await Audio.Sound.createAsync(
         { uri },
         {
-          shouldPlay: options.shouldPlay,
+          shouldPlay: options.shouldPlay || this.playPending,
           isLooping: options.isLooping,
         },
         this.onPlaybackStatusUpdate
       );
 
       this.sound = sound;
+      if (this.playPending) {
+        this.playPending = false;
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && !status.isPlaying) {
+          await sound.playAsync();
+        }
+      }
     } catch (error) {
       console.error('Error initializing mobile audio:', error);
     }
@@ -68,6 +77,8 @@ class MobileAudioPlayer {
         if (status.isLoaded && !status.isPlaying) {
           await this.sound.playAsync();
         }
+      } else {
+        this.playPending = true;
       }
     } catch (error) {
       console.error('Error playing sound:', error);
@@ -104,6 +115,7 @@ class MobileAudioPlayer {
   }
 
   async unload() {
+    this.playPending = false;
     if (this.sound) {
       await this.sound.unloadAsync();
       this.sound = null;

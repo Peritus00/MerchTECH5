@@ -26,9 +26,20 @@ class WebAudioPlayer {
       this.audio = document.createElement('audio');
       this.audio.src = this.uri;
       this.audio.loop = options.isLooping;
-      
-      // Add crossOrigin attribute to handle CORS
-      this.audio.crossOrigin = "anonymous";
+
+      // Only set crossOrigin for same-origin URLs. For cross-origin (e.g. S3 signed URLs), anonymous
+      // forces a CORS check; iOS Safari often fails playback if ACAO is missing or misconfigured,
+      // while Android Chrome may still play. Omitting crossOrigin avoids that for typical media playback.
+      if (typeof window !== 'undefined') {
+        try {
+          const resolved = new URL(uri, window.location.href);
+          if (resolved.origin === window.location.origin) {
+            this.audio.crossOrigin = 'anonymous';
+          }
+        } catch {
+          /* leave default */
+        }
+      }
       
       // Preload the audio
       this.audio.preload = "auto";
