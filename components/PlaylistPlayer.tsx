@@ -1454,6 +1454,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               slideshow={mapped}
               autoPlay={isPlaying}
               showFeaturedProducts={false}
+              showDiscussionPanel={false}
             />
           </View>
         );

@@ -51,6 +51,8 @@ interface SlideshowPlayerProps {
   autoPlay?: boolean;
   /** When false, hides slideshow-level Featured Products (e.g. inside playlist playback). Default true. */
   showFeaturedProducts?: boolean;
+  /** When false, hides slideshow-level Slideshow Discussion (e.g. inside playlist playback). Default true. */
+  showDiscussionPanel?: boolean;
 }
 
 const SlideshowPlayer = ({
@@ -58,6 +60,7 @@ const SlideshowPlayer = ({
   slideshow,
   autoPlay = false,
   showFeaturedProducts = true,
+  showDiscussionPanel = true,
 }: SlideshowPlayerProps) => {
   const [slideshowData, setSlideshowData] = useState<any>(slideshow);
   const [images, setImages] = useState<SlideshowImage[]>([]);
@@ -783,7 +786,7 @@ const SlideshowPlayer = ({
       </View>
 
         {/* Bottom Panel - Live Chat */}
-        {!isFullscreen && (
+        {!isFullscreen && showDiscussionPanel && (
           <View style={styles.slideshowChatSection}>
             <SlideshowChat
               slideshowId={slideshowData?.id?.toString() || ''}
