@@ -268,12 +268,24 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
     }
   }, [slideshow, fetchSlideshow]);
 
-  // Background audio URL
+  // Background audio URL (API may send audioUrl, audio_url, or backgroundAudioUrl; may be JSON string)
   const backgroundAudioUrl = useMemo(() => {
-    if (slideshowData?.audioUrl) {
-      return slideshowData.audioUrl;
+    const raw =
+      slideshowData?.audioUrl ||
+      slideshowData?.audio_url ||
+      slideshowData?.backgroundAudioUrl;
+    if (!raw || typeof raw !== 'string') return null;
+    let url = raw.trim();
+    if (url.startsWith('{')) {
+      try {
+        const audioData = JSON.parse(url);
+        url = (audioData && audioData.url) || url;
+      } catch {
+        const urlMatch = url.match(/"url":"([^"]+)"/);
+        if (urlMatch) url = urlMatch[1];
+      }
     }
-    return null;
+    return url || null;
   }, [slideshowData]);
 
   // Audio player lifecycle
@@ -317,7 +329,10 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
   // Slideshow auto-play
   useEffect(() => {
     if (isPlaying && images.length > 1) {
-      const interval = slideshowData?.autoplayInterval || 5000;
+      const interval =
+        slideshowData?.autoplayInterval ??
+        slideshowData?.autoplay_interval ??
+        5000;
       
       slideshowIntervalRef.current = setInterval(() => {
         setCurrentIndex(prev => prev < images.length - 1 ? prev + 1 : 0);
@@ -329,7 +344,12 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         }
       };
     }
-  }, [isPlaying, images.length, slideshowData?.autoplayInterval]);
+  }, [
+    isPlaying,
+    images.length,
+    slideshowData?.autoplayInterval,
+    slideshowData?.autoplay_interval,
+  ]);
 
   // Cleanup on unmount
   useEffect(() => {

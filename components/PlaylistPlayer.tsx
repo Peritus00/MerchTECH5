@@ -1431,6 +1431,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       if (slideshowData) {
         const mapped = {
           ...slideshowData,
+          // SlideshowPlayer reads audioUrl; playlist API returns audio_url
+          audioUrl:
+            slideshowData.audioUrl ||
+            slideshowData.audio_url ||
+            slideshowData.backgroundAudioUrl,
+          autoplayInterval:
+            slideshowData.autoplayInterval ??
+            slideshowData.autoplay_interval ??
+            5000,
           images: (slideshowData.images || []).map((img: any) => ({
             id: img.id,
             title: img.caption || img.title,

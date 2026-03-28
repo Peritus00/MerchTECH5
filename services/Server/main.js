@@ -14190,13 +14190,32 @@ app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
         productName: link.product_name
       };
     });
+    // Match authenticated slideshow audio handling: JSON-stored URLs + any S3 host via extractKeyFromUrl
     if (fullSlideshow.audio_url) {
-      try {
-        if (fullSlideshow.audio_url.includes('s3.us-east-2.amazonaws.com/')) {
-          const s3Key = fullSlideshow.audio_url.split('s3.us-east-2.amazonaws.com/')[1].split('?')[0];
-          fullSlideshow.audio_url = await s3Service.getSignedUrl(s3Key, 3600);
+      let actualAudioUrl = fullSlideshow.audio_url;
+      if (typeof fullSlideshow.audio_url === 'string' && fullSlideshow.audio_url.startsWith('{')) {
+        try {
+          const audioData = JSON.parse(fullSlideshow.audio_url);
+          actualAudioUrl = audioData.url || fullSlideshow.audio_url;
+        } catch (parseErr) {
+          const urlMatch = fullSlideshow.audio_url.match(/"url":"([^"]+)"/);
+          actualAudioUrl = urlMatch ? urlMatch[1] : fullSlideshow.audio_url;
         }
-      } catch (e) {}
+      }
+      try {
+        if (actualAudioUrl && actualAudioUrl.includes('amazonaws.com') && s3Service) {
+          const audioKey = s3Service.extractKeyFromUrl(actualAudioUrl);
+          if (audioKey) {
+            fullSlideshow.audio_url = await s3Service.getSignedUrl(audioKey, 3600);
+          } else {
+            fullSlideshow.audio_url = actualAudioUrl;
+          }
+        } else if (actualAudioUrl) {
+          fullSlideshow.audio_url = actualAudioUrl;
+        }
+      } catch (e) {
+        console.error('🎬 SLIDESHOW_FOR_PLAYLIST: Audio URL processing failed:', e?.message || e);
+      }
     }
     res.json(fullSlideshow);
   } catch (err) {
