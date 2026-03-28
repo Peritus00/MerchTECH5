@@ -127,94 +127,133 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
         {/* Actions */}
         {showActions && (
           <View style={styles.actions}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                console.log('🔴 PLAYLIST_CARD: Play button pressed for playlist:', {
-                  id: playlist.id,
-                  name: playlist.name,
-                  hasMediaFiles: !!(playlist.mediaFiles && playlist.mediaFiles.length > 0),
-                  mediaCount: playlist.mediaFiles?.length || 0
-                });
-                console.log('🔴 PLAYLIST_CARD: Calling onView function...');
-                onView();
-                console.log('🔴 PLAYLIST_CARD: onView function called');
-              }}
-            >
-              <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />
-            </TouchableOpacity>
-            {onToggleProtection && (
+            <View style={styles.actionItem}>
               <TouchableOpacity
                 style={styles.actionButton}
+                accessibilityLabel="Play playlist"
+                accessibilityHint="Opens this playlist in the player"
                 onPress={() => {
-                  console.log('🔴 PLAYLIST_CARD: Shield icon pressed for playlist:', playlist.id, 'Current protection:', playlist.requiresActivationCode);
-                  onToggleProtection();
+                  console.log('🔴 PLAYLIST_CARD: Play button pressed for playlist:', {
+                    id: playlist.id,
+                    name: playlist.name,
+                    hasMediaFiles: !!(playlist.mediaFiles && playlist.mediaFiles.length > 0),
+                    mediaCount: playlist.mediaFiles?.length || 0
+                  });
+                  console.log('🔴 PLAYLIST_CARD: Calling onView function...');
+                  onView();
+                  console.log('🔴 PLAYLIST_CARD: onView function called');
                 }}
               >
-                <MaterialIcons 
-                  name={(playlist.requiresActivationCode ?? false) ? "lock" : "lock-open"} 
-                  size={20} 
-                  color={(playlist.requiresActivationCode ?? false) ? "#f59e0b" : "#9ca3af"} 
-                />
+                <MaterialIcons name="play-arrow" size={20} color="#3b82f6" />
               </TouchableOpacity>
+              <Text style={styles.actionLabel}>Play</Text>
+            </View>
+            {onToggleProtection && (
+              <View style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  accessibilityLabel={
+                    (playlist.requiresActivationCode ?? false)
+                      ? 'Require activation code is on. Tap to turn off.'
+                      : 'Require activation code is off. Tap to turn on.'
+                  }
+                  accessibilityHint="Toggles whether viewers need an activation code"
+                  onPress={() => {
+                    console.log('🔴 PLAYLIST_CARD: Shield icon pressed for playlist:', playlist.id, 'Current protection:', playlist.requiresActivationCode);
+                    onToggleProtection();
+                  }}
+                >
+                  <MaterialIcons 
+                    name={(playlist.requiresActivationCode ?? false) ? "lock" : "lock-open"} 
+                    size={20} 
+                    color={(playlist.requiresActivationCode ?? false) ? "#f59e0b" : "#9ca3af"} 
+                  />
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>
+                  {(playlist.requiresActivationCode ?? false) ? 'Unlock' : 'Lock'}
+                </Text>
+              </View>
             )}
             {onToggleRequirePhone && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={requirePhoneSaving ? undefined : onToggleRequirePhone}
-                disabled={requirePhoneSaving}
-              >
-                {requirePhoneSaving ? (
-                  <ActivityIndicator size="small" color="#3b82f6" />
-                ) : (
-                  <MaterialIcons 
-                    name={(playlist.requirePhoneForPreview ?? false) ? "check-box" : "check-box-outline-blank"} 
-                    size={20} 
-                    color={(playlist.requirePhoneForPreview ?? false) ? "#3b82f6" : "#9ca3af"} 
-                  />
-                )}
-              </TouchableOpacity>
+              <View style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  accessibilityLabel={
+                    (playlist.requirePhoneForPreview ?? false)
+                      ? 'Require phone for preview is on. Tap to turn off.'
+                      : 'Require phone for preview is off. Tap to turn on.'
+                  }
+                  accessibilityHint="Toggles whether viewers must enter a phone number before preview"
+                  onPress={requirePhoneSaving ? undefined : onToggleRequirePhone}
+                  disabled={requirePhoneSaving}
+                >
+                  {requirePhoneSaving ? (
+                    <ActivityIndicator size="small" color="#3b82f6" />
+                  ) : (
+                    <MaterialIcons 
+                      name={(playlist.requirePhoneForPreview ?? false) ? "check-box" : "check-box-outline-blank"} 
+                      size={20} 
+                      color={(playlist.requirePhoneForPreview ?? false) ? "#3b82f6" : "#9ca3af"} 
+                    />
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>Phone</Text>
+              </View>
             )}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => {
-                // Navigate to product links manager
-                router.push(`/product-links/${playlist.id}`);
-              }}
-            >
-              <MaterialIcons name="shopping-bag" size={20} color="#9ca3af" />
-            </TouchableOpacity>
-            {onEdit && (
+            <View style={styles.actionItem}>
               <TouchableOpacity
                 style={styles.actionButton}
+                accessibilityLabel="Product links"
+                accessibilityHint="Opens product links for this playlist"
                 onPress={() => {
-                  console.log('🔴 PLAYLIST_CARD: Edit button pressed for playlist:', {
-                    id: playlist.id,
-                    name: playlist.name
-                  });
-                  console.log('🔴 PLAYLIST_CARD: Calling onEdit function...');
-                  onEdit();
-                  console.log('🔴 PLAYLIST_CARD: onEdit function called');
+                  // Navigate to product links manager
+                  router.push(`/product-links/${playlist.id}`);
                 }}
               >
-                <MaterialIcons name="edit" size={20} color="#6b7280" />
+                <MaterialIcons name="shopping-bag" size={20} color="#9ca3af" />
               </TouchableOpacity>
+              <Text style={styles.actionLabel}>Shop</Text>
+            </View>
+            {onEdit && (
+              <View style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  accessibilityLabel="Edit playlist"
+                  onPress={() => {
+                    console.log('🔴 PLAYLIST_CARD: Edit button pressed for playlist:', {
+                      id: playlist.id,
+                      name: playlist.name
+                    });
+                    console.log('🔴 PLAYLIST_CARD: Calling onEdit function...');
+                    onEdit();
+                    console.log('🔴 PLAYLIST_CARD: onEdit function called');
+                  }}
+                >
+                  <MaterialIcons name="edit" size={20} color="#6b7280" />
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>Edit</Text>
+              </View>
             )}
             {onDelete && (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => {
-                  console.log('🔴 PLAYLIST_CARD: Delete button pressed for playlist:', {
-                    id: playlist.id,
-                    name: playlist.name
-                  });
-                  console.log('🔴 PLAYLIST_CARD: Calling onDelete function...');
-                  onDelete();
-                  console.log('🔴 PLAYLIST_CARD: onDelete function called');
-                }}
-              >
-                <MaterialIcons name="delete" size={20} color="#ef4444" />
-              </TouchableOpacity>
+              <View style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  accessibilityLabel="Delete playlist"
+                  accessibilityHint="Permanently removes this playlist"
+                  onPress={() => {
+                    console.log('🔴 PLAYLIST_CARD: Delete button pressed for playlist:', {
+                      id: playlist.id,
+                      name: playlist.name
+                    });
+                    console.log('🔴 PLAYLIST_CARD: Calling onDelete function...');
+                    onDelete();
+                    console.log('🔴 PLAYLIST_CARD: onDelete function called');
+                  }}
+                >
+                  <MaterialIcons name="delete" size={20} color="#ef4444" />
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>Delete</Text>
+              </View>
             )}
           </View>
         )}
@@ -314,7 +353,20 @@ const styles = StyleSheet.create({
   },
   actions: {
     justifyContent: 'flex-start',
-    gap: 8,
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 44,
+  },
+  actionItem: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  actionLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#6b7280',
+    textAlign: 'center',
+    maxWidth: 52,
   },
   actionButton: {
     width: 36,
