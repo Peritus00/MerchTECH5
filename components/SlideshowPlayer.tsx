@@ -49,9 +49,16 @@ interface SlideshowPlayerProps {
   slideshowId?: string;
   slideshow?: any;
   autoPlay?: boolean;
+  /** When false, hides slideshow-level Featured Products (e.g. inside playlist playback). Default true. */
+  showFeaturedProducts?: boolean;
 }
 
-const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: SlideshowPlayerProps) => {
+const SlideshowPlayer = ({
+  slideshowId,
+  slideshow,
+  autoPlay = false,
+  showFeaturedProducts = true,
+}: SlideshowPlayerProps) => {
   const [slideshowData, setSlideshowData] = useState<any>(slideshow);
   const [images, setImages] = useState<SlideshowImage[]>([]);
   const [loading, setLoading] = useState(!slideshow);
@@ -636,7 +643,7 @@ const SlideshowPlayer = ({ slideshowId, slideshow, autoPlay = false }: Slideshow
         </View>
 
         {/* Right Panel - Featured Products */}
-        {!isFullscreen && (
+        {!isFullscreen && showFeaturedProducts && (
           <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
           <View style={styles.featuredProductsHeader}>
             <MaterialIcons name="storefront" size={24} color="#374151" />

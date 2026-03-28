@@ -1450,7 +1450,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         };
         return (
           <View style={{ flex: 1, minHeight: 400 }}>
-            <SlideshowPlayer slideshow={mapped} autoPlay={isPlaying} />
+            <SlideshowPlayer
+              slideshow={mapped}
+              autoPlay={isPlaying}
+              showFeaturedProducts={false}
+            />
           </View>
         );
       }
