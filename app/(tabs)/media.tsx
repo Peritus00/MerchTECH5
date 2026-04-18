@@ -40,6 +40,7 @@ export default function MediaScreen() {
       console.log('🔴 MEDIA: Starting file upload...');
       const uploadedFile = await selectAndUploadFile();
       if (uploadedFile) {
+        await refetch();
         console.log('🔴 MEDIA: File uploaded successfully:', uploadedFile);
         Alert.alert('Success', 'File uploaded successfully');
       }

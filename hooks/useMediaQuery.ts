@@ -21,6 +21,8 @@ export function useMediaQuery() {
   const query = useQuery({
     queryKey: MEDIA_QUERY_KEY,
     queryFn: fetchMedia,
+    staleTime: 0,
+    refetchOnMount: 'always',
     refetchInterval: (query) => {
       const files = query.state.data ?? [];
       return hasPendingScans(files) ? SCAN_POLL_INTERVAL_MS : false;
