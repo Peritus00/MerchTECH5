@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { api } from '@/services/api';
 import SmsOptInFields from '@/components/SmsOptInFields';
-import { buildSmsConsentCopyVersion } from '@/constants/smsConsent';
+import { buildSmsConsentCopyVersion, buildMarketingConsentCopyVersion } from '@/constants/smsConsent';
 
 const DEFAULT_COUPON_TITLE = 'Get a Coupon';
 
@@ -71,31 +71,47 @@ export default function PreviewGateModal({
   const [phone, setPhone] = useState('');
   const [smsConsent, setSmsConsent] = useState(false);
   const [termsConsent, setTermsConsent] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
   const [sending, setSending] = useState(false);
   const [skipAllowed, setSkipAllowed] = useState(true);
   const [smsConfigured, setSmsConfigured] = useState(false);
   const [couponDisplay, setCouponDisplay] = useState<PreviewCouponDisplay | null>(null);
+  const [waitingVerify, setWaitingVerify] = useState(false);
+  const [pollToken, setPollToken] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (visible) {
-      if (requirePhoneForPreview) {
-        setSkipAllowed(false);
-        setSmsConfigured(true);
-        return;
+    if (!visible) {
+      setPhone('');
+      setSmsConsent(false);
+      setTermsConsent(false);
+      setMarketingConsent(false);
+      setSending(false);
+      setWaitingVerify(false);
+      setPollToken(null);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
-      const params = ownerId != null ? { ownerId } : {};
-      api.get('/coupons/preview-gate-settings', { params }).then((r) => {
-        setSkipAllowed(r.data?.skipAllowed !== false);
-        setSmsConfigured(r.data?.smsConfigured === true);
-      }).catch(() => {
-        setSkipAllowed(true);
-        setSmsConfigured(false);
-      });
+      return;
     }
+    if (requirePhoneForPreview) {
+      setSkipAllowed(false);
+      setSmsConfigured(true);
+      return;
+    }
+    const params = ownerId != null ? { ownerId } : {};
+    api.get('/coupons/preview-gate-settings', { params }).then((r) => {
+      setSkipAllowed(r.data?.skipAllowed !== false);
+      setSmsConfigured(r.data?.smsConfigured === true);
+    }).catch(() => {
+      setSkipAllowed(true);
+      setSmsConfigured(false);
+    });
   }, [visible, ownerId, requirePhoneForPreview]);
 
   useEffect(() => {
-    if (!visible || requirePhoneForPreview) {
+    if (!visible) {
       setCouponDisplay(null);
       return;
     }
@@ -119,7 +135,44 @@ export default function PreviewGateModal({
     return () => {
       cancelled = true;
     };
-  }, [visible, requirePhoneForPreview, couponId, contentType, contentId]);
+  }, [visible, couponId, contentType, contentId]);
+
+  useEffect(() => {
+    if (!visible || !waitingVerify || !pollToken) {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+      return;
+    }
+
+    const tick = async () => {
+      try {
+        const r = await api.get('/preview-leads/status', { params: { pollToken } });
+        if (r.data?.status === 'verified') {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
+          setWaitingVerify(false);
+          setPollToken(null);
+          onClose();
+          onStartPreview();
+        }
+      } catch {
+        // keep polling
+      }
+    };
+
+    tick();
+    pollTimerRef.current = setInterval(tick, 2000);
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, [visible, waitingVerify, pollToken, onClose, onStartPreview]);
 
   const couponOffer = React.useMemo(
     () => formatPreviewCouponOffer(couponDisplay),
@@ -127,11 +180,13 @@ export default function PreviewGateModal({
   );
 
   const titleText = requirePhoneForPreview
-    ? 'Phone Required for Preview'
+    ? (couponOffer?.headline || 'Verify your phone for preview')
     : couponOffer?.headline || DEFAULT_COUPON_TITLE;
 
   const subtitleText = requirePhoneForPreview
-    ? 'Enter your phone number, accept both consent checkboxes, and tap SEND to start the preview.'
+    ? (couponOffer?.label
+      ? `Enter your phone for ${couponOffer.label} and verification. Check both required boxes, optionally agree to marketing texts, then tap SEND. Open the link in the text message on this device to verify — preview starts automatically here.`
+      : 'Enter your phone for your coupon and verification. Check both required boxes, optionally agree to marketing texts, then tap SEND. Open the link in the text on this device — preview starts here when verified.')
     : couponOffer?.label
       ? `Enter your phone number to receive ${couponOffer.label} via text (tap SEND), or skip to start the preview.`
       : 'Enter your phone number to receive a discount coupon via text (tap SEND), or skip to start the preview.';
@@ -152,23 +207,43 @@ export default function PreviewGateModal({
     }
     setSending(true);
     try {
-      const res = await api.post('/coupons/sms/send', {
-        phone,
-        consent: true,
-        termsConsent: true,
-        couponId: couponId || undefined,
-        contentType,
-        contentId,
-        consentCopyVersion: buildSmsConsentCopyVersion(),
-      });
-      if (res.data?.sent) {
-        onClose();
-        onStartPreview();
+      if (requirePhoneForPreview) {
+        const res = await api.post('/preview-leads/start', {
+          phone,
+          contentType,
+          contentId,
+          couponId: couponId || undefined,
+          transactionalConsent: true,
+          termsConsent: true,
+          marketingOptIn: marketingConsent,
+          transactionalConsentCopyVersion: buildSmsConsentCopyVersion(),
+          marketingConsentCopyVersion: marketingConsent ? buildMarketingConsentCopyVersion() : undefined,
+        });
+        if (res.data?.ok && res.data?.pollToken) {
+          setPollToken(String(res.data.pollToken));
+          setWaitingVerify(true);
+        } else {
+          Alert.alert('Send Failed', res.data?.error || 'Could not send verification text.');
+        }
       } else {
-        Alert.alert('Send Failed', res.data?.error || 'Could not send coupon.');
+        const res = await api.post('/coupons/sms/send', {
+          phone,
+          consent: true,
+          termsConsent: true,
+          couponId: couponId || undefined,
+          contentType,
+          contentId,
+          consentCopyVersion: buildSmsConsentCopyVersion(),
+        });
+        if (res.data?.sent) {
+          onClose();
+          onStartPreview();
+        } else {
+          Alert.alert('Send Failed', res.data?.error || 'Could not send coupon.');
+        }
       }
     } catch (e: any) {
-      const msg = e.response?.data?.error || e.message || 'Failed to send coupon.';
+      const msg = e.response?.data?.error || e.message || 'Failed to send.';
       Alert.alert('Error', msg);
     } finally {
       setSending(false);
@@ -187,6 +262,8 @@ export default function PreviewGateModal({
     }
   };
 
+  const formBlocked = sending || waitingVerify;
+
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
@@ -195,8 +272,17 @@ export default function PreviewGateModal({
             {titleText}
           </Text>
           <Text style={styles.subtitle}>
-            {subtitleText}
+            {waitingVerify
+              ? 'Check your text message and tap the verification link on this device. This window will start the preview when your number is verified.'
+              : subtitleText}
           </Text>
+
+          {waitingVerify && (
+            <View style={styles.waitingRow}>
+              <ActivityIndicator color="#3b82f6" />
+              <Text style={styles.waitingText}>Waiting for verification…</Text>
+            </View>
+          )}
 
           <SmsOptInFields
             phone={phone}
@@ -205,9 +291,13 @@ export default function PreviewGateModal({
             onSmsConsentChange={setSmsConsent}
             termsConsent={termsConsent}
             onTermsConsentChange={setTermsConsent}
+            showMarketingOptIn={requirePhoneForPreview}
+            marketingConsent={marketingConsent}
+            onMarketingConsentChange={setMarketingConsent}
             sending={sending}
             onSend={handleSendCoupon}
             sendButtonLabel="SEND"
+            disabled={formBlocked}
           />
 
           <View style={styles.buttons}>
@@ -215,14 +305,14 @@ export default function PreviewGateModal({
               <TouchableOpacity
                 style={[styles.btn, styles.btnSecondary]}
                 onPress={handleSkip}
-                disabled={sending}
+                disabled={formBlocked}
               >
                 <Text style={styles.btnSecondaryText}>Skip</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {!smsConfigured && (
+          {!smsConfigured && !requirePhoneForPreview && (
             <Text style={styles.hint}>SMS delivery may not be configured. You can still skip to preview.</Text>
           )}
 
@@ -260,6 +350,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginBottom: 20,
+  },
+  waitingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  waitingText: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '600',
   },
   buttons: {
     gap: 12,

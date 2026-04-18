@@ -11,6 +11,8 @@ interface Slideshow {
   autoplayInterval: number;
   transition: string;
   requiresActivationCode: boolean;
+  /** When true and slideshow is locked, preview requires SMS link verification */
+  requirePhoneForPreview?: boolean;
   previewCouponId?: number | null;
 }
 
@@ -27,6 +29,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
   const [autoplayInterval, setAutoplayInterval] = useState(5000);
   const [transition, setTransition] = useState('fade');
   const [requiresActivationCode, setRequiresActivationCode] = useState(false);
+  const [requirePhoneForPreview, setRequirePhoneForPreview] = useState(false);
   const [previewCouponId, setPreviewCouponId] = useState('');
   const [coupons, setCoupons] = useState<any[]>([]);
 
@@ -50,6 +53,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       setAutoplayInterval(slideshow.autoplayInterval);
       setTransition(slideshow.transition);
       setRequiresActivationCode(slideshow.requiresActivationCode);
+      setRequirePhoneForPreview(!!slideshow.requirePhoneForPreview);
       setPreviewCouponId(slideshow.previewCouponId != null ? String(slideshow.previewCouponId) : '');
       
       console.log('🔄 EditSlideshowModal: State set to:', {
@@ -107,6 +111,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       autoplayInterval,
       transition,
       requiresActivationCode,
+      requirePhoneForPreview,
       previewCouponId: previewCouponId ? Number(previewCouponId) : null,
     });
   };
@@ -161,6 +166,17 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
             <Text style={styles.label}>Require Access Code</Text>
             <Switch value={requiresActivationCode} onValueChange={(v)=>{console.log('🛡️ Edit modal require code toggle:',v); setRequiresActivationCode(v);} } />
           </View>
+
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>Require verified phone for preview</Text>
+            <Switch
+              value={requirePhoneForPreview}
+              onValueChange={setRequirePhoneForPreview}
+            />
+          </View>
+          <Text style={styles.helperText}>
+            When the slideshow is locked, viewers enter their phone, receive a coupon by text, and must tap the verification link before the 30-second preview starts.
+          </Text>
 
           <Text style={styles.label}>Preview Coupon</Text>
           <View style={styles.pickerWrap}>

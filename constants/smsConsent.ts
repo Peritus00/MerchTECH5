@@ -15,7 +15,18 @@ export const SMS_TRANSACTIONAL_CONSENT_TEXT =
 export const SMS_TERMS_CONSENT_SUMMARY =
   'I agree to the Terms and Conditions and Privacy Policy.';
 
+/** Optional — recurring marketing / promotional SMS (separate from transactional preview verification). */
+export const SMS_MARKETING_OPT_IN_TEXT =
+  'I agree to receive recurring promotional and marketing text messages from ' +
+  SMS_COMPANY_NAME +
+  '. Consent is not a condition of purchase. Reply STOP to opt out. Reply HELP for help. Message and data rates may apply. Message frequency may vary.';
+
 /** Single stored version string for API + DB audit trail. */
 export function buildSmsConsentCopyVersion(): string {
   return `${SMS_TRANSACTIONAL_CONSENT_TEXT} | ${SMS_TERMS_CONSENT_SUMMARY}`;
+}
+
+/** Marketing opt-in copy version (stored when user checks optional marketing box). */
+export function buildMarketingConsentCopyVersion(): string {
+  return SMS_MARKETING_OPT_IN_TEXT;
 }

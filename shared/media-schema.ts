@@ -92,6 +92,8 @@ export interface Slideshow {
   autoplayInterval: number;
   transition: string;
   requiresActivationCode: boolean;
+  /** When true, locked preview requires verified SMS before 30s preview starts */
+  requirePhoneForPreview?: boolean;
   previewCouponId?: number | null;
   createdAt: string;
   images: SlideshowImage[];

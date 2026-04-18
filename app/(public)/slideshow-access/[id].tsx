@@ -312,10 +312,23 @@ export default function SlideshowAccessScreen() {
   }, []);
 
   const fetchSlideshow = async (activationCode?: string) => {
+    let publicMeta: {
+      name?: string;
+      userId?: number;
+      requirePhoneForPreview?: boolean;
+      previewCouponId?: number | null;
+    } | null = null;
+
     try {
       console.log('🎬 SLIDESHOW_ACCESS: Fetching slideshow with ID:', id);
 
       const { slideshowAccessAPI } = await import('@/services/api');
+
+      try {
+        publicMeta = await slideshowAccessAPI.getPublicMeta(id);
+      } catch {
+        publicMeta = null;
+      }
       
       // Use provided activation code or check state
       const activationCodeToUse = activationCode || validatedCode?.code;
@@ -360,6 +373,8 @@ export default function SlideshowAccessScreen() {
           // Ensure creator userId is available for store routing
           userId: slideshowData.user_id || slideshowData.userId,
           previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
+          requirePhoneForPreview:
+            !!(slideshowData.requirePhoneForPreview ?? slideshowData.require_phone_for_preview ?? publicMeta?.requirePhoneForPreview),
         };
         setSlideshow(mappedSlideshow);
         // Don't set isFullAccess to true - user needs to enter activation code
@@ -374,6 +389,8 @@ export default function SlideshowAccessScreen() {
           // Ensure creator userId is available for store routing
           userId: slideshowData.user_id || slideshowData.userId,
           previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
+          requirePhoneForPreview:
+            !!(slideshowData.requirePhoneForPreview ?? slideshowData.require_phone_for_preview ?? publicMeta?.requirePhoneForPreview),
         };
         setSlideshow(mappedSlideshow);
         // Access is granted, user can view slideshow
@@ -396,7 +413,7 @@ export default function SlideshowAccessScreen() {
         const minimalSlideshow: Slideshow = {
           id: parseInt(id),
           uniqueId: id,
-          name: 'Protected Slideshow',
+          name: publicMeta?.name || 'Protected Slideshow',
           requiresActivationCode: true,
           images: [],
           description: 'This slideshow requires an activation code to access.',
@@ -404,6 +421,9 @@ export default function SlideshowAccessScreen() {
           autoplayInterval: 5000,
           transition: 'fade',
           createdAt: new Date().toISOString(),
+          userId: publicMeta?.userId,
+          requirePhoneForPreview: !!publicMeta?.requirePhoneForPreview,
+          previewCouponId: publicMeta?.previewCouponId ?? null,
         };
         setSlideshow(minimalSlideshow);
       } else {
@@ -988,6 +1008,7 @@ export default function SlideshowAccessScreen() {
         contentName={slideshow?.name}
         couponId={slideshow?.previewCouponId != null ? Number(slideshow.previewCouponId) : undefined}
         ownerId={slideshow?.userId != null ? Number(slideshow.userId) : undefined}
+        requirePhoneForPreview={slideshow?.requirePhoneForPreview === true}
       />
 
       {/* Demographics Survey Overlay */}

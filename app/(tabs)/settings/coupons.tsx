@@ -342,7 +342,7 @@ export default function CouponsSettingsScreen() {
                   <View style={styles.couponHeaderText}>
                     <ThemedText style={styles.couponCode}>{c.code}</ThemedText>
                     {c.isDefaultPreviewCoupon && (
-                      <ThemedText style={styles.defaultBadge}>Default $5.00 coupon</ThemedText>
+                      <ThemedText style={styles.defaultBadge}>Default preview coupon</ThemedText>
                     )}
                   </View>
                   {!c.isDefaultPreviewCoupon && (

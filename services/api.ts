@@ -647,6 +647,25 @@ export const couponAPI = {
   },
 };
 
+/** Verified preview phone leads (owner export). */
+export const previewLeadsAPI = {
+  async exportLeads(marketingOnly?: boolean) {
+    const response = await api.get('/preview-leads/export', {
+      params: { marketingOnly: marketingOnly === true ? 'true' : 'false' },
+    });
+    return response.data as {
+      leads: Array<{
+        phone_e164: string;
+        verified_at: string;
+        marketing_opt_in: boolean;
+        content_type: string;
+        content_id: string | number;
+        coupon_id: number | null;
+      }>;
+    };
+  },
+};
+
 export const mediaAPI = {
   async getAll() {
     const response = await api.get('/media');
@@ -955,6 +974,11 @@ export const slideshowsAPI = {
 };
 
 export const slideshowAccessAPI = {
+  /** Public metadata when full access is blocked (no activation code). */
+  async getPublicMeta(id: string) {
+    const response = await api.get(`/slideshow-access-public/${id}`);
+    return response.data;
+  },
   async getByIdForAccess(id: string, activationCode?: string) {
     try {
       console.log('🎬 API: Fetching slideshow access for ID:', id, 'with code:', activationCode || 'none');

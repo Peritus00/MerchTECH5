@@ -48,6 +48,8 @@ interface Slideshow {
   transition: string;
   audioUrl?: string;
   requiresActivationCode: boolean;
+  requirePhoneForPreview?: boolean;
+  previewCouponId?: number | null;
   createdAt: string;
   images: SlideshowImage[];
   userId: number; // Added userId to Slideshow interface
@@ -55,6 +57,7 @@ interface Slideshow {
 
 export default function SlideshowsScreen() {
   const [slideshows, setSlideshows] = useState<Slideshow[]>([]);
+  const [savingPreviewGateSlideshowIds, setSavingPreviewGateSlideshowIds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -229,6 +232,39 @@ export default function SlideshowsScreen() {
     }
   };
 
+  const handleToggleRequirePhoneForPreview = async (slideshow: Slideshow) => {
+    const sid = slideshow.id;
+    if (savingPreviewGateSlideshowIds.has(sid)) return;
+    const nextValue = !(slideshow.requirePhoneForPreview ?? false);
+    setSavingPreviewGateSlideshowIds((prev) => new Set(prev).add(sid));
+    const updated = { ...slideshow, requirePhoneForPreview: nextValue };
+    try {
+      const updatedState = await performOptimisticUpdate({
+        currentState: slideshows,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updated, (s) => s.id),
+        serverMutation: async () => {
+          return await slideshowsAPI.update(String(sid), { requirePhoneForPreview: nextValue });
+        },
+        getItemId: (s) => s.id,
+        refreshState: fetchSlideshows,
+        onError: (error: any) => {
+          Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview phone setting');
+        },
+      });
+      setSlideshows(updatedState);
+    } catch (error: any) {
+      console.error('Slideshow preview gate toggle error:', error);
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview phone setting');
+    } finally {
+      setSavingPreviewGateSlideshowIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sid);
+        return next;
+      });
+    }
+  };
+
   const handlePreviewSlideshow = (slideshow: Slideshow) => {
     console.log(
       `▶️ Play button clicked for slideshow: "${slideshow.name}" (ID: ${slideshow.id})`
@@ -358,6 +394,8 @@ export default function SlideshowsScreen() {
                   console.log('🔗 Link products pressed for slideshow', slideshow.id);
                   router.push(`/product-links/${slideshow.id}?type=slideshow`);
                 }}
+                onToggleRequirePhone={() => handleToggleRequirePhoneForPreview(slideshow)}
+                requirePhoneSaving={savingPreviewGateSlideshowIds.has(slideshow.id)}
               />
             ))}
           </View>
@@ -436,6 +474,7 @@ export default function SlideshowsScreen() {
             if (updates.transition !== undefined) payload.transition = updates.transition;
             if (updates.autoplayInterval !== undefined) payload.autoplayInterval = updates.autoplayInterval;
             if (updates.requiresActivationCode !== undefined) payload.requiresActivationCode = updates.requiresActivationCode;
+            if (updates.requirePhoneForPreview !== undefined) payload.requirePhoneForPreview = updates.requirePhoneForPreview;
             if (updates.previewCouponId !== undefined) payload.previewCouponId = updates.previewCouponId;
 
             // Create optimistic updated slideshow

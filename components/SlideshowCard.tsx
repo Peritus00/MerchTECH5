@@ -5,7 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
@@ -26,6 +26,7 @@ interface Slideshow {
   transition: string;
   audioUrl?: string;
   requiresActivationCode: boolean;
+  requirePhoneForPreview?: boolean;
   createdAt: string;
   images: SlideshowImage[];
 }
@@ -37,6 +38,8 @@ interface SlideshowCardProps {
   onManageImages: () => void;
   onPreview: () => void;
   onLinkProducts: () => void;
+  onToggleRequirePhone?: () => void;
+  requirePhoneSaving?: boolean;
 }
 
 const SlideshowCard: React.FC<SlideshowCardProps> = ({
@@ -46,6 +49,8 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
   onManageImages,
   onPreview,
   onLinkProducts,
+  onToggleRequirePhone,
+  requirePhoneSaving,
 }) => {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '--';
@@ -139,6 +144,29 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
         <TouchableOpacity style={[styles.actionButton, styles.previewButton]} onPress={onPreview}>
           <MaterialIcons name="play-arrow" size={18} color="#10b981" />
         </TouchableOpacity>
+
+        {onToggleRequirePhone && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={requirePhoneSaving ? undefined : onToggleRequirePhone}
+            disabled={requirePhoneSaving}
+            accessibilityLabel={
+              (slideshow.requirePhoneForPreview ?? false)
+                ? 'Require verified phone for preview is on. Tap to turn off.'
+                : 'Require verified phone for preview is off. Tap to turn on.'
+            }
+          >
+            {requirePhoneSaving ? (
+              <ActivityIndicator size="small" color="#3b82f6" />
+            ) : (
+              <MaterialIcons
+                name={(slideshow.requirePhoneForPreview ?? false) ? 'check-box' : 'check-box-outline-blank'}
+                size={18}
+                color={(slideshow.requirePhoneForPreview ?? false) ? '#3b82f6' : '#9ca3af'}
+              />
+            )}
+          </TouchableOpacity>
+        )}
         
         <TouchableOpacity style={styles.actionButton} onPress={onLinkProducts}>
           <MaterialIcons name="link" size={18} color="#3b82f6" />

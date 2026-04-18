@@ -525,6 +525,8 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 playlistLines.map((line, index) => {
                   const file = line.file;
                   const weekdays = getWeeklyWeekdays(line);
+                  const isActiveWebDatePicker =
+                    Platform.OS === 'web' && datePickerCtx?.lineIndex === index;
                   return (
                     <View key={String(file.id)} style={styles.mediaItemBlock}>
                       <View style={styles.mediaItem}>
@@ -635,6 +637,37 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                             </TouchableOpacity>
                           </View>
 
+                          {isActiveWebDatePicker && datePickerCtx && (
+                            <View style={styles.inlineWebDatePicker}>
+                              <View style={styles.inlineWebDatePickerHeader}>
+                                <Text style={styles.inlineWebDatePickerTitle}>
+                                  {datePickerCtx.mode === 'exact' ? 'Add date' : 'Set date'}
+                                </Text>
+                                <View style={styles.inlineWebDatePickerActions}>
+                                  <TouchableOpacity onPress={() => setDatePickerCtx(null)}>
+                                    <Text style={styles.inlineWebDatePickerCancel}>Cancel</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity onPress={closeDatePickerIos}>
+                                    <Text style={styles.inlineWebDatePickerDone}>Done</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                              <View style={styles.webDateInputWrap}>
+                                <TextInput
+                                  style={styles.webDateInput}
+                                  value={toLocalIsoDate(datePickerValue)}
+                                  onChangeText={(text) => {
+                                    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+                                      setDatePickerValue(parseIsoToLocalDate(text));
+                                    }
+                                  }}
+                                  // @ts-expect-error react-native-web: DOM input type
+                                  type="date"
+                                />
+                              </View>
+                            </View>
+                          )}
+
                           <Text style={styles.subLabel}>Exact dates</Text>
                           <View style={styles.exactDatesRow}>
                             {line.scheduleExactDates.map((d) => (
@@ -705,35 +738,6 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                     onChange={onNativeDateChange}
                     style={styles.iosPicker}
                   />
-                </View>
-              )}
-
-              {datePickerCtx && Platform.OS === 'web' && (
-                <View style={styles.iosPickerSheet}>
-                  <View style={styles.iosPickerHeader}>
-                    <TouchableOpacity onPress={() => setDatePickerCtx(null)}>
-                      <Text style={styles.iosPickerCancel}>Cancel</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.iosPickerTitle}>
-                      {datePickerCtx.mode === 'exact' ? 'Add date' : 'Set date'}
-                    </Text>
-                    <TouchableOpacity onPress={closeDatePickerIos}>
-                      <Text style={styles.iosPickerDone}>Done</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <View style={styles.webDateInputWrap}>
-                    <TextInput
-                      style={styles.webDateInput}
-                      value={toLocalIsoDate(datePickerValue)}
-                      onChangeText={(text) => {
-                        if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-                          setDatePickerValue(parseIsoToLocalDate(text));
-                        }
-                      }}
-                      // @ts-expect-error react-native-web: DOM input type
-                      type="date"
-                    />
-                  </View>
                 </View>
               )}
 
@@ -1121,8 +1125,8 @@ const styles = StyleSheet.create({
     height: 200,
   },
   webDateInputWrap: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
   },
   webDateInput: {
     minHeight: 44,
@@ -1133,6 +1137,40 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
     color: '#1f2937',
+  },
+  inlineWebDatePicker: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 10,
+    backgroundColor: '#f8fbff',
+  },
+  inlineWebDatePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  inlineWebDatePickerTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1d4ed8',
+  },
+  inlineWebDatePickerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  inlineWebDatePickerCancel: {
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  inlineWebDatePickerDone: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#2563eb',
   },
 });
 

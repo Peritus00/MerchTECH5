@@ -245,6 +245,12 @@ export default function Settings() {
       icon: '🎟️',
     },
     {
+      title: 'Preview phone leads',
+      description: 'Export verified numbers from locked previews (optional marketing filter)',
+      onPress: () => router.push('/(tabs)/settings/preview-leads'),
+      icon: '📱',
+    },
+    {
       title: 'Help & Support',
       description: 'Get help and contact support',
       onPress: handleHelpSupport,

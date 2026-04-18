@@ -86,6 +86,17 @@ const smsSendLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// Preview phone verification start (abuse protection)
+const previewLeadStartLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 12,
+  message: { error: 'Too many preview verification requests. Please try again later.' },
+  handler: rateLimitViolationHandler,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   authLimiter,
   uploadLimiter,
@@ -94,5 +105,6 @@ module.exports = {
   mediaReadLimiter,
   mediaStreamLimiter,
   smsSendLimiter,
+  previewLeadStartLimiter,
 };
 

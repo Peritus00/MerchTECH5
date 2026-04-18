@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { SMS_TRANSACTIONAL_CONSENT_TEXT } from '@/constants/smsConsent';
+import { SMS_TRANSACTIONAL_CONSENT_TEXT, SMS_MARKETING_OPT_IN_TEXT } from '@/constants/smsConsent';
 
 export interface SmsOptInFieldsProps {
   phone: string;
@@ -19,6 +19,10 @@ export interface SmsOptInFieldsProps {
   onSmsConsentChange: (value: boolean) => void;
   termsConsent: boolean;
   onTermsConsentChange: (value: boolean) => void;
+  /** Optional separate marketing SMS opt-in (unchecked by default). */
+  showMarketingOptIn?: boolean;
+  marketingConsent?: boolean;
+  onMarketingConsentChange?: (value: boolean) => void;
   sending: boolean;
   onSend: () => void;
   /** Primary action label — provider requires "SEND". */
@@ -33,6 +37,9 @@ export default function SmsOptInFields({
   onSmsConsentChange,
   termsConsent,
   onTermsConsentChange,
+  showMarketingOptIn = false,
+  marketingConsent = false,
+  onMarketingConsentChange,
   sending,
   onSend,
   sendButtonLabel = 'SEND',
@@ -106,6 +113,24 @@ export default function SmsOptInFields({
           </Text>
         </View>
       </View>
+
+      {showMarketingOptIn && onMarketingConsentChange && (
+        <TouchableOpacity
+          style={[styles.checkboxRow, marketingConsent && styles.checkboxChecked]}
+          onPress={() => onMarketingConsentChange(!marketingConsent)}
+          disabled={blocked}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: marketingConsent }}
+        >
+          <MaterialIcons
+            name={marketingConsent ? 'check-box' : 'check-box-outline-blank'}
+            size={24}
+            color={marketingConsent ? '#3b82f6' : '#9ca3af'}
+            style={styles.checkboxIcon}
+          />
+          <Text style={styles.checkboxLabel}>{SMS_MARKETING_OPT_IN_TEXT}</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity
         style={[styles.btn, styles.btnPrimary, blocked && styles.btnDisabled]}

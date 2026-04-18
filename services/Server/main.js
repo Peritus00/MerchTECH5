@@ -18,6 +18,7 @@ const s3Service = require('./s3Service');
 const axios = require('axios');
 const helmet = require('helmet');
 const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const socialAuthService = require('./socialAuthService');
 const smsService = require('./services/smsService');
 const {
@@ -31,7 +32,7 @@ console.log('🚀 Server startup initiated...');
 console.log('📦 Loading middleware modules...');
 
 // Phase 1 Security Middleware - wrap in try-catch to catch initialization errors
-let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter;
+let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter;
 let validate, validators;
 let errorHandler, errorLogger;
 let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
@@ -39,7 +40,7 @@ let validateFileMagic, clamavScanner;
 
 try {
   console.log('📦 Loading rate limiter...');
-  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter } = require('./middleware/rateLimiter'));
+  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter } = require('./middleware/rateLimiter'));
   
   console.log('📦 Loading validator...');
   ({ validate, validators, normalizeConfirmUploadBody } = require('./middleware/validator'));
@@ -561,6 +562,9 @@ app.use((req, res, next) => {
 
 // SMS send rate limiting (abuse protection)
 app.use('/api/coupons/sms/send', smsSendLimiter);
+
+// Preview phone verification start (stricter than general API limiter)
+app.use('/api/preview-leads/start', previewLeadStartLimiter);
 
 // General API rate limiting (applies to all other /api/ routes)
 // IMPORTANT: Exclude streaming endpoints to avoid 429s during media playback,
@@ -10705,7 +10709,7 @@ async function ensureDefaultPreviewCouponForUser(userId) {
   if (!coupon) {
     const inserted = await db.query(
       `INSERT INTO coupons (owner_id, code, discount_type, discount_value, max_redemptions, starts_at, expires_at)
-       VALUES ($1, $2, 'fixed', 5, NULL, NULL, NULL)
+       VALUES ($1, $2, 'percent', 20, NULL, NULL, NULL)
        RETURNING *`,
       [normalizedUserId, defaultCode]
     );
@@ -10713,8 +10717,8 @@ async function ensureDefaultPreviewCouponForUser(userId) {
   } else {
     const updated = await db.query(
       `UPDATE coupons
-       SET discount_type = 'fixed',
-           discount_value = 5,
+       SET discount_type = 'percent',
+           discount_value = 20,
            max_redemptions = NULL,
            starts_at = NULL,
            expires_at = NULL,
@@ -10922,6 +10926,69 @@ async function ensureCouponTables() {
   return r.rows.length > 0;
 }
 
+async function ensurePreviewLeadTables() {
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'preview_phone_leads' LIMIT 1`
+    );
+    return r.rows.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function loadLockedContentForPreviewGate(contentType, contentId) {
+  const id = parseInt(String(contentId), 10);
+  if (isNaN(id)) return null;
+  if (contentType === 'playlist') {
+    const { rows } = await db.query(
+      `SELECT id, user_id, requires_activation_code, is_public, COALESCE(require_phone_for_preview, false) AS require_phone_for_preview
+       FROM playlists WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [id]
+    );
+    return rows[0] || null;
+  }
+  if (contentType === 'slideshow') {
+    try {
+      const { rows } = await db.query(
+        `SELECT id, user_id, requires_activation_code, COALESCE(require_phone_for_preview, false) AS require_phone_for_preview
+         FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [id]
+      );
+      return rows[0] || null;
+    } catch (e) {
+      if (e.code === '42703') {
+        const { rows } = await db.query(
+          `SELECT id, user_id, requires_activation_code, false AS require_phone_for_preview
+           FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+          [id]
+        );
+        return rows[0] || null;
+      }
+      throw e;
+    }
+  }
+  return null;
+}
+
+function assertVerifiedPreviewGateForContent(contentType, row) {
+  if (!row) return { ok: false, error: 'Content not found' };
+  if (!row.require_phone_for_preview) {
+    return { ok: false, error: 'Phone verification is not enabled for this content' };
+  }
+  if (contentType === 'playlist') {
+    const accessRestricted = !!row.requires_activation_code && !row.is_public;
+    if (!accessRestricted) {
+      return { ok: false, error: 'Preview verification is only for locked playlists' };
+    }
+  } else if (contentType === 'slideshow') {
+    if (!row.requires_activation_code) {
+      return { ok: false, error: 'Preview verification is only for locked slideshows' };
+    }
+  }
+  return { ok: true, ownerUserId: row.user_id };
+}
+
 // POST /api/coupons - create coupon (authenticated)
 app.post('/api/coupons', authenticateToken, async (req, res) => {
   try {
@@ -11086,7 +11153,7 @@ app.delete('/api/coupons/:id', authenticateToken, async (req, res) => {
     if (!existing.rows.length) return res.status(404).json({ error: 'Coupon not found' });
     const coupon = existing.rows[0];
     if (coupon.code === getDefaultPreviewCouponCode(userId)) {
-      return res.status(400).json({ error: 'The default $5.00 coupon cannot be deleted.' });
+      return res.status(400).json({ error: 'The default preview coupon cannot be deleted.' });
     }
     await db.query(`DELETE FROM coupons WHERE id = $1 AND owner_id = $2`, [id, userId]);
     res.json({ ok: true });
@@ -11200,6 +11267,220 @@ app.post('/api/coupons/sms/send', async (req, res) => {
   } catch (e) {
     console.error('Coupon SMS send error:', e);
     res.status(500).json({ error: 'Failed to send SMS' });
+  }
+});
+
+// ---------- PREVIEW PHONE LEADS (verified gate + optional marketing opt-in) ----------
+app.post('/api/preview-leads/start', async (req, res) => {
+  try {
+    if (!(await ensureCouponTables())) {
+      return res.status(503).json({ error: 'Coupon feature not available' });
+    }
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available. Run migration 040_preview_phone_leads_and_slideshow_phone_gate.sql' });
+    }
+
+    const {
+      phone,
+      contentType,
+      contentId,
+      couponId,
+      transactionalConsent,
+      termsConsent,
+      marketingOptIn,
+      transactionalConsentCopyVersion,
+      marketingConsentCopyVersion,
+    } = req.body || {};
+
+    if (!transactionalConsent) {
+      return res.status(400).json({ error: 'Consent is required to receive the verification text' });
+    }
+    if (!termsConsent) {
+      return res.status(400).json({ error: 'Terms and Privacy Policy agreement is required' });
+    }
+    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    if (contentType !== 'playlist' && contentType !== 'slideshow') {
+      return res.status(400).json({ error: 'Invalid contentType' });
+    }
+    const cid = parseInt(String(contentId), 10);
+    if (isNaN(cid)) return res.status(400).json({ error: 'Invalid contentId' });
+
+    const row = await loadLockedContentForPreviewGate(contentType, cid);
+    const gate = assertVerifiedPreviewGateForContent(contentType, row);
+    if (!gate.ok) {
+      return res.status(400).json({ error: gate.error });
+    }
+
+    const phoneDigits = String(phone).replace(/\D/g, '');
+    if (phoneDigits.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+    const e164 = phoneDigits.startsWith('1') && phoneDigits.length === 11 ? `+${phoneDigits}` : `+1${phoneDigits}`;
+
+    const numericCouponId = couponId != null && couponId !== '' ? parseInt(String(couponId), 10) : null;
+    const coupon = (await resolveCouponForPreviewSms({
+      couponId: !isNaN(numericCouponId) ? numericCouponId : null,
+      contentType,
+      contentId: cid,
+    })) || null;
+    const couponCode = coupon ? coupon.code : 'SAVE';
+
+    const verificationPlain = crypto.randomBytes(24).toString('hex');
+    const verificationHash = crypto.createHash('sha256').update(verificationPlain, 'utf8').digest('hex');
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    let qrId = null;
+    try {
+      const qrCol = contentType === 'playlist' ? 'playlist_id' : 'slideshow_id';
+      const qrRes = await db.query(
+        `SELECT id FROM qr_codes WHERE ${qrCol} = $1 ORDER BY created_at DESC LIMIT 1`,
+        [cid]
+      );
+      qrId = qrRes.rows[0]?.id || null;
+    } catch (_) {
+      qrId = null;
+    }
+
+    await db.query(
+      `DELETE FROM preview_phone_leads WHERE phone_e164 = $1 AND content_type = $2 AND content_id = $3 AND verified_at IS NULL`,
+      [e164, contentType, cid]
+    );
+
+    const ins = await db.query(
+      `INSERT INTO preview_phone_leads (
+        owner_user_id, content_type, content_id, phone_e164, coupon_id,
+        verification_token_hash, verification_expires_at,
+        transactional_consent_copy_version, terms_consented, marketing_opt_in,
+        marketing_consent_copy_version, marketing_consented_at, qr_code_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      RETURNING id, public_poll_token`,
+      [
+        gate.ownerUserId,
+        contentType,
+        cid,
+        e164,
+        coupon?.id || null,
+        verificationHash,
+        verificationExpires,
+        transactionalConsentCopyVersion || null,
+        !!termsConsent,
+        !!marketingOptIn,
+        marketingOptIn ? (marketingConsentCopyVersion || null) : null,
+        marketingOptIn ? new Date() : null,
+        qrId,
+      ]
+    );
+
+    const leadRow = ins.rows[0];
+    const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'http://localhost:8081';
+    const frontend = String(rawFrontend).replace(/\/$/, '');
+    const verifyUrl = `${frontend}/preview-verify?t=${encodeURIComponent(verificationPlain)}`;
+
+    const smsBody = `MerchTrader: Code ${couponCode}. Verify to unlock preview: ${verifyUrl} Msg/data rates may apply. Reply STOP to opt out.`;
+
+    const smsResult = await smsService.sendCouponSms(e164, smsBody);
+    if (smsResult.error) {
+      await db.query(`DELETE FROM preview_phone_leads WHERE id = $1`, [leadRow.id]);
+      return res.status(502).json({ error: smsResult.error, sent: false });
+    }
+
+    await db.query(`UPDATE preview_phone_leads SET last_sms_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [leadRow.id]);
+    await db.query(
+      `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'sms_sent',$2::jsonb)`,
+      [leadRow.id, JSON.stringify({ providerMessageId: smsResult.messageId || null })]
+    );
+
+    res.json({ ok: true, pollToken: leadRow.public_poll_token });
+  } catch (e) {
+    console.error('preview-leads/start error:', e);
+    res.status(500).json({ error: 'Failed to start preview verification' });
+  }
+});
+
+app.post('/api/preview-leads/verify', async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const token = (req.body && req.body.token) || req.query.t;
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'token required' });
+    }
+    const hash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+    const { rows } = await db.query(
+      `SELECT * FROM preview_phone_leads
+       WHERE verification_token_hash = $1 AND verification_expires_at > NOW() AND verified_at IS NULL`,
+      [hash]
+    );
+    if (!rows.length) {
+      return res.status(400).json({ error: 'Invalid or expired verification link' });
+    }
+    const lead = rows[0];
+    await db.query(`UPDATE preview_phone_leads SET verified_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
+    await db.query(
+      `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'verified','{}'::jsonb)`,
+      [lead.id]
+    );
+    res.json({ ok: true, pollToken: lead.public_poll_token });
+  } catch (e) {
+    console.error('preview-leads/verify error:', e);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+app.get('/api/preview-leads/status', async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const pollToken = req.query.pollToken;
+    if (!pollToken) return res.status(400).json({ error: 'pollToken required' });
+    const { rows } = await db.query(
+      `SELECT id, verified_at, content_type, content_id FROM preview_phone_leads WHERE public_poll_token = $1::uuid LIMIT 1`,
+      [String(pollToken)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const lead = rows[0];
+    if (!lead.verified_at) {
+      return res.json({ status: 'pending' });
+    }
+    const unlockToken = jwt.sign(
+      {
+        typ: 'preview_unlock',
+        leadId: lead.id,
+        contentType: lead.content_type,
+        contentId: lead.content_id,
+      },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    return res.json({ status: 'verified', unlockToken });
+  } catch (e) {
+    if (e.code === '22P02') {
+      return res.status(400).json({ error: 'Invalid pollToken' });
+    }
+    console.error('preview-leads/status error:', e);
+    res.status(500).json({ error: 'Status check failed' });
+  }
+});
+
+app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const ownerId = parseInt(req.user.userId, 10);
+    const marketingOnly = String(req.query.marketingOnly || 'false') === 'true';
+    const { rows } = await db.query(
+      `SELECT phone_e164, verified_at, marketing_opt_in, content_type, content_id, coupon_id
+       FROM preview_phone_leads
+       WHERE owner_user_id = $1 AND verified_at IS NOT NULL
+       ${marketingOnly ? 'AND marketing_opt_in = true' : ''}
+       ORDER BY verified_at DESC`,
+      [ownerId]
+    );
+    res.json({ leads: rows });
+  } catch (e) {
+    console.error('preview-leads/export error:', e);
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 
@@ -13580,6 +13861,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
           description: slideshow.description,
           requiresActivationCode: slideshow.requires_activation_code,
           isPublic: slideshow.is_public,
+          requirePhoneForPreview: !!slideshow.require_phone_for_preview,
           previewCouponId: slideshow.preview_coupon_id ?? null,
           autoplayInterval: slideshow.autoplay_interval,
           transition: slideshow.transition,
@@ -13771,6 +14053,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
       username: slideshow.username,
       isPublic: slideshow.is_public,
       requiresActivationCode: slideshow.requires_activation_code,
+      requirePhoneForPreview: !!slideshow.require_phone_for_preview,
       previewCouponId: slideshow.preview_coupon_id ?? null,
       autoplayInterval: slideshow.autoplay_interval,
       backgroundAudioUrl: signedAudioUrl,
@@ -14226,6 +14509,53 @@ app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
   }
 });
 
+// Public metadata for locked slideshow access UI (no images / no activation code)
+app.get('/api/slideshow-access-public/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    try {
+      const { rows } = await db.query(
+        `SELECT id, name, user_id, requires_activation_code, preview_coupon_id,
+          COALESCE(require_phone_for_preview, false) AS require_phone_for_preview
+         FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+        [id]
+      );
+      if (!rows.length) return res.status(404).json({ error: 'Not found' });
+      const s = rows[0];
+      return res.json({
+        id: s.id,
+        name: s.name,
+        userId: s.user_id,
+        requiresActivationCode: s.requires_activation_code,
+        requirePhoneForPreview: !!s.require_phone_for_preview,
+        previewCouponId: s.preview_coupon_id ?? null,
+      });
+    } catch (e) {
+      if (e.code === '42703') {
+        const { rows } = await db.query(
+          `SELECT id, name, user_id, requires_activation_code, preview_coupon_id
+           FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+          [id]
+        );
+        if (!rows.length) return res.status(404).json({ error: 'Not found' });
+        const s = rows[0];
+        return res.json({
+          id: s.id,
+          name: s.name,
+          userId: s.user_id,
+          requiresActivationCode: s.requires_activation_code,
+          requirePhoneForPreview: false,
+          previewCouponId: s.preview_coupon_id ?? null,
+        });
+      }
+      throw e;
+    }
+  } catch (err) {
+    console.error('slideshow-access-public error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get a specific slideshow by ID for access control (no auth required)
 app.get('/api/slideshow-access/:id', async (req, res) => {
   const slideshowId = req.params.id;
@@ -14545,6 +14875,14 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
     
     // Add isFallback flag to normal response
     fullSlideshow.isFallback = false;
+    try {
+      fullSlideshow.requirePhoneForPreview = !!fullSlideshow.require_phone_for_preview;
+    } catch (_) {
+      fullSlideshow.requirePhoneForPreview = false;
+    }
+    if (fullSlideshow.preview_coupon_id != null && fullSlideshow.previewCouponId == null) {
+      fullSlideshow.previewCouponId = fullSlideshow.preview_coupon_id;
+    }
     
     res.json(fullSlideshow);
 
@@ -14674,7 +15012,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
 app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, autoplayInterval, transition, requiresActivationCode, audio_url, previewCouponId } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, requirePhoneForPreview, audio_url, previewCouponId } = req.body;
     
     console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====');
     console.log('🎬 SLIDESHOWS: Updating slideshow ID:', id);
@@ -14756,9 +15094,10 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
            requires_activation_code = COALESCE($5, requires_activation_code),
            audio_url = COALESCE($6, audio_url),
            preview_coupon_id = $7,
+           require_phone_for_preview = COALESCE($8, require_phone_for_preview),
            updated_at = NOW()
-       WHERE id = $8 RETURNING *`,
-      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, nextPreviewCouponId, id]
+       WHERE id = $9 RETURNING *`,
+      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, nextPreviewCouponId, requirePhoneForPreview, id]
     );
 
     const slideshow = result.rows[0];
@@ -14798,6 +15137,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
       autoplayInterval: slideshow.autoplay_interval,
       transition: slideshow.transition,
       requiresActivationCode: slideshow.requires_activation_code,
+      requirePhoneForPreview: !!slideshow.require_phone_for_preview,
       previewCouponId: slideshow.preview_coupon_id ?? null,
       backgroundAudioUrl: slideshow.audio_url,
       updatedAt: slideshow.updated_at
