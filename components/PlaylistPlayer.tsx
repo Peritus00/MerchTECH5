@@ -2383,7 +2383,7 @@ const styles = StyleSheet.create({
     mobileRightPanel: {
         width: '100%',
         flex: 0,
-        minHeight: 0,
+        minHeight: 280,
         marginTop: 8,
     },
     featuredProductsHeader: {
@@ -2405,6 +2405,8 @@ const styles = StyleSheet.create({
       },
       mobileFeaturedProductsContent: {
         flexGrow: 0,
+        minHeight: 220,
+        maxHeight: 420,
       },
       productsListContent: {
         paddingBottom: 20,
