@@ -395,7 +395,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [isMuted, setIsMuted] = useState(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
   const [videoDimensions, setVideoDimensions] = useState<{width: number, height: number} | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(1); // Start at normal size on mobile/web to avoid excessive empty space
+  const [zoomLevel, setZoomLevel] = useState(1); // Start at normal size so media fills the available player area
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExitButton, setShowExitButton] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -1173,7 +1173,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     if (videoRef.current && currentItemMediaType === 'video') {
       videoRef.current.setPositionAsync(0);
       setVideoDimensions(null); // Reset dimensions for new video
-      setZoomLevel(0.5); // Reset zoom level for new video
+      setZoomLevel(1); // Reset zoom to full-size for each new video
       setIsFullscreen(false); // Reset fullscreen state for new video
     }
     // Reset retry state when media changes
@@ -1246,11 +1246,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   };
 
   const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 0.25, 0.5)); // Min zoom 0.5x
+    setZoomLevel(prev => Math.max(prev - 0.25, isFullscreen ? 1 : 0.75)); // Keep fullscreen media filling the screen
   };
 
   const handleZoomReset = () => {
-    setZoomLevel(0.5);
+    setZoomLevel(1);
   };
 
   // Handle touch to show/hide exit button in fullscreen
