@@ -16,6 +16,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -396,8 +397,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
-  const [mobileQuickPayHeight, setMobileQuickPayHeight] = useState(0);
-  const [mobileControlsHeight, setMobileControlsHeight] = useState(0);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -417,6 +416,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const lastAutoPlayAttemptAtRef = useRef<number>(0);
   const stallRecoveryInProgressRef = useRef<boolean>(false);
   const html5VideoRef = useRef<HTMLVideoElement | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+  const resumeAfterCheckoutReturnRef = useRef(false);
 
   // Slideshow-in-playlist: loaded data for current slideshow media item
   const [slideshowData, setSlideshowData] = useState<any>(null);
@@ -488,17 +489,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     return Math.max(220, Math.round(maxHeight * zoomLevel));
   }, [isFullscreen, isMobile, videoDimensions, zoomLevel]);
 
-  const mobilePlayerReserveHeight = useMemo(() => {
-    if (!isMobile || isFullscreen) {
-      return 0;
-    }
-
-    // Measure the actual quick-pay and controls stack so iPhone can pull products
-    // upward without Android clipping controls when that stack is taller.
-    const measured = mobileQuickPayHeight + mobileControlsHeight;
-    return Math.max(44, measured + 8);
-  }, [isFullscreen, isMobile, mobileControlsHeight, mobileQuickPayHeight]);
-
   useEffect(() => {
     // Disable right-click on web
     if (Platform.OS === 'web') {
@@ -557,6 +547,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     if (isCheckoutLoading) return;
     setIsCheckoutLoading(true);
     setPendingCheckoutUrl(null);
+    resumeAfterCheckoutReturnRef.current = Platform.OS !== 'web' && isPlaying;
     const preparedCheckoutWindow =
       Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
@@ -575,7 +566,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       if (launchResult.status === 'blocked') {
         setPendingCheckoutUrl(url);
       }
+      if (Platform.OS !== 'web') {
+        setTimeout(() => {
+          if (resumeAfterCheckoutReturnRef.current) {
+            resumeAfterCheckoutReturnRef.current = false;
+            setIsPlaying(true);
+          }
+        }, 150);
+      }
     } catch (error) {
+      resumeAfterCheckoutReturnRef.current = false;
       preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
@@ -1390,6 +1390,34 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     goToNextVideo();
   }, [goToNextVideo]);
 
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        resumeAfterCheckoutReturnRef.current &&
+        (previousState === 'inactive' || previousState === 'background') &&
+        nextState === 'active'
+      ) {
+        setTimeout(() => {
+          if (resumeAfterCheckoutReturnRef.current) {
+            resumeAfterCheckoutReturnRef.current = false;
+            setIsPlaying(true);
+          }
+        }, 150);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   const attachMediaController = useCallback((ref: HTMLMediaElement | null, kind: 'video' | 'audio') => {
     if (!ref) {
       if (kind === 'video') {
@@ -2016,7 +2044,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             isFullscreen && styles.fullscreenLeftPanel,
             isMobile && styles.mobileLeftPanel,
             !isFullscreen && {
-              minHeight: estimatedVideoHeight + (isMobile ? mobilePlayerReserveHeight : 180)
+              minHeight: estimatedVideoHeight + (isMobile ? 0 : 180)
             }
           ]}>
             <View style={[
@@ -2079,12 +2107,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 )}
             </View>
             
-            <View
-              onLayout={(event) => {
-                if (!isMobile || isFullscreen) return;
-                setMobileQuickPayHeight(Math.round(event.nativeEvent.layout.height));
-              }}
-            >
+            <View>
               <QuickPayOverlay
                 activeProducts={activeProducts}
                 isFullscreen={isFullscreen}
@@ -2097,60 +2120,56 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
             {/* CONTROLS MOVED HERE */}
             <View
-              style={styles.controls}
-              onLayout={(event) => {
-                if (!isMobile || isFullscreen) return;
-                setMobileControlsHeight(Math.round(event.nativeEvent.layout.height));
-              }}
+              style={[styles.controls, isMobile && styles.mobileControls]}
             >
-                <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
+                <TouchableOpacity onPress={handlePrevious} style={[styles.controlButton, isMobile && styles.mobileControlButton]}>
                 <MaterialIcons
                     name="skip-previous"
-                    size={30}
+                    size={isMobile ? 26 : 30}
                     color="white"
                 />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handlePlayPause} style={styles.controlButton}>
+                <TouchableOpacity onPress={handlePlayPause} style={[styles.controlButton, isMobile && styles.mobileControlButton]}>
                 <FontAwesome5
                     name={isPlaying ? 'pause' : 'play'}
-                    size={28}
+                    size={isMobile ? 24 : 28}
                     color="white"
                 />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleNext} style={styles.controlButton}>
+                <TouchableOpacity onPress={handleNext} style={[styles.controlButton, isMobile && styles.mobileControlButton]}>
                 <MaterialIcons
                     name="skip-next"
-                    size={30}
+                    size={isMobile ? 26 : 30}
                     color="white"
                 />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleMuteToggle} style={styles.controlButton}>
+                <TouchableOpacity onPress={handleMuteToggle} style={[styles.controlButton, isMobile && styles.mobileControlButton]}>
                 <MaterialCommunityIcons
                     name={isMuted ? 'volume-off' : 'volume-high'}
-                    size={30}
+                    size={isMobile ? 26 : 30}
                     color="white"
                 />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleFullscreen} style={styles.controlButton}>
+                <TouchableOpacity onPress={handleFullscreen} style={[styles.controlButton, isMobile && styles.mobileControlButton]}>
                 <MaterialIcons
                     name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
-                    size={30}
+                    size={isMobile ? 26 : 30}
                     color="white"
                 />
                 </TouchableOpacity>
-                <View style={styles.zoomControls}>
-                  <TouchableOpacity onPress={handleZoomOut} style={styles.zoomButton}>
-                    <MaterialIcons name="zoom-out" size={24} color="white" />
+                <View style={[styles.zoomControls, isMobile && styles.mobileZoomControls]}>
+                  <TouchableOpacity onPress={handleZoomOut} style={[styles.zoomButton, isMobile && styles.mobileZoomButton]}>
+                    <MaterialIcons name="zoom-out" size={isMobile ? 20 : 24} color="white" />
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleZoomReset} style={styles.zoomButton}>
-                    <Text style={styles.zoomText}>{Math.round(zoomLevel * 100)}%</Text>
+                  <TouchableOpacity onPress={handleZoomReset} style={[styles.zoomButton, isMobile && styles.mobileZoomButton]}>
+                    <Text style={[styles.zoomText, isMobile && styles.mobileZoomText]}>{Math.round(zoomLevel * 100)}%</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={handleZoomIn} style={styles.zoomButton}>
-                    <MaterialIcons name="zoom-in" size={24} color="white" />
+                  <TouchableOpacity onPress={handleZoomIn} style={[styles.zoomButton, isMobile && styles.mobileZoomButton]}>
+                    <MaterialIcons name="zoom-in" size={isMobile ? 20 : 24} color="white" />
                   </TouchableOpacity>
                 </View>
-                <View style={styles.videoProgress}>
-                  <Text style={styles.progressText}>
+                <View style={[styles.videoProgress, isMobile && styles.mobileVideoProgress]}>
+                  <Text style={[styles.progressText, isMobile && styles.mobileProgressText]}>
                     {currentIndex + 1} / {playableMedia.length}
                   </Text>
                 </View>
@@ -2620,18 +2639,38 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.5)',
     paddingVertical: 15,
   },
+  mobileControls: {
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    rowGap: 6,
+    columnGap: 2,
+  },
   controlButton: {
     padding: 10,
+  },
+  mobileControlButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
   },
   videoProgress: {
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mobileVideoProgress: {
+    width: '100%',
+    paddingTop: 2,
+    paddingBottom: 0,
+  },
   progressText: {
     color: 'white',
     fontSize: 14,
     fontWeight: '600',
+  },
+  mobileProgressText: {
+    fontSize: 12,
   },
   zoomControls: {
     flexDirection: 'row',
@@ -2641,9 +2680,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
+  mobileZoomControls: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+  },
   zoomButton: {
     padding: 4,
     marginHorizontal: 2,
+  },
+  mobileZoomButton: {
+    padding: 3,
+    marginHorizontal: 1,
   },
   zoomText: {
     color: 'white',
@@ -2651,6 +2698,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 40,
     textAlign: 'center',
+  },
+  mobileZoomText: {
+    fontSize: 11,
+    minWidth: 34,
   },
 
   errorText: {
@@ -2735,7 +2786,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.6)',
     paddingVertical: 12,
     paddingHorizontal: 36,
-    marginVertical: 8,
+    marginTop: 8,
+    marginBottom: 4,
     borderRadius: 12,
     position: 'relative',
   },

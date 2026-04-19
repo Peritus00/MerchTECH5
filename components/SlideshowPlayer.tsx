@@ -17,6 +17,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  AppState,
 } from 'react-native';
 import {
   MaterialCommunityIcons,
@@ -84,6 +85,8 @@ const SlideshowPlayer = ({
   // Audio player reference
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const appStateRef = useRef(AppState.currentState);
+  const resumeAfterCheckoutReturnRef = useRef(false);
 
   // Cart functionality
   const { addToCart, getTotalItems } = useCart();
@@ -126,6 +129,7 @@ const SlideshowPlayer = ({
 
   const handleBuyNow = async (productLink: ProductLink) => {
     setPendingCheckoutUrl(null);
+    resumeAfterCheckoutReturnRef.current = Platform.OS !== 'web' && isPlaying;
     const preparedCheckoutWindow =
       Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
@@ -144,7 +148,16 @@ const SlideshowPlayer = ({
       if (launchResult.status === 'blocked') {
         setPendingCheckoutUrl(url);
       }
+      if (Platform.OS !== 'web') {
+        setTimeout(() => {
+          if (resumeAfterCheckoutReturnRef.current) {
+            resumeAfterCheckoutReturnRef.current = false;
+            setIsPlaying(true);
+          }
+        }, 150);
+      }
     } catch (error) {
+      resumeAfterCheckoutReturnRef.current = false;
       preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
@@ -317,6 +330,34 @@ const SlideshowPlayer = ({
       audioPlayerRef.current?.pause();
     }
   }, [isPlaying]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const previousState = appStateRef.current;
+      appStateRef.current = nextState;
+
+      if (
+        resumeAfterCheckoutReturnRef.current &&
+        (previousState === 'inactive' || previousState === 'background') &&
+        nextState === 'active'
+      ) {
+        setTimeout(() => {
+          if (resumeAfterCheckoutReturnRef.current) {
+            resumeAfterCheckoutReturnRef.current = false;
+            setIsPlaying(true);
+          }
+        }, 150);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
 
   // Mute/unmute synchronization
   useEffect(() => {
