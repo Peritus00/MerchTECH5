@@ -7,7 +7,6 @@ import {
   Alert,
   ScrollView,
   Image,
-  Linking,
   Platform,
   Dimensions,
 } from 'react-native';
@@ -19,8 +18,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
 import { useCart } from '@/contexts/CartContext';
 import { paymentAPI } from '@/services/api';
-import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
+import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
+import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
 const { width } = Dimensions.get('window');
 
@@ -218,6 +218,7 @@ function PreviewPlayer({
   const [previewEnded, setPreviewEnded] = useState(false);
   const [showPlayOverlay, setShowPlayOverlay] = useState(true);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
   const [productImageIndexes, setProductImageIndexes] = useState<{
     [key: string]: number;
   }>({});
@@ -1127,6 +1128,9 @@ function PreviewPlayer({
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
+    setPendingCheckoutUrl(null);
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
@@ -1135,39 +1139,16 @@ function PreviewPlayer({
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        // Direct redirect - no popups, works reliably on all devices
-        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
-        window.location.href = url;
-      } else if (Platform.OS === 'ios') {
-        // iOS native: Try WebBrowser first, fallback to Linking if it fails
-        try {
-          const result = await WebBrowser.openBrowserAsync(url, {
-            dismissButtonStyle: 'done',
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            controlsColor: '#3b82f6',
-          });
-          console.log('🔗 PAYMENT (iOS): Opened Stripe checkout from PreviewPlayer, result:', result);
-          
-          if (result.type === 'cancel') {
-            console.log('🔗 PAYMENT (iOS): User cancelled checkout');
-          }
-        } catch (webBrowserError) {
-          console.warn('🔗 PAYMENT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
-          const canOpen = await Linking.canOpenURL(url);
-          if (canOpen) {
-            await Linking.openURL(url);
-            console.log('🔗 PAYMENT (iOS): Opened with Linking API');
-          } else {
-            throw new Error('Cannot open checkout URL on this device');
-          }
-        }
-      } else {
-        // Android: Use WebBrowser
-        const result = await WebBrowser.openBrowserAsync(url);
-        console.log('🔗 PAYMENT: Opened Stripe checkout from PreviewPlayer, result:', result);
+      const launchResult = await launchStripeCheckout(
+        url,
+        'PreviewPlayer',
+        preparedCheckoutWindow
+      );
+      if (launchResult.status === 'blocked') {
+        setPendingCheckoutUrl(url);
       }
     } catch (error) {
+      preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
@@ -1300,6 +1281,12 @@ function PreviewPlayer({
 
   return (
     <View style={styles.container}>
+      <CheckoutLaunchBanner
+        checkoutUrl={pendingCheckoutUrl}
+        source="PreviewPlayer"
+        onDismiss={() => setPendingCheckoutUrl(null)}
+        message="Stripe is ready. Open checkout in a new tab so the preview keeps playing here."
+      />
       {/* Initial Play Overlay for Preview */}
       {showPlayOverlay && (
         <View style={styles.playOverlay}>

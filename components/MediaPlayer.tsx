@@ -17,7 +17,6 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  Linking,
 } from 'react-native';
 import {
   MaterialCommunityIcons,
@@ -35,7 +34,6 @@ import { MediaFile, ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import * as WebBrowser from 'expo-web-browser';
 import { env } from '@/config/environment';
 import { useRouter } from 'expo-router';
 import { analyticsService } from '../services/analyticsService';
@@ -43,6 +41,8 @@ import { getSessionId } from '../utils/sessionTracking';
 import { getDemographicsForTracking } from '../utils/demographicsHelper';
 import { getAgeForTracking } from '../utils/ageStorage';
 import { getUserGender } from '../utils/genderStorage';
+import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
+import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
 const { width } = Dimensions.get('window');
 
@@ -92,6 +92,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const stallStartTimeRef = useRef<number | null>(null);
   const stallTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const STALL_THRESHOLD_MS = 10000; // 10 seconds of buffering = stall
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
   
   // Slideshow-specific state
   const slideshowIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -311,6 +312,9 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
+    setPendingCheckoutUrl(null);
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
       const base = Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, '');
       if (!base) {
@@ -323,42 +327,16 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        // Direct redirect - no popups, works reliably on all devices
-        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
-        window.location.href = url;
-      } else {
-        // For mobile native apps (iOS/Android)
-        if (Platform.OS === 'ios') {
-          // iOS: Try WebBrowser first, fallback to Linking if it fails
-          try {
-            const result = await WebBrowser.openBrowserAsync(url, {
-              dismissButtonStyle: 'done',
-              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-              controlsColor: '#3b82f6',
-            });
-            console.log('🔗 PAYMENT (iOS): Opened Stripe checkout from MediaPlayer, result:', result);
-            
-            if (result.type === 'cancel') {
-              console.log('🔗 PAYMENT (iOS): User cancelled checkout');
-            }
-          } catch (webBrowserError) {
-            console.warn('🔗 PAYMENT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
-            const canOpen = await Linking.canOpenURL(url);
-            if (canOpen) {
-              await Linking.openURL(url);
-              console.log('🔗 PAYMENT (iOS): Opened with Linking API');
-            } else {
-              throw new Error('Cannot open checkout URL on this device');
-            }
-          }
-        } else {
-          // Android: Use WebBrowser
-          const result = await WebBrowser.openBrowserAsync(url);
-          console.log('🔗 PAYMENT (Android): Opened Stripe checkout from MediaPlayer, result:', result);
-        }
+      const launchResult = await launchStripeCheckout(
+        url,
+        'MediaPlayer',
+        preparedCheckoutWindow
+      );
+      if (launchResult.status === 'blocked') {
+        setPendingCheckoutUrl(url);
       }
     } catch (error) {
+      preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
@@ -865,6 +843,12 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   if (slideshow) {
     return (
       <View style={styles.slideshowContainer}>
+        <CheckoutLaunchBanner
+          checkoutUrl={pendingCheckoutUrl}
+          source="MediaPlayer"
+          onDismiss={() => setPendingCheckoutUrl(null)}
+          message="Stripe is ready. Open checkout in a new tab so the current media keeps playing here."
+        />
         {/* Header */}
         <View style={styles.slideshowHeader}>
           <View style={styles.slideshowHeaderRow}>

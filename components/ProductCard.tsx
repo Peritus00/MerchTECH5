@@ -11,7 +11,6 @@ import {
 import { useRouter } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
 import { paymentAPI } from '@/services/api';
-import * as WebBrowser from 'expo-web-browser';
 import { env } from '@/config/environment';
 import ShareButton from '@/components/ShareButton'; // Assuming you have this
 import { Product } from '@/shared/product-schema';
@@ -19,6 +18,7 @@ import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 import { MaterialIcons } from '@expo/vector-icons';
 import { MobileCompatibleImage } from './MobileCompatibleImage';
+import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
 interface ProductCardProps {
   product: Product;
@@ -107,18 +107,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
       return;
     }
 
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
+
     try {
       const items = [{ productId: product.id, quantity: 1 }];
       const successUrl = `${absBase}/store/checkout-success`;
       const cancelUrl = `${absBase}/store/product/${product.id}`;
       
       console.log('🔗 PRODUCT_CARD: Creating session with items:', items);
-      // Pre-open a blank window on web to avoid Safari popup blocking
-      let preOpened: Window | null = null;
-      if (Platform.OS === 'web') {
-        preOpened = window.open('', '_blank');
-      }
-
       const response = await paymentAPI.createSession(items, successUrl, cancelUrl);
       console.log('🔗 PRODUCT_CARD: API response:', response);
 
@@ -129,30 +126,17 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
 
       console.log('🔗 PRODUCT_CARD: Opening URL:', checkoutUrl);
 
-      if (Platform.OS === 'web') {
-        // Prefer same-tab redirect on iOS Safari to avoid popup blocking
-        const ua = navigator.userAgent || '';
-        const isIOS = /iPhone|iPad|iPod/i.test(ua);
-        const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
-        if (isIOS && isSafari) {
-          window.location.assign(checkoutUrl);
-        } else {
-          if (preOpened) {
-            preOpened.location.href = checkoutUrl;
-          } else {
-            const newWindow = window.open(checkoutUrl, '_blank');
-            if (!newWindow) {
-              console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
-              window.location.href = checkoutUrl;
-            }
-          }
-        }
-      } else {
-        // For mobile, use WebBrowser
-        await WebBrowser.openBrowserAsync(checkoutUrl);
-        console.log('🔗 PRODUCT_CARD: Opened Stripe checkout in WebBrowser');
+      const launchResult = await launchStripeCheckout(
+        checkoutUrl,
+        'ProductCard',
+        preparedCheckoutWindow
+      );
+      if (launchResult.status === 'blocked' && Platform.OS === 'web') {
+        console.warn('🔗 PRODUCT_CARD: Popup blocked, redirecting in same window');
+        window.location.assign(checkoutUrl);
       }
     } catch (error: any) {
+      preparedCheckoutWindow?.close();
       console.error('🔴 PRODUCT_CARD BUY_NOW ERROR:', error);
       console.error('🔴 PRODUCT_CARD BUY_NOW ERROR Details:', {
         message: error.message,

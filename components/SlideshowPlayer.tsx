@@ -17,7 +17,6 @@ import {
   ScrollView,
   Alert,
   Platform,
-  Linking,
 } from 'react-native';
 import {
   MaterialCommunityIcons,
@@ -32,8 +31,9 @@ import { ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
 import { useRouter } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import SlideshowChat from './SlideshowChat';
+import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
+import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
 const { width } = Dimensions.get('window');
 
@@ -79,6 +79,7 @@ const SlideshowPlayer = ({
   const [showExitButton, setShowExitButton] = useState(false);
   const [imageLoadError, setImageLoadError] = useState<boolean>(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
 
   // Audio player reference
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -124,6 +125,9 @@ const SlideshowPlayer = ({
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
+    setPendingCheckoutUrl(null);
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
@@ -132,39 +136,16 @@ const SlideshowPlayer = ({
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        // Direct redirect - no popups, works reliably on all devices
-        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
-        window.location.href = url;
-      } else if (Platform.OS === 'ios') {
-        // iOS native: Try WebBrowser first, fallback to Linking if it fails
-        try {
-          const result = await WebBrowser.openBrowserAsync(url, {
-            dismissButtonStyle: 'done',
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            controlsColor: '#3b82f6',
-          });
-          console.log('🔗 PAYMENT (iOS): Opened Stripe checkout from SlideshowPlayer, result:', result);
-          
-          if (result.type === 'cancel') {
-            console.log('🔗 PAYMENT (iOS): User cancelled checkout');
-          }
-        } catch (webBrowserError) {
-          console.warn('🔗 PAYMENT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
-          const canOpen = await Linking.canOpenURL(url);
-          if (canOpen) {
-            await Linking.openURL(url);
-            console.log('🔗 PAYMENT (iOS): Opened with Linking API');
-          } else {
-            throw new Error('Cannot open checkout URL on this device');
-          }
-        }
-      } else {
-        // Android: Use WebBrowser
-        const result = await WebBrowser.openBrowserAsync(url);
-        console.log('🔗 PAYMENT: Opened Stripe checkout from SlideshowPlayer, result:', result);
+      const launchResult = await launchStripeCheckout(
+        url,
+        'SlideshowPlayer',
+        preparedCheckoutWindow
+      );
+      if (launchResult.status === 'blocked') {
+        setPendingCheckoutUrl(url);
       }
     } catch (error) {
+      preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     }
@@ -534,6 +515,12 @@ const SlideshowPlayer = ({
   return (
     <TouchableWithoutFeedback onPress={handleScreenTouch}>
       <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-slideshow-player="true">
+      <CheckoutLaunchBanner
+        checkoutUrl={pendingCheckoutUrl}
+        source="SlideshowPlayer"
+        onDismiss={() => setPendingCheckoutUrl(null)}
+        message="Stripe is ready. Open checkout in a new tab to keep the slideshow audio going here."
+      />
       {/* Header */}
       {!isFullscreen && (
         <View style={styles.slideshowHeader}>

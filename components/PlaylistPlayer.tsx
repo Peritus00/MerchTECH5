@@ -13,11 +13,9 @@ import {
   TouchableWithoutFeedback,
   ActivityIndicator,
   Text,
-  SafeAreaView,
   Platform,
   ScrollView,
   Image,
-  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
@@ -35,7 +33,6 @@ import { api, paymentAPI, playlistAccessAPI } from '../services/api';
 import { ProductLink } from '@/shared/media-schema';
 import { isPlaylistItemActiveOnDate, todayIsoDateInLocalTimezone } from '@/shared/playlistSchedule';
 import { useCart } from '@/contexts/CartContext';
-import * as WebBrowser from 'expo-web-browser';
 import PlaylistChat from './PlaylistChat';
 import SlideshowPlayer from './SlideshowPlayer';
 import { Alert } from 'react-native';
@@ -47,6 +44,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getAgeForTracking } from '@/utils/ageStorage';
 import { getUserGender } from '@/utils/genderStorage';
 import { getDemographicsForTracking } from '@/utils/demographicsHelper';
+import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
+import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
 const { width } = Dimensions.get('window');
 
@@ -396,6 +395,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -543,6 +543,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const handleBuyNow = async (productLink: ProductLink) => {
     if (isCheckoutLoading) return;
     setIsCheckoutLoading(true);
+    setPendingCheckoutUrl(null);
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
       const successUrl = `${base}/store/checkout-success`;
@@ -551,39 +554,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
 
-      if (Platform.OS === 'web') {
-        // Direct redirect - no popups, works reliably on all devices
-        console.log('🔗 PAYMENT: Redirecting to checkout:', url);
-        window.location.href = url;
-      } else if (Platform.OS === 'ios') {
-        // iOS native: Try WebBrowser first, fallback to Linking if it fails
-        try {
-          const result = await WebBrowser.openBrowserAsync(url, {
-            dismissButtonStyle: 'done',
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            controlsColor: '#3b82f6',
-          });
-          console.log('🔗 PAYMENT (iOS): Opened Stripe checkout from PlaylistPlayer, result:', result);
-          
-          if (result.type === 'cancel') {
-            console.log('🔗 PAYMENT (iOS): User cancelled checkout');
-          }
-        } catch (webBrowserError) {
-          console.warn('🔗 PAYMENT (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
-          const canOpen = await Linking.canOpenURL(url);
-          if (canOpen) {
-            await Linking.openURL(url);
-            console.log('🔗 PAYMENT (iOS): Opened with Linking API');
-          } else {
-            throw new Error('Cannot open checkout URL on this device');
-          }
-        }
-      } else {
-        // Android: Use WebBrowser
-        const result = await WebBrowser.openBrowserAsync(url);
-        console.log('🔗 PAYMENT: Opened Stripe checkout from PlaylistPlayer, result:', result);
+      const launchResult = await launchStripeCheckout(
+        url,
+        'PlaylistPlayer',
+        preparedCheckoutWindow
+      );
+      if (launchResult.status === 'blocked') {
+        setPendingCheckoutUrl(url);
       }
     } catch (error) {
+      preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     } finally {
@@ -1976,6 +1956,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   return (
     <TouchableWithoutFeedback onPress={handleScreenTouch}>
       <View style={[styles.slideshowContainer, isFullscreen && styles.fullscreenContainer]} data-playlist-player="true">
+      <CheckoutLaunchBanner
+        checkoutUrl={pendingCheckoutUrl}
+        source="PlaylistPlayer"
+        onDismiss={() => setPendingCheckoutUrl(null)}
+        message="Stripe is ready. Open checkout in a new tab to keep the playlist playing here."
+      />
       {!isFullscreen && (
       <View style={styles.slideshowHeader}>
         <TouchableOpacity 
