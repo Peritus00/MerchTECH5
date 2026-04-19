@@ -2586,12 +2586,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   videoContainer: {
-    flex: 1,
     backgroundColor: 'black',
     justifyContent: 'flex-start', // Changed from center to flex-start to avoid cropping
     alignItems: 'center',
     padding: 0,
     minHeight: 220,
+    width: '100%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   controls: {
     flexDirection: 'row',
