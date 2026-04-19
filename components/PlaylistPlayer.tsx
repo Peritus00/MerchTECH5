@@ -396,6 +396,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
+  const [mobileQuickPayHeight, setMobileQuickPayHeight] = useState(0);
+  const [mobileControlsHeight, setMobileControlsHeight] = useState(0);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -485,6 +487,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
     return Math.max(220, Math.round(maxHeight * zoomLevel));
   }, [isFullscreen, isMobile, videoDimensions, zoomLevel]);
+
+  const mobilePlayerReserveHeight = useMemo(() => {
+    if (!isMobile || isFullscreen) {
+      return 0;
+    }
+
+    // Measure the actual quick-pay and controls stack so iPhone can pull products
+    // upward without Android clipping controls when that stack is taller.
+    const measured = mobileQuickPayHeight + mobileControlsHeight;
+    return Math.max(44, measured + 8);
+  }, [isFullscreen, isMobile, mobileControlsHeight, mobileQuickPayHeight]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -2002,7 +2015,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             styles.slideshowLeftPanel,
             isFullscreen && styles.fullscreenLeftPanel,
             isMobile && styles.mobileLeftPanel,
-            !isFullscreen && { minHeight: estimatedVideoHeight + (isMobile ? 40 : 180) }
+            !isFullscreen && {
+              minHeight: estimatedVideoHeight + (isMobile ? mobilePlayerReserveHeight : 180)
+            }
           ]}>
             <View style={[
               styles.videoContainer,
@@ -2064,17 +2079,30 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 )}
             </View>
             
-            <QuickPayOverlay
-              activeProducts={activeProducts}
-              isFullscreen={isFullscreen}
-              isPlaying={isPlaying}
-              isCheckoutLoading={isCheckoutLoading}
-              onBuyNow={handleBuyNow}
-              formatPrice={formatPrice}
-            />
+            <View
+              onLayout={(event) => {
+                if (!isMobile || isFullscreen) return;
+                setMobileQuickPayHeight(Math.round(event.nativeEvent.layout.height));
+              }}
+            >
+              <QuickPayOverlay
+                activeProducts={activeProducts}
+                isFullscreen={isFullscreen}
+                isPlaying={isPlaying}
+                isCheckoutLoading={isCheckoutLoading}
+                onBuyNow={handleBuyNow}
+                formatPrice={formatPrice}
+              />
+            </View>
 
             {/* CONTROLS MOVED HERE */}
-            <View style={styles.controls}>
+            <View
+              style={styles.controls}
+              onLayout={(event) => {
+                if (!isMobile || isFullscreen) return;
+                setMobileControlsHeight(Math.round(event.nativeEvent.layout.height));
+              }}
+            >
                 <TouchableOpacity onPress={handlePrevious} style={styles.controlButton}>
                 <MaterialIcons
                     name="skip-previous"
@@ -2258,7 +2286,7 @@ const styles = StyleSheet.create({
     mobileMainContent: {
         flexDirection: 'column',
         minHeight: 0,
-        gap: 12,
+        gap: 6,
     },
     slideshowLeftPanel: {
         flex: 1.344, // Increased to give more space to video (44.8% of total)
