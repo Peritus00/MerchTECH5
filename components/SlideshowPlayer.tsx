@@ -54,6 +54,8 @@ interface SlideshowPlayerProps {
   showFeaturedProducts?: boolean;
   /** When false, hides slideshow-level Slideshow Discussion (e.g. inside playlist playback). Default true. */
   showDiscussionPanel?: boolean;
+  /** Compact layout when embedded inside playlist player — avoids large minHeights pushing Featured Products down. */
+  embedInPlaylist?: boolean;
 }
 
 const SlideshowPlayer = ({
@@ -62,6 +64,7 @@ const SlideshowPlayer = ({
   autoPlay = false,
   showFeaturedProducts = true,
   showDiscussionPanel = true,
+  embedInPlaylist = false,
 }: SlideshowPlayerProps) => {
   const [slideshowData, setSlideshowData] = useState<any>(slideshow);
   const [images, setImages] = useState<SlideshowImage[]>([]);
@@ -92,6 +95,7 @@ const SlideshowPlayer = ({
   const { addToCart, getTotalItems } = useCart();
   const router = useRouter();
   const isMobile = width < 768;
+  const isEmbedCompact = embedInPlaylist && !isFullscreen;
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
@@ -596,11 +600,25 @@ const SlideshowPlayer = ({
         contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
         {/* Main Content - Horizontal Layout */}
-        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isMobile && styles.mobileMainContent]}>
+        <View style={[
+          styles.slideshowMainContent,
+          isFullscreen && styles.fullscreenMainContent,
+          isMobile && !isEmbedCompact && styles.mobileMainContent,
+          isEmbedCompact && styles.embedPlaylistMainContent,
+        ]}>
         {/* Left Panel - Slideshow */}
-        <View style={[styles.slideshowLeftPanel, isFullscreen && styles.fullscreenLeftPanel, isMobile && styles.mobileLeftPanel]}>
+        <View style={[
+          styles.slideshowLeftPanel,
+          isFullscreen && styles.fullscreenLeftPanel,
+          isMobile && !isEmbedCompact && styles.mobileLeftPanel,
+          isEmbedCompact && styles.embedPlaylistLeftPanel,
+        ]}>
           {/* Current Image Display */}
-          <View style={[styles.slideshowImageContainer, isFullscreen && styles.fullscreenImageContainer]}>
+          <View style={[
+            styles.slideshowImageContainer,
+            isFullscreen && styles.fullscreenImageContainer,
+            isEmbedCompact && styles.embedPlaylistImageContainer,
+          ]}>
             {images[currentIndex] && !imageLoadError && (
               <Image
                 source={{
@@ -939,6 +957,26 @@ const styles = StyleSheet.create({
   },
   mobileMainContent: {
     flexDirection: 'column',
+  },
+  /** Embedded in playlist player: drop desktop minHeights so playlist Featured Products stays near controls */
+  embedPlaylistMainContent: {
+    flexDirection: 'column',
+    minHeight: 0,
+    padding: 8,
+    gap: 8,
+  },
+  embedPlaylistLeftPanel: {
+    flex: 0,
+    flexGrow: 0,
+    minHeight: 0,
+    alignSelf: 'stretch',
+    width: '100%',
+  },
+  embedPlaylistImageContainer: {
+    flex: 0,
+    minHeight: 200,
+    maxHeight: 280,
+    width: '100%',
   },
   slideshowLeftPanel: {
     flex: 1.2, // Reduced from 2 to 1.2 (give more space to products)

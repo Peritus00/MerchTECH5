@@ -250,6 +250,7 @@ interface QuickPayOverlayProps {
   isFullscreen: boolean;
   isPlaying: boolean;
   isCheckoutLoading: boolean;
+  compact?: boolean;
   onBuyNow: (productLink: ProductLink) => void;
   formatPrice: (price: string | number) => string;
 }
@@ -259,6 +260,7 @@ const QuickPayOverlay = React.memo(({
   isFullscreen,
   isPlaying,
   isCheckoutLoading,
+  compact,
   onBuyNow,
   formatPrice,
 }: QuickPayOverlayProps) => {
@@ -300,6 +302,7 @@ const QuickPayOverlay = React.memo(({
     <View style={[
       styles.quickPayOverlay,
       isFullscreen && styles.quickPayOverlayFullscreen,
+      compact && styles.quickPayOverlayCompact,
     ]}>
       {activeProducts.length > 1 && (
         <TouchableOpacity
@@ -444,6 +447,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const isCompactLayout = screenWidth < 960;
   const isMobile = screenWidth < 768;
 
+  /** Tighter cap than % of full window height — avoids huge blank band under video on iOS Safari / Android zoom. */
+  const mobileMediaMaxHeightPx = useMemo(() => {
+    if (isFullscreen) return Math.round(screenHeight * 0.92);
+    if (!isMobile) return 500;
+    return Math.min(Math.max(200, Math.round(screenHeight * 0.34)), 300);
+  }, [isFullscreen, isMobile, screenHeight]);
+
   const playableMedia = useMemo(() => {
     const today = todayIsoDateInLocalTimezone();
     return media.filter((m) =>
@@ -478,7 +488,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     const maxHeight = isFullscreen
       ? screenHeight * 0.92
       : isMobile
-        ? screenHeight * 0.46
+        ? mobileMediaMaxHeightPx
         : 500;
 
     if (videoDimensions?.width && videoDimensions?.height) {
@@ -486,11 +496,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         maxWidth / videoDimensions.width,
         maxHeight / videoDimensions.height
       );
-      return Math.max(220, Math.round(videoDimensions.height * scale * zoomLevel));
+      const rawH = Math.round(videoDimensions.height * scale * zoomLevel);
+      return Math.max(220, Math.min(rawH, Math.round(maxHeight)));
     }
 
-    return Math.max(220, Math.round(maxHeight * zoomLevel));
-  }, [isFullscreen, isMobile, screenHeight, screenWidth, videoDimensions, zoomLevel]);
+    return Math.max(220, Math.round(Math.min(maxHeight * zoomLevel, maxHeight)));
+  }, [isFullscreen, isMobile, mobileMediaMaxHeightPx, screenHeight, screenWidth, videoDimensions, zoomLevel]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -1494,12 +1505,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           })),
         };
         return (
-          <View style={{ flex: 1, minHeight: 400 }}>
+          <View style={styles.embedSlideshowOuterCompact}>
             <SlideshowPlayer
               slideshow={mapped}
               autoPlay={isPlaying}
               showFeaturedProducts={false}
               showDiscussionPanel={false}
+              embedInPlaylist
             />
           </View>
         );
@@ -1558,7 +1570,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       const maxHeight = isFullscreen
         ? screenHeight * 0.92
         : isMobile
-          ? screenHeight * 0.46
+          ? mobileMediaMaxHeightPx
           : 500;
 
       if (videoDimensions?.width && videoDimensions?.height) {
@@ -1566,18 +1578,22 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           maxWidth / videoDimensions.width,
           maxHeight / videoDimensions.height
         );
+        const rawW = Math.round(videoDimensions.width * scale * zoomLevel);
+        const rawH = Math.round(videoDimensions.height * scale * zoomLevel);
+        const cappedH = Math.min(rawH, Math.round(maxHeight));
+        const cappedW = rawH > 0 ? Math.round(rawW * (cappedH / rawH)) : rawW;
 
         return {
-          width: Math.round(videoDimensions.width * scale * zoomLevel),
-          height: Math.round(videoDimensions.height * scale * zoomLevel),
+          width: cappedW,
+          height: cappedH,
           alignSelf: 'center' as const,
           borderRadius: isFullscreen ? 0 : 8,
         };
       }
 
       return {
-        width: isMobile ? maxWidth : width * 0.9,
-        height: Math.round(maxHeight * zoomLevel),
+        width: isMobile ? maxWidth : Math.min(screenWidth * 0.9, 720),
+        height: Math.round(Math.min(maxHeight * zoomLevel, maxHeight)),
         alignSelf: 'center' as const,
         borderRadius: isFullscreen ? 0 : 8,
       };
@@ -1786,7 +1802,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         });
         
       return (
-        <View style={styles.audioPlayerContainer}>
+        <View style={[styles.audioPlayerContainer, isMobile && !isFullscreen && styles.audioPlayerContainerMobile]}>
           <View style={styles.audioVisualization}>
             <View style={styles.audioWaveform}>
               {/* Audio waveform visualization */}
@@ -1898,7 +1914,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       } else {
         // Use expo-av Video for mobile (audio files)
         return (
-          <View style={styles.audioPlayerContainer}>
+          <View style={[styles.audioPlayerContainer, isMobile && !isFullscreen && styles.audioPlayerContainerMobile]}>
             <View style={styles.audioVisualization}>
               <View style={styles.audioWaveform}>
                 {/* Audio waveform visualization */}
@@ -2036,16 +2052,20 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       <ScrollView 
         style={[styles.scrollContainer, isFullscreen && styles.fullscreenScrollContainer]}
         showsVerticalScrollIndicator={!isFullscreen}
-        contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          isFullscreen && styles.fullscreenScrollContent,
+          isCompactLayout && !isFullscreen && styles.scrollContentCompact,
+        ]}
       >
         <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isCompactLayout && styles.mobileMainContent]}>
         <View style={[
             styles.slideshowLeftPanel,
             isFullscreen && styles.fullscreenLeftPanel,
             isCompactLayout && styles.mobileLeftPanel,
-            !isFullscreen && {
-              minHeight: estimatedVideoHeight + (isCompactLayout ? 0 : 180)
-            }
+            !isFullscreen && !isCompactLayout && {
+              minHeight: estimatedVideoHeight + 180,
+            },
           ]}>
             <View style={[
               styles.videoContainer,
@@ -2113,6 +2133,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 isFullscreen={isFullscreen}
                 isPlaying={isPlaying}
                 isCheckoutLoading={isCheckoutLoading}
+                compact={isMobile && !isFullscreen}
                 onBuyNow={handleBuyNow}
                 formatPrice={formatPrice}
               />
@@ -2212,7 +2233,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         )}
 
         {!isFullscreen && (
-        <View style={styles.slideshowChatSection}>
+        <View style={[styles.slideshowChatSection, isMobile && styles.slideshowChatSectionMobile]}>
           <PlaylistChat
             playlistId={playlistData?.id?.toString() || playlistId || ''}
             playlistName={playlistData?.name || playlistTitle || 'Playlist'}
@@ -2248,6 +2269,14 @@ const styles = StyleSheet.create({
     },
     scrollContent: {
         flexGrow: 1,
+    },
+    scrollContentCompact: {
+        flexGrow: 0,
+    },
+    embedSlideshowOuterCompact: {
+        flex: 0,
+        minHeight: 0,
+        alignSelf: 'stretch',
     },
     slideshowHeader: {
         paddingVertical: 16,
@@ -2305,7 +2334,9 @@ const styles = StyleSheet.create({
     mobileMainContent: {
         flexDirection: 'column',
         minHeight: 0,
-        gap: 12,
+        gap: 8,
+        padding: 12,
+        paddingHorizontal: 12,
     },
     slideshowLeftPanel: {
         flex: 1.344, // Increased to give more space to video (44.8% of total)
@@ -2317,6 +2348,9 @@ const styles = StyleSheet.create({
     mobileLeftPanel: {
         width: '100%',
         minHeight: 0,
+        flex: 0,
+        flexGrow: 0,
+        alignSelf: 'stretch',
         backgroundColor: 'transparent',
         borderRadius: 0,
         overflow: 'visible',
@@ -2337,7 +2371,7 @@ const styles = StyleSheet.create({
         width: '100%',
         flex: 0,
         minHeight: 0,
-        marginTop: 12,
+        marginTop: 8,
     },
     featuredProductsHeader: {
         flexDirection: 'row',
@@ -2542,6 +2576,12 @@ const styles = StyleSheet.create({
         elevation: 3,
         minHeight: 400, // Increased from maxHeight: 200 to minHeight: 400 for better visibility
       },
+      slideshowChatSectionMobile: {
+        minHeight: 160,
+        marginHorizontal: 12,
+        marginBottom: 12,
+        padding: 12,
+      },
       chatHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -2733,6 +2773,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
+  audioPlayerContainerMobile: {
+    height: 220,
+    minHeight: 180,
+    maxHeight: 280,
+  },
   audioVisualization: {
     width: '100%',
     height: '100%',
@@ -2796,6 +2841,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderRadius: 12,
     position: 'relative',
+  },
+  quickPayOverlayCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 2,
   },
   quickPayOverlayFullscreen: {
     marginVertical: 8,
