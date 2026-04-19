@@ -138,8 +138,12 @@ const SlideshowPlayer = ({
       Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
     try {
       const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const returnUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.href
+          : base;
       const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = base;
+      const cancelUrl = returnUrl;
 
       const items = [{ productId: productLink.id, quantity: 1 }];
       const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
