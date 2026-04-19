@@ -454,6 +454,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     return Math.min(Math.max(200, Math.round(screenHeight * 0.34)), 300);
   }, [isFullscreen, isMobile, screenHeight]);
 
+  const fullscreenMediaHeightPx = useMemo(() => {
+    const controlsAllowance = isMobile ? 120 : 96;
+    return Math.max(220, Math.round(screenHeight - controlsAllowance));
+  }, [isMobile, screenHeight]);
+
   const playableMedia = useMemo(() => {
     const today = todayIsoDateInLocalTimezone();
     return media.filter((m) =>
@@ -1564,8 +1569,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     const getVideoStyle = () => {
       if (isFullscreen) {
         return {
-          width: '100%' as const,
-          height: '100%' as const,
+          width: screenWidth,
+          height: fullscreenMediaHeightPx,
           alignSelf: 'center' as const,
           borderRadius: 0,
         };
@@ -2959,14 +2964,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
     borderRadius: 0,
     minHeight: '100%',
+    justifyContent: 'space-between',
   },
   fullscreenVideoContainer: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
     backgroundColor: 'black',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 0,
-    minHeight: '100%',
+    minHeight: 220,
   },
   
   // Exit button styles
