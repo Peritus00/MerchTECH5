@@ -1562,6 +1562,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
     // Calculate dynamic media style based on viewport, aspect ratio, and zoom level
     const getVideoStyle = () => {
+      if (isFullscreen) {
+        return {
+          width: '100%' as const,
+          height: '100%' as const,
+          alignSelf: 'center' as const,
+          borderRadius: 0,
+        };
+      }
+
       const maxWidth = isFullscreen
         ? screenWidth
         : isMobile
@@ -1618,7 +1627,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             src={itemUri}
             style={{
               ...(getVideoStyle() as React.CSSProperties),
-              objectFit: 'contain'
+              objectFit: isFullscreen ? 'cover' : 'contain'
             }}
             controls={false}
             playsInline
@@ -1770,7 +1779,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             isMuted={isMuted}
             shouldPlay={isPlaying}
             isLooping={false}
-            resizeMode={ResizeMode.CONTAIN}
+            resizeMode={isFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
             style={getVideoStyle()}
             useNativeControls={true}
             // On iOS ensure controls show and video plays inline when available
@@ -1965,7 +1974,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         <ExpoImage
           source={{ uri: itemUri }}
           style={getVideoStyle()}
-          contentFit="contain"
+          contentFit={isFullscreen ? 'cover' : 'contain'}
           transition={300}
         />
       );
@@ -2127,6 +2136,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 )}
             </View>
             
+            {!isFullscreen && (
             <View>
               <QuickPayOverlay
                 activeProducts={activeProducts}
@@ -2138,6 +2148,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 formatPrice={formatPrice}
               />
             </View>
+            )}
 
             {/* CONTROLS MOVED HERE */}
             <View
