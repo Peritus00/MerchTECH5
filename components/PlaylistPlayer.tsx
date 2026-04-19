@@ -389,7 +389,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [isMuted, setIsMuted] = useState(false);
   const [productImageIndexes, setProductImageIndexes] = useState<Record<string, number>>({});
   const [videoDimensions, setVideoDimensions] = useState<{width: number, height: number} | null>(null);
-  const [zoomLevel, setZoomLevel] = useState(0.5); // 1 = normal, 0.5 = zoomed out, 2 = zoomed in
+  const [zoomLevel, setZoomLevel] = useState(1); // Start at normal size on mobile/web to avoid excessive empty space
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showExitButton, setShowExitButton] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
@@ -462,8 +462,29 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   // Used to size containers to content height to avoid large empty space
   const estimatedVideoHeight = useMemo(() => {
-    return Math.max(200, Math.round(500 * zoomLevel));
-  }, [zoomLevel]);
+    const screenWidth = Dimensions.get('window').width;
+    const screenHeight = Dimensions.get('window').height;
+    const maxWidth = isFullscreen
+      ? screenWidth
+      : isMobile
+        ? Math.max(220, screenWidth - 40)
+        : Math.min(screenWidth * 0.5, 720);
+    const maxHeight = isFullscreen
+      ? screenHeight * 0.92
+      : isMobile
+        ? screenHeight * 0.46
+        : 500;
+
+    if (videoDimensions?.width && videoDimensions?.height) {
+      const scale = Math.min(
+        maxWidth / videoDimensions.width,
+        maxHeight / videoDimensions.height
+      );
+      return Math.max(220, Math.round(videoDimensions.height * scale * zoomLevel));
+    }
+
+    return Math.max(220, Math.round(maxHeight * zoomLevel));
+  }, [isFullscreen, isMobile, videoDimensions, zoomLevel]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -1503,64 +1524,42 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       fullMediaObject: currentItem
     });
 
-    // Calculate dynamic video style based on actual video dimensions and zoom level
+    // Calculate dynamic media style based on viewport, aspect ratio, and zoom level
     const getVideoStyle = () => {
       const screenWidth = Dimensions.get('window').width;
       const screenHeight = Dimensions.get('window').height;
-      
-      if (videoDimensions) {
-        let baseWidth, baseHeight;
-        
-        if (isFullscreen) {
-          // In fullscreen mode, use the entire screen dimensions
-          if (Platform.OS === 'web') {
-            // For web, use full viewport dimensions
-            baseWidth = screenWidth;
-            baseHeight = screenHeight;
-          } else {
-            // For mobile, account for status bar and navigation
-            baseWidth = screenWidth;
-            baseHeight = screenHeight * 0.95; // Leave 5% for system UI
-          }
-        } else {
-          // Normal mode: use container-appropriate dimensions
-          const baseHeightNormal = 500; // Conservative height that should fit in most containers
-        const videoAspectRatio = videoDimensions.width / videoDimensions.height;
-          baseWidth = (baseHeightNormal * videoAspectRatio) * 1.25; // Widen by 25%
-          baseHeight = baseHeightNormal;
-        }
-        
-        // Apply zoom level
-        const zoomedWidth = baseWidth * zoomLevel;
-        const zoomedHeight = baseHeight * zoomLevel;
-        
+
+      const maxWidth = isFullscreen
+        ? screenWidth
+        : isMobile
+          ? Math.max(220, screenWidth - 40)
+          : Math.min(screenWidth * 0.5, 720);
+      const maxHeight = isFullscreen
+        ? screenHeight * 0.92
+        : isMobile
+          ? screenHeight * 0.46
+          : 500;
+
+      if (videoDimensions?.width && videoDimensions?.height) {
+        const scale = Math.min(
+          maxWidth / videoDimensions.width,
+          maxHeight / videoDimensions.height
+        );
+
         return {
-          width: zoomedWidth,
-          height: zoomedHeight,
+          width: Math.round(videoDimensions.width * scale * zoomLevel),
+          height: Math.round(videoDimensions.height * scale * zoomLevel),
           alignSelf: 'center' as const,
-          borderRadius: isFullscreen ? 0 : 8, // No border radius in fullscreen
-          transform: [{ scale: 1 }], // Keep scale at 1, we're changing dimensions instead
+          borderRadius: isFullscreen ? 0 : 8,
         };
       }
-      
-      // Fallback style while dimensions are loading
-      if (isFullscreen) {
-        return {
-          width: screenWidth,
-          height: screenHeight * 0.9,
-          alignSelf: 'center' as const,
-          borderRadius: 0,
-          transform: [{ scale: 1 }],
-        };
-      } else {
+
       return {
-        width: width * 0.9, // Use 90% of screen width instead of string percentage
-        height: 500 * zoomLevel,
+        width: isMobile ? maxWidth : width * 0.9,
+        height: Math.round(maxHeight * zoomLevel),
         alignSelf: 'center' as const,
-        borderRadius: 8,
-        transform: [{ scale: 1 }],
+        borderRadius: isFullscreen ? 0 : 8,
       };
-      }
     };
 
     if (isVideo) {
@@ -1581,12 +1580,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             ref={(ref) => attachMediaController(ref, 'video')}
             src={itemUri}
             style={{
-              width: videoDimensions ? (videoDimensions.width / videoDimensions.height) * (500 * zoomLevel) : width * 0.9,
-              height: 500 * zoomLevel,
-              alignSelf: 'center',
-              borderRadius: 8,
+              ...(getVideoStyle() as React.CSSProperties),
               objectFit: 'contain'
-            } as React.CSSProperties}
+            }}
             controls={false}
             playsInline
             controlsList="nodownload noplaybackrate noremoteplayback"
@@ -2020,7 +2016,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             styles.slideshowLeftPanel,
             isFullscreen && styles.fullscreenLeftPanel,
             isMobile && styles.mobileLeftPanel,
-            !isFullscreen && { minHeight: estimatedVideoHeight + 180 }
+            !isFullscreen && { minHeight: estimatedVideoHeight + (isMobile ? 120 : 180) }
           ]}>
             <View style={[
               styles.videoContainer,
@@ -2271,21 +2267,22 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         padding: 20,
         gap: 20,
-        minHeight: 500, // Set minimum height for the main content
+        minHeight: 0,
     },
     mobileMainContent: {
         flexDirection: 'column',
+        minHeight: 0,
     },
     slideshowLeftPanel: {
         flex: 1.344, // Increased to give more space to video (44.8% of total)
         backgroundColor: '#000000',
         borderRadius: 12,
         overflow: 'hidden',
-        minHeight: 700, // Increased to accommodate larger video
+        minHeight: 0,
     },
     mobileLeftPanel: {
         width: '100%',
-        minHeight: 300,
+        minHeight: 0,
     },
     slideshowRightPanel: {
         flex: 1.656, // Decreased by 20% from 2.07 to 1.656 (55.2% - 20% decrease for products)
@@ -2593,8 +2590,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'black',
     justifyContent: 'flex-start', // Changed from center to flex-start to avoid cropping
     alignItems: 'center',
-    padding: 5, // Minimal padding to maximize video space
-    minHeight: 550, // Adjusted to accommodate video + minimal padding
+    padding: 0,
+    minHeight: 220,
   },
   controls: {
     flexDirection: 'row',
