@@ -9,6 +9,7 @@ import {
   View,
   StyleSheet,
   Dimensions,
+  useWindowDimensions,
   TouchableOpacity,
   TouchableWithoutFeedback,
   ActivityIndicator,
@@ -48,8 +49,6 @@ import { getDemographicsForTracking } from '@/utils/demographicsHelper';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 
-const { width } = Dimensions.get('window');
-
 interface MediaItem {
   id: string | number;
   title?: string;
@@ -86,7 +85,7 @@ const debugLog = (...args: unknown[]) => {
 
 interface FeaturedProductsPanelProps {
   productLinks?: ProductLink[];
-  isMobile: boolean;
+  isStackedLayout: boolean;
   productImageIndexes: Record<string, number>;
   onImageNavigate: (productId: string, direction: 'prev' | 'next', imageCount: number) => void;
   onBuyNow: (productLink: ProductLink) => void;
@@ -97,7 +96,7 @@ interface FeaturedProductsPanelProps {
 
 const FeaturedProductsPanel = React.memo(({
   productLinks,
-  isMobile,
+  isStackedLayout,
   productImageIndexes,
   onImageNavigate,
   onBuyNow,
@@ -113,15 +112,19 @@ const FeaturedProductsPanel = React.memo(({
   );
 
   return (
-    <View style={[styles.slideshowRightPanel, isMobile && styles.mobileRightPanel]}>
+    <View style={[styles.slideshowRightPanel, isStackedLayout && styles.mobileRightPanel]}>
       <View style={styles.featuredProductsHeader}>
         <MaterialIcons name="storefront" size={24} color="#374151" />
         <Text style={styles.featuredProductsTitle}>Featured Products</Text>
       </View>
       <ScrollView
-        style={styles.featuredProductsContent}
+        style={[
+          styles.featuredProductsContent,
+          isStackedLayout && styles.mobileFeaturedProductsContent,
+        ]}
         showsVerticalScrollIndicator={true}
         contentContainerStyle={styles.productsListContent}
+        nestedScrollEnabled
       >
         {activeProducts.length > 0 ? (
           activeProducts.map((link: ProductLink) => {
@@ -436,8 +439,10 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const { addToCart, cart, getTotalItems } = useCart();
   const { user } = useAuth();
   const router = useRouter();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
 
-  const isMobile = width < 768;
+  const isCompactLayout = screenWidth < 960;
+  const isMobile = screenWidth < 768;
 
   const playableMedia = useMemo(() => {
     const today = todayIsoDateInLocalTimezone();
@@ -465,8 +470,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   // Used to size containers to content height to avoid large empty space
   const estimatedVideoHeight = useMemo(() => {
-    const screenWidth = Dimensions.get('window').width;
-    const screenHeight = Dimensions.get('window').height;
     const maxWidth = isFullscreen
       ? screenWidth
       : isMobile
@@ -487,7 +490,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
 
     return Math.max(220, Math.round(maxHeight * zoomLevel));
-  }, [isFullscreen, isMobile, videoDimensions, zoomLevel]);
+  }, [isFullscreen, isMobile, screenHeight, screenWidth, videoDimensions, zoomLevel]);
 
   useEffect(() => {
     // Disable right-click on web
@@ -1547,9 +1550,6 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
     // Calculate dynamic media style based on viewport, aspect ratio, and zoom level
     const getVideoStyle = () => {
-      const screenWidth = Dimensions.get('window').width;
-      const screenHeight = Dimensions.get('window').height;
-
       const maxWidth = isFullscreen
         ? screenWidth
         : isMobile
@@ -2038,13 +2038,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         showsVerticalScrollIndicator={!isFullscreen}
         contentContainerStyle={[styles.scrollContent, isFullscreen && styles.fullscreenScrollContent]}
       >
-        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isMobile && styles.mobileMainContent]}>
+        <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isCompactLayout && styles.mobileMainContent]}>
         <View style={[
             styles.slideshowLeftPanel,
             isFullscreen && styles.fullscreenLeftPanel,
-            isMobile && styles.mobileLeftPanel,
+            isCompactLayout && styles.mobileLeftPanel,
             !isFullscreen && {
-              minHeight: estimatedVideoHeight + (isMobile ? 0 : 180)
+              minHeight: estimatedVideoHeight + (isCompactLayout ? 0 : 180)
             }
           ]}>
             <View style={[
@@ -2179,7 +2179,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         {!isFullscreen && (
           <FeaturedProductsPanel
             productLinks={playlistData?.productLinks}
-            isMobile={isMobile}
+            isStackedLayout={isCompactLayout}
             productImageIndexes={productImageIndexes}
             onImageNavigate={handleImageNavigation}
             onBuyNow={handleBuyNow}
@@ -2305,7 +2305,7 @@ const styles = StyleSheet.create({
     mobileMainContent: {
         flexDirection: 'column',
         minHeight: 0,
-        gap: 6,
+        gap: 12,
     },
     slideshowLeftPanel: {
         flex: 1.344, // Increased to give more space to video (44.8% of total)
@@ -2335,6 +2335,9 @@ const styles = StyleSheet.create({
     },
     mobileRightPanel: {
         width: '100%',
+        flex: 0,
+        minHeight: 0,
+        marginTop: 12,
     },
     featuredProductsHeader: {
         flexDirection: 'row',
@@ -2352,6 +2355,9 @@ const styles = StyleSheet.create({
       },
       featuredProductsContent: {
         flex: 1,
+      },
+      mobileFeaturedProductsContent: {
+        flexGrow: 0,
       },
       productsListContent: {
         paddingBottom: 20,
