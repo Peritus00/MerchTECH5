@@ -2002,7 +2002,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             styles.slideshowLeftPanel,
             isFullscreen && styles.fullscreenLeftPanel,
             isMobile && styles.mobileLeftPanel,
-            !isFullscreen && { minHeight: estimatedVideoHeight + (isMobile ? 120 : 180) }
+            !isFullscreen && { minHeight: estimatedVideoHeight + (isMobile ? 40 : 180) }
           ]}>
             <View style={[
               styles.videoContainer,
@@ -2258,6 +2258,7 @@ const styles = StyleSheet.create({
     mobileMainContent: {
         flexDirection: 'column',
         minHeight: 0,
+        gap: 12,
     },
     slideshowLeftPanel: {
         flex: 1.344, // Increased to give more space to video (44.8% of total)
@@ -2269,6 +2270,9 @@ const styles = StyleSheet.create({
     mobileLeftPanel: {
         width: '100%',
         minHeight: 0,
+        backgroundColor: 'transparent',
+        borderRadius: 0,
+        overflow: 'visible',
     },
     slideshowRightPanel: {
         flex: 1.656, // Decreased by 20% from 2.07 to 1.656 (55.2% - 20% decrease for products)
