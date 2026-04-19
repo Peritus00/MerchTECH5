@@ -5,36 +5,64 @@ export type StripeCheckoutLaunchResult =
   | { status: 'opened'; method: 'web-tab' | 'native-browser' | 'native-linking' }
   | { status: 'blocked'; method: 'web-popup-blocked' };
 
-const WEB_WINDOW_FEATURES = 'noopener,noreferrer';
-
 export type PreparedCheckoutWindow = Window | null;
 
-function prepareWindow(windowRef: Window) {
-  try {
-    windowRef.opener = null;
-  } catch (error) {
-    console.warn('Unable to clear checkout window opener:', error);
-  }
-}
-
+/**
+ * Open a blank tab synchronously from the user's tap, before any await.
+ * Do not pass windowFeatures with "noopener" here: on iOS/Android WebKit,
+ * assigning location to Stripe after await often leaves a permanent white
+ * about:blank when the opener relationship / navigation is restricted.
+ */
 export function prepareStripeCheckoutWindow(): PreparedCheckoutWindow {
   if (typeof window === 'undefined') {
     return null;
   }
 
-  const preOpenedWindow = window.open('', '_blank', WEB_WINDOW_FEATURES);
-  if (!preOpenedWindow) {
+  const w = window.open('about:blank', '_blank');
+  if (!w) {
     return null;
   }
 
-  prepareWindow(preOpenedWindow);
   try {
-    preOpenedWindow.document.title = 'Opening checkout...';
-  } catch (error) {
-    console.warn('Unable to set checkout window title:', error);
+    w.document.title = 'Opening checkout…';
+  } catch {
+    // ignore
   }
 
-  return preOpenedWindow;
+  return w;
+}
+
+/**
+ * Load Stripe inside a popup we own by writing a minimal HTML shell.
+ * This survives mobile Safari/Chrome restrictions that block setting
+ * popup.location to a cross-origin URL after an async gap.
+ */
+function injectStripeRedirect(checkoutWindow: Window, url: string): boolean {
+  try {
+    const jsonUrl = JSON.stringify(url);
+    const doc = checkoutWindow.document;
+    doc.open();
+    doc.write(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"/>' +
+        '<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
+        '<title>Redirecting…</title></head>' +
+        '<body style="margin:0;font-family:system-ui,-apple-system,sans-serif;' +
+        'background:#111827;color:#e5e7eb;display:flex;min-height:100vh;' +
+        'align-items:center;justify-content:center;padding:1.25rem;text-align:center">' +
+        '<div><p style="margin:0 0 0.75rem;font-size:1rem">Opening secure checkout…</p>' +
+        '<p style="margin:0;font-size:0.9rem;opacity:0.85">If nothing happens, use the button below.</p>' +
+        '<p style="margin:1rem 0 0"><a id="go" href="#" style="color:#60a5fa;font-weight:600">Continue to checkout</a></p></div>' +
+        '<script>(function(){var u=' +
+        jsonUrl +
+        ";var a=document.getElementById('go');if(a){a.href=u;}try{location.replace(u);}catch(e){}})();<\/script>" +
+        '</body></html>'
+    );
+    doc.close();
+    return true;
+  } catch (error) {
+    console.warn('injectStripeRedirect failed:', error);
+    return false;
+  }
 }
 
 function openWebCheckoutTab(
@@ -45,14 +73,32 @@ function openWebCheckoutTab(
     throw new Error('Window is not available for web checkout');
   }
 
-  const checkoutWindow = preparedWindow ?? window.open(url, '_blank', WEB_WINDOW_FEATURES);
+  if (preparedWindow) {
+    if (injectStripeRedirect(preparedWindow, url)) {
+      preparedWindow.focus?.();
+      return { status: 'opened', method: 'web-tab' };
+    }
+    try {
+      preparedWindow.location.replace(url);
+    } catch (error) {
+      console.warn('Prepared window location.replace failed:', error);
+      try {
+        preparedWindow.close();
+      } catch {
+        // ignore
+      }
+      return { status: 'blocked', method: 'web-popup-blocked' };
+    }
+    preparedWindow.focus?.();
+    return { status: 'opened', method: 'web-tab' };
+  }
 
+  // No prepared window: single call after async — may be blocked on strict mobile;
+  // omit windowFeatures so navigation is not tied to noopener quirks.
+  const checkoutWindow = window.open(url, '_blank');
   if (!checkoutWindow) {
     return { status: 'blocked', method: 'web-popup-blocked' };
   }
-
-  prepareWindow(checkoutWindow);
-  checkoutWindow.location.href = url;
   checkoutWindow.focus?.();
   return { status: 'opened', method: 'web-tab' };
 }

@@ -2,8 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 
-import { launchStripeCheckout } from '@/utils/stripeCheckout';
-
 interface CheckoutLaunchBannerProps {
   checkoutUrl: string | null;
   source: string;
@@ -19,13 +17,15 @@ export default function CheckoutLaunchBanner({
 }: CheckoutLaunchBannerProps) {
   const [isOpening, setIsOpening] = useState(false);
 
-  const handleOpenCheckout = useCallback(async () => {
-    if (!checkoutUrl || isOpening) return;
+  const handleOpenCheckout = useCallback(() => {
+    if (!checkoutUrl || isOpening || typeof window === 'undefined') return;
 
     setIsOpening(true);
     try {
-      const result = await launchStripeCheckout(checkoutUrl, `${source} fallback`);
-      if (result.status === 'opened') {
+      // Direct open from the tap handler (no await) — most reliable on mobile Safari.
+      const w = window.open(checkoutUrl, '_blank');
+      if (w) {
+        w.focus?.();
         onDismiss();
       }
     } catch (error) {
