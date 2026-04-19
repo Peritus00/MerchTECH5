@@ -2195,9 +2195,22 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                   </Text>
                 </View>
             </View>
+
+            {!isFullscreen && isCompactLayout && (
+              <FeaturedProductsPanel
+                productLinks={playlistData?.productLinks}
+                isStackedLayout
+                productImageIndexes={productImageIndexes}
+                onImageNavigate={handleImageNavigation}
+                onBuyNow={handleBuyNow}
+                onAddToCart={handleAddToCart}
+                formatPrice={formatPrice}
+                renderStars={renderStars}
+              />
+            )}
         </View>
 
-        {!isFullscreen && (
+        {!isFullscreen && !isCompactLayout && (
           <FeaturedProductsPanel
             productLinks={playlistData?.productLinks}
             isStackedLayout={isCompactLayout}
