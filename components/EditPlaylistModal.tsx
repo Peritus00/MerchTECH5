@@ -511,8 +511,9 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
             <View style={styles.mediaTab}>
               <Text style={styles.sectionTitle}>Current Media Files</Text>
               <Text style={styles.scheduleHint}>
-                Turn on the calendar to play an item only on chosen dates. At least one item must stay
-                unscheduled if any item uses a schedule.
+                Turn on the calendar to play an item only on chosen dates. Start is required,
+                expiration is optional, and at least one item must stay unscheduled if any item uses
+                a schedule.
               </Text>
 
               {playlistLines.length === 0 ? (
@@ -626,15 +627,20 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                                 {line.scheduleStartDate || 'Set'}
                               </Text>
                             </TouchableOpacity>
-                            <Text style={styles.miniLabel}>Expires</Text>
+                            <Text style={styles.miniLabel}>Expires (optional)</Text>
                             <TouchableOpacity
                               style={styles.dateChip}
                               onPress={() => openDatePicker(index, 'end')}
                             >
                               <Text style={styles.dateChipText}>
-                                {line.scheduleEndDate || 'Set'}
+                                {line.scheduleEndDate || 'Optional'}
                               </Text>
                             </TouchableOpacity>
+                            {line.scheduleEndDate && (
+                              <TouchableOpacity onPress={() => updateLine(index, { scheduleEndDate: null })}>
+                                <Text style={styles.clearDateText}>Clear</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
 
                           {isActiveWebDatePicker && datePickerCtx && (
@@ -1027,6 +1033,11 @@ const styles = StyleSheet.create({
   dateChipText: {
     fontSize: 13,
     color: '#1d4ed8',
+    fontWeight: '500',
+  },
+  clearDateText: {
+    fontSize: 12,
+    color: '#6b7280',
     fontWeight: '500',
   },
   subLabel: {

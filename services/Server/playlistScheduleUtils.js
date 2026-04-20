@@ -33,8 +33,12 @@ function isPlaylistItemActiveOnDate(schedule, dateStr) {
   if (!schedule.scheduleEnabled) return true;
   const start = schedule.scheduleStartDate;
   const end = schedule.scheduleEndDate;
-  if (!start || !end || !isValidIsoDate(start) || !isValidIsoDate(end)) return false;
-  if (!isDateInRangeInclusive(dateStr, start, end)) return false;
+  if (!start || !isValidIsoDate(start)) return false;
+  if (dateStr < start) return false;
+  if (end) {
+    if (!isValidIsoDate(end)) return false;
+    if (!isDateInRangeInclusive(dateStr, start, end)) return false;
+  }
   const exact = schedule.scheduleExactDates || [];
   const rules = schedule.scheduleRecurringRules || [];
   const inExact = exact.includes(dateStr);
@@ -65,13 +69,13 @@ function validatePlaylistMediaScheduleItems(items) {
     if (!it.scheduleEnabled) continue;
     const start = it.scheduleStartDate;
     const end = it.scheduleEndDate;
-    if (!start || !end) {
-      return { ok: false, error: 'Scheduled items require both a start date and an expiration date.' };
+    if (!start) {
+      return { ok: false, error: 'Scheduled items require a start date.' };
     }
-    if (!isValidIsoDate(start) || !isValidIsoDate(end)) {
+    if (!isValidIsoDate(start) || (end != null && !isValidIsoDate(end))) {
       return { ok: false, error: 'Invalid schedule date format. Use YYYY-MM-DD.' };
     }
-    if (start > end) {
+    if (end && start > end) {
       return { ok: false, error: 'Schedule start date cannot be after the expiration date.' };
     }
     const exact = it.scheduleExactDates || [];
@@ -86,8 +90,11 @@ function validatePlaylistMediaScheduleItems(items) {
       if (!isValidIsoDate(d)) {
         return { ok: false, error: `Invalid exact date: ${d}` };
       }
-      if (!isDateInRangeInclusive(d, start, end)) {
-        return { ok: false, error: `Exact date ${d} must fall within the item's start and expiration range.` };
+      if (d < start || (end && d > end)) {
+        return {
+          ok: false,
+          error: `Exact date ${d} must fall on or after the item's start date and before its expiration date when one is set.`,
+        };
       }
     }
     for (const r of rules) {
@@ -107,6 +114,9 @@ function validatePlaylistMediaScheduleItems(items) {
   }
 
   const scheduledItems = items.filter((i) => i.scheduleEnabled);
+  if (scheduledItems.some((i) => !i.scheduleEndDate)) {
+    return { ok: true };
+  }
   const minStart = scheduledItems.reduce(
     (acc, i) => (i.scheduleStartDate < acc ? i.scheduleStartDate : acc),
     scheduledItems[0].scheduleStartDate
