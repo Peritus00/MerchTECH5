@@ -273,6 +273,26 @@ export const authAPI = {
     }
   },
 
+  async registerViewer(
+    email: string,
+    password: string,
+    username: string,
+    activationCode?: string
+  ) {
+    const response = await api.post('/auth/register-viewer', {
+      email,
+      password,
+      username,
+      activationCode: activationCode || undefined,
+    });
+    return response.data;
+  },
+
+  async upgradeViewerToFree() {
+    const response = await api.post('/auth/upgrade-viewer-to-free');
+    return response.data;
+  },
+
   async sendVerification(email: string) {
     const response = await api.post('/auth/send-verification', { email });
     return response.data;
@@ -1419,6 +1439,14 @@ export const settingsAPI = {
     const response = await api.get('/settings/signups-enabled');
     return response.data;
   },
+  async getViewerSignupsEnabled() {
+    const response = await api.get('/settings/viewer-signups-enabled');
+    return response.data;
+  },
+  async getViewerUpgradesEnabled() {
+    const response = await api.get('/settings/viewer-upgrades-enabled');
+    return response.data;
+  },
 };
 
 // Admin Settings API
@@ -1430,6 +1458,16 @@ export const adminSettingsAPI = {
   
   async toggleSignups(enabled: boolean) {
     const response = await api.patch('/admin/settings/signups', { enabled });
+    return response.data;
+  },
+
+  async toggleViewerSignups(enabled: boolean) {
+    const response = await api.patch('/admin/settings/viewer-signups', { enabled });
+    return response.data;
+  },
+
+  async toggleViewerUpgrades(enabled: boolean) {
+    const response = await api.patch('/admin/settings/viewer-upgrades', { enabled });
     return response.data;
   },
 };

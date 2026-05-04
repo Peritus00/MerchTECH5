@@ -60,7 +60,21 @@ export default function SubscriptionCheckoutScreen() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`HTTP ${response.status}: ${errorText}`);
+        let parsed: { error?: string; code?: string } = {};
+        try {
+          parsed = JSON.parse(errorText);
+        } catch {
+          // not JSON
+        }
+        if (parsed.code === 'VIEWER_UPGRADES_DISABLED') {
+          Alert.alert(
+            'Upgrades unavailable',
+            parsed.error ||
+              'Upgrading from a viewer account is disabled. Contact support or try again later.'
+          );
+          return;
+        }
+        throw new Error(parsed.error || `HTTP ${response.status}: ${errorText}`);
       }
 
       const result = await response.json();

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,16 +19,33 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { SUBSCRIPTION_TIERS } from '@/types/subscription';
 import { authService } from '@/services/authService';
+import { settingsAPI } from '@/services/api';
 
 export default function SubscriptionScreen() {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, upgradeViewerToFree } = useAuth();
   const router = useRouter();
   const { newUser } = useLocalSearchParams();
   const [isLoading, setIsLoading] = useState<string | null>(null);
   const [showFreeConfirmation, setShowFreeConfirmation] = useState(false);
   const [showBusinessInquiriesModal, setShowBusinessInquiriesModal] = useState(false);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [viewerUpgradesEnabled, setViewerUpgradesEnabled] = useState(true);
   const isNewUser = newUser === 'true';
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await settingsAPI.getViewerUpgradesEnabled();
+        if (!cancelled) setViewerUpgradesEnabled(!!r.enabled);
+      } catch {
+        if (!cancelled) setViewerUpgradesEnabled(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const getTierIcon = (tierKey: string) => {
     switch (tierKey) {
@@ -49,6 +66,18 @@ export default function SubscriptionScreen() {
 
     try {
       setIsLoading('free');
+
+      if (user?.accountType === 'viewer') {
+        const up = await upgradeViewerToFree();
+        if (!up.success) {
+          Alert.alert(
+            'Cannot switch to creator',
+            up.error ||
+              'Upgrades from viewer accounts may be disabled. Try again later or contact support.'
+          );
+          return;
+        }
+      }
 
       if (user?.email) {
         console.log('Starting free account setup for:', user.email);
@@ -107,11 +136,12 @@ export default function SubscriptionScreen() {
         console.error('❌ Missing user email:', user);
         throw new Error('User email not found. Please try logging in again.');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Failed to process free account selection:', error);
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
       Alert.alert(
         'Setup Error',
-        `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${error?.message || 'Unknown error'}`,
+        `There was an issue setting up your free account. Please try again or contact support if the problem persists.\n\nError: ${errMsg}`,
         [{ text: 'OK' }]
       );
     } finally {
@@ -163,6 +193,14 @@ export default function SubscriptionScreen() {
         return;
       }
 
+      if (user?.accountType === 'viewer' && !viewerUpgradesEnabled) {
+        Alert.alert(
+          'Paid plans unavailable',
+          'Upgrading from a viewer account is temporarily disabled. Contact support if you need creator access.'
+        );
+        return;
+      }
+
       console.log('Paid tier selected:', tierKey);
       router.push(`/subscription/checkout?tier=${tierKey}&newUser=${isNewUser}`);
     } catch (error) {
@@ -175,6 +213,8 @@ export default function SubscriptionScreen() {
     const isPopular = tier.popular;
     const isCurrent = isCurrentPlan(tierKey);
     const loading = isLoading === tierKey;
+    const viewerPaidBlocked =
+      user?.accountType === 'viewer' && tierKey !== 'free' && !viewerUpgradesEnabled;
 
     return (
       <ThemedView
@@ -221,13 +261,14 @@ export default function SubscriptionScreen() {
             styles.selectButton,
             isCurrent ? styles.currentButton : styles.upgradeButton,
             loading && styles.loadingButton,
+            viewerPaidBlocked && styles.loadingButton,
           ]}
           onPress={() => {
             console.log(`🚀 Button pressed for tier: ${tierKey}`);
             console.log('Button disabled state:', loading || (isCurrent && tierKey !== 'free'));
             handleSelectPlan(tierKey);
           }}
-          disabled={loading || (isCurrent && tierKey !== 'free')}
+          disabled={loading || (isCurrent && tierKey !== 'free') || viewerPaidBlocked}
           activeOpacity={0.8}
         >
           {loading ? (
@@ -236,7 +277,7 @@ export default function SubscriptionScreen() {
             <ThemedText style={styles.buttonText}>
               {!user 
                 ? (tierKey === 'free' ? 'Sign Up Free' : 'Sign Up & Subscribe')
-                : (isCurrent && tierKey !== 'free' ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : 'Select Plan')
+                : (isCurrent && tierKey !== 'free' ? 'Current Plan' : tierKey === 'free' ? 'Get Started' : viewerPaidBlocked ? 'Unavailable' : 'Select Plan')
               }
             </ThemedText>
           )}
@@ -265,6 +306,13 @@ export default function SubscriptionScreen() {
                 : 'Select the perfect plan for your QR code and media management needs'
             }
           </ThemedText>
+          {user?.accountType === 'viewer' && (
+            <ThemedText style={styles.viewerBanner}>
+              {`You're on a viewer account (watch-only). Choose Free to become a creator, or upgrade to a paid plan when enabled by the site admin.${
+                !viewerUpgradesEnabled ? ' Paid upgrades are currently turned off.' : ''
+              }`}
+            </ThemedText>
+          )}
           {!user && (
             <TouchableOpacity 
               onPress={() => router.push('/auth/login')}
@@ -430,6 +478,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     opacity: 0.7,
     textAlign: 'center',
+  },
+  viewerBanner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   loginLink: {
     marginTop: 16,

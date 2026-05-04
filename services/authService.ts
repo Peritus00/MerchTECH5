@@ -237,6 +237,59 @@ class AuthService {
     }
   }
 
+  async registerViewer(
+    credentials: RegisterCredentials & { activationCode?: string }
+  ): Promise<AuthResponse> {
+    this.validateRegistrationData(credentials);
+    try {
+      const response = await authAPI.registerViewer(
+        credentials.email,
+        credentials.password,
+        credentials.username,
+        credentials.activationCode
+      );
+      if (!response.user || !response.token) {
+        throw new Error('Registration completed but server response was invalid. Please try logging in.');
+      }
+      await this.storeAuthData(response);
+      return response;
+    } catch (error: any) {
+      if (error.response?.status === 503 || error.response?.data?.code === 'VIEWER_SIGNUPS_DISABLED') {
+        throw new Error(error.response?.data?.error || 'Viewer signups are currently disabled');
+      }
+      if (error.response?.status === 409) {
+        throw new Error(error.response?.data?.error || 'Email or username already exists');
+      }
+      const msg = error.response?.data?.error || error.message || 'Viewer registration failed';
+      throw new Error(msg);
+    }
+  }
+
+  /** Converts a viewer account to a free creator (requires auth). */
+  async upgradeViewerToFree(): Promise<User> {
+    try {
+      const response = await authAPI.upgradeViewerToFree();
+      if (!response.user) {
+        throw new Error('Invalid response from server');
+      }
+      const token = await AsyncStorage.getItem(AuthService.TOKEN_KEY);
+      if (!token) {
+        throw new Error('Not authenticated');
+      }
+      await this.storeAuthData({ user: response.user, token });
+      return response.user;
+    } catch (error: any) {
+      if (error.response?.status === 403 && error.response?.data?.code === 'VIEWER_UPGRADES_DISABLED') {
+        throw new Error(
+          error.response?.data?.error ||
+            'Upgrades from viewer accounts are currently disabled. Contact support for access.'
+        );
+      }
+      const msg = error.response?.data?.error || error.message || 'Upgrade failed';
+      throw new Error(msg);
+    }
+  }
+
   async logout(): Promise<void> {
     try {
       console.log('🔴 AuthService: Starting logout...');
@@ -404,7 +457,7 @@ class AuthService {
         return false;
       }
 
-      const response = await authAPI.refreshToken(refreshToken);
+      const response = await (authAPI as any).refreshToken(refreshToken);
       if (response.token) {
         await AsyncStorage.setItem(AuthService.TOKEN_KEY, response.token);
         if (response.refreshToken) {

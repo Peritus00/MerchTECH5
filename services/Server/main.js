@@ -652,6 +652,101 @@ const authenticateTokenOptional = (req, res, next) => {
   });
 };
 
+/** System setting as boolean (string 'true' / 'false' in system_settings). */
+async function getSystemSettingBool(key, defaultValue = false, requestId = null) {
+  try {
+    const result = await db.query(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      [key],
+      { queryName: 'get_system_setting_bool', requestId }
+    );
+    if (!result.rows.length) return defaultValue;
+    return result.rows[0].setting_value === 'true';
+  } catch (e) {
+    console.warn('getSystemSettingBool:', key, e?.message || e);
+    return defaultValue;
+  }
+}
+
+/** Block viewer accounts from creator write endpoints. */
+function requireCreatorAccount(req, res, next) {
+  if (!req.user?.userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  db.query(
+    `SELECT COALESCE(account_type, 'creator') AS account_type FROM users WHERE id = $1`,
+    [req.user.userId],
+    { queryName: 'require_creator_account', requestId: req.requestId }
+  )
+    .then((r) => {
+      if (!r.rows.length) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (r.rows[0].account_type === 'viewer') {
+        return res.status(403).json({
+          error: 'Viewer accounts cannot perform this action',
+          code: 'VIEWER_ACCOUNT_RESTRICTED',
+        });
+      }
+      next();
+    })
+    .catch((err) => {
+      console.error('requireCreatorAccount:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+}
+
+/**
+ * Attach a valid activation code to a user (same rules as POST /api/activation-codes/attach).
+ * @returns {Promise<{ ok: true, activationCode: object } | { ok: false, status: number, error: string }>}
+ */
+async function attachActivationCodeForUserId(userId, code) {
+  if (!code || typeof code !== 'string') {
+    return { ok: false, status: 400, error: 'Activation code is required' };
+  }
+  let codeResult;
+  try {
+    codeResult = await db.query(
+      `SELECT * FROM activation_codes 
+       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
+       AND (expires_at IS NULL OR expires_at > NOW())
+       AND (max_uses IS NULL OR uses_count < max_uses)`,
+      [code]
+    );
+  } catch (error) {
+    if (error.code === '42703' || error.message?.includes('deleted_at')) {
+      codeResult = await db.query(
+        `SELECT * FROM activation_codes 
+         WHERE code = $1 AND is_active = true
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)`,
+        [code]
+      );
+    } else {
+      throw error;
+    }
+  }
+  if (codeResult.rows.length === 0) {
+    return { ok: false, status: 400, error: 'Invalid or expired activation code' };
+  }
+  const activationCode = codeResult.rows[0];
+  const existingResult = await db.query(
+    `SELECT * FROM user_activation_codes 
+     WHERE user_id = $1 AND activation_code_id = $2`,
+    [userId, activationCode.id]
+  );
+  if (existingResult.rows.length > 0) {
+    return { ok: false, status: 400, error: 'Code already attached to your profile' };
+  }
+  await db.query(
+    `INSERT INTO user_activation_codes (user_id, activation_code_id) 
+     VALUES ($1, $2)`,
+    [userId, activationCode.id]
+  );
+  await db.query(`UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`, [activationCode.id]);
+  return { ok: true, activationCode };
+}
+
 const isAdmin = async (req, res, next) => {
   try {
     const result = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId], { 
@@ -2489,6 +2584,86 @@ app.patch('/api/admin/settings/signups', authenticateToken, isAdmin, async (req,
     });
   } catch (error) {
     console.error('Error updating signups setting:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/admin/settings/viewer-signups', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    const userId = req.user.userId;
+    const settingValue = enabled ? 'true' : 'false';
+    await db.query(
+      `INSERT INTO system_settings (setting_key, setting_value, updated_by, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) 
+       DO UPDATE SET setting_value = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP`,
+      ['viewer_signups_enabled', settingValue, userId],
+      { queryName: 'update_viewer_signups_setting', requestId: req.requestId }
+    );
+    try {
+      const { logActivity } = require('./middleware/activityLogger');
+      logActivity({
+        userId,
+        actionType: 'update',
+        resourceType: 'system_setting',
+        resourceId: null,
+        details: { setting: 'viewer_signups_enabled', enabled },
+        requestId: req.requestId
+      });
+    } catch (logError) {
+      console.warn('Could not log activity:', logError);
+    }
+    res.json({
+      success: true,
+      enabled,
+      message: `Viewer signups ${enabled ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating viewer signups setting:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.patch('/api/admin/settings/viewer-upgrades', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    const { enabled } = req.body;
+    if (typeof enabled !== 'boolean') {
+      return res.status(400).json({ error: 'enabled must be a boolean' });
+    }
+    const userId = req.user.userId;
+    const settingValue = enabled ? 'true' : 'false';
+    await db.query(
+      `INSERT INTO system_settings (setting_key, setting_value, updated_by, updated_at)
+       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+       ON CONFLICT (setting_key) 
+       DO UPDATE SET setting_value = $2, updated_by = $3, updated_at = CURRENT_TIMESTAMP`,
+      ['viewer_upgrades_enabled', settingValue, userId],
+      { queryName: 'update_viewer_upgrades_setting', requestId: req.requestId }
+    );
+    try {
+      const { logActivity } = require('./middleware/activityLogger');
+      logActivity({
+        userId,
+        actionType: 'update',
+        resourceType: 'system_setting',
+        resourceId: null,
+        details: { setting: 'viewer_upgrades_enabled', enabled },
+        requestId: req.requestId
+      });
+    } catch (logError) {
+      console.warn('Could not log activity:', logError);
+    }
+    res.json({
+      success: true,
+      enabled,
+      message: `Viewer upgrades ${enabled ? 'enabled' : 'disabled'} successfully`
+    });
+  } catch (error) {
+    console.error('Error updating viewer upgrades setting:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -5863,6 +6038,38 @@ app.get('/api/auth/profile', authenticateToken, async (req, res) => {
   }
 });
 
+/** Viewer upgrades to a free creator account (no Stripe). */
+app.post('/api/auth/upgrade-viewer-to-free', authenticateToken, async (req, res) => {
+  try {
+    const upgradesEnabled = await getSystemSettingBool('viewer_upgrades_enabled', true, req.requestId);
+    if (!upgradesEnabled) {
+      return res.status(403).json({
+        error: 'Upgrades from viewer accounts are currently disabled',
+        code: 'VIEWER_UPGRADES_DISABLED',
+      });
+    }
+    const row = await db.query(
+      `SELECT COALESCE(account_type, 'creator') AS account_type FROM users WHERE id = $1`,
+      [req.user.userId]
+    );
+    if (!row.rows.length) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    if (row.rows[0].account_type !== 'viewer') {
+      return res.status(400).json({ error: 'Account is not a viewer profile' });
+    }
+    await db.query(
+      `UPDATE users SET account_type = 'creator', subscription_tier = 'free' WHERE id = $1`,
+      [req.user.userId]
+    );
+    const full = await db.query('SELECT * FROM users WHERE id = $1', [req.user.userId]);
+    res.json({ user: transformUser(full.rows[0]) });
+  } catch (error) {
+    console.error('🔴 upgrade-viewer-to-free:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.post('/api/auth/login', 
   validators.email,
   validators.password,
@@ -5971,6 +6178,43 @@ app.post('/api/auth/login',
 
 // Helper function to transform database user to frontend format
 function transformUser(dbUser) {
+  const accountType = dbUser.account_type === 'viewer' ? 'viewer' : 'creator';
+
+  if (accountType === 'viewer') {
+    return {
+      id: dbUser.id,
+      email: dbUser.email,
+      username: dbUser.username,
+      firstName: dbUser.first_name,
+      lastName: dbUser.last_name,
+      isAdmin: dbUser.is_admin || false,
+      accountType: 'viewer',
+      subscriptionTier: dbUser.subscription_tier || 'free',
+      isEmailVerified: dbUser.is_email_verified || false,
+      isSuspended: dbUser.is_suspended || false,
+      createdAt: dbUser.created_at,
+      lastActive: dbUser.updated_at || dbUser.created_at,
+      canViewLogs: dbUser.can_view_logs || false,
+      canViewAnalytics: false,
+      canManagePlaylists: false,
+      canEditPlaylists: false,
+      canUploadMedia: false,
+      canGenerateCodes: false,
+      canAccessStore: true,
+      canViewFanmail: false,
+      canManageQRCodes: false,
+      maxPlaylists: 0,
+      maxVideos: 0,
+      maxAudioFiles: 0,
+      maxActivationCodes: 0,
+      maxProducts: 0,
+      maxQrCodes: 0,
+      maxSlideshows: 0,
+      googleId: dbUser.google_id || null,
+      appleId: dbUser.apple_id || null,
+    };
+  }
+
   return {
     id: dbUser.id,
     email: dbUser.email,
@@ -5978,6 +6222,7 @@ function transformUser(dbUser) {
     firstName: dbUser.first_name,
     lastName: dbUser.last_name,
     isAdmin: dbUser.is_admin || false,
+    accountType: 'creator',
     subscriptionTier: dbUser.subscription_tier || 'free',
     isEmailVerified: dbUser.is_email_verified || false,
     isSuspended: dbUser.is_suspended || false,
@@ -6029,6 +6274,26 @@ app.get('/api/settings/signups-enabled', async (req, res) => {
   }
 });
 
+app.get('/api/settings/viewer-signups-enabled', async (req, res) => {
+  try {
+    const enabled = await getSystemSettingBool('viewer_signups_enabled', false, req.requestId);
+    res.json({ enabled });
+  } catch (error) {
+    console.error('Error checking viewer signups enabled:', error);
+    res.json({ enabled: false });
+  }
+});
+
+app.get('/api/settings/viewer-upgrades-enabled', async (req, res) => {
+  try {
+    const enabled = await getSystemSettingBool('viewer_upgrades_enabled', true, req.requestId);
+    res.json({ enabled });
+  } catch (error) {
+    console.error('Error checking viewer upgrades enabled:', error);
+    res.json({ enabled: true });
+  }
+});
+
 app.post('/api/auth/register',
   validators.email,
   validators.password,
@@ -6058,7 +6323,7 @@ app.post('/api/auth/register',
     if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
     const hashedPassword = await bcrypt.hash(password, 12);
     const result = await db.query(
-      `INSERT INTO users (email, username, password_hash) VALUES ($1, $2, $3) RETURNING id, email, username, is_admin`,
+      `INSERT INTO users (email, username, password_hash, account_type) VALUES ($1, $2, $3, 'creator') RETURNING id, email, username, is_admin`,
       [email, username, hashedPassword]
     );
     const newUser = result.rows[0];
@@ -6080,9 +6345,74 @@ app.post('/api/auth/register',
       // Do not block registration if email fails. Log the error for follow-up.
     }
 
-    res.status(201).json({ user: newUser, token });
+    const fullUserResult = await db.query('SELECT * FROM users WHERE id = $1', [newUser.id]);
+    const user = transformUser(fullUserResult.rows[0]);
+    res.status(201).json({ user, token });
   } catch (error) {
     console.error('🔴 REGISTRATION ERROR:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/api/auth/register-viewer',
+  validators.email,
+  validators.password,
+  validators.username,
+  validate,
+  async (req, res) => {
+  try {
+    const viewerCheck = await db.query(
+      'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+      ['viewer_signups_enabled'],
+      { queryName: 'check_viewer_signups_enabled', requestId: req.requestId }
+    );
+    const viewerEnabled = viewerCheck.rows.length > 0 && viewerCheck.rows[0].setting_value === 'true';
+    if (!viewerEnabled) {
+      return res.status(503).json({
+        error: 'Viewer signups are currently disabled',
+        code: 'VIEWER_SIGNUPS_DISABLED',
+      });
+    }
+
+    const { email, password, username, activationCode } = req.body;
+    const existingUser = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
+    if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
+    const hashedPassword = await bcrypt.hash(password, 12);
+    const result = await db.query(
+      `INSERT INTO users (email, username, password_hash, account_type) VALUES ($1, $2, $3, 'viewer') RETURNING id, email, username, is_admin`,
+      [email, username, hashedPassword]
+    );
+    const newUser = result.rows[0];
+    const userId = newUser.id;
+
+    if (activationCode != null && String(activationCode).trim()) {
+      const attachResult = await attachActivationCodeForUserId(userId, String(activationCode).trim());
+      if (!attachResult.ok) {
+        await db.query('DELETE FROM users WHERE id = $1', [userId]);
+        return res.status(attachResult.status || 400).json({ error: attachResult.error });
+      }
+    }
+
+    const token = jwt.sign({ userId: newUser.id, email: newUser.email, isAdmin: newUser.is_admin }, JWT_SECRET, { expiresIn: '24h' });
+
+    try {
+      const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+      await transporter.sendMail({
+        from: '"MerchTrader QR" <help@merchtrader.org>',
+        to: email,
+        subject: 'Verify Your MerchTech Account',
+        html: `Thank you for registering! Please verify your email by clicking this link: <a href="${frontendUrl}/auth/verify-email?token=${token}">Verify Email</a>`,
+      });
+      console.log(`Verification email sent to ${email}`);
+    } catch (emailError) {
+      console.error(`🔴 Failed to send verification email to ${email}:`, emailError);
+    }
+
+    const fullUserResult = await db.query('SELECT * FROM users WHERE id = $1', [userId]);
+    const user = transformUser(fullUserResult.rows[0]);
+    res.status(201).json({ user, token });
+  } catch (error) {
+    console.error('🔴 VIEWER REGISTRATION ERROR:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -6100,7 +6430,7 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     const googleUser = await socialAuthService.verifyGoogleToken(idToken);
     
     // Find or create user
-    const dbUser = await socialAuthService.findOrCreateSocialUser(
+    const { user: dbUser } = await socialAuthService.findOrCreateSocialUser(
       db,
       'google',
       googleUser.googleId,
@@ -6131,6 +6461,12 @@ app.post('/api/auth/google', authLimiter, async (req, res) => {
     res.json({ user, token, provider: 'google' });
   } catch (error) {
     console.error('🔴 GOOGLE AUTH ERROR:', error);
+    if (error.code === 'SIGNUPS_DISABLED' || error.statusCode === 503) {
+      return res.status(503).json({
+        error: error.message || 'Signups are currently disabled',
+        code: 'SIGNUPS_DISABLED',
+      });
+    }
     res.status(401).json({ error: error.message || 'Google authentication failed' });
   }
 });
@@ -6156,7 +6492,7 @@ app.post('/api/auth/google/web', authLimiter, async (req, res) => {
 
     const googleUser = await socialAuthService.exchangeGoogleCode(code, redirectUri);
 
-    const dbUser = await socialAuthService.findOrCreateSocialUser(
+    const { user: dbUser } = await socialAuthService.findOrCreateSocialUser(
       db,
       'google',
       googleUser.googleId,
@@ -6185,6 +6521,12 @@ app.post('/api/auth/google/web', authLimiter, async (req, res) => {
     res.json({ user, token, provider: 'google' });
   } catch (error) {
     console.error('🔴 GOOGLE WEB AUTH ERROR:', error);
+    if (error.code === 'SIGNUPS_DISABLED' || error.statusCode === 503) {
+      return res.status(503).json({
+        error: error.message || 'Signups are currently disabled',
+        code: 'SIGNUPS_DISABLED',
+      });
+    }
     res.status(401).json({ error: error.message || 'Google authentication failed' });
   }
 });
@@ -6235,7 +6577,7 @@ app.post('/api/auth/apple', authLimiter, async (req, res) => {
     const appleUser = await socialAuthService.verifyAppleToken(identityToken, nonce);
     
     // Find or create user
-    const dbUser = await socialAuthService.findOrCreateSocialUser(
+    const { user: dbUser } = await socialAuthService.findOrCreateSocialUser(
       db,
       'apple',
       appleUser.appleId,
@@ -6262,6 +6604,12 @@ app.post('/api/auth/apple', authLimiter, async (req, res) => {
     res.json({ user, token, provider: 'apple' });
   } catch (error) {
     console.error('🔴 APPLE AUTH ERROR:', error);
+    if (error.code === 'SIGNUPS_DISABLED' || error.statusCode === 503) {
+      return res.status(503).json({
+        error: error.message || 'Signups are currently disabled',
+        code: 'SIGNUPS_DISABLED',
+      });
+    }
     res.status(401).json({ error: error.message || 'Apple authentication failed' });
   }
 });
@@ -6327,7 +6675,7 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
       const appleUser = await socialAuthService.verifyAppleToken(id_token, nonce);
       
       // Find or create user
-      const dbUser = await socialAuthService.findOrCreateSocialUser(
+      const { user: dbUser } = await socialAuthService.findOrCreateSocialUser(
         db,
         'apple',
         appleUser.appleId,
@@ -6355,6 +6703,12 @@ app.post('/api/auth/apple/web', authLimiter, async (req, res) => {
       res.json({ user, token, provider: 'apple' });
     } catch (tokenError) {
       console.error('🔴 APPLE WEB AUTH ERROR: Token exchange failed');
+      if (tokenError.code === 'SIGNUPS_DISABLED' || tokenError.statusCode === 503) {
+        return res.status(503).json({
+          error: tokenError.message || 'Signups are currently disabled',
+          code: 'SIGNUPS_DISABLED',
+        });
+      }
       console.error('🔴 Error details:', {
         message: tokenError.message,
         status: tokenError.response?.status,
@@ -7947,7 +8301,7 @@ app.get('/api/products/:id', authenticateToken, async (req, res) => {
 });
 
 // Update product (owner or admin)
-app.patch('/api/products/:id', authenticateToken, async (req, res) => {
+app.patch('/api/products/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const prodRes = await db.query('SELECT * FROM products WHERE id = $1', [id]);
@@ -7987,7 +8341,7 @@ app.patch('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/products/:id', authenticateToken, async (req, res) => {
+app.delete('/api/products/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const prodRes = await db.query('SELECT user_id FROM products WHERE id = $1', [id]);
@@ -8009,7 +8363,7 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/products', authenticateToken, async (req, res) => {
+app.post('/api/products', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { name, description, images, metadata, inStock, prices, price, category } = req.body;
     const { userId } = req.user;
@@ -8423,7 +8777,7 @@ async function queuePendingMediaScan(media) {
     });
 }
 
-app.post('/api/upload', authenticateToken, (req, res, next) => {
+app.post('/api/upload', authenticateToken, requireCreatorAccount, (req, res, next) => {
     const requestId = `req_${Date.now()}`;
     console.log(`📤 UPLOAD [${requestId}]: Starting upload request for user ${req.user?.userId}`);
     
@@ -8655,6 +9009,7 @@ app.post('/api/upload', authenticateToken, (req, res, next) => {
 // --- Presigned URL Endpoint (Direct-to-Cloud Upload) ---
 app.post('/api/upload/presigned', 
   authenticateToken,
+  requireCreatorAccount,
   validators.fileName,
   validators.contentType,
   validators.fileSize,
@@ -8880,6 +9235,7 @@ app.get('/api/images/local/:filename', async (req, res) => {
 // ---------- MEDIA ROUTES ----------
 app.post('/api/media/confirm-upload',
   authenticateToken,
+  requireCreatorAccount,
   normalizeConfirmUploadBody,
   validators.title,
   validators.filename,
@@ -9018,6 +9374,7 @@ app.post('/api/media/confirm-upload',
 
 app.post('/api/media', 
   authenticateToken,
+  requireCreatorAccount,
   validators.optionalString('title', 255),
   validators.optionalString('url', 2048),
   validators.optionalString('filename', 255),
@@ -9669,7 +10026,7 @@ app.get('/api/media/:id/stream', async (req, res) => {
   }
 });
 
-app.delete('/api/media/:id', authenticateToken, async (req, res) => {
+app.delete('/api/media/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     console.log(`🗑️ MEDIA_DELETE: Starting deletion for media ID: ${id}, user: ${req.user.userId}`);
@@ -9787,7 +10144,7 @@ async function validateOwnedPreviewCouponId(userId, previewCouponId) {
   return numericCouponId;
 }
 
-app.post('/api/playlists', authenticateToken, async (req, res) => {
+app.post('/api/playlists', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { name, description, mediaFileIds, requiresActivationCode, isPublic, previewCouponId } = req.body;
     
@@ -9980,7 +10337,7 @@ app.get('/api/playlists/:id', async (req, res) => {
     `);
   }
 });
-app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
+app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, previewCouponId } = req.body;
@@ -10070,7 +10427,7 @@ app.patch('/api/playlists/:id', authenticateToken, async (req, res) => {
   }
 });
 
-app.delete('/api/playlists/:id', authenticateToken, async (req, res) => {
+app.delete('/api/playlists/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -10432,7 +10789,7 @@ app.get('/api/analytics/debug/recent-scans', authenticateToken, isAdmin, async (
   }
 });
 
-app.post('/api/stripe/create-payment-intent', authenticateToken, async (req, res) => {
+app.post('/api/stripe/create-payment-intent', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { amount, subscriptionTier } = req.body;
     if (!amount) return res.status(400).json({ error: 'Amount required' });
@@ -10468,6 +10825,17 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
       return res.status(404).json({ error: 'User not found' });
     }
     const user = userResult.rows[0];
+
+    const accountType = user.account_type || 'creator';
+    if (accountType === 'viewer') {
+      const allowUpgrades = await getSystemSettingBool('viewer_upgrades_enabled', true, req.requestId);
+      if (!allowUpgrades) {
+        return res.status(403).json({
+          error: 'Upgrades from viewer accounts are currently disabled',
+          code: 'VIEWER_UPGRADES_DISABLED',
+        });
+      }
+    }
 
     // Define subscription tiers with pricing (amount in cents)
     const tiers = {
@@ -10990,7 +11358,7 @@ function assertVerifiedPreviewGateForContent(contentType, row) {
 }
 
 // POST /api/coupons - create coupon (authenticated)
-app.post('/api/coupons', authenticateToken, async (req, res) => {
+app.post('/api/coupons', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) {
       return res.status(503).json({ error: 'Coupon feature not available. Run migration 033_coupons_and_sms_gate.sql' });
@@ -11089,7 +11457,7 @@ app.get('/api/coupons', authenticateToken, async (req, res) => {
 });
 
 // PATCH /api/coupons/:id
-app.patch('/api/coupons/:id', authenticateToken, async (req, res) => {
+app.patch('/api/coupons/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
     const id = parseInt(req.params.id, 10);
@@ -11144,7 +11512,7 @@ app.patch('/api/coupons/:id', authenticateToken, async (req, res) => {
 });
 
 // DELETE /api/coupons/:id
-app.delete('/api/coupons/:id', authenticateToken, async (req, res) => {
+app.delete('/api/coupons/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) return res.status(503).json({ error: 'Coupon feature not available' });
     const id = parseInt(req.params.id, 10);
@@ -11577,7 +11945,7 @@ app.patch('/api/coupons/preview-gate-settings', authenticateToken, isAdmin, asyn
 });
 
 // PATCH /api/coupons/preview-gate-settings/me - authenticated user: update own setting
-app.patch('/api/coupons/preview-gate-settings/me', authenticateToken, async (req, res) => {
+app.patch('/api/coupons/preview-gate-settings/me', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     if (!(await ensureCouponTables())) {
       return res.status(503).json({ error: 'Coupon feature not available' });
@@ -11808,7 +12176,28 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
         }
 
         // Extract user ID from metadata
-        const userId = session.metadata?.userId !== 'guest' ? parseInt(session.metadata?.userId) : null;
+        const userId = session.metadata?.userId !== 'guest' ? parseInt(session.metadata?.userId, 10) : null;
+
+        // Paid subscription checkout: promote viewer to creator and set tier (from create-checkout-session metadata)
+        try {
+          const md = session.metadata || {};
+          const tierRaw = md.tier;
+          if (userId && !Number.isNaN(userId) && tierRaw && session.payment_status === 'paid') {
+            let tier = String(tierRaw).toLowerCase();
+            if (tier === 'pro') tier = 'basic';
+            if (tier === 'enterprise') tier = 'premium';
+            const allowed = ['free', 'basic', 'premium'];
+            if (allowed.includes(tier)) {
+              await db.query(
+                `UPDATE users SET subscription_tier = $1, account_type = 'creator' WHERE id = $2`,
+                [tier, userId]
+              );
+              console.log('💳 STRIPE_WEBHOOK: User subscription updated', { userId, tier });
+            }
+          }
+        } catch (subErr) {
+          console.warn('💳 STRIPE_WEBHOOK: subscription tier update failed:', subErr?.message || subErr);
+        }
         
         // Get line items from the session
         const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 100 });
@@ -12480,7 +12869,7 @@ async function processQrLogoOptions(options, userId, qrCodeIdForKey = null) {
 }
 
 // Create a new QR code (alias for backward compatibility)
-app.post('/api/qrcodes', authenticateToken, async (req, res) => {
+app.post('/api/qrcodes', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     console.log('📱 QR_CODES: ============ CREATE QR CODE DEBUG START ============');
     console.log('📱 QR_CODES: Request body:', JSON.stringify(req.body, null, 2));
@@ -12581,7 +12970,7 @@ app.post('/api/qrcodes', authenticateToken, async (req, res) => {
 });
 
 // Create a new QR code
-app.post('/api/qr-codes', authenticateToken, async (req, res) => {
+app.post('/api/qr-codes', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     console.log('📱 QR_CODES: ============ CREATE QR CODE DEBUG START ============');
     console.log('📱 QR_CODES: Request body:', JSON.stringify(req.body, null, 2));
@@ -12663,7 +13052,7 @@ app.post('/api/qr-codes', authenticateToken, async (req, res) => {
   }
 });
 // Update a QR code (alias for backward compatibility)
-app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
+app.patch('/api/qrcodes/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, url, description, options } = req.body;
@@ -12712,7 +13101,7 @@ app.patch('/api/qrcodes/:id', authenticateToken, async (req, res) => {
 });
 
 // Update a QR code
-app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+app.patch('/api/qr-codes/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, url, description, options } = req.body;
@@ -12754,7 +13143,7 @@ app.patch('/api/qr-codes/:id', authenticateToken, async (req, res) => {
   }
 });
 // Delete a QR code (soft delete)
-app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
+app.delete('/api/qrcodes/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -12789,7 +13178,7 @@ app.delete('/api/qrcodes/:id', authenticateToken, async (req, res) => {
 });
 
 // Alias endpoint for consistency
-app.delete('/api/qr-codes/:id', authenticateToken, async (req, res) => {
+app.delete('/api/qr-codes/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   // Redirect to the main endpoint
   req.url = req.url.replace('/api/qr-codes/', '/api/qrcodes/');
   return app._router.handle(req, res);
@@ -12936,7 +13325,7 @@ app.get('/api/admin/users/:id/qr-codes', authenticateToken, isAdmin, async (req,
 });
 
 // ---------- QR CODE DELETE REQUESTS ----------
-app.post('/api/qr-codes/:id/delete-request', authenticateToken, async (req, res) => {
+app.post('/api/qr-codes/:id/delete-request', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body || {};
@@ -13071,7 +13460,7 @@ app.post('/api/admin/qr-codes/delete-requests/:id/deny', authenticateToken, isAd
 // ---------- ACTIVATION CODES API ----------
 
 // Generate new activation code
-app.post('/api/activation-codes', authenticateToken, async (req, res) => {
+app.post('/api/activation-codes', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { playlistId, slideshowId, maxUses, expiresAt, priceCents } = req.body;
     
@@ -13175,7 +13564,7 @@ app.get('/api/activation-codes', authenticateToken, async (req, res) => {
 });
 
 // Get all codes generated by user (ALL GENERATED CODES tab)
-app.get('/api/activation-codes/generated', authenticateToken, async (req, res) => {
+app.get('/api/activation-codes/generated', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     console.log('🔑 ACTIVATION_CODES: Fetching all generated codes for user:', req.user.userId);
     
@@ -13253,73 +13642,13 @@ app.get('/api/activation-codes/my-access', authenticateToken, async (req, res) =
 app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => {
   try {
     const { code } = req.body;
-    
-    if (!code) {
-      return res.status(400).json({ error: 'Activation code is required' });
-    }
-    
     console.log('🔑 ACTIVATION_CODES: Attaching code to user:', { code, userId: req.user.userId });
-    
-    // First, verify the code exists and is valid
-    let codeResult;
-    try {
-      codeResult = await db.query(
-        `SELECT * FROM activation_codes 
-         WHERE code = $1 AND is_active = true AND deleted_at IS NULL
-         AND (expires_at IS NULL OR expires_at > NOW())
-         AND (max_uses IS NULL OR uses_count < max_uses)`,
-        [code]
-      );
-    } catch (error) {
-      // If column doesn't exist, retry without deleted_at filter
-      if (error.code === '42703' || error.message?.includes('deleted_at')) {
-        codeResult = await db.query(
-          `SELECT * FROM activation_codes 
-           WHERE code = $1 AND is_active = true
-           AND (expires_at IS NULL OR expires_at > NOW())
-           AND (max_uses IS NULL OR uses_count < max_uses)`,
-          [code]
-        );
-      } else {
-        throw error;
-      }
+    const result = await attachActivationCodeForUserId(req.user.userId, code);
+    if (!result.ok) {
+      return res.status(result.status || 400).json({ error: result.error });
     }
-    
-    if (codeResult.rows.length === 0) {
-      console.log('🔑 ACTIVATION_CODES: Invalid or expired code:', code);
-      return res.status(400).json({ error: 'Invalid or expired activation code' });
-    }
-    
-    const activationCode = codeResult.rows[0];
-    
-    // Check if already attached
-    const existingResult = await db.query(
-      `SELECT * FROM user_activation_codes 
-       WHERE user_id = $1 AND activation_code_id = $2`,
-      [req.user.userId, activationCode.id]
-    );
-    
-    if (existingResult.rows.length > 0) {
-      console.log('🔑 ACTIVATION_CODES: Code already attached to user');
-      return res.status(400).json({ error: 'Code already attached to your profile' });
-    }
-    
-    // Attach the code
-    await db.query(
-      `INSERT INTO user_activation_codes (user_id, activation_code_id) 
-       VALUES ($1, $2)`,
-      [req.user.userId, activationCode.id]
-    );
-    
-    // Increment usage count
-    await db.query(
-      `UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`,
-      [activationCode.id]
-    );
-    
     console.log('🔑 ACTIVATION_CODES: Code attached successfully');
-    res.json({ message: 'Activation code attached successfully', activationCode });
-    
+    res.json({ message: 'Activation code attached successfully', activationCode: result.activationCode });
   } catch (error) {
     console.error('🔑 ACTIVATION_CODES: Error attaching code:', error);
     res.status(500).json({ error: 'Failed to attach activation code' });
@@ -13533,7 +13862,7 @@ app.get('/api/activation-codes/content/:contentType/:contentId', authenticateTok
 });
 
 // Update activation code (change expiration date, usage limits, active status, or price)
-app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) => {
+app.patch('/api/activation-codes/:codeId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { codeId } = req.params;
     const { maxUses, expiresAt, isActive, priceCents } = req.body;
@@ -13621,7 +13950,7 @@ app.patch('/api/activation-codes/:codeId', authenticateToken, async (req, res) =
 });
 
 // Delete activation code (soft delete)
-app.delete('/api/activation-codes/:codeId', authenticateToken, async (req, res) => {
+app.delete('/api/activation-codes/:codeId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { codeId } = req.params;
     
@@ -13757,7 +14086,7 @@ app.get('/api/debug/activation-code/:code', authenticateToken, async (req, res) 
 });
 
 // Fix activation code linkage endpoint (admin only)
-app.post('/api/debug/fix-activation-code/:code', authenticateToken, async (req, res) => {
+app.post('/api/debug/fix-activation-code/:code', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { code } = req.params;
     const { targetSlideshowId } = req.body;
@@ -14556,8 +14885,8 @@ app.get('/api/slideshow-access-public/:id', async (req, res) => {
   }
 });
 
-// Get a specific slideshow by ID for access control (no auth required)
-app.get('/api/slideshow-access/:id', async (req, res) => {
+// Get a specific slideshow by ID for access control (optional auth for profile-linked activation codes)
+app.get('/api/slideshow-access/:id', authenticateTokenOptional, async (req, res) => {
   const slideshowId = req.params.id;
   const activationCode = req.query.code;
   const client = await db.getClient();
@@ -14684,32 +15013,72 @@ app.get('/api/slideshow-access/:id', async (req, res) => {
 
     let slideshow = slideshowRes.rows[0];
 
-    // If the slideshow is protected, validate the activation code
+    // If the slideshow is protected, validate the activation code or profile-linked access
     if (slideshow.requires_activation_code) {
-      if (!activationCode) {
-        return res.status(403).json({ message: 'Activation code required' });
-      }
+      let accessOk = false;
 
-      let codeRes;
-      try {
-        codeRes = await client.query(
-          'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND deleted_at IS NULL AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
-          [activationCode, slideshowId]
-        );
-      } catch (error) {
-        // If column doesn't exist, retry without deleted_at filter
-        if (error.code === '42703' || error.message?.includes('deleted_at')) {
+      if (activationCode) {
+        let codeRes;
+        try {
           codeRes = await client.query(
-            'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
+            'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND deleted_at IS NULL AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
             [activationCode, slideshowId]
           );
-        } else {
-          throw error;
+        } catch (error) {
+          if (error.code === '42703' || error.message?.includes('deleted_at')) {
+            codeRes = await client.query(
+              'SELECT * FROM activation_codes WHERE code = $1 AND slideshow_id = $2 AND (max_uses IS NULL OR uses_count < max_uses) AND (expires_at IS NULL OR expires_at > NOW())',
+              [activationCode, slideshowId]
+            );
+          } else {
+            throw error;
+          }
+        }
+        if (codeRes.rows.length > 0) {
+          accessOk = true;
         }
       }
 
-      if (codeRes.rows.length === 0) {
-        return res.status(403).json({ message: 'Invalid or expired activation code' });
+      if (!accessOk && req.user?.userId) {
+        const sid = parseInt(slideshowId, 10);
+        let profRes;
+        try {
+          profRes = await client.query(
+            `SELECT 1 FROM user_activation_codes uac
+             JOIN activation_codes ac ON uac.activation_code_id = ac.id
+             WHERE uac.user_id = $1 AND ac.slideshow_id = $2
+             AND ac.is_active = true AND ac.deleted_at IS NULL
+             AND (ac.max_uses IS NULL OR ac.uses_count < ac.max_uses)
+             AND (ac.expires_at IS NULL OR ac.expires_at > NOW())`,
+            [req.user.userId, sid]
+          );
+        } catch (error) {
+          if (error.code === '42703' || error.message?.includes('deleted_at')) {
+            profRes = await client.query(
+              `SELECT 1 FROM user_activation_codes uac
+               JOIN activation_codes ac ON uac.activation_code_id = ac.id
+               WHERE uac.user_id = $1 AND ac.slideshow_id = $2
+               AND ac.is_active = true
+               AND (ac.max_uses IS NULL OR ac.uses_count < ac.max_uses)
+               AND (ac.expires_at IS NULL OR ac.expires_at > NOW())`,
+              [req.user.userId, sid]
+            );
+          } else {
+            throw error;
+          }
+        }
+        if (profRes.rows.length > 0) {
+          accessOk = true;
+        }
+      }
+
+      if (!accessOk) {
+        if (!activationCode && !req.user?.userId) {
+          return res.status(403).json({ message: 'Activation code required' });
+        }
+        return res.status(403).json({
+          message: 'Access denied. Enter a valid activation code or sign in with an account that has this slideshow linked to your profile.',
+        });
       }
     }
 
@@ -14935,7 +15304,7 @@ app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => 
   });
 
 // Create a new slideshow
-app.post('/api/slideshows', authenticateToken, async (req, res) => {
+app.post('/api/slideshows', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { name, description, autoplayInterval, transition, requiresActivationCode, previewCouponId } = req.body;
     
@@ -15009,7 +15378,7 @@ app.post('/api/slideshows', authenticateToken, async (req, res) => {
 });
 
 // Update a slideshow
-app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
+app.patch('/api/slideshows/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, description, autoplayInterval, transition, requiresActivationCode, requirePhoneForPreview, audio_url, previewCouponId } = req.body;
@@ -15166,7 +15535,7 @@ app.patch('/api/slideshows/:id', authenticateToken, async (req, res) => {
 });
 
 // Delete a slideshow
-app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
+app.delete('/api/slideshows/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -15202,7 +15571,7 @@ app.delete('/api/slideshows/:id', authenticateToken, async (req, res) => {
   }
 });
 // Upload image for slideshow
-app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image'), async (req, res) => {
+app.post('/api/slideshows/:id/images', authenticateToken, requireCreatorAccount, upload.single('image'), async (req, res) => {
   try {
     console.log('🎬 SLIDESHOW_UPLOAD: Starting image upload process');
     const { id } = req.params;
@@ -15378,7 +15747,7 @@ app.post('/api/slideshows/:id/images', authenticateToken, upload.single('image')
 });
 
 // Delete image from slideshow
-app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, async (req, res) => {
+app.delete('/api/slideshows/:slideshowId/images/:imageId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { slideshowId, imageId } = req.params;
     
@@ -15948,7 +16317,7 @@ app.get('/api/slideshow-audio/:id/stream', async (req, res) => {
 // ---------- PLAYLIST MEDIA MANAGEMENT ROUTES ----------
 
 // Add media files to a playlist
-app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+app.post('/api/playlists/:id/media', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { mediaFileIds } = req.body;
@@ -16033,7 +16402,7 @@ app.post('/api/playlists/:id/media', authenticateToken, async (req, res) => {
 });
 
 // Remove media file from a playlist
-app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, res) => {
+app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id, mediaId } = req.params;
     
@@ -16082,7 +16451,7 @@ app.delete('/api/playlists/:id/media/:mediaId', authenticateToken, async (req, r
   }
 });
 // Update playlist media order (optional per-item calendar schedule via mediaItems)
-app.put('/api/playlists/:id/media', authenticateToken, async (req, res) => {
+app.put('/api/playlists/:id/media', authenticateToken, requireCreatorAccount, async (req, res) => {
   const client = await db.getClient();
   let released = false;
   try {
@@ -16296,7 +16665,7 @@ app.get('/api/playlists/:playlistId/chat', async (req, res) => {
   }
 });
 
-app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) => {
+app.post('/api/playlists/:playlistId/chat', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { playlistId } = req.params;
     const { message } = req.body;
@@ -16357,7 +16726,7 @@ app.post('/api/playlists/:playlistId/chat', authenticateToken, async (req, res) 
   }
 });
 
-app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, async (req, res) => {
+app.delete('/api/playlists/:playlistId/chat/:messageId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { playlistId, messageId } = req.params;
 
@@ -16453,7 +16822,7 @@ app.get('/api/slideshows/:slideshowId/chat', async (req, res) => {
   }
 });
 
-app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res) => {
+app.post('/api/slideshows/:slideshowId/chat', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { slideshowId } = req.params;
     const { message } = req.body;
@@ -16514,7 +16883,7 @@ app.post('/api/slideshows/:slideshowId/chat', authenticateToken, async (req, res
   }
 });
 
-app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, async (req, res) => {
+app.delete('/api/slideshows/:slideshowId/chat/:messageId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { slideshowId, messageId } = req.params;
 
@@ -16622,7 +16991,7 @@ app.get('/api/chat/universal', authenticateToken, async (req, res) => {
 });
 
 // Post universal chat message
-app.post('/api/chat/universal', authenticateToken, async (req, res) => {
+app.post('/api/chat/universal', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { message, messageType = 'general', relatedProductId, relatedStoreUserId, productCategory } = req.body;
     const userId = req.user.id;
@@ -16668,7 +17037,7 @@ app.post('/api/chat/universal', authenticateToken, async (req, res) => {
 });
 
 // Delete universal chat message
-app.delete('/api/chat/universal/:messageId', authenticateToken, async (req, res) => {
+app.delete('/api/chat/universal/:messageId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
@@ -16762,7 +17131,7 @@ app.get('/api/playlists/:id/product-links', authenticateToken, async (req, res) 
 });
 
 // Add product link to playlist
-app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res) => {
+app.post('/api/playlists/:id/product-links', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { productId } = req.body;
@@ -16825,7 +17194,7 @@ app.post('/api/playlists/:id/product-links', authenticateToken, async (req, res)
 });
 
 // Remove product link from playlist
-app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, async (req, res) => {
+app.delete('/api/playlists/:id/product-links/:productId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id, productId } = req.params;
     
@@ -16896,7 +17265,7 @@ app.get('/api/slideshows/:id/product-links', authenticateToken, async (req, res)
 });
 
 // Add product link to slideshow
-app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res) => {
+app.post('/api/slideshows/:id/product-links', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
     const { productId } = req.body;
@@ -16959,7 +17328,7 @@ app.post('/api/slideshows/:id/product-links', authenticateToken, async (req, res
 });
 
 // Remove product link from slideshow
-app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, async (req, res) => {
+app.delete('/api/slideshows/:id/product-links/:productId', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id, productId } = req.params;
     

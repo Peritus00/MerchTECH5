@@ -191,6 +191,19 @@ async function verifyAppleToken(identityToken, nonce = null) {
  */
 async function findOrCreateSocialUser(db, provider, providerId, email, metadata = {}) {
   const providerColumn = provider === 'google' ? 'google_id' : 'apple_id';
+
+  async function readBoolSetting(key, defaultValue) {
+    try {
+      const result = await db.query(
+        'SELECT setting_value FROM system_settings WHERE setting_key = $1',
+        [key]
+      );
+      if (!result.rows.length) return defaultValue;
+      return result.rows[0].setting_value === 'true';
+    } catch (_) {
+      return defaultValue;
+    }
+  }
   
   // First, try to find user by provider ID
   let result = await db.query(
@@ -199,7 +212,7 @@ async function findOrCreateSocialUser(db, provider, providerId, email, metadata 
   );
 
   if (result.rows.length > 0) {
-    return result.rows[0];
+    return { user: result.rows[0], created: false };
   }
 
   // If not found, try to find by email (for linking existing accounts)
@@ -220,8 +233,23 @@ async function findOrCreateSocialUser(db, provider, providerId, email, metadata 
       
       // Fetch updated user
       result = await db.query('SELECT * FROM users WHERE id = $1', [existingUser.id]);
-      return result.rows[0];
+      return { user: result.rows[0], created: false };
     }
+  }
+
+  // New account: respect global signup toggles (same rules as email/password registration)
+  const signupsEnabled = await readBoolSetting('signups_enabled', true);
+  const viewerSignupsEnabled = await readBoolSetting('viewer_signups_enabled', false);
+  let newAccountType = 'creator';
+  if (signupsEnabled) {
+    newAccountType = 'creator';
+  } else if (viewerSignupsEnabled) {
+    newAccountType = 'viewer';
+  } else {
+    const err = new Error('Signups are currently disabled');
+    err.statusCode = 503;
+    err.code = 'SIGNUPS_DISABLED';
+    throw err;
   }
 
   // Create new user
@@ -239,8 +267,8 @@ async function findOrCreateSocialUser(db, provider, providerId, email, metadata 
   }
 
   const insertResult = await db.query(
-    `INSERT INTO users (email, username, ${providerColumn}, first_name, last_name, provider_metadata, is_email_verified, password_hash)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, NULL)
+    `INSERT INTO users (email, username, ${providerColumn}, first_name, last_name, provider_metadata, is_email_verified, password_hash, account_type)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, NULL, $8)
      RETURNING *`,
     [
       email || null,
@@ -250,10 +278,11 @@ async function findOrCreateSocialUser(db, provider, providerId, email, metadata 
       metadata.familyName || metadata.lastName || null,
       JSON.stringify(metadata),
       metadata.emailVerified || false,
+      newAccountType,
     ]
   );
 
-  return insertResult.rows[0];
+  return { user: insertResult.rows[0], created: true };
 }
 
 /**

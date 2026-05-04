@@ -160,7 +160,13 @@ function RootLayoutNav() {
         if (inAuthGroup) {
           // Redirect away from sign-in if already authenticated
           router.replace('/');
-        } else if (user.isNewUser && !inSubscriptionGroup && !inNotFoundGroup && !inTabsGroup) {
+        } else if (
+          user.isNewUser &&
+          user.accountType !== 'viewer' &&
+          !inSubscriptionGroup &&
+          !inNotFoundGroup &&
+          !inTabsGroup
+        ) {
           // Only redirect new users to subscription if they're not already in tabs or subscription
           // Dev user bypass - skip subscription flow
           if (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel') {

@@ -803,6 +803,26 @@ export default function SlideshowAccessScreen() {
                   <Text style={styles.signUpButtonText}>Sign Up</Text>
                 </TouchableOpacity>
               </View>
+              <TouchableOpacity
+                style={styles.viewerSignupLink}
+                onPress={() => {
+                  const code = (validatedCode?.code || activationCode || '').trim();
+                  if (!code) {
+                    Alert.alert(
+                      'Activation code required',
+                      'Create a viewer account from this screen after your code is validated, or open Viewer sign up and paste your code there.'
+                    );
+                    return;
+                  }
+                  router.push(
+                    `/auth/register-viewer?activationCode=${encodeURIComponent(code)}` as any
+                  );
+                }}
+              >
+                <Text style={styles.viewerSignupLinkText}>
+                  Create a viewer account to save this activation code to your profile
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -1557,5 +1577,17 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  viewerSignupLink: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  viewerSignupLinkText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+    textAlign: 'center',
   },
 });

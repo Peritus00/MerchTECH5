@@ -12,6 +12,13 @@ interface AuthContextType {
   isInitialized: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, username: string, firstName?: string, lastName?: string) => Promise<{ success: boolean; user?: User; error?: string }>;
+  registerViewer: (
+    email: string,
+    password: string,
+    username: string,
+    activationCode?: string
+  ) => Promise<{ success: boolean; user?: User; error?: string }>;
+  upgradeViewerToFree: () => Promise<{ success: boolean; error?: string }>;
   socialLogin: (provider: 'google' | 'apple', token: string, nonce?: string) => Promise<void>;
   socialLoginWithCode: (provider: 'apple' | 'google', code: string, redirectUri?: string, nonce?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -158,6 +165,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const registerViewer = async (
+    email: string,
+    password: string,
+    username: string,
+    activationCode?: string
+  ) => {
+    setIsLoading(true);
+    try {
+      const authResponse = await authService.registerViewer({
+        email,
+        password,
+        username,
+        activationCode,
+      });
+      globalAuthState.user = authResponse.user;
+      setUser(authResponse.user);
+      return { success: true, user: authResponse.user };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const upgradeViewerToFree = async () => {
+    setIsLoading(true);
+    try {
+      const updated = await authService.upgradeViewerToFree();
+      globalAuthState.user = updated;
+      setUser(updated);
+      return { success: true };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const logout = async () => {
     console.log('🔴 AuthContext: LOGOUT FUNCTION CALLED!');
     console.log('🔴 AuthContext: Current user before logout:', user?.username);
@@ -256,6 +301,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isInitialized: initialized,
       login,
       register,
+      registerViewer,
+      upgradeViewerToFree,
       socialLogin,
       socialLoginWithCode,
       logout,

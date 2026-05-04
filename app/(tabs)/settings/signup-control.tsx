@@ -24,6 +24,8 @@ export default function SignupControlScreen() {
   const insets = useSafeAreaInsets();
   
   const [signupsEnabled, setSignupsEnabled] = useState<boolean>(true);
+  const [viewerSignupsEnabled, setViewerSignupsEnabled] = useState<boolean>(false);
+  const [viewerUpgradesEnabled, setViewerUpgradesEnabled] = useState<boolean>(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -50,7 +52,14 @@ export default function SignupControlScreen() {
         setSignupsEnabled(result.settings.signups_enabled.value === 'true');
         setLastUpdated(result.settings.signups_enabled.updatedAt);
         setUpdatedBy(result.settings.signups_enabled.updatedBy);
-      } else {
+      }
+      if (result.settings?.viewer_signups_enabled) {
+        setViewerSignupsEnabled(result.settings.viewer_signups_enabled.value === 'true');
+      }
+      if (result.settings?.viewer_upgrades_enabled) {
+        setViewerUpgradesEnabled(result.settings.viewer_upgrades_enabled.value === 'true');
+      }
+      if (!result.settings?.signups_enabled) {
         // Fallback to public endpoint if admin endpoint doesn't have the setting
         const publicResult = await settingsAPI.getSignupsEnabled();
         setSignupsEnabled(publicResult.enabled);
@@ -126,6 +135,106 @@ export default function SignupControlScreen() {
     }
   };
 
+  const performViewerSignupsToggle = async (newValue: boolean) => {
+    try {
+      setSaving(true);
+      const result = await adminSettingsAPI.toggleViewerSignups(newValue);
+      setViewerSignupsEnabled(newValue);
+      Alert.alert(
+        'Success',
+        result.message || `Viewer signups ${newValue ? 'enabled' : 'disabled'} successfully.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('Error toggling viewer signups:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.error || 'Failed to update viewer signup settings. Please try again.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const performViewerUpgradesToggle = async (newValue: boolean) => {
+    try {
+      setSaving(true);
+      const result = await adminSettingsAPI.toggleViewerUpgrades(newValue);
+      setViewerUpgradesEnabled(newValue);
+      Alert.alert(
+        'Success',
+        result.message || `Viewer upgrades ${newValue ? 'enabled' : 'disabled'} successfully.`,
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('Error toggling viewer upgrades:', error);
+      Alert.alert(
+        'Error',
+        error.response?.data?.error || 'Failed to update viewer upgrade settings. Please try again.'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleViewerSignupsToggle = async (newValue: boolean) => {
+    const action = newValue ? 'enable' : 'disable';
+    const confirmMessage = `Are you sure you want to ${action} viewer-only signups? ${
+      !newValue
+        ? 'The viewer registration screen will redirect to the BETA splash page.'
+        : 'Users can create watch-only accounts (e.g. from protected content links).'
+    }`;
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) return;
+      await performViewerSignupsToggle(newValue);
+      return;
+    }
+
+    Alert.alert(
+      `${action === 'enable' ? 'Enable' : 'Disable'} viewer signups`,
+      confirmMessage,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: action === 'enable' ? 'Enable' : 'Disable',
+          style: action === 'disable' ? 'destructive' : 'default',
+          onPress: () => void performViewerSignupsToggle(newValue),
+        },
+      ]
+    );
+  };
+
+  const handleViewerUpgradesToggle = async (newValue: boolean) => {
+    const action = newValue ? 'enable' : 'disable';
+    const confirmMessage = `Are you sure you want to ${action} viewer upgrades to paid creator plans? ${
+      !newValue
+        ? 'Viewer accounts cannot start Stripe checkout or switch to the free creator tier until this is turned back on.'
+        : 'Viewer accounts can upgrade via subscription checkout or choose the free creator plan.'
+    }`;
+
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(confirmMessage);
+      if (!confirmed) return;
+      await performViewerUpgradesToggle(newValue);
+      return;
+    }
+
+    Alert.alert(
+      `${action === 'enable' ? 'Enable' : 'Disable'} viewer upgrades`,
+      confirmMessage,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: action === 'enable' ? 'Enable' : 'Disable',
+          style: action === 'disable' ? 'destructive' : 'default',
+          onPress: () => void performViewerUpgradesToggle(newValue),
+        },
+      ]
+    );
+  };
+
   if (!isAdmin) {
     return null;
   }
@@ -199,6 +308,48 @@ export default function SignupControlScreen() {
                 disabled={saving}
                 trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
                 thumbColor={signupsEnabled ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <ThemedText type="subtitle" style={styles.sectionTitle}>
+              Viewer accounts
+            </ThemedText>
+
+            <View style={styles.toggleContainer}>
+              <View style={styles.toggleInfo}>
+                <ThemedText style={styles.toggleLabel}>
+                  {viewerSignupsEnabled ? 'Viewer signups on' : 'Viewer signups off'}
+                </ThemedText>
+                <ThemedText style={styles.toggleDescription}>
+                  Separate from creator registration. Use for fans who only need activation-code access.
+                </ThemedText>
+              </View>
+              <Switch
+                value={viewerSignupsEnabled}
+                onValueChange={handleViewerSignupsToggle}
+                disabled={saving}
+                trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+                thumbColor={viewerSignupsEnabled ? '#3b82f6' : '#9ca3af'}
+              />
+            </View>
+
+            <View style={[styles.toggleContainer, { marginTop: 12 }]}>
+              <View style={styles.toggleInfo}>
+                <ThemedText style={styles.toggleLabel}>
+                  {viewerUpgradesEnabled ? 'Viewer upgrades on' : 'Viewer upgrades off'}
+                </ThemedText>
+                <ThemedText style={styles.toggleDescription}>
+                  When off, viewers cannot start paid checkout or convert to the free creator tier from the app.
+                </ThemedText>
+              </View>
+              <Switch
+                value={viewerUpgradesEnabled}
+                onValueChange={handleViewerUpgradesToggle}
+                disabled={saving}
+                trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+                thumbColor={viewerUpgradesEnabled ? '#3b82f6' : '#9ca3af'}
               />
             </View>
           </View>

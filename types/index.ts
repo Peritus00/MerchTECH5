@@ -5,6 +5,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   isAdmin: boolean;
+  accountType?: 'creator' | 'viewer';
   subscriptionTier: 'free' | 'basic' | 'premium';
   permissions?: string[];
   isEmailVerified?: boolean;
