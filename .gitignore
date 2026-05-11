@@ -3,6 +3,7 @@
 # Environment
 .env
 .env.bak
+ENVIRONMENT_VARIABLES.txt
 
 # Dependencies
 /node_modules
@@ -56,3 +57,15 @@ app-example
 
 # Build artifacts (generated during EAS builds)
 build-artifacts/
+
+# Local backup / deploy dumps (reduce Git "too many active changes" noise)
+Archive*/
+"Archive*/
+*.zip
+eb-deploy/
+eb-backend-deploy-*.zip
+**/uploads/
+*.db
+*.sqlite
+*.sqlite3
+*.log

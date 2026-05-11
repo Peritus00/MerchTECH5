@@ -1,6 +1,0 @@
-{"level":"info","message":{"ip":"::1","method":"HEAD","timestamp":"2025-07-05T23:09:16.095Z","type":"request","url":"/health"},"timestamp":"2025-07-05T23:09:16.096Z"}
-{"level":"info","message":{"ip":"::1","method":"POST","timestamp":"2025-07-05T23:09:24.241Z","type":"request","url":"/test-auth"},"timestamp":"2025-07-05T23:09:24.241Z"}
-{"level":"info","message":{"ip":"::1","method":"POST","timestamp":"2025-07-05T23:09:24.250Z","type":"request","url":"/test-auth"},"timestamp":"2025-07-05T23:09:24.250Z"}
-{"level":"info","message":{"ip":"::1","method":"POST","timestamp":"2025-07-05T23:09:24.258Z","type":"request","url":"/test-auth"},"timestamp":"2025-07-05T23:09:24.258Z"}
-{"level":"warn","message":{"ip":"::1","timestamp":"2025-07-05T23:09:24.266Z","type":"rate_limit_exceeded","url":"/"},"timestamp":"2025-07-05T23:09:24.266Z"}
-{"level":"warn","message":{"ip":"::1","timestamp":"2025-07-05T23:09:24.274Z","type":"rate_limit_exceeded","url":"/"},"timestamp":"2025-07-05T23:09:24.274Z"}
