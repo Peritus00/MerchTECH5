@@ -32,7 +32,7 @@ console.log('🚀 Server startup initiated...');
 console.log('📦 Loading middleware modules...');
 
 // Phase 1 Security Middleware - wrap in try-catch to catch initialization errors
-let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter;
+let authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter, previewLeadCampaignSendLimiter;
 let validate, validators;
 let errorHandler, errorLogger;
 let logger, requestIdMiddleware, requestLogger, sanitizeLogData;
@@ -40,7 +40,7 @@ let validateFileMagic, clamavScanner;
 
 try {
   console.log('📦 Loading rate limiter...');
-  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter } = require('./middleware/rateLimiter'));
+  ({ authLimiter, uploadLimiter, generalApiLimiter, mediaCreationLimiter, mediaReadLimiter, mediaStreamLimiter, smsSendLimiter, previewLeadStartLimiter, previewLeadCampaignSendLimiter } = require('./middleware/rateLimiter'));
   
   console.log('📦 Loading validator...');
   ({ validate, validators, normalizeConfirmUploadBody } = require('./middleware/validator'));
@@ -565,6 +565,9 @@ app.use('/api/coupons/sms/send', smsSendLimiter);
 
 // Preview phone verification start (stricter than general API limiter)
 app.use('/api/preview-leads/start', previewLeadStartLimiter);
+
+// Preview lead SMS campaign sends (bulk abuse protection)
+app.use('/api/preview-leads/campaign-send', previewLeadCampaignSendLimiter);
 
 // General API rate limiting (applies to all other /api/ routes)
 // IMPORTANT: Exclude streaming endpoints to avoid 429s during media playback,
@@ -11321,6 +11324,19 @@ async function ensurePreviewLeadTables() {
   }
 }
 
+async function ensurePreviewLeadCampaignTables() {
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'preview_phone_lead_campaigns' LIMIT 1`
+    );
+    return r.rows.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+const PREVIEW_CAMPAIGN_MESSAGE_MAX = 1600;
+
 async function loadLockedContentForPreviewGate(contentType, contentId) {
   const id = parseInt(String(contentId), 10);
   if (isNaN(id)) return null;
@@ -11881,6 +11897,140 @@ app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('preview-leads/export error:', e);
     res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+/** Deduped verified preview leads per phone for export / copy-paste lists */
+app.get('/api/preview-leads/campaign-contacts', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const ownerId = parseInt(req.user.userId, 10);
+    if (isNaN(ownerId)) {
+      return res.status(400).json({ error: 'Invalid user' });
+    }
+    const { rows } = await db.query(
+      `SELECT phone_e164,
+              MAX(verified_at) AS last_verified_at,
+              BOOL_OR(marketing_opt_in) AS marketing_opt_in
+       FROM preview_phone_leads
+       WHERE owner_user_id = $1 AND verified_at IS NOT NULL
+       GROUP BY phone_e164
+       ORDER BY MAX(verified_at) DESC`,
+      [ownerId]
+    );
+    const contacts = rows.map((r) => ({
+      phone_e164: r.phone_e164,
+      last_verified_at: r.last_verified_at,
+      marketing_opt_in: !!r.marketing_opt_in,
+    }));
+    const verified_unique = contacts.length;
+    const marketing_eligible_unique = contacts.filter((c) => c.marketing_opt_in).length;
+    res.json({
+      contacts,
+      summary: { verified_unique, marketing_eligible_unique },
+      smsConfigured: smsService.isSmsConfigured(),
+    });
+  } catch (e) {
+    console.error('preview-leads/campaign-contacts error:', e);
+    res.status(500).json({ error: 'Failed to load campaign contacts' });
+  }
+});
+
+/** Send custom marketing SMS to distinct verified numbers with marketing_opt_in (audit trail in DB). */
+app.post('/api/preview-leads/campaign-send', authenticateToken, requireCreatorAccount, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    if (!(await ensurePreviewLeadCampaignTables())) {
+      return res.status(503).json({
+        error: 'Campaign history not available. Run migration 042_preview_phone_lead_campaigns.sql',
+      });
+    }
+    if (!smsService.isSmsConfigured()) {
+      return res.status(503).json({ error: 'SMS is not configured on the server' });
+    }
+
+    const ownerId = parseInt(req.user.userId, 10);
+    if (isNaN(ownerId)) {
+      return res.status(400).json({ error: 'Invalid user' });
+    }
+
+    const raw = (req.body && req.body.message != null) ? String(req.body.message) : '';
+    const message = raw.trim();
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    if (message.length > PREVIEW_CAMPAIGN_MESSAGE_MAX) {
+      return res.status(400).json({
+        error: `Message too long (max ${PREVIEW_CAMPAIGN_MESSAGE_MAX} characters)`,
+      });
+    }
+
+    const { rows: phoneRows } = await db.query(
+      `SELECT DISTINCT phone_e164 FROM preview_phone_leads
+       WHERE owner_user_id = $1 AND verified_at IS NOT NULL AND marketing_opt_in = true
+       ORDER BY phone_e164`,
+      [ownerId]
+    );
+    const phones = phoneRows.map((r) => r.phone_e164);
+    if (!phones.length) {
+      return res.status(400).json({ error: 'No marketing opt-in contacts to message' });
+    }
+
+    const insCampaign = await db.query(
+      `INSERT INTO preview_phone_lead_campaigns (owner_user_id, message_body, recipient_total, sent_count, failed_count)
+       VALUES ($1, $2, $3, 0, 0) RETURNING id`,
+      [ownerId, message, phones.length]
+    );
+    const campaignId = insCampaign.rows[0].id;
+
+    let sent = 0;
+    let failed = 0;
+    const failures = [];
+
+    for (const phoneE164 of phones) {
+      const smsResult = await smsService.sendSms(phoneE164, message, 'marketing');
+      if (smsResult.error) {
+        failed += 1;
+        if (failures.length < 25) {
+          failures.push({ phone_e164: phoneE164, error: String(smsResult.error) });
+        }
+        await db.query(
+          `INSERT INTO preview_phone_lead_campaign_recipients
+           (campaign_id, phone_e164, status, provider_message_id, error_message)
+           VALUES ($1, $2, 'failed', NULL, $3)`,
+          [campaignId, phoneE164, smsResult.error]
+        );
+      } else {
+        sent += 1;
+        await db.query(
+          `INSERT INTO preview_phone_lead_campaign_recipients
+           (campaign_id, phone_e164, status, provider_message_id, error_message)
+           VALUES ($1, $2, 'sent', $3, NULL)`,
+          [campaignId, phoneE164, smsResult.messageId || null]
+        );
+      }
+    }
+
+    await db.query(
+      `UPDATE preview_phone_lead_campaigns SET sent_count = $2, failed_count = $3 WHERE id = $1`,
+      [campaignId, sent, failed]
+    );
+
+    res.json({
+      ok: true,
+      campaignId,
+      recipientTotal: phones.length,
+      sent,
+      failed,
+      failures,
+    });
+  } catch (e) {
+    console.error('preview-leads/campaign-send error:', e);
+    res.status(500).json({ error: 'Campaign send failed' });
   }
 });
 

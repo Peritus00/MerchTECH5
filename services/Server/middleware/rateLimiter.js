@@ -97,6 +97,17 @@ const previewLeadStartLimiter = rateLimit({
   validate: { trustProxy: false },
 });
 
+// Bulk SMS campaign from preview leads (one POST can send many texts — keep requests rare)
+const previewLeadCampaignSendLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many campaign send requests. Please try again later.' },
+  handler: rateLimitViolationHandler,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false },
+});
+
 module.exports = {
   authLimiter,
   uploadLimiter,
@@ -106,5 +117,6 @@ module.exports = {
   mediaStreamLimiter,
   smsSendLimiter,
   previewLeadStartLimiter,
+  previewLeadCampaignSendLimiter,
 };
 

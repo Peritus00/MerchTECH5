@@ -674,14 +674,41 @@ export const previewLeadsAPI = {
       params: { marketingOnly: marketingOnly === true ? 'true' : 'false' },
     });
     return response.data as {
-      leads: Array<{
+      leads: {
         phone_e164: string;
         verified_at: string;
         marketing_opt_in: boolean;
         content_type: string;
         content_id: string | number;
         coupon_id: number | null;
-      }>;
+      }[];
+    };
+  },
+
+  /** Deduped verified contacts (one row per phone) for text campaigns */
+  async getCampaignContacts() {
+    const response = await api.get('/preview-leads/campaign-contacts');
+    return response.data as {
+      contacts: {
+        phone_e164: string;
+        last_verified_at: string;
+        marketing_opt_in: boolean;
+      }[];
+      summary: { verified_unique: number; marketing_eligible_unique: number };
+      smsConfigured: boolean;
+    };
+  },
+
+  /** Marketing opt-in verified numbers only; server enforces eligibility */
+  async sendCampaignMessage(message: string) {
+    const response = await api.post('/preview-leads/campaign-send', { message });
+    return response.data as {
+      ok: boolean;
+      campaignId: number;
+      recipientTotal: number;
+      sent: number;
+      failed: number;
+      failures: { phone_e164: string; error: string }[];
     };
   },
 };

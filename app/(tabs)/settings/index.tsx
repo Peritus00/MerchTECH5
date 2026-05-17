@@ -251,6 +251,12 @@ export default function Settings() {
       icon: '📱',
     },
     {
+      title: 'Text campaigns',
+      description: 'Copy deduped numbers and send SMS to marketing opt-in preview leads',
+      onPress: () => router.push('/(tabs)/settings/text-campaigns'),
+      icon: '💬',
+    },
+    {
       title: 'Help & Support',
       description: 'Get help and contact support',
       onPress: handleHelpSupport,
