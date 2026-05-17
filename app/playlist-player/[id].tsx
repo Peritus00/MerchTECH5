@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
@@ -21,6 +22,8 @@ export default function PlaylistPlayerScreen() {
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
+  const [playbackToken, setPlaybackToken] = useState<string | null>(null);
+  const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
   
   // Guard to prevent multiple scan tracking calls
   const hasTrackedScanRef = useRef<boolean>(false);
@@ -37,6 +40,60 @@ export default function PlaylistPlayerScreen() {
     loadUserDemographics();
   }, [isAuthenticated]);
 
+  // Store playback token when playlist has it; load from storage when not in response (e.g. after protected access)
+  useEffect(() => {
+    let isActive = true;
+
+    const loadPlaybackToken = async () => {
+      setHasCheckedStoredPlaybackToken(false);
+
+      const token = (playlist as any)?.playbackToken;
+      if (token && id) {
+        await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
+        if (isActive) {
+          setPlaybackToken(token);
+          setHasCheckedStoredPlaybackToken(true);
+        }
+        return;
+      }
+
+      if (!id) {
+        if (isActive) setHasCheckedStoredPlaybackToken(true);
+        return;
+      }
+
+      try {
+        const storedToken = await AsyncStorage.getItem(`playlist_playback_token_${id}`);
+        if (isActive) {
+          setPlaybackToken(storedToken);
+        }
+      } finally {
+        if (isActive) {
+          setHasCheckedStoredPlaybackToken(true);
+        }
+      }
+    };
+
+    loadPlaybackToken();
+
+    return () => {
+      isActive = false;
+    };
+  }, [playlist, id]);
+
+  const accessRestricted = Boolean((playlist as any)?.accessRestricted);
+  const hasPlaybackToken = Boolean(playbackToken || (playlist as any)?.playbackToken);
+  const canAccessPlaylist = Boolean(playlist) && (!accessRestricted || hasPlaybackToken);
+  const awaitingAccessDecision = Boolean(playlist) && accessRestricted && !hasCheckedStoredPlaybackToken;
+  const shouldRedirectForActivation =
+    Boolean(playlist) && accessRestricted && hasCheckedStoredPlaybackToken && !hasPlaybackToken;
+
+  useEffect(() => {
+    if (shouldRedirectForActivation) {
+      router.replace(`/playlist-access/${id}`);
+    }
+  }, [shouldRedirectForActivation, id]);
+
   // Attempt geolocation on player too (some QR flows go straight here)
   useEffect(() => {
     const submitGeo = async () => {
@@ -52,7 +109,7 @@ export default function PlaylistPlayerScreen() {
               return;
             }
           }
-        } catch (permError) {
+        } catch {
           // Permissions API not available or blocked, continue to try geolocation anyway
         }
         
@@ -92,11 +149,11 @@ export default function PlaylistPlayerScreen() {
         }
       }
     };
-    if (playlist && !loading) {
+    if (canAccessPlaylist && !loading) {
       const t = setTimeout(submitGeo, 1200);
       return () => clearTimeout(t);
     }
-  }, [playlist, loading, id]);
+  }, [canAccessPlaylist, playlist, loading, id]);
 
   // Show demographics survey after content starts playing
   useEffect(() => {
@@ -109,7 +166,7 @@ export default function PlaylistPlayerScreen() {
       });
       
       // Only show survey after content is loaded
-      if (!playlist || loading) {
+      if (!playlist || loading || !canAccessPlaylist) {
         console.log('🔍 PLAYER_DEMOGRAPHICS: Skipping - playlist not loaded');
         return;
       }
@@ -132,23 +189,11 @@ export default function PlaylistPlayerScreen() {
     };
     
     checkAndShowSurvey();
-  }, [playlist, loading, isAuthenticated, userDemographics]);
-
-  // Store playback token when playlist has it; load from storage when not in response (e.g. after protected access)
-  const [playbackToken, setPlaybackToken] = useState<string | null>(null);
-  useEffect(() => {
-    const token = (playlist as any)?.playbackToken;
-    if (token && id) {
-      AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
-      setPlaybackToken(token);
-    } else if (id) {
-      AsyncStorage.getItem(`playlist_playback_token_${id}`).then((t) => t && setPlaybackToken((prev) => prev || t));
-    }
-  }, [playlist, id]);
+  }, [playlist, loading, isAuthenticated, userDemographics, canAccessPlaylist]);
 
   // Track QR scan when playlist loads (only once per mount)
   useEffect(() => {
-    if (!playlist || hasTrackedScanRef.current) return;
+    if (!canAccessPlaylist || !playlist || hasTrackedScanRef.current) return;
     const qrId = playlist?.qr_code_id || playlist?.qrCodeId;
     if (!qrId) return;
     hasTrackedScanRef.current = true;
@@ -160,7 +205,7 @@ export default function PlaylistPlayerScreen() {
       console.warn('Analytics track scan failed (playlist-player):', e);
       hasTrackedScanRef.current = false;
     });
-  }, [playlist, isAuthenticated, userDemographics]);
+  }, [canAccessPlaylist, playlist, isAuthenticated, userDemographics]);
 
   const errorMessage = isError && error
     ? (error as any)?.response?.status === 403
@@ -193,6 +238,17 @@ export default function PlaylistPlayerScreen() {
 
   if (!playlist) {
     return null;
+  }
+
+  if (awaitingAccessDecision || shouldRedirectForActivation) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>
+          {shouldRedirectForActivation ? 'Opening activation code screen...' : 'Checking playlist access...'}
+        </Text>
+      </View>
+    );
   }
 
   // Demographics survey handler
