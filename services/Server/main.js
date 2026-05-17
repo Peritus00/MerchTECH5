@@ -10352,9 +10352,11 @@ app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async 
       });
     }
 
-    // Check if user owns the playlist
+    // Check if user owns the playlist. Keep this query limited to columns that
+    // every playlist update needs so simple toggles are not coupled to optional
+    // feature columns.
     const ownerCheck = await db.query(
-      'SELECT user_id, preview_coupon_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
+      'SELECT user_id FROM playlists WHERE id = $1 AND deleted_at IS NULL',
       [id]
     );
 
@@ -10388,24 +10390,38 @@ app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async 
       }
     }
 
-    if (VERBOSE_PLAYLIST_LOGGING) {
-      logger.debug({ type: 'playlist_patch', message: 'Running UPDATE query', playlistId: id });
-    }
-    const nextPreviewCouponId = previewCouponId === undefined
-      ? ownerCheck.rows[0].preview_coupon_id
-      : await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
+    const setClauses = [];
+    const values = [];
+    const addUpdateField = (columnName, value) => {
+      values.push(value);
+      setClauses.push(`${columnName} = $${values.length}`);
+    };
 
-    const result = await db.query(
-      `UPDATE playlists 
-       SET name = COALESCE($1, name), 
-           description = COALESCE($2, description), 
-           requires_activation_code = COALESCE($3, requires_activation_code), 
-           is_public = COALESCE($4, is_public),
-           require_phone_for_preview = COALESCE($5, require_phone_for_preview),
-           preview_coupon_id = $6
-       WHERE id = $7 RETURNING *`,
-      [name, description, requiresActivationCode, isPublic, requirePhoneForPreview, nextPreviewCouponId, id]
-    );
+    if (name !== undefined) addUpdateField('name', name);
+    if (description !== undefined) addUpdateField('description', description);
+    if (requiresActivationCode !== undefined) addUpdateField('requires_activation_code', requiresActivationCode);
+    if (isPublic !== undefined) addUpdateField('is_public', isPublic);
+    if (requirePhoneForPreview !== undefined) addUpdateField('require_phone_for_preview', requirePhoneForPreview);
+    if (previewCouponId !== undefined) {
+      const nextPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
+      addUpdateField('preview_coupon_id', nextPreviewCouponId);
+    }
+
+    if (setClauses.length > 0) {
+      setClauses.push('updated_at = NOW()');
+      values.push(id);
+
+      if (VERBOSE_PLAYLIST_LOGGING) {
+        logger.debug({ type: 'playlist_patch', message: 'Running UPDATE query', playlistId: id, fields: setClauses });
+      }
+
+      await db.query(
+        `UPDATE playlists
+         SET ${setClauses.join(', ')}
+         WHERE id = $${values.length}`,
+        values
+      );
+    }
 
     if (VERBOSE_PLAYLIST_LOGGING) {
       logger.debug({ type: 'playlist_patch', message: 'UPDATE query successful', playlistId: id });
