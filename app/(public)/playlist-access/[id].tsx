@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,9 +9,10 @@ import {
   ActivityIndicator,
   ScrollView,
   Linking,
+  Platform,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -35,6 +36,8 @@ export default function PlaylistAccessScreen() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const { id } = route.params as { id: string };
+  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
+  const smsAutoPreviewStartedRef = useRef(false);
   const { user, isAuthenticated, register, login } = useAuth();
 
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -639,6 +642,33 @@ export default function PlaylistAccessScreen() {
     setShowPreviewGateModal(false);
     setShowPreview(true);
   };
+
+  // After SMS verification link: land on this page with ?previewVerified=1 and jump straight into preview.
+  useEffect(() => {
+    if (!playlist || isLoading) return;
+    const v = previewQuery.previewVerified;
+    const verified = v === '1' || v === 'true';
+    if (!verified || smsAutoPreviewStartedRef.current) return;
+    if (!playlist.requiresActivationCode || !playlist.requirePhoneForPreview) return;
+
+    smsAutoPreviewStartedRef.current = true;
+    setShowPreviewGateModal(false);
+    setShowPreview(true);
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const u = new URL(window.location.href);
+        if (u.searchParams.has('previewVerified') || u.searchParams.has('previewToken')) {
+          u.searchParams.delete('previewVerified');
+          u.searchParams.delete('previewToken');
+          const qs = u.searchParams.toString();
+          window.history.replaceState({}, '', u.pathname + (qs ? `?${qs}` : ''));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [playlist, isLoading, previewQuery.previewVerified]);
 
   const handlePreviewComplete = () => {
     console.log('🔴 PLAYLIST_ACCESS: 30-second preview completed, returning to access screen');

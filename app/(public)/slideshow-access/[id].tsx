@@ -1,6 +1,6 @@
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
@@ -23,7 +23,6 @@ import { Slideshow } from '@/shared/media-schema';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { accessCodeAPI } from '@/services/api';
-import { useRef } from 'react';
 import PreviewPlayer from '@/components/PreviewPlayer';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { env } from '@/config/environment';
@@ -39,6 +38,8 @@ export default function SlideshowAccessScreen() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const { id } = route.params as { id: string };
+  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
+  const smsAutoPreviewStartedRef = useRef(false);
   const { user, isAuthenticated, register, login } = useAuth();
   
   const [slideshow, setSlideshow] = useState<Slideshow | null>(null);
@@ -726,6 +727,31 @@ export default function SlideshowAccessScreen() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!slideshow || isLoading) return;
+    const v = previewQuery.previewVerified;
+    const verified = v === '1' || v === 'true';
+    if (!verified || smsAutoPreviewStartedRef.current) return;
+    if (!slideshow.requiresActivationCode || !slideshow.requirePhoneForPreview) return;
+
+    smsAutoPreviewStartedRef.current = true;
+    void handlePreviewGateStart();
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const u = new URL(window.location.href);
+        if (u.searchParams.has('previewVerified') || u.searchParams.has('previewToken')) {
+          u.searchParams.delete('previewVerified');
+          u.searchParams.delete('previewToken');
+          const qs = u.searchParams.toString();
+          window.history.replaceState({}, '', u.pathname + (qs ? `?${qs}` : ''));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [slideshow, isLoading, previewQuery.previewVerified]);
 
   const handlePreviewComplete = () => {
     console.log('🎬 SLIDESHOW_ACCESS: Preview completed, returning to access screen');

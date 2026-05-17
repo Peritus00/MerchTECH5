@@ -11803,7 +11803,23 @@ app.post('/api/preview-leads/verify', async (req, res) => {
       `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'verified','{}'::jsonb)`,
       [lead.id]
     );
-    res.json({ ok: true, pollToken: lead.public_poll_token });
+    const unlockToken = jwt.sign(
+      {
+        typ: 'preview_unlock',
+        leadId: lead.id,
+        contentType: lead.content_type,
+        contentId: lead.content_id,
+      },
+      JWT_SECRET,
+      { expiresIn: '15m' }
+    );
+    res.json({
+      ok: true,
+      pollToken: lead.public_poll_token,
+      contentType: lead.content_type,
+      contentId: lead.content_id,
+      unlockToken,
+    });
   } catch (e) {
     console.error('preview-leads/verify error:', e);
     res.status(500).json({ error: 'Verification failed' });
