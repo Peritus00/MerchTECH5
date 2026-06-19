@@ -9,6 +9,8 @@ export interface User {
   subscriptionTier: 'free' | 'basic' | 'premium';
   permissions?: string[];
   isEmailVerified?: boolean;
+  phoneE164?: string | null;
+  phoneVerifiedAt?: string | null;
   isSuspended: boolean;
   isPending?: boolean;
   pendingExpiry?: Date;

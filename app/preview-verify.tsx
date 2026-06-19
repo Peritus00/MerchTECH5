@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,9 @@ import {
 } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api } from '@/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { api, lockedAccessAPI, playlistAccessAPI } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 type VerifySuccessPayload = {
   contentType: 'playlist' | 'slideshow';
@@ -32,6 +34,8 @@ function buildPreviewAccessPath({ contentType, contentId, pollToken }: VerifySuc
 export default function PreviewVerifyScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLocalSearchParams<{ t?: string }>();
+  const { acceptAuthResponse } = useAuth();
+  const acceptAuthResponseRef = useRef(acceptAuthResponse);
   const [status, setStatus] = useState<'loading' | 'ok' | 'err'>('loading');
   const [message, setMessage] = useState('Verifying…');
   const [successPayload, setSuccessPayload] = useState<VerifySuccessPayload | null>(null);
@@ -40,6 +44,10 @@ export default function PreviewVerifyScreen() {
     const path = buildPreviewAccessPath(payload);
     router.replace(path as any);
   }, []);
+
+  useEffect(() => {
+    acceptAuthResponseRef.current = acceptAuthResponse;
+  }, [acceptAuthResponse]);
 
   useEffect(() => {
     const token = typeof t === 'string' ? t : Array.isArray(t) ? t[0] : '';
@@ -57,6 +65,28 @@ export default function PreviewVerifyScreen() {
           const contentType = res.data.contentType;
           const contentId = Number(res.data.contentId);
           const pollToken = res.data.pollToken != null ? String(res.data.pollToken) : '';
+          if (res.data.leadSource === 'locked_access' && pollToken) {
+            const completion = await lockedAccessAPI.status(pollToken);
+            if (completion.status === 'verified' && completion.user && completion.token) {
+              await acceptAuthResponseRef.current({ user: completion.user, token: completion.token });
+              if (contentType === 'playlist') {
+                try {
+                  const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(String(contentId));
+                  if (playbackToken) {
+                    await AsyncStorage.setItem(`playlist_playback_token_${contentId}`, playbackToken);
+                  }
+                } catch {
+                  // The player can still request access again if token creation is delayed.
+                }
+                router.replace(`/playlist-player/${contentId}` as any);
+              } else {
+                router.replace(`/slideshow-player/${contentId}` as any);
+              }
+              setStatus('ok');
+              setMessage('Verified. Your viewer account is ready.');
+              return;
+            }
+          }
           if (
             (contentType === 'playlist' || contentType === 'slideshow') &&
             Number.isFinite(contentId) &&

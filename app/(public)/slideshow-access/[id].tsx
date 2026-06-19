@@ -30,6 +30,7 @@ import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
 import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
+import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -72,6 +73,7 @@ export default function SlideshowAccessScreen() {
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
+  const [showLockedAccessSignup, setShowLockedAccessSignup] = useState(false);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -612,28 +614,16 @@ export default function SlideshowAccessScreen() {
       if (validationResult.valid) {
         console.log('🎬 SLIDESHOW_ACCESS: Valid activation code:', validationResult);
         setValidatedCode(validationResult);
-        // Store the activation code in AsyncStorage as a fallback
-        await AsyncStorage.setItem('pending_activation_code', activationCode);
+        const trimmedCode = activationCode.trim();
+        await AsyncStorage.setItem('pending_activation_code', trimmedCode);
         
         // Check if user is authenticated
         if (isAuthenticated) {
           // User is logged in - attach code and redirect to slideshow player
-          await handleAttachCodeAndRedirect(activationCode);
+          await handleAttachCodeAndRedirect(trimmedCode);
         } else {
-          // User not logged in - prompt to sign in/sign up so code attaches to profile
-          Alert.alert(
-            'Access Granted!',
-            'Sign in or create an account to save this code to your profile. Otherwise you\'ll need to enter it each time you visit.',
-            [
-              { text: 'Sign In', onPress: () => router.push('/auth/login') },
-              { text: 'Sign Up', onPress: () => router.push('/auth/register') },
-              { text: 'Continue as Guest', onPress: async () => {
-                console.log('🎬 SLIDESHOW_ACCESS: Granting guest access with valid activation code');
-                await fetchSlideshow(activationCode);
-                setIsFullAccess(true);
-              }},
-            ]
-          );
+          setActivationCode(trimmedCode);
+          setShowLockedAccessSignup(true);
         }
       } else {
         console.log('🎬 SLIDESHOW_ACCESS: Invalid activation code, attempt:', failedAttempts + 1);
@@ -690,6 +680,12 @@ export default function SlideshowAccessScreen() {
       console.error('🎬 SLIDESHOW_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');
     }
+  };
+
+  const handleLockedAccessCompleted = async (code: string) => {
+    await AsyncStorage.setItem(`slideshow_access_${id}`, code);
+    await AsyncStorage.removeItem('pending_activation_code');
+    router.replace(`/slideshow-player/${id}`);
   };
 
   const handlePreviewStart = () => {
@@ -813,7 +809,7 @@ export default function SlideshowAccessScreen() {
           <View style={styles.guestAccessHeader}>
             <View style={styles.guestAccessContent}>
               <Text style={styles.guestAccessText}>
-                You're viewing as a guest with your activation code
+                You are viewing as a guest with your activation code
               </Text>
               <View style={styles.authButtonsContainer}>
                 <TouchableOpacity
@@ -1016,7 +1012,7 @@ export default function SlideshowAccessScreen() {
               <Text style={styles.optionTitle}>Visit Our Store</Text>
             </View>
             <Text style={styles.optionDescription}>
-              If you don't have an activation code, you can visit our store to purchase one.
+              If you do not have an activation code, you can visit our store to purchase one.
             </Text>
             <TouchableOpacity
               style={styles.storePromoButton}
@@ -1055,6 +1051,16 @@ export default function SlideshowAccessScreen() {
         couponId={slideshow?.previewCouponId != null ? Number(slideshow.previewCouponId) : undefined}
         ownerId={slideshow?.userId != null ? Number(slideshow.userId) : undefined}
         requirePhoneForPreview={slideshow?.requirePhoneForPreview === true}
+      />
+
+      <LockedAccessSignupModal
+        visible={showLockedAccessSignup}
+        onClose={() => setShowLockedAccessSignup(false)}
+        contentType="slideshow"
+        contentId={id}
+        activationCode={activationCode}
+        contentName={slideshow?.name}
+        onCompleted={handleLockedAccessCompleted}
       />
 
       {/* Demographics Survey Overlay */}

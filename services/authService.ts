@@ -265,6 +265,14 @@ class AuthService {
     }
   }
 
+  async acceptAuthResponse(authResponse: AuthResponse): Promise<AuthResponse> {
+    if (!authResponse.user || !authResponse.token) {
+      throw new Error('Authentication response was invalid. Please try signing in.');
+    }
+    await this.storeAuthData(authResponse);
+    return authResponse;
+  }
+
   /** Converts a viewer account to a free creator (requires auth). */
   async upgradeViewerToFree(): Promise<User> {
     try {

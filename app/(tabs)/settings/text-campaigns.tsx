@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { previewLeadsAPI } from '@/services/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 const MESSAGE_MAX = 1600;
 
@@ -25,6 +26,18 @@ type ContactRow = {
   phone_e164: string;
   last_verified_at: string;
   marketing_opt_in: boolean;
+};
+
+type CampaignRow = {
+  id: number;
+  owner_user_id: number;
+  owner_email?: string | null;
+  owner_username?: string | null;
+  message_body: string;
+  recipient_total: number;
+  sent_count: number;
+  failed_count: number;
+  created_at: string;
 };
 
 function contactsToCsv(rows: ContactRow[]): string {
@@ -67,13 +80,17 @@ async function shareCsvNative(filename: string, csv: string) {
 export default function TextCampaignsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
+  const isAdmin = !!user?.isAdmin;
   const [loading, setLoading] = useState(false);
   const [contacts, setContacts] = useState<ContactRow[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignRow[]>([]);
   const [summary, setSummary] = useState<{ verified_unique: number; marketing_eligible_unique: number } | null>(null);
   const [smsConfigured, setSmsConfigured] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [historyScope, setHistoryScope] = useState<'mine' | 'all' | 'admin'>('mine');
   const [sendResult, setSendResult] = useState<{
     sent: number;
     failed: number;
@@ -86,18 +103,25 @@ export default function TextCampaignsScreen() {
     setError(null);
     try {
       const data = await previewLeadsAPI.getCampaignContacts();
+      const history = await previewLeadsAPI.getCampaignHistory({
+        admin: isAdmin && historyScope !== 'mine',
+        ownerScope: historyScope === 'admin' ? 'admin' : undefined,
+        limit: 50,
+      });
       setContacts(Array.isArray(data.contacts) ? data.contacts : []);
+      setCampaigns(Array.isArray(history.campaigns) ? history.campaigns : []);
       setSummary(data.summary || null);
       setSmsConfigured(!!data.smsConfigured);
     } catch (e: any) {
       const msg = e.response?.data?.error || e.message || 'Failed to load contacts';
       setError(msg);
       setContacts([]);
+      setCampaigns([]);
       setSummary(null);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [historyScope, isAdmin]);
 
   React.useEffect(() => {
     load();
@@ -315,6 +339,34 @@ export default function TextCampaignsScreen() {
           </View>
         ) : null}
 
+        <ThemedText style={styles.section}>Campaign history</ThemedText>
+        {isAdmin ? (
+          <View style={styles.historyTabs}>
+            <HistoryTab label="Mine" active={historyScope === 'mine'} onPress={() => setHistoryScope('mine')} />
+            <HistoryTab label="All platform" active={historyScope === 'all'} onPress={() => setHistoryScope('all')} />
+            <HistoryTab label="Admin collected" active={historyScope === 'admin'} onPress={() => setHistoryScope('admin')} />
+          </View>
+        ) : null}
+        {campaigns.length === 0 ? (
+          <ThemedText style={styles.hint}>No campaign sends yet.</ThemedText>
+        ) : (
+          campaigns.map((campaign) => (
+            <View key={campaign.id} style={styles.historyCard}>
+              <ThemedText style={styles.resultTitle}>
+                {new Date(campaign.created_at).toLocaleString()} | {campaign.sent_count} sent, {campaign.failed_count} failed
+              </ThemedText>
+              {isAdmin ? (
+                <ThemedText style={styles.hint}>
+                  Owner: {campaign.owner_username || campaign.owner_email || campaign.owner_user_id}
+                </ThemedText>
+              ) : null}
+              <ThemedText style={styles.historyMessage} numberOfLines={4}>
+                {campaign.message_body}
+              </ThemedText>
+            </View>
+          ))
+        )}
+
         {loading ? (
           <View style={styles.loading}>
             <ActivityIndicator size="large" color="#3b82f6" />
@@ -322,6 +374,14 @@ export default function TextCampaignsScreen() {
         ) : null}
       </ScrollView>
     </ThemedView>
+  );
+}
+
+function HistoryTab({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+  return (
+    <TouchableOpacity style={[styles.historyTab, active && styles.historyTabActive]} onPress={onPress}>
+      <ThemedText style={[styles.historyTabText, active && styles.historyTabTextActive]}>{label}</ThemedText>
+    </TouchableOpacity>
   );
 }
 
@@ -412,5 +472,19 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 14, fontWeight: '600', color: '#111827', marginBottom: 8 },
   failuresHeading: { fontSize: 13, fontWeight: '600', color: '#b91c1c', marginBottom: 6 },
   failureLine: { fontSize: 12, color: '#4b5563', marginBottom: 4 },
+  historyTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  historyTab: { paddingVertical: 8, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#e5e7eb' },
+  historyTabActive: { backgroundColor: '#2563eb' },
+  historyTabText: { color: '#374151', fontWeight: '600', fontSize: 12 },
+  historyTabTextActive: { color: '#fff' },
+  historyCard: {
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    marginBottom: 10,
+  },
+  historyMessage: { color: '#4b5563', fontSize: 13, lineHeight: 19 },
   loading: { marginTop: 24 },
 });

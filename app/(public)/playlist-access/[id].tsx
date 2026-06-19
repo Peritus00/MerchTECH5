@@ -28,6 +28,7 @@ import { env } from '@/config/environment';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
 import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
+import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -68,6 +69,7 @@ export default function PlaylistAccessScreen() {
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
+  const [showLockedAccessSignup, setShowLockedAccessSignup] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -431,27 +433,16 @@ export default function PlaylistAccessScreen() {
       if (validationResult.valid) {
         console.log('🎵 PLAYLIST_ACCESS: Valid activation code:', validationResult);
         setValidatedCode(validationResult);
-        // Store the activation code in AsyncStorage as a fallback
-        await AsyncStorage.setItem('pending_activation_code', activationCode);
+        const trimmedCode = activationCode.trim();
+        await AsyncStorage.setItem('pending_activation_code', trimmedCode);
         
         // Check if user is authenticated
         if (isAuthenticated) {
           // User is logged in - attach code and redirect to media player
-          await handleAttachCodeAndRedirect(activationCode);
+          await handleAttachCodeAndRedirect(trimmedCode);
         } else {
-          // User not logged in - prompt to sign in/sign up so code attaches to profile
-          Alert.alert(
-            'Access Granted!',
-            'Sign in or create an account to save this code to your profile. Otherwise you\'ll need to enter it each time you visit.',
-            [
-              { text: 'Sign In', onPress: () => router.push('/auth/login') },
-              { text: 'Sign Up', onPress: () => router.push('/auth/register') },
-              { text: 'Continue as Guest', onPress: () => {
-                console.log('🎵 PLAYLIST_ACCESS: Granting guest access with valid activation code');
-                setIsFullAccess(true);
-              }},
-            ]
-          );
+          setActivationCode(trimmedCode);
+          setShowLockedAccessSignup(true);
         }
       } else {
         console.log('🎵 PLAYLIST_ACCESS: Invalid activation code');
@@ -513,6 +504,16 @@ export default function PlaylistAccessScreen() {
       console.error('🔴 PLAYLIST_ACCESS: Error attaching code:', error);
       Alert.alert('Error', 'Failed to link activation code to your account');
     }
+  };
+
+  const handleLockedAccessCompleted = async (code: string) => {
+    await AsyncStorage.setItem(`playlist_access_${id}`, code);
+    await AsyncStorage.removeItem('pending_activation_code');
+    try {
+      const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, code);
+      if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+    } catch (e) { /* non-blocking */ }
+    router.replace(`/playlist-player/${id}`);
   };
 
   const handleRegistrationSubmit = async () => {
@@ -725,7 +726,7 @@ export default function PlaylistAccessScreen() {
           <View style={styles.guestAccessHeader}>
             <View style={styles.guestAccessContent}>
               <Text style={styles.guestAccessText}>
-                You're viewing as a guest with your activation code
+                You are viewing as a guest with your activation code
               </Text>
               <View style={styles.authButtonsContainer}>
                 <TouchableOpacity
@@ -857,10 +858,9 @@ export default function PlaylistAccessScreen() {
             {/* Success Message */}
             <View style={styles.successBanner}>
               <MaterialIcons name="check-circle" size={32} color="#10b981" />
-              <Text style={styles.successTitle}>Valid Activation Code! 🎉</Text>
+              <Text style={styles.successTitle}>Valid Activation Code!</Text>
               <Text style={styles.successText}>
-                Your activation code is valid for "{playlist?.name}". 
-                Create an account to save this access to your profile.
+                Your activation code is valid for {playlist?.name}. Create an account to save this access to your profile.
               </Text>
             </View>
 
@@ -981,10 +981,9 @@ export default function PlaylistAccessScreen() {
             {/* Success Message */}
             <View style={styles.appDownloadContainer}>
               <MaterialIcons name="celebration" size={64} color="#10b981" />
-              <Text style={styles.appDownloadTitle}>You're All Set! 🎉</Text>
+              <Text style={styles.appDownloadTitle}>You are all set!</Text>
               <Text style={styles.appDownloadSubtitle}>
-                Your account has been created and the activation code for "{playlist?.name}" 
-                is now saved to your profile.
+                Your account has been created and the activation code for {playlist?.name} is now saved to your profile.
               </Text>
               
               {/* App Download Options */}
@@ -1017,7 +1016,7 @@ export default function PlaylistAccessScreen() {
               </View>
 
               <View style={styles.benefitsContainer}>
-                <Text style={styles.benefitsTitle}>What's Next?</Text>
+                <Text style={styles.benefitsTitle}>What is next?</Text>
                 <Text style={styles.benefitsText}>
                   • Your activation code is permanently saved to your account{'\n'}
                   • Sign in to the app with your email and password{'\n'}
@@ -1223,6 +1222,16 @@ export default function PlaylistAccessScreen() {
         couponId={playlist?.previewCouponId != null ? Number(playlist.previewCouponId) : undefined}
         ownerId={playlist?.userId != null ? Number(playlist.userId) : undefined}
         requirePhoneForPreview={playlist?.requirePhoneForPreview === true}
+      />
+
+      <LockedAccessSignupModal
+        visible={showLockedAccessSignup}
+        onClose={() => setShowLockedAccessSignup(false)}
+        contentType="playlist"
+        contentId={id}
+        activationCode={activationCode}
+        contentName={playlist?.name}
+        onCompleted={handleLockedAccessCompleted}
       />
 
       {/* Demographics Survey Overlay */}

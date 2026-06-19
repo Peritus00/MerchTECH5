@@ -750,6 +750,55 @@ async function attachActivationCodeForUserId(userId, code) {
   return { ok: true, activationCode };
 }
 
+async function findValidActivationCodeForContent(code, contentType, contentId) {
+  if (!code || (contentType !== 'playlist' && contentType !== 'slideshow')) {
+    return null;
+  }
+  const cid = parseInt(String(contentId), 10);
+  if (isNaN(cid)) {
+    return null;
+  }
+  const playlistId = contentType === 'playlist' ? cid : null;
+  const slideshowId = contentType === 'slideshow' ? cid : null;
+  let result;
+  try {
+    result = await db.query(
+      `SELECT * FROM activation_codes
+       WHERE code = $1 AND is_active = true AND deleted_at IS NULL
+       AND (expires_at IS NULL OR expires_at > NOW())
+       AND (max_uses IS NULL OR uses_count < max_uses)
+       AND (playlist_id = $2 OR slideshow_id = $3)`,
+      [String(code).trim(), playlistId, slideshowId]
+    );
+  } catch (error) {
+    if (error.code === '42703' || error.message?.includes('deleted_at')) {
+      result = await db.query(
+        `SELECT * FROM activation_codes
+         WHERE code = $1 AND is_active = true
+         AND (expires_at IS NULL OR expires_at > NOW())
+         AND (max_uses IS NULL OR uses_count < max_uses)
+         AND (playlist_id = $2 OR slideshow_id = $3)`,
+        [String(code).trim(), playlistId, slideshowId]
+      );
+    } else {
+      throw error;
+    }
+  }
+  return result.rows[0] || null;
+}
+
+async function sendVerificationEmailForUser(userId, email) {
+  const verificationToken = jwt.sign({ userId, email }, JWT_SECRET, { expiresIn: '24h' });
+  await db.query('UPDATE users SET verification_token = $1 WHERE id = $2', [verificationToken, userId]);
+  const frontendUrl = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'https://www.merchtrader.org';
+  await transporter.sendMail({
+    from: '"MerchTrader QR" <help@merchtrader.org>',
+    to: email,
+    subject: 'Verify Your MerchTech Account',
+    html: `Thank you for registering! Please verify your email by clicking this link: <a href="${frontendUrl}/auth/verify-email?token=${verificationToken}">Verify Email</a>`,
+  });
+}
+
 const isAdmin = async (req, res, next) => {
   try {
     const result = await db.query('SELECT is_admin FROM users WHERE id = $1', [req.user.userId], { 
@@ -6194,6 +6243,8 @@ function transformUser(dbUser) {
       accountType: 'viewer',
       subscriptionTier: dbUser.subscription_tier || 'free',
       isEmailVerified: dbUser.is_email_verified || false,
+      phoneE164: dbUser.phone_e164 || null,
+      phoneVerifiedAt: dbUser.phone_verified_at || null,
       isSuspended: dbUser.is_suspended || false,
       createdAt: dbUser.created_at,
       lastActive: dbUser.updated_at || dbUser.created_at,
@@ -6228,6 +6279,8 @@ function transformUser(dbUser) {
     accountType: 'creator',
     subscriptionTier: dbUser.subscription_tier || 'free',
     isEmailVerified: dbUser.is_email_verified || false,
+    phoneE164: dbUser.phone_e164 || null,
+    phoneVerifiedAt: dbUser.phone_verified_at || null,
     isSuspended: dbUser.is_suspended || false,
     createdAt: dbUser.created_at,
     lastActive: dbUser.updated_at || dbUser.created_at,
@@ -11671,6 +11724,252 @@ app.post('/api/coupons/sms/send', async (req, res) => {
 });
 
 // ---------- PREVIEW PHONE LEADS (verified gate + optional marketing opt-in) ----------
+app.post('/api/locked-access/start', async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Locked access leads not available. Run migration 043_locked_access_viewer_accounts.sql' });
+    }
+
+    const {
+      code,
+      contentType,
+      contentId,
+      phone,
+      email,
+      username,
+      password,
+      transactionalConsent,
+      termsConsent,
+      smsMarketingOptIn,
+      emailMarketingOptIn,
+      transactionalConsentCopyVersion,
+      smsMarketingConsentCopyVersion,
+      emailMarketingConsentCopyVersion,
+    } = req.body || {};
+
+    if (!transactionalConsent) {
+      return res.status(400).json({ error: 'Consent is required to receive the verification text' });
+    }
+    if (!termsConsent) {
+      return res.status(400).json({ error: 'Terms and Privacy Policy agreement is required' });
+    }
+    if (contentType !== 'playlist' && contentType !== 'slideshow') {
+      return res.status(400).json({ error: 'Invalid contentType' });
+    }
+    const cid = parseInt(String(contentId), 10);
+    if (isNaN(cid)) return res.status(400).json({ error: 'Invalid contentId' });
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    const cleanUsername = String(username || '').trim();
+    if (!cleanEmail.includes('@')) return res.status(400).json({ error: 'Valid email is required' });
+    if (cleanUsername.length < 3) return res.status(400).json({ error: 'Username must be at least 3 characters' });
+    if (!password || String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+    const phoneDigits = String(phone || '').replace(/\D/g, '');
+    if (phoneDigits.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+    const e164 = phoneDigits.startsWith('1') && phoneDigits.length === 11 ? `+${phoneDigits}` : `+1${phoneDigits}`;
+
+    const contentRow = await loadLockedContentForPreviewGate(contentType, cid);
+    if (!contentRow) return res.status(404).json({ error: 'Content not found' });
+    const isLocked = contentType === 'playlist'
+      ? !!contentRow.requires_activation_code && !contentRow.is_public
+      : !!contentRow.requires_activation_code;
+    if (!isLocked) {
+      return res.status(400).json({ error: 'This content does not require an activation code' });
+    }
+
+    const activationCode = await findValidActivationCodeForContent(code, contentType, cid);
+    if (!activationCode) {
+      return res.status(400).json({ error: 'Invalid activation code for this content' });
+    }
+
+    const existingUser = await db.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2 LIMIT 1',
+      [cleanEmail, cleanUsername]
+    );
+    if (existingUser.rows.length > 0) {
+      return res.status(409).json({ error: 'An account with this email or username already exists. Sign in to continue.' });
+    }
+
+    const passwordHash = await bcrypt.hash(String(password), 12);
+    const verificationPlain = crypto.randomBytes(24).toString('hex');
+    const verificationHash = crypto.createHash('sha256').update(verificationPlain, 'utf8').digest('hex');
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await db.query(
+      `DELETE FROM preview_phone_leads
+       WHERE phone_e164 = $1 AND content_type = $2 AND content_id = $3
+       AND verified_at IS NULL AND lead_source = 'locked_access'`,
+      [e164, contentType, cid]
+    );
+
+    const ins = await db.query(
+      `INSERT INTO preview_phone_leads (
+        owner_user_id, content_type, content_id, phone_e164, email,
+        verification_token_hash, verification_expires_at,
+        transactional_consent_copy_version, terms_consented, marketing_opt_in,
+        marketing_consent_copy_version, marketing_consented_at,
+        email_marketing_opt_in, email_marketing_consent_copy_version, email_marketing_consented_at,
+        activation_code_id, pending_username, pending_password_hash, lead_source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,'locked_access')
+      RETURNING id, public_poll_token`,
+      [
+        contentRow.user_id,
+        contentType,
+        cid,
+        e164,
+        cleanEmail,
+        verificationHash,
+        verificationExpires,
+        transactionalConsentCopyVersion || null,
+        !!termsConsent,
+        !!smsMarketingOptIn,
+        smsMarketingOptIn ? (smsMarketingConsentCopyVersion || null) : null,
+        smsMarketingOptIn ? new Date() : null,
+        !!emailMarketingOptIn,
+        emailMarketingOptIn ? (emailMarketingConsentCopyVersion || null) : null,
+        emailMarketingOptIn ? new Date() : null,
+        activationCode.id,
+        cleanUsername,
+        passwordHash,
+      ]
+    );
+
+    const leadRow = ins.rows[0];
+    const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'http://localhost:8081';
+    const frontend = String(rawFrontend).replace(/\/$/, '');
+    const verifyUrl = `${frontend}/preview-verify?t=${encodeURIComponent(verificationPlain)}`;
+    const contentLabel = contentType === 'playlist' ? 'playlist' : 'slideshow';
+    const smsBody = `MerchTrader: Verify your phone to unlock this ${contentLabel}: ${verifyUrl} Msg/data rates may apply. Reply STOP to opt out.`;
+    const smsResult = await smsService.sendSms(e164, smsBody, 'transactional');
+    if (smsResult.error) {
+      await db.query(`DELETE FROM preview_phone_leads WHERE id = $1`, [leadRow.id]);
+      return res.status(502).json({ error: smsResult.error, sent: false });
+    }
+
+    await db.query(`UPDATE preview_phone_leads SET last_sms_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [leadRow.id]);
+    await db.query(
+      `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'locked_access_sms_sent',$2::jsonb)`,
+      [leadRow.id, JSON.stringify({ providerMessageId: smsResult.messageId || null, activationCodeId: activationCode.id })]
+    );
+
+    res.json({ ok: true, pollToken: leadRow.public_poll_token });
+  } catch (e) {
+    console.error('locked-access/start error:', e);
+    res.status(500).json({ error: 'Failed to start locked access verification' });
+  }
+});
+
+app.get('/api/locked-access/status', async (req, res) => {
+  let client;
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Locked access leads not available' });
+    }
+    const pollToken = req.query.pollToken;
+    if (!pollToken) return res.status(400).json({ error: 'pollToken required' });
+
+    const leadResult = await db.query(
+      `SELECT * FROM preview_phone_leads WHERE public_poll_token = $1::uuid AND lead_source = 'locked_access' LIMIT 1`,
+      [String(pollToken)]
+    );
+    if (!leadResult.rows.length) return res.status(404).json({ error: 'Not found' });
+    const lead = leadResult.rows[0];
+    if (!lead.verified_at) {
+      return res.json({ status: 'pending' });
+    }
+
+    if (lead.completed_user_id) {
+      const full = await db.query('SELECT * FROM users WHERE id = $1', [lead.completed_user_id]);
+      if (!full.rows.length) return res.status(404).json({ error: 'Completed user not found' });
+      const user = transformUser(full.rows[0]);
+      const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+      return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id });
+    }
+
+    client = await db.getClient();
+    await client.query('BEGIN');
+    const lockedLeadResult = await client.query(
+      `SELECT * FROM preview_phone_leads WHERE id = $1 FOR UPDATE`,
+      [lead.id]
+    );
+    const lockedLead = lockedLeadResult.rows[0];
+    if (lockedLead.completed_user_id) {
+      await client.query('COMMIT');
+      const full = await db.query('SELECT * FROM users WHERE id = $1', [lockedLead.completed_user_id]);
+      const user = transformUser(full.rows[0]);
+      const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+      return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id });
+    }
+
+    const conflict = await client.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2 LIMIT 1',
+      [lockedLead.email, lockedLead.pending_username]
+    );
+    if (conflict.rows.length > 0) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'An account with this email or username already exists. Sign in to continue.' });
+    }
+
+    const insertUser = await client.query(
+      `INSERT INTO users (email, username, password_hash, account_type, phone_e164, phone_verified_at, is_email_verified)
+       VALUES ($1, $2, $3, 'viewer', $4, NOW(), false)
+       RETURNING *`,
+      [lockedLead.email, lockedLead.pending_username, lockedLead.pending_password_hash, lockedLead.phone_e164]
+    );
+    const newUser = insertUser.rows[0];
+
+    const attachResult = await client.query(
+      `INSERT INTO user_activation_codes (user_id, activation_code_id)
+       VALUES ($1, $2)
+       ON CONFLICT (user_id, activation_code_id) DO NOTHING
+       RETURNING id`,
+      [newUser.id, lockedLead.activation_code_id]
+    );
+    if (attachResult.rows.length > 0) {
+      await client.query(`UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`, [lockedLead.activation_code_id]);
+    }
+
+    await client.query(
+      `UPDATE preview_phone_leads
+       SET completed_user_id = $2, account_created_at = NOW(), updated_at = NOW()
+       WHERE id = $1`,
+      [lockedLead.id, newUser.id]
+    );
+    await client.query(
+      `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta)
+       VALUES ($1,'viewer_account_created',$2::jsonb), ($1,'activation_code_attached',$3::jsonb)`,
+      [
+        lockedLead.id,
+        JSON.stringify({ userId: newUser.id }),
+        JSON.stringify({ userId: newUser.id, activationCodeId: lockedLead.activation_code_id }),
+      ]
+    );
+    await client.query('COMMIT');
+
+    try {
+      await sendVerificationEmailForUser(newUser.id, newUser.email);
+    } catch (emailError) {
+      console.error(`🔴 Failed to send verification email to ${newUser.email}:`, emailError);
+    }
+
+    const full = await db.query('SELECT * FROM users WHERE id = $1', [newUser.id]);
+    const user = transformUser(full.rows[0]);
+    const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+    res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id });
+  } catch (e) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
+    }
+    if (e.code === '22P02') {
+      return res.status(400).json({ error: 'Invalid pollToken' });
+    }
+    console.error('locked-access/status error:', e);
+    res.status(500).json({ error: 'Status check failed' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
 app.post('/api/preview-leads/start', async (req, res) => {
   try {
     if (!(await ensureCouponTables())) {
@@ -11834,6 +12133,7 @@ app.post('/api/preview-leads/verify', async (req, res) => {
       pollToken: lead.public_poll_token,
       contentType: lead.content_type,
       contentId: lead.content_id,
+      leadSource: lead.lead_source || 'preview_gate',
       unlockToken,
     });
   } catch (e) {
@@ -11886,10 +12186,11 @@ app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
     const ownerId = parseInt(req.user.userId, 10);
     const marketingOnly = String(req.query.marketingOnly || 'false') === 'true';
     const { rows } = await db.query(
-      `SELECT phone_e164, verified_at, marketing_opt_in, content_type, content_id, coupon_id
+      `SELECT phone_e164, email, verified_at, marketing_opt_in, email_marketing_opt_in,
+              content_type, content_id, coupon_id, lead_source, owner_user_id
        FROM preview_phone_leads
        WHERE owner_user_id = $1 AND verified_at IS NOT NULL
-       ${marketingOnly ? 'AND marketing_opt_in = true' : ''}
+       ${marketingOnly ? 'AND (marketing_opt_in = true OR email_marketing_opt_in = true)' : ''}
        ORDER BY verified_at DESC`,
       [ownerId]
     );
@@ -11897,6 +12198,87 @@ app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('preview-leads/export error:', e);
     res.status(500).json({ error: 'Export failed' });
+  }
+});
+
+async function queryPreviewLeadRows({ ownerId = null, adminMode = false, adminOwnerId = null, query = {} }) {
+  const values = [];
+  const where = ['l.verified_at IS NOT NULL'];
+  if (!adminMode) {
+    values.push(ownerId);
+    where.push(`l.owner_user_id = $${values.length}`);
+  } else if (query.ownerScope === 'admin') {
+    values.push(adminOwnerId);
+    where.push(`l.owner_user_id = $${values.length}`);
+  } else if (query.ownerId) {
+    values.push(parseInt(String(query.ownerId), 10));
+    where.push(`l.owner_user_id = $${values.length}`);
+  }
+  if (query.marketingOnly === 'true') {
+    where.push('(l.marketing_opt_in = true OR l.email_marketing_opt_in = true)');
+  }
+  if (query.smsMarketingOnly === 'true') {
+    where.push('l.marketing_opt_in = true');
+  }
+  if (query.emailMarketingOnly === 'true') {
+    where.push('l.email_marketing_opt_in = true');
+  }
+  if (query.contentType === 'playlist' || query.contentType === 'slideshow') {
+    values.push(query.contentType);
+    where.push(`l.content_type = $${values.length}`);
+  }
+  if (query.search) {
+    values.push(`%${String(query.search).trim()}%`);
+    where.push(`(l.phone_e164 ILIKE $${values.length} OR l.email ILIKE $${values.length} OR u.email ILIKE $${values.length} OR u.username ILIKE $${values.length})`);
+  }
+  const limit = Math.min(Math.max(parseInt(String(query.limit || '250'), 10) || 250, 1), 1000);
+  values.push(limit);
+  const limitParam = values.length;
+  const { rows } = await db.query(
+    `SELECT l.id, l.owner_user_id, u.email AS owner_email, u.username AS owner_username,
+            l.content_type, l.content_id, l.phone_e164, l.email, l.verified_at,
+            l.marketing_opt_in, l.email_marketing_opt_in, l.coupon_id, l.activation_code_id,
+            l.completed_user_id, l.account_created_at, l.lead_source, l.created_at,
+            l.transactional_consent_copy_version, l.marketing_consent_copy_version,
+            l.email_marketing_consent_copy_version
+     FROM preview_phone_leads l
+     LEFT JOIN users u ON u.id = l.owner_user_id
+     WHERE ${where.join(' AND ')}
+     ORDER BY l.verified_at DESC
+     LIMIT $${limitParam}`,
+    values
+  );
+  return rows;
+}
+
+app.get('/api/preview-leads/list', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const ownerId = parseInt(req.user.userId, 10);
+    const leads = await queryPreviewLeadRows({ ownerId, query: req.query });
+    res.json({ leads });
+  } catch (e) {
+    console.error('preview-leads/list error:', e);
+    res.status(500).json({ error: 'Failed to load leads' });
+  }
+});
+
+app.get('/api/admin/preview-leads/list', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const leads = await queryPreviewLeadRows({
+      adminMode: true,
+      adminOwnerId: parseInt(req.user.userId, 10),
+      query: req.query,
+    });
+    res.json({ leads });
+  } catch (e) {
+    console.error('admin/preview-leads/list error:', e);
+    res.status(500).json({ error: 'Failed to load leads' });
   }
 });
 
@@ -12031,6 +12413,81 @@ app.post('/api/preview-leads/campaign-send', authenticateToken, requireCreatorAc
   } catch (e) {
     console.error('preview-leads/campaign-send error:', e);
     res.status(500).json({ error: 'Campaign send failed' });
+  }
+});
+
+async function queryPreviewLeadCampaignHistory({ ownerId = null, adminMode = false, adminOwnerId = null, query = {} }) {
+  const values = [];
+  const where = ['1=1'];
+  if (!adminMode) {
+    values.push(ownerId);
+    where.push(`c.owner_user_id = $${values.length}`);
+  } else if (query.ownerScope === 'admin') {
+    values.push(adminOwnerId);
+    where.push(`c.owner_user_id = $${values.length}`);
+  } else if (query.ownerId) {
+    values.push(parseInt(String(query.ownerId), 10));
+    where.push(`c.owner_user_id = $${values.length}`);
+  }
+  const limit = Math.min(Math.max(parseInt(String(query.limit || '100'), 10) || 100, 1), 500);
+  values.push(limit);
+  const limitParam = values.length;
+  const { rows } = await db.query(
+    `SELECT c.id, c.owner_user_id, u.email AS owner_email, u.username AS owner_username,
+            c.message_body, c.recipient_total, c.sent_count, c.failed_count, c.created_at,
+            COALESCE(
+              json_agg(
+                json_build_object(
+                  'phone_e164', r.phone_e164,
+                  'status', r.status,
+                  'provider_message_id', r.provider_message_id,
+                  'error_message', r.error_message,
+                  'created_at', r.created_at
+                )
+                ORDER BY r.created_at DESC
+              ) FILTER (WHERE r.id IS NOT NULL),
+              '[]'::json
+            ) AS recipients
+     FROM preview_phone_lead_campaigns c
+     LEFT JOIN users u ON u.id = c.owner_user_id
+     LEFT JOIN preview_phone_lead_campaign_recipients r ON r.campaign_id = c.id
+     WHERE ${where.join(' AND ')}
+     GROUP BY c.id, u.email, u.username
+     ORDER BY c.created_at DESC
+     LIMIT $${limitParam}`,
+    values
+  );
+  return rows;
+}
+
+app.get('/api/preview-leads/campaign-history', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadCampaignTables())) {
+      return res.status(503).json({ error: 'Campaign history not available' });
+    }
+    const ownerId = parseInt(req.user.userId, 10);
+    const campaigns = await queryPreviewLeadCampaignHistory({ ownerId, query: req.query });
+    res.json({ campaigns });
+  } catch (e) {
+    console.error('preview-leads/campaign-history error:', e);
+    res.status(500).json({ error: 'Failed to load campaign history' });
+  }
+});
+
+app.get('/api/admin/preview-leads/campaign-history', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadCampaignTables())) {
+      return res.status(503).json({ error: 'Campaign history not available' });
+    }
+    const campaigns = await queryPreviewLeadCampaignHistory({
+      adminMode: true,
+      adminOwnerId: parseInt(req.user.userId, 10),
+      query: req.query,
+    });
+    res.json({ campaigns });
+  } catch (e) {
+    console.error('admin/preview-leads/campaign-history error:', e);
+    res.status(500).json({ error: 'Failed to load campaign history' });
   }
 });
 

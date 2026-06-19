@@ -18,6 +18,7 @@ interface AuthContextType {
     username: string,
     activationCode?: string
   ) => Promise<{ success: boolean; user?: User; error?: string }>;
+  acceptAuthResponse: (authResponse: { user: User; token: string; refreshToken?: string }) => Promise<{ success: boolean; user?: User; error?: string }>;
   upgradeViewerToFree: () => Promise<{ success: boolean; error?: string }>;
   socialLogin: (provider: 'google' | 'apple', token: string, nonce?: string) => Promise<void>;
   socialLoginWithCode: (provider: 'apple' | 'google', code: string, redirectUri?: string, nonce?: string) => Promise<void>;
@@ -189,6 +190,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const acceptAuthResponse = async (authResponse: { user: User; token: string; refreshToken?: string }) => {
+    setIsLoading(true);
+    try {
+      const stored = await authService.acceptAuthResponse(authResponse);
+      globalAuthState.user = stored.user;
+      setUser(stored.user);
+      return { success: true, user: stored.user };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const upgradeViewerToFree = async () => {
     setIsLoading(true);
     try {
@@ -302,6 +317,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       registerViewer,
+      acceptAuthResponse,
       upgradeViewerToFree,
       socialLogin,
       socialLoginWithCode,

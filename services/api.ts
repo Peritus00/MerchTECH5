@@ -676,11 +676,58 @@ export const previewLeadsAPI = {
     return response.data as {
       leads: {
         phone_e164: string;
+        email?: string | null;
         verified_at: string;
         marketing_opt_in: boolean;
+        email_marketing_opt_in?: boolean;
         content_type: string;
         content_id: string | number;
         coupon_id: number | null;
+        lead_source?: string;
+        owner_user_id?: number;
+      }[];
+    };
+  },
+
+  async listLeads(params?: {
+    admin?: boolean;
+    ownerScope?: 'all' | 'admin';
+    ownerId?: string | number;
+    search?: string;
+    marketingOnly?: boolean;
+    smsMarketingOnly?: boolean;
+    emailMarketingOnly?: boolean;
+    contentType?: 'playlist' | 'slideshow';
+    limit?: number;
+  }) {
+    const { admin, ...query } = params || {};
+    const response = await api.get(admin ? '/admin/preview-leads/list' : '/preview-leads/list', {
+      params: {
+        ...query,
+        marketingOnly: query.marketingOnly ? 'true' : undefined,
+        smsMarketingOnly: query.smsMarketingOnly ? 'true' : undefined,
+        emailMarketingOnly: query.emailMarketingOnly ? 'true' : undefined,
+      },
+    });
+    return response.data as {
+      leads: {
+        id: number;
+        owner_user_id: number;
+        owner_email?: string | null;
+        owner_username?: string | null;
+        content_type: string;
+        content_id: string | number;
+        phone_e164: string;
+        email?: string | null;
+        verified_at: string;
+        marketing_opt_in: boolean;
+        email_marketing_opt_in: boolean;
+        coupon_id: number | null;
+        activation_code_id?: number | null;
+        completed_user_id?: number | null;
+        account_created_at?: string | null;
+        lead_source?: string;
+        created_at?: string;
       }[];
     };
   },
@@ -709,6 +756,67 @@ export const previewLeadsAPI = {
       sent: number;
       failed: number;
       failures: { phone_e164: string; error: string }[];
+    };
+  },
+
+  async getCampaignHistory(params?: { admin?: boolean; ownerScope?: 'all' | 'admin'; ownerId?: string | number; limit?: number }) {
+    const { admin, ...query } = params || {};
+    const response = await api.get(
+      admin ? '/admin/preview-leads/campaign-history' : '/preview-leads/campaign-history',
+      { params: query }
+    );
+    return response.data as {
+      campaigns: {
+        id: number;
+        owner_user_id: number;
+        owner_email?: string | null;
+        owner_username?: string | null;
+        message_body: string;
+        recipient_total: number;
+        sent_count: number;
+        failed_count: number;
+        created_at: string;
+        recipients?: {
+          phone_e164: string;
+          status: 'sent' | 'failed';
+          provider_message_id?: string | null;
+          error_message?: string | null;
+          created_at?: string;
+        }[];
+      }[];
+    };
+  },
+};
+
+export const lockedAccessAPI = {
+  async start(data: {
+    code: string;
+    contentType: 'playlist' | 'slideshow';
+    contentId: string;
+    phone: string;
+    email: string;
+    username: string;
+    password: string;
+    transactionalConsent: boolean;
+    termsConsent: boolean;
+    smsMarketingOptIn: boolean;
+    emailMarketingOptIn: boolean;
+    transactionalConsentCopyVersion?: string;
+    smsMarketingConsentCopyVersion?: string;
+    emailMarketingConsentCopyVersion?: string;
+  }) {
+    const response = await api.post('/locked-access/start', data);
+    return response.data as { ok: boolean; pollToken: string };
+  },
+
+  async status(pollToken: string) {
+    const response = await api.get('/locked-access/status', { params: { pollToken } });
+    return response.data as {
+      status: 'pending' | 'verified';
+      user?: any;
+      token?: string;
+      contentType?: 'playlist' | 'slideshow';
+      contentId?: string | number;
     };
   },
 };
