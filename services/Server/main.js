@@ -11902,6 +11902,17 @@ app.post('/api/locked-access/start', async (req, res) => {
   }
 });
 
+function buildPlaylistPlaybackToken(contentType, contentId) {
+  if (contentType !== 'playlist') return null;
+  const playlistId = parseInt(String(contentId), 10);
+  if (isNaN(playlistId)) return null;
+  return jwt.sign(
+    { playlistId, purpose: 'playlist-playback' },
+    JWT_SECRET,
+    { expiresIn: '2h' }
+  );
+}
+
 app.get('/api/locked-access/status', async (req, res) => {
   let client;
   try {
@@ -11926,7 +11937,8 @@ app.get('/api/locked-access/status', async (req, res) => {
       if (!full.rows.length) return res.status(404).json({ error: 'Completed user not found' });
       const user = transformUser(full.rows[0]);
       const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-      return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id });
+      const playbackToken = buildPlaylistPlaybackToken(lead.content_type, lead.content_id);
+      return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id, playbackToken });
     }
 
     client = await db.getClient();
@@ -11941,7 +11953,8 @@ app.get('/api/locked-access/status', async (req, res) => {
       const full = await db.query('SELECT * FROM users WHERE id = $1', [lockedLead.completed_user_id]);
       const user = transformUser(full.rows[0]);
       const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-      return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id });
+      const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
+      return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
     }
 
     const conflict = await client.query(
@@ -12009,7 +12022,8 @@ app.get('/api/locked-access/status', async (req, res) => {
     const full = await db.query('SELECT * FROM users WHERE id = $1', [newUser.id]);
     const user = transformUser(full.rows[0]);
     const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-    res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id });
+    const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
+    res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }

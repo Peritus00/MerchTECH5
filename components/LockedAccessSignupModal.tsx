@@ -19,6 +19,7 @@ import {
   buildMarketingConsentCopyVersion,
   buildSmsConsentCopyVersion,
 } from '@/constants/smsConsent';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type Props = {
   visible: boolean;
@@ -94,6 +95,9 @@ export default function LockedAccessSignupModal({
         const accepted = await acceptAuthResponse({ user: result.user, token: result.token });
         if (!accepted.success) {
           throw new Error(accepted.error || 'Could not sign in to the new viewer account.');
+        }
+        if (result.contentType === 'playlist' && result.contentId != null && result.playbackToken) {
+          await AsyncStorage.setItem(`playlist_playback_token_${result.contentId}`, result.playbackToken);
         }
         await onCompleted(activationCode.trim());
         onClose();

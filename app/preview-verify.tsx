@@ -70,13 +70,17 @@ export default function PreviewVerifyScreen() {
             if (completion.status === 'verified' && completion.user && completion.token) {
               await acceptAuthResponseRef.current({ user: completion.user, token: completion.token });
               if (contentType === 'playlist') {
-                try {
-                  const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(String(contentId));
-                  if (playbackToken) {
-                    await AsyncStorage.setItem(`playlist_playback_token_${contentId}`, playbackToken);
+                let playbackToken = completion.playbackToken;
+                if (!playbackToken) {
+                  try {
+                    const issued = await playlistAccessAPI.issuePlaybackToken(String(contentId));
+                    playbackToken = issued.playbackToken;
+                  } catch {
+                    // The player can still request access again if token creation is delayed.
                   }
-                } catch {
-                  // The player can still request access again if token creation is delayed.
+                }
+                if (playbackToken) {
+                  await AsyncStorage.setItem(`playlist_playback_token_${contentId}`, playbackToken);
                 }
                 router.replace(`/playlist-player/${contentId}` as any);
               } else {

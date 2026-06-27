@@ -817,6 +817,7 @@ export const lockedAccessAPI = {
       token?: string;
       contentType?: 'playlist' | 'slideshow';
       contentId?: string | number;
+      playbackToken?: string;
     };
   },
 };
