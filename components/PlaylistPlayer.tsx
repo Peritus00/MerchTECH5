@@ -48,6 +48,7 @@ import { getUserGender } from '@/utils/genderStorage';
 import { getDemographicsForTracking } from '@/utils/demographicsHelper';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
+import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 
 interface MediaItem {
   id: string | number;
@@ -2047,22 +2048,25 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
         </TouchableOpacity>
         <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
-        <TouchableOpacity style={styles.cartButton} onPress={() => {
-          console.log('Navigate to cart');
-          if (Platform.OS === 'web') {
-            window.location.href = '/store/cart';
-          } else {
-            router.push('/store/cart');
-          }
-        }}>
-          <MaterialIcons name="shopping-cart" size={24} color="#374151" />
-          {/* Cart item count badge */}
-          {getTotalItems() > 0 && (
-            <View style={styles.cartBadge}>
-              <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <AccountStatusIndicator compact />
+          <TouchableOpacity style={styles.cartButton} onPress={() => {
+            console.log('Navigate to cart');
+            if (Platform.OS === 'web') {
+              window.location.href = '/store/cart';
+            } else {
+              router.push('/store/cart');
+            }
+          }}>
+            <MaterialIcons name="shopping-cart" size={24} color="#374151" />
+            {/* Cart item count badge */}
+            {getTotalItems() > 0 && (
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{getTotalItems()}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
       )}
       
@@ -2333,6 +2337,11 @@ const styles = StyleSheet.create({
         color: '#1f2937',
         textAlign: 'center',
         flex: 1,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
     },
     cartButton: {
         position: 'relative',

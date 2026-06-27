@@ -11,6 +11,7 @@ import { Product } from '@/shared/product-schema';
 import { useRouter } from 'expo-router';
 import { productsAPI } from '@/services/api';
 import { useCart } from '@/contexts/CartContext';
+import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 
 export default function ShopScreen() {
   const router = useRouter();
@@ -133,6 +134,7 @@ export default function ShopScreen() {
           </TouchableOpacity>
           
           <ThemedView style={styles.headerTopRight}>
+            <AccountStatusIndicator compact color="#3b82f6" />
             <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
               <ThemedText style={styles.cartIcon}>🛍</ThemedText>
               {getTotalItems() > 0 && (
@@ -217,6 +219,7 @@ const styles = StyleSheet.create({
   headerTopRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   backButton: {
     paddingVertical: 8,

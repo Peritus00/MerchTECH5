@@ -6,6 +6,7 @@ import { useCart } from '@/contexts/CartContext';
 import { checkoutAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import * as WebBrowser from 'expo-web-browser';
+import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 
 interface CartHeaderProps {
   color?: string;
@@ -108,24 +109,32 @@ export function CartHeader({ color = '#6b7280', size = 32 }: CartHeaderProps) {
   };
 
   return (
-    <TouchableOpacity 
-      style={styles.container}
-      onPress={handlePress}
-      activeOpacity={0.7}
-    >
-      <MaterialIcons name="shopping-cart" size={size} color={color} />
-      {totalItems > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {totalItems > 99 ? '99+' : totalItems.toString()}
-          </Text>
-        </View>
-      )}
-    </TouchableOpacity>
+    <View style={styles.actionGroup}>
+      <AccountStatusIndicator color={color} compact />
+      <TouchableOpacity
+        style={styles.container}
+        onPress={handlePress}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons name="shopping-cart" size={size} color={color} />
+        {totalItems > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {totalItems > 99 ? '99+' : totalItems.toString()}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  actionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   container: {
     position: 'relative',
     padding: 4,

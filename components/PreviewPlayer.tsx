@@ -21,6 +21,7 @@ import { paymentAPI } from '@/services/api';
 import PlaylistChat from './PlaylistChat';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
+import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 
 const { width } = Dimensions.get('window');
 
@@ -1342,6 +1343,7 @@ function PreviewPlayer({
             </View>
 
             {/* Cart Icon */}
+            <AccountStatusIndicator compact style={styles.accountIndicator} />
             <TouchableOpacity style={styles.cartButton} onPress={handleCartPress}>
               <MaterialIcons name="shopping-cart" size={24} color="#374151" />
               {getTotalItems() > 0 && (
@@ -2440,6 +2442,9 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
   },
   // Cart Button Styles
+  accountIndicator: {
+    marginRight: 8,
+  },
   cartButton: {
     position: 'relative',
     padding: 8,

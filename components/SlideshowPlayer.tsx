@@ -35,6 +35,7 @@ import { useRouter } from 'expo-router';
 import SlideshowChat from './SlideshowChat';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
+import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 
 const { width } = Dimensions.get('window');
 
@@ -575,24 +576,27 @@ const SlideshowPlayer = ({
         <View style={styles.slideshowHeader}>
           <View style={styles.slideshowHeaderRow}>
             <Text style={styles.slideshowTitle}>{slideshowData?.name || 'Slideshow'}</Text>
-            <TouchableOpacity
-              style={styles.slideshowCartButton}
-              onPress={() => {
-                console.log('Navigate to cart');
-                if (Platform.OS === 'web') {
-                  window.location.href = '/store/cart';
-                } else {
-                  router.push('/store/cart');
-                }
-              }}
-            >
-              <MaterialIcons name="shopping-cart" size={24} color="#374151" />
-              {getTotalItems() > 0 && (
-                <View style={styles.slideshowCartBadge}>
-                  <Text style={styles.slideshowCartBadgeText}>{getTotalItems()}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            <View style={styles.slideshowHeaderActions}>
+              <AccountStatusIndicator compact />
+              <TouchableOpacity
+                style={styles.slideshowCartButton}
+                onPress={() => {
+                  console.log('Navigate to cart');
+                  if (Platform.OS === 'web') {
+                    window.location.href = '/store/cart';
+                  } else {
+                    router.push('/store/cart');
+                  }
+                }}
+              >
+                <MaterialIcons name="shopping-cart" size={24} color="#374151" />
+                {getTotalItems() > 0 && (
+                  <View style={styles.slideshowCartBadge}>
+                    <Text style={styles.slideshowCartBadgeText}>{getTotalItems()}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       )}
@@ -928,6 +932,12 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1f2937',
     textAlign: 'center',
+    flex: 1,
+  },
+  slideshowHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   slideshowCartButton: {
     position: 'relative',
