@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   Switch,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -35,6 +34,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
   const [hasExpiration, setHasExpiration] = useState(false);
   const [expirationDate, setExpirationDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [errors, setErrors] = useState<{ maxUses?: string; expiration?: string }>({});
 
   const handleCreate = () => {
     const codeData: {
@@ -45,7 +45,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
     if (hasUsageLimit) {
       const parsedMaxUses = parseInt(maxUses);
       if (isNaN(parsedMaxUses) || parsedMaxUses <= 0) {
-        Alert.alert('Error', 'Please enter a valid number for max uses');
+        setErrors({ maxUses: 'Enter a valid number greater than 0 for max uses.' });
         return;
       }
       codeData.maxUses = parsedMaxUses;
@@ -55,7 +55,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
 
     if (hasExpiration) {
       if (expirationDate <= new Date()) {
-        Alert.alert('Error', 'Expiration date must be in the future');
+        setErrors({ expiration: 'Choose an expiration date in the future.' });
         return;
       }
       codeData.expiresAt = expirationDate;
@@ -63,6 +63,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
       codeData.expiresAt = null;
     }
 
+    setErrors({});
     onCreateCode(codeData);
     resetForm();
   };
@@ -73,6 +74,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
     setHasExpiration(false);
     setExpirationDate(new Date());
     setShowDatePicker(false);
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -124,7 +126,10 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
               <Text style={styles.sectionTitle}>Usage Limit</Text>
               <Switch
                 value={hasUsageLimit}
-                onValueChange={setHasUsageLimit}
+                onValueChange={(value) => {
+                  setHasUsageLimit(value);
+                  setErrors((prev) => ({ ...prev, maxUses: undefined }));
+                }}
                 trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
                 thumbColor={hasUsageLimit ? '#3b82f6' : '#9ca3af'}
               />
@@ -134,13 +139,17 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Maximum Uses</Text>
                 <TextInput
-                  style={styles.numberInput}
+                  style={[styles.numberInput, errors.maxUses && styles.inputError]}
                   value={maxUses}
-                  onChangeText={setMaxUses}
+                  onChangeText={(value) => {
+                    setMaxUses(value);
+                    setErrors((prev) => ({ ...prev, maxUses: undefined }));
+                  }}
                   placeholder="Enter number"
                   keyboardType="number-pad"
                   placeholderTextColor="#9ca3af"
                 />
+                {errors.maxUses ? <Text style={styles.errorText}>{errors.maxUses}</Text> : null}
                 <Text style={styles.inputHelp}>
                   How many times this code can be used before it becomes invalid. Toggle off for unlimited uses.
                 </Text>
@@ -160,7 +169,10 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
               <Text style={styles.sectionTitle}>Expiration Date</Text>
               <Switch
                 value={hasExpiration}
-                onValueChange={setHasExpiration}
+                onValueChange={(value) => {
+                  setHasExpiration(value);
+                  setErrors((prev) => ({ ...prev, expiration: undefined }));
+                }}
                 trackColor={{ false: '#e5e7eb', true: '#bfdbfe' }}
                 thumbColor={hasExpiration ? '#3b82f6' : '#9ca3af'}
               />
@@ -170,7 +182,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
               <View style={styles.inputContainer}>
                 <Text style={styles.inputLabel}>Expires On</Text>
                 <TouchableOpacity
-                  style={styles.dateButton}
+                  style={[styles.dateButton, errors.expiration && styles.inputError]}
                   onPress={() => setShowDatePicker(true)}
                 >
                   <MaterialIcons name="event" size={20} color="#6b7280" />
@@ -179,6 +191,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
                   </Text>
                   <MaterialIcons name="keyboard-arrow-down" size={20} color="#6b7280" />
                 </TouchableOpacity>
+                {errors.expiration ? <Text style={styles.errorText}>{errors.expiration}</Text> : null}
                 <Text style={styles.inputHelp}>
                   The code will automatically become invalid after this date
                 </Text>
@@ -220,6 +233,7 @@ const CreateCodeModal: React.FC<CreateCodeModalProps> = ({
               setShowDatePicker(false);
               if (selectedDate) {
                 setExpirationDate(selectedDate);
+                setErrors((prev) => ({ ...prev, expiration: undefined }));
               }
             }}
             minimumDate={new Date()}
@@ -330,6 +344,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     color: '#1f2937',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
   inputHelp: {
     fontSize: 12,

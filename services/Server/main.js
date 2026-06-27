@@ -6375,8 +6375,24 @@ app.post('/api/auth/register',
     
     const { email, password, username } = req.body;
     // Case-insensitive email check
-    const existingUser = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
-    if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
+    const existingUser = await db.query(
+      'SELECT email, username FROM users WHERE LOWER(email) = LOWER($1) OR username = $2',
+      [email, username]
+    );
+    if (existingUser.rows.length > 0) {
+      const fields = {};
+      if (existingUser.rows.some((row) => String(row.email || '').toLowerCase() === String(email || '').toLowerCase())) {
+        fields.email = 'An account already exists with this email. Sign in to continue, or use a different email.';
+      }
+      if (existingUser.rows.some((row) => row.username === username)) {
+        fields.username = 'This username is already taken. Choose a different username.';
+      }
+      return res.status(409).json({
+        error: 'Email or username already exists',
+        code: 'ACCOUNT_EXISTS',
+        fields,
+      });
+    }
     const hashedPassword = await bcrypt.hash(password, 12);
     const result = await db.query(
       `INSERT INTO users (email, username, password_hash, account_type) VALUES ($1, $2, $3, 'creator') RETURNING id, email, username, is_admin`,
@@ -6431,8 +6447,24 @@ app.post('/api/auth/register-viewer',
     }
 
     const { email, password, username, activationCode } = req.body;
-    const existingUser = await db.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2', [email, username]);
-    if (existingUser.rows.length > 0) return res.status(409).json({ error: 'Email or username already exists' });
+    const existingUser = await db.query(
+      'SELECT email, username FROM users WHERE LOWER(email) = LOWER($1) OR username = $2',
+      [email, username]
+    );
+    if (existingUser.rows.length > 0) {
+      const fields = {};
+      if (existingUser.rows.some((row) => String(row.email || '').toLowerCase() === String(email || '').toLowerCase())) {
+        fields.email = 'An account already exists with this email. Sign in to continue, or use a different email.';
+      }
+      if (existingUser.rows.some((row) => row.username === username)) {
+        fields.username = 'This username is already taken. Choose a different username.';
+      }
+      return res.status(409).json({
+        error: 'Email or username already exists',
+        code: 'ACCOUNT_EXISTS',
+        fields,
+      });
+    }
     const hashedPassword = await bcrypt.hash(password, 12);
     const result = await db.query(
       `INSERT INTO users (email, username, password_hash, account_type) VALUES ($1, $2, $3, 'viewer') RETURNING id, email, username, is_admin`,
@@ -11783,11 +11815,22 @@ app.post('/api/locked-access/start', async (req, res) => {
     }
 
     const existingUser = await db.query(
-      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2 LIMIT 1',
+      'SELECT email, username FROM users WHERE LOWER(email) = LOWER($1) OR username = $2',
       [cleanEmail, cleanUsername]
     );
     if (existingUser.rows.length > 0) {
-      return res.status(409).json({ error: 'An account with this email or username already exists. Sign in to continue.' });
+      const fields = {};
+      if (existingUser.rows.some((row) => String(row.email || '').toLowerCase() === cleanEmail)) {
+        fields.email = 'An account already exists with this email. Sign in to continue, or use a different email.';
+      }
+      if (existingUser.rows.some((row) => row.username === cleanUsername)) {
+        fields.username = 'This username is already taken. Choose a different username.';
+      }
+      return res.status(409).json({
+        error: 'An account with this email or username already exists. Sign in to continue.',
+        code: 'ACCOUNT_EXISTS',
+        fields,
+      });
     }
 
     const passwordHash = await bcrypt.hash(String(password), 12);
@@ -11902,12 +11945,23 @@ app.get('/api/locked-access/status', async (req, res) => {
     }
 
     const conflict = await client.query(
-      'SELECT id FROM users WHERE LOWER(email) = LOWER($1) OR username = $2 LIMIT 1',
+      'SELECT email, username FROM users WHERE LOWER(email) = LOWER($1) OR username = $2',
       [lockedLead.email, lockedLead.pending_username]
     );
     if (conflict.rows.length > 0) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'An account with this email or username already exists. Sign in to continue.' });
+      const fields = {};
+      if (conflict.rows.some((row) => String(row.email || '').toLowerCase() === String(lockedLead.email || '').toLowerCase())) {
+        fields.email = 'An account already exists with this email. Sign in to continue, or use a different email.';
+      }
+      if (conflict.rows.some((row) => row.username === lockedLead.pending_username)) {
+        fields.username = 'This username is already taken. Choose a different username.';
+      }
+      return res.status(409).json({
+        error: 'An account with this email or username already exists. Sign in to continue.',
+        code: 'ACCOUNT_EXISTS',
+        fields,
+      });
     }
 
     const insertUser = await client.query(

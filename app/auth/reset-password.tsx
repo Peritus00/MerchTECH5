@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -17,11 +16,18 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 
+interface FormErrors {
+  password?: string;
+  confirmPassword?: string;
+  token?: string;
+  general?: string;
+}
+
 export default function ResetPasswordScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [errors, setErrors] = useState<FormErrors>({});
   const [success, setSuccess] = useState(false);
   
   const { resetPassword } = useAuth();
@@ -30,27 +36,31 @@ export default function ResetPasswordScreen() {
 
   useEffect(() => {
     if (!token) {
-      setError("No reset token found. Please use the link from your email.");
+      setErrors({ token: 'No reset token found. Open the reset link from your email or request a new one.' });
     }
   }, [token]);
 
   const handleResetPassword = async () => {
+    const next: FormErrors = {};
     if (password.length < 8) {
-      setError('Password must be at least 8 characters long.');
-      return;
+      next.password = 'Password must be at least 8 characters long.';
     }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
+    if (!confirmPassword) {
+      next.confirmPassword = 'Please confirm your new password.';
+    } else if (password !== confirmPassword) {
+      next.confirmPassword = 'Passwords do not match. Re-enter the same password in both fields.';
+    }
+    if (!token) {
+      next.token = 'No reset token found. Open the reset link from your email or request a new one.';
     }
 
-    if (!token) {
-        setError("No reset token found. Please use the link from your email.");
-        return;
+    if (Object.keys(next).length > 0) {
+      setErrors(next);
+      return;
     }
 
     setIsSubmitting(true);
-    setError('');
+    setErrors({});
 
     try {
       const result = await resetPassword(token, password);
@@ -58,10 +68,10 @@ export default function ResetPasswordScreen() {
       if (result.success) {
         setSuccess(true);
       } else {
-        setError(result.message);
+        setErrors({ general: result.message });
       }
     } catch (error: any) {
-      setError('An unexpected error occurred. Please try again.');
+      setErrors({ general: error.message || 'We could not reset your password. Please try again.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -113,47 +123,55 @@ export default function ResetPasswordScreen() {
           </View>
 
           <View style={styles.form}>
-            {error && (
+            {(errors.general || errors.token) && (
               <View style={styles.errorContainer}>
                 <MaterialIconWithFallback name="error" size={16} color="#ef4444" />
-                <Text style={styles.errorText}>{error}</Text>
+                <Text style={styles.errorText}>{errors.general || errors.token}</Text>
               </View>
             )}
 
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>New Password</ThemedText>
-              <View style={[styles.inputContainer, error && styles.inputError]}>
+              <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                 <MaterialIconWithFallback name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(value) => {
+                    setPassword(value);
+                    setErrors((prev) => ({ ...prev, password: undefined }));
+                  }}
                   placeholder="Enter new password"
                   placeholderTextColor="#9ca3af"
                   secureTextEntry
                 />
               </View>
+              {errors.password && <Text style={styles.fieldError}>{errors.password}</Text>}
             </View>
 
             <View style={styles.inputGroup}>
               <ThemedText style={styles.label}>Confirm New Password</ThemedText>
-              <View style={[styles.inputContainer, error && styles.inputError]}>
+              <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                 <MaterialIconWithFallback name="lock" size={20} color="#6b7280" style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(value) => {
+                    setConfirmPassword(value);
+                    setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                  }}
                   placeholder="Confirm new password"
                   placeholderTextColor="#9ca3af"
                   secureTextEntry
                 />
               </View>
+              {errors.confirmPassword && <Text style={styles.fieldError}>{errors.confirmPassword}</Text>}
             </View>
 
             <TouchableOpacity
-              style={[styles.primaryButton, (isSubmitting || !token) && styles.disabled]}
+              style={[styles.primaryButton, isSubmitting && styles.disabled]}
               onPress={handleResetPassword}
-              disabled={isSubmitting || !token}
+              disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <ActivityIndicator color="#fff" size="small" />
@@ -208,6 +226,11 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 14,
     flex: 1,
+  },
+  fieldError: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
   inputGroup: {
     marginBottom: 24,

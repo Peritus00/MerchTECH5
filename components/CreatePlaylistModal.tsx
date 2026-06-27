@@ -7,12 +7,12 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { MediaFile, Playlist } from '@/shared/media-schema';
 import MediaSelectionList from './MediaSelectionList';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
+import { normalizeApiError } from '@/utils/formErrors';
 
 interface CreatePlaylistModalProps {
   visible: boolean;
@@ -37,6 +37,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [requiresActivationCode, setRequiresActivationCode] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; general?: string }>({});
   const { canCreate } = useSubscriptionLimits();
 
   useEffect(() => {
@@ -48,18 +49,14 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
   const handleCreate = async () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a playlist name');
+      setErrors({ name: 'Playlist name is required.' });
       return;
     }
 
     // Check subscription limits before creating playlist
     const canCreatePlaylist = canCreate('playlists');
     if (!canCreatePlaylist.allowed) {
-      Alert.alert(
-        'Playlist Limit Reached',
-        canCreatePlaylist.message,
-        [{ text: 'OK' }]
-      );
+      setErrors({ general: canCreatePlaylist.message });
       return;
     }
 
@@ -102,8 +99,11 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
       setSelectedMediaIds([]);
     } catch (error: any) {
       console.error('🔴 CreatePlaylistModal: Error creating playlist:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to create playlist';
-      Alert.alert('Error', errorMessage);
+      const normalized = normalizeApiError(error, 'Failed to create playlist. Please check the playlist details and try again.');
+      setErrors({
+        name: normalized.fields.name,
+        general: normalized.message,
+      });
     } finally {
       setIsCreating(false);
     }
@@ -117,6 +117,7 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     setRequiresActivationCode(false);
     setIsPublic(false);
     setIsCreating(false);
+    setErrors({});
   };
 
   const handleClose = () => {
@@ -134,9 +135,10 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
 
   const handleNext = () => {
     if (!name.trim()) {
-      Alert.alert('Error', 'Please enter a playlist name');
+      setErrors({ name: 'Playlist name is required.' });
       return;
     }
+    setErrors({});
     setStep('media');
   };
 
@@ -166,11 +168,11 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           </Text>
           <TouchableOpacity 
             onPress={step === 'details' ? handleNext : handleCreate}
-            disabled={!name.trim() || isCreating}
+            disabled={isCreating}
           >
             <Text style={[
               styles.headerAction,
-              (!name.trim() || isCreating) && styles.headerActionDisabled
+              isCreating && styles.headerActionDisabled
             ]}>
               {step === 'details' ? 'Next' : isCreating ? 'Creating...' : 'Create'}
             </Text>
@@ -181,16 +183,25 @@ const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
           // Step 1: Playlist Details
           <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
             <View style={styles.form}>
+              {errors.general ? (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorBannerText}>{errors.general}</Text>
+                </View>
+              ) : null}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Playlist Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errors.name && styles.inputError]}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(value) => {
+                    setName(value);
+                    setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                   placeholder="Enter playlist name"
                   placeholderTextColor="#9ca3af"
                   maxLength={100}
                 />
+                {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
               </View>
 
               <View style={styles.inputGroup}>
@@ -290,6 +301,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1f2937',
     backgroundColor: '#fff',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorBannerText: {
+    color: '#b91c1c',
+    fontSize: 14,
   },
   textArea: {
     height: 100,

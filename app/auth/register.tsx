@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -26,6 +25,8 @@ interface FormErrors {
   username?: string;
   password?: string;
   confirmPassword?: string;
+  terms?: string;
+  privacy?: string;
   general?: string;
 }
 
@@ -158,9 +159,10 @@ export default function RegisterScreen() {
 
     // Terms and privacy agreement validation
     if (!agreeToTerms) {
-      newErrors.general = 'You must agree to the Terms of Service to create an account';
-    } else if (!agreeToPrivacy) {
-      newErrors.general = 'You must agree to the Privacy Policy to create an account';
+      newErrors.terms = 'Check this box to agree to the Terms of Service.';
+    }
+    if (!agreeToPrivacy) {
+      newErrors.privacy = 'Check this box to agree to the Privacy Policy.';
     }
 
     setErrors(newErrors);
@@ -189,9 +191,19 @@ export default function RegisterScreen() {
         router.replace('/subscription?newUser=true');
       } else {
         console.error('🔴 Registration: Failed with result:', result);
-        setErrors({ 
-          general: result.error || 'Registration failed. Please check your information and try again.' 
-        });
+        const message = result.error || 'Registration failed. Please check your information and try again.';
+        const lower = message.toLowerCase();
+        if (lower.includes('email') && lower.includes('username')) {
+          setErrors({ general: message, email: message, username: message });
+        } else if (lower.includes('email')) {
+          setErrors({ email: message });
+        } else if (lower.includes('username')) {
+          setErrors({ username: message });
+        } else if (lower.includes('password')) {
+          setErrors({ password: message });
+        } else {
+          setErrors({ general: message });
+        }
       }
     } catch (error: any) {
       console.error('🔴 Registration: Exception caught:', error);
@@ -212,11 +224,12 @@ export default function RegisterScreen() {
       }
 
       // Show specific field errors if possible
-      if (errorMessage.includes('email')) {
+      const lowerErrorMessage = errorMessage.toLowerCase();
+      if (lowerErrorMessage.includes('email')) {
         setErrors({ email: errorMessage });
-      } else if (errorMessage.includes('username')) {
+      } else if (lowerErrorMessage.includes('username')) {
         setErrors({ username: errorMessage });
-      } else if (errorMessage.includes('password')) {
+      } else if (lowerErrorMessage.includes('password')) {
         setErrors({ password: errorMessage });
       } else {
         setErrors({ general: errorMessage });
@@ -409,7 +422,10 @@ export default function RegisterScreen() {
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
                   style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}
-                  onPress={() => setAgreeToTerms(!agreeToTerms)}
+                  onPress={() => {
+                    setAgreeToTerms(!agreeToTerms);
+                    setErrors((prev) => ({ ...prev, terms: undefined }));
+                  }}
                 >
                   {agreeToTerms && (
                     <MaterialIconWithFallback name="check" size={16} color="#fff" />
@@ -425,11 +441,15 @@ export default function RegisterScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {errors.terms && <Text style={styles.fieldError}>{errors.terms}</Text>}
 
               <View style={styles.checkboxContainer}>
                 <TouchableOpacity
                   style={[styles.checkbox, agreeToPrivacy && styles.checkboxChecked]}
-                  onPress={() => setAgreeToPrivacy(!agreeToPrivacy)}
+                  onPress={() => {
+                    setAgreeToPrivacy(!agreeToPrivacy);
+                    setErrors((prev) => ({ ...prev, privacy: undefined }));
+                  }}
                 >
                   {agreeToPrivacy && (
                     <MaterialIconWithFallback name="check" size={16} color="#fff" />
@@ -445,12 +465,13 @@ export default function RegisterScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {errors.privacy && <Text style={styles.fieldError}>{errors.privacy}</Text>}
             </View>
 
             <TouchableOpacity
-              style={[styles.registerButton, (loading || !agreeToTerms || !agreeToPrivacy) && styles.disabled]}
+              style={[styles.registerButton, loading && styles.disabled]}
               onPress={handleRegister}
-              disabled={loading || !agreeToTerms || !agreeToPrivacy}
+              disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />

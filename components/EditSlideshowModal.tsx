@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, Modal, TextInput, TouchableOpacity, StyleSheet, ScrollView, Switch, KeyboardAvoidingView, Platform } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { couponAPI } from '@/services/api';
@@ -32,6 +32,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
   const [requirePhoneForPreview, setRequirePhoneForPreview] = useState(false);
   const [previewCouponId, setPreviewCouponId] = useState('');
   const [coupons, setCoupons] = useState<any[]>([]);
+  const [errors, setErrors] = useState<{ name?: string; general?: string }>({});
 
   const getDefaultCouponId = (rows: any[]) => {
     const defaultCoupon = rows.find((row) => row?.isDefaultPreviewCoupon);
@@ -55,6 +56,7 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
       setRequiresActivationCode(slideshow.requiresActivationCode);
       setRequirePhoneForPreview(!!slideshow.requirePhoneForPreview);
       setPreviewCouponId(slideshow.previewCouponId != null ? String(slideshow.previewCouponId) : '');
+      setErrors({});
       
       console.log('🔄 EditSlideshowModal: State set to:', {
         name: slideshow.name,
@@ -102,9 +104,10 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
   const handleSave = () => {
     if (!slideshow) return;
     if (!name.trim()) {
-      Alert.alert('Validation', 'Name is required');
+      setErrors({ name: 'Slideshow name is required.' });
       return;
     }
+    setErrors({});
     onSave({
       name: name.trim(),
       description: description.trim(),
@@ -133,9 +136,22 @@ const EditSlideshowModal: React.FC<Props> = ({ visible, slideshow, onClose, onSa
         </View>
 
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {errors.general ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{errors.general}</Text>
+            </View>
+          ) : null}
           {/* Name */}
           <Text style={styles.label}>Name</Text>
-          <TextInput style={styles.input} value={name} onChangeText={setName} />
+          <TextInput
+            style={[styles.input, errors.name && styles.inputError]}
+            value={name}
+            onChangeText={(value) => {
+              setName(value);
+              setErrors((prev) => ({ ...prev, name: undefined }));
+            }}
+          />
+          {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
 
           {/* Description */}
           <Text style={styles.label}>Description</Text>
@@ -212,6 +228,10 @@ const styles = StyleSheet.create({
   content: { flex: 1, padding: 16 },
   label: { fontSize: 14, fontWeight: '600', marginTop: 16 },
   input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, padding: 12 },
+  inputError: { borderColor: '#ef4444' },
+  errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
+  errorBanner: { backgroundColor: '#fef2f2', borderRadius: 8, padding: 12, borderWidth: 1, borderColor: '#fecaca', marginBottom: 12 },
+  errorBannerText: { color: '#b91c1c', fontSize: 14 },
   textArea: { height: 80, textAlignVertical: 'top' },
   pickerWrap: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 8, overflow: 'hidden', backgroundColor: '#fff', marginTop: 8 },
   picker: { width: '100%' },

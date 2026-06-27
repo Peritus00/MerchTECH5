@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -24,6 +23,8 @@ interface FormErrors {
   username?: string;
   password?: string;
   confirmPassword?: string;
+  terms?: string;
+  privacy?: string;
   general?: string;
 }
 
@@ -76,27 +77,30 @@ export default function RegisterViewerScreen() {
 
   const validate = (): boolean => {
     const next: FormErrors = {};
-    if (!formData.email?.includes('@')) next.email = 'Enter a valid email';
-    if (formData.username.length < 3) next.username = 'Username must be at least 3 characters';
-    if (formData.password.length < 8) next.password = 'Password must be at least 8 characters';
+    if (!formData.email.trim()) next.email = 'Email is required';
+    else if (!formData.email.includes('@')) next.email = 'Enter a valid email address';
+    if (!formData.username.trim()) next.username = 'Username is required';
+    else if (formData.username.length < 3) next.username = 'Username must be at least 3 characters';
+    if (!formData.password) next.password = 'Password is required';
+    else if (formData.password.length < 8) next.password = 'Password must be at least 8 characters';
     const hasUpper = /[A-Z]/.test(formData.password);
     const hasLower = /[a-z]/.test(formData.password);
     const hasNum = /\d/.test(formData.password);
-    if (!hasUpper || !hasLower || !hasNum) {
+    if (formData.password && (!hasUpper || !hasLower || !hasNum)) {
       next.password = 'Password must include uppercase, lowercase, and a number';
     }
-    if (formData.password !== formData.confirmPassword) {
-      next.confirmPassword = 'Passwords do not match';
+    if (!formData.confirmPassword) {
+      next.confirmPassword = 'Please confirm your password';
+    } else if (formData.password !== formData.confirmPassword) {
+      next.confirmPassword = 'Passwords do not match. Re-enter the same password in both fields.';
     }
+    if (!agreeToTerms) next.terms = 'Check this box to agree to the Terms of Service.';
+    if (!agreeToPrivacy) next.privacy = 'Check this box to agree to the Privacy Policy.';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
   const handleRegister = async () => {
-    if (!agreeToTerms || !agreeToPrivacy) {
-      Alert.alert('Required', 'Please accept the Terms of Service and Privacy Policy.');
-      return;
-    }
     if (!validate()) return;
 
     setIsSubmitting(true);
@@ -115,7 +119,23 @@ export default function RegisterViewerScreen() {
         setIsSubmitting(false);
         return;
       }
-      setErrors({ general: result.error || 'Registration failed' });
+      const message = result.error || 'Registration failed. Please check your information and try again.';
+      const lower = message.toLowerCase();
+      if (lower.includes('email') && lower.includes('username')) {
+        setErrors({
+          general: message,
+          email: message,
+          username: message,
+        });
+      } else if (lower.includes('email')) {
+        setErrors({ email: message });
+      } else if (lower.includes('username')) {
+        setErrors({ username: message });
+      } else if (lower.includes('password')) {
+        setErrors({ password: message });
+      } else {
+        setErrors({ general: message });
+      }
       setIsSubmitting(false);
       return;
     }
@@ -255,7 +275,10 @@ export default function RegisterViewerScreen() {
               <View style={styles.checkboxRow}>
                 <TouchableOpacity
                   style={[styles.checkbox, agreeToTerms && styles.checkboxChecked]}
-                  onPress={() => setAgreeToTerms(!agreeToTerms)}
+                  onPress={() => {
+                    setAgreeToTerms(!agreeToTerms);
+                    setErrors((prev) => ({ ...prev, terms: undefined }));
+                  }}
                 >
                   {agreeToTerms && <MaterialIconWithFallback name="check" size={16} color="#fff" />}
                 </TouchableOpacity>
@@ -266,10 +289,14 @@ export default function RegisterViewerScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {errors.terms && <Text style={styles.fieldError}>{errors.terms}</Text>}
               <View style={styles.checkboxRow}>
                 <TouchableOpacity
                   style={[styles.checkbox, agreeToPrivacy && styles.checkboxChecked]}
-                  onPress={() => setAgreeToPrivacy(!agreeToPrivacy)}
+                  onPress={() => {
+                    setAgreeToPrivacy(!agreeToPrivacy);
+                    setErrors((prev) => ({ ...prev, privacy: undefined }));
+                  }}
                 >
                   {agreeToPrivacy && <MaterialIconWithFallback name="check" size={16} color="#fff" />}
                 </TouchableOpacity>
@@ -280,12 +307,13 @@ export default function RegisterViewerScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+              {errors.privacy && <Text style={styles.fieldError}>{errors.privacy}</Text>}
             </View>
 
             <TouchableOpacity
-              style={[styles.registerButton, (loading || !agreeToTerms || !agreeToPrivacy) && styles.disabled]}
+              style={[styles.registerButton, loading && styles.disabled]}
               onPress={handleRegister}
-              disabled={loading || !agreeToTerms || !agreeToPrivacy}
+              disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" size="small" />

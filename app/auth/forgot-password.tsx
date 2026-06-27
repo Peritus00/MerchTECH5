@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
@@ -26,13 +25,16 @@ export default function ForgotPasswordScreen() {
   const { forgotPassword } = useAuth();
   const router = useRouter();
 
-  const validateEmail = (email: string): boolean => {
-    return email.includes('@') && email.trim().length > 0;
+  const validateEmail = (email: string): string | null => {
+    if (!email.trim()) return 'Email is required';
+    if (!email.includes('@')) return 'Please enter a valid email address';
+    return null;
   };
 
   const handleForgotPassword = async () => {
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
+    const emailError = validateEmail(email);
+    if (emailError) {
+      setError(emailError);
       return;
     }
 
@@ -48,7 +50,7 @@ export default function ForgotPasswordScreen() {
         setError(result.message);
       }
     } catch (error: any) {
-      setError('An unexpected error occurred. Please try again.');
+      setError(error.message || 'We could not send the reset link. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -68,10 +70,10 @@ export default function ForgotPasswordScreen() {
                 Check Your Email
               </ThemedText>
               <ThemedText style={styles.successText}>
-                We've sent a password reset link to {email}
+                We have sent a password reset link to {email}
               </ThemedText>
               <ThemedText style={styles.successSubtext}>
-                Click the link in the email to reset your password. If you don't see it, check your spam folder.
+                Click the link in the email to reset your password. If you signed up with Google or Apple, use that sign-in option instead.
               </ThemedText>
             </View>
 
@@ -116,7 +118,7 @@ export default function ForgotPasswordScreen() {
             <MaterialIconWithFallback name="lock-reset" size={48} color="#3b82f6" />
             <ThemedText type="title">Forgot Password?</ThemedText>
             <ThemedText type="subtitle" style={styles.subtitle}>
-              Enter your email address and we'll send you a link to reset your password.
+              Enter your email address and we will send you a link to reset your password.
             </ThemedText>
           </View>
 
@@ -147,6 +149,7 @@ export default function ForgotPasswordScreen() {
                   autoComplete="email"
                 />
               </View>
+              {error && <Text style={styles.fieldError}>{error}</Text>}
             </View>
 
             <TouchableOpacity
@@ -235,6 +238,11 @@ const styles = StyleSheet.create({
   },
   inputError: {
     borderColor: '#ef4444',
+  },
+  fieldError: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
   },
   inputIcon: {
     marginLeft: 12,

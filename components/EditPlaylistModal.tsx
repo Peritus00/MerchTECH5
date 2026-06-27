@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Switch,
   Platform,
@@ -19,6 +18,7 @@ import { Playlist, MediaFile, PlaylistRecurringRule } from '@/shared/media-schem
 import { validatePlaylistMediaScheduleItems } from '@/shared/playlistSchedule';
 import MediaSelectionList from './MediaSelectionList';
 import { couponAPI, playlistMediaFilesToUpdateItems, type PlaylistMediaUpdateItem } from '@/services/api';
+import { normalizeApiError } from '@/utils/formErrors';
 
 type PlaylistLine = {
   file: MediaFile;
@@ -103,6 +103,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
   const [previewCouponId, setPreviewCouponId] = useState('');
   const [coupons, setCoupons] = useState<any[]>([]);
   const [couponsLoading, setCouponsLoading] = useState(false);
+  const [errors, setErrors] = useState<{ name?: string; general?: string }>({});
   const [datePickerCtx, setDatePickerCtx] = useState<
     { mode: 'start' | 'end' | 'exact'; lineIndex: number } | null
   >(null);
@@ -125,6 +126,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
       setDescription(playlist.description || '');
       setPlaylistLines((playlist.mediaFiles || []).map(mediaFileToLine));
       setPreviewCouponId(playlist.previewCouponId != null ? String(playlist.previewCouponId) : '');
+      setErrors({});
     }
   }, [playlist, visible]);
 
@@ -153,7 +155,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
   const handleUpdatePlaylist = async () => {
     if (!playlist || !name.trim()) {
-      Alert.alert('Error', 'Please enter a playlist name');
+      setErrors({ name: 'Playlist name is required.' });
       return;
     }
 
@@ -195,7 +197,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
           }))
         );
         if (!clientCheck.ok) {
-          Alert.alert('Schedule', clientCheck.error);
+          setErrors({ general: clientCheck.error || 'Check the media schedule and try again.' });
           setIsUpdating(false);
           return;
         }
@@ -215,8 +217,11 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
     } catch (error: any) {
       console.error('🔴 EDIT_PLAYLIST: Error updating playlist:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to update playlist';
-      Alert.alert('Error', errorMessage);
+      const normalized = normalizeApiError(error, 'Failed to update playlist. Please check your changes and try again.');
+      setErrors({
+        name: normalized.fields.name,
+        general: normalized.message,
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -229,6 +234,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
     setActiveTab('details');
     setIsUpdating(false);
     setDatePickerCtx(null);
+    setErrors({});
     onClose();
   };
 
@@ -398,11 +404,11 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
           <Text style={styles.headerTitle}>Edit Playlist</Text>
           <TouchableOpacity 
             onPress={handleUpdatePlaylist}
-            disabled={!name.trim() || isUpdating}
+            disabled={isUpdating}
           >
             <Text style={[
               styles.saveButton,
-              (!name.trim() || isUpdating) && styles.saveButtonDisabled
+              isUpdating && styles.saveButtonDisabled
             ]}>
               {isUpdating ? 'Saving...' : 'Save'}
             </Text>
@@ -441,18 +447,27 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
 
         {/* Content */}
         <ScrollView style={styles.content} keyboardShouldPersistTaps="handled">
+          {errors.general ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{errors.general}</Text>
+            </View>
+          ) : null}
           {activeTab === 'details' && (
             <View style={styles.detailsTab}>
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Playlist Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, errors.name && styles.inputError]}
                   value={name}
-                  onChangeText={setName}
+                  onChangeText={(value) => {
+                    setName(value);
+                    setErrors((prev) => ({ ...prev, name: undefined }));
+                  }}
                   placeholder="Enter playlist name"
                   placeholderTextColor="#9ca3af"
                   maxLength={100}
                 />
+                {errors.name ? <Text style={styles.errorText}>{errors.name}</Text> : null}
               </View>
 
               <View style={styles.inputGroup}>
@@ -520,7 +535,7 @@ const EditPlaylistModal: React.FC<EditPlaylistModalProps> = ({
                 <View style={styles.emptyContainer}>
                   <MaterialIcons name="queue-music" size={48} color="#9ca3af" />
                   <Text style={styles.emptyText}>No media files in this playlist</Text>
-                  <Text style={styles.emptySubtext}>Use the "Add Media" tab to add files</Text>
+                  <Text style={styles.emptySubtext}>Use the Add Media tab to add files</Text>
                 </View>
               ) : (
                 playlistLines.map((line, index) => {
@@ -858,6 +873,26 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1f2937',
     backgroundColor: '#fff',
+  },
+  inputError: {
+    borderColor: '#ef4444',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorBannerText: {
+    color: '#b91c1c',
+    fontSize: 14,
   },
   textArea: {
     height: 80,

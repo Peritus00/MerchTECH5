@@ -4,13 +4,23 @@ const { body, param, query, validationResult } = require('express-validator');
 const validate = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const details = errors.array().map(err => ({
+      field: err.path || err.param,
+      message: err.msg,
+      value: err.value
+    }));
+    const fields = details.reduce((acc, err) => {
+      if (err.field && !acc[err.field]) {
+        acc[err.field] = err.message;
+      }
+      return acc;
+    }, {});
+
     return res.status(400).json({
       error: 'Validation failed',
-      details: errors.array().map(err => ({
-        field: err.path || err.param,
-        message: err.msg,
-        value: err.value
-      }))
+      code: 'VALIDATION_FAILED',
+      fields,
+      details
     });
   }
   next();
@@ -26,8 +36,8 @@ const validators = {
 
   // Password validation
   password: body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long')
+    .isLength({ min: 8 })
+    .withMessage('Password must be at least 8 characters long')
     .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
     .withMessage('Password must contain at least one uppercase letter, one lowercase letter, and one number'),
 

@@ -2,6 +2,7 @@ import { User } from '@/types';
 import { authAPI } from './api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { env } from '@/config/environment';
+import { normalizeApiError } from '@/utils/formErrors';
 
 interface AuthResponse {
   user: User;
@@ -189,10 +190,11 @@ class AuthService {
       // Then check HTTP response errors
       if (error.response?.status === 404) {
         throw new Error('Registration service not found. Please try again later.');
-      } else if (error.response?.status === 400) {
-        const errorMessage = error.response?.data?.error || error.message;
+      } else if (error.response?.status === 400 || error.response?.status === 409) {
+        const normalized = normalizeApiError(error, 'Registration failed. Please check your information and try again.');
+        const errorMessage = normalized.message;
         if (errorMessage.includes('Email already registered') || errorMessage.includes('already exists')) {
-          throw new Error('This email is already registered. Please use a different email or try logging in.');
+          throw new Error('An account already exists with this email or username. Sign in to continue, or use a different email/username.');
         } else if (errorMessage.includes('Username already taken') || errorMessage.includes('username')) {
           throw new Error('This username is already taken. Please choose a different username.');
         } else {
@@ -258,10 +260,15 @@ class AuthService {
         throw new Error(error.response?.data?.error || 'Viewer signups are currently disabled');
       }
       if (error.response?.status === 409) {
-        throw new Error(error.response?.data?.error || 'Email or username already exists');
+        throw new Error(
+          normalizeApiError(
+            error,
+            'An account already exists with this email or username. Sign in to continue, or use a different email/username.'
+          ).message
+        );
       }
-      const msg = error.response?.data?.error || error.message || 'Viewer registration failed';
-      throw new Error(msg);
+      const normalized = normalizeApiError(error, 'Viewer registration failed. Please check your information and try again.');
+      throw new Error(normalized.message);
     }
   }
 
@@ -578,7 +585,7 @@ class AuthService {
       return { success: true, message: response.message };
     } catch (error: any) {
       console.error('🔴 AuthService: Forgot Password error:', error);
-      throw new Error(error.response?.data?.error || 'Failed to send password reset email.');
+      throw new Error(normalizeApiError(error, 'Failed to send password reset email. Please try again.').message);
     }
   }
 
@@ -588,7 +595,7 @@ class AuthService {
       return { success: true, message: response.message };
     } catch (error: any) {
       console.error('🔴 AuthService: Reset Password error:', error);
-      throw new Error(error.response?.data?.error || 'Failed to reset password.');
+      throw new Error(normalizeApiError(error, 'Failed to reset password. Please check the link and try again.').message);
     }
   }
 
@@ -732,7 +739,7 @@ class AuthService {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const currentTime = Date.now() / 1000;
       return payload.exp > currentTime;
-    } catch (error) {
+    } catch {
       return false;
     }
   }

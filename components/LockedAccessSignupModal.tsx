@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { lockedAccessAPI } from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { normalizeApiError } from '@/utils/formErrors';
 import {
   SMS_MARKETING_OPT_IN_TEXT,
   SMS_TERMS_CONSENT_SUMMARY,
@@ -27,6 +28,17 @@ type Props = {
   contentName?: string;
   onClose: () => void;
   onCompleted: (code: string) => void | Promise<void>;
+};
+
+type FormErrors = {
+  email?: string;
+  username?: string;
+  password?: string;
+  confirmPassword?: string;
+  phone?: string;
+  smsConsent?: string;
+  termsConsent?: string;
+  general?: string;
 };
 
 export default function LockedAccessSignupModal({
@@ -48,6 +60,7 @@ export default function LockedAccessSignupModal({
   const [termsConsent, setTermsConsent] = useState(false);
   const [smsMarketing, setSmsMarketing] = useState(false);
   const [emailMarketing, setEmailMarketing] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
   const [sending, setSending] = useState(false);
   const [pollToken, setPollToken] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,6 +69,7 @@ export default function LockedAccessSignupModal({
     if (!visible) {
       setPollToken(null);
       setSending(false);
+      setErrors({});
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -90,7 +104,8 @@ export default function LockedAccessSignupModal({
         }
         setPollToken(null);
         setSending(false);
-        Alert.alert('Account setup failed', error.response?.data?.error || error.message || 'Please try again.');
+        const normalized = normalizeApiError(error, 'Account setup failed. Please check your information and try again.');
+        setErrors({ ...normalized.fields, general: normalized.message });
       }
     };
 
@@ -104,24 +119,54 @@ export default function LockedAccessSignupModal({
     };
   }, [visible, pollToken, acceptAuthResponse, activationCode, onClose, onCompleted]);
 
+  const clearError = (field: keyof FormErrors) => {
+    setErrors((prev) => ({ ...prev, [field]: undefined, general: field === 'general' ? undefined : prev.general }));
+  };
+
   const validate = () => {
-    if (!email.includes('@')) return 'Enter a valid email address.';
-    if (username.trim().length < 3) return 'Username must be at least 3 characters.';
-    if (password.length < 8) return 'Password must be at least 8 characters.';
-    if (password !== confirmPassword) return 'Passwords do not match.';
-    if (phone.replace(/\D/g, '').length < 10) return 'Enter a valid phone number.';
-    if (!smsConsent) return 'Please consent to the verification text message.';
-    if (!termsConsent) return 'Please agree to the Terms and Privacy Policy.';
-    return null;
+    const next: FormErrors = {};
+    if (!email.trim()) {
+      next.email = 'Email is required.';
+    } else if (!email.includes('@')) {
+      next.email = 'Enter a valid email address.';
+    }
+    if (!username.trim()) {
+      next.username = 'Username is required.';
+    } else if (username.trim().length < 3) {
+      next.username = 'Username must be at least 3 characters.';
+    }
+    if (!password) {
+      next.password = 'Password is required.';
+    } else if (password.length < 8) {
+      next.password = 'Password must be at least 8 characters.';
+    } else if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/\d/.test(password)) {
+      next.password = 'Password must include uppercase, lowercase, and a number.';
+    }
+    if (!confirmPassword) {
+      next.confirmPassword = 'Confirm your password.';
+    } else if (password !== confirmPassword) {
+      next.confirmPassword = 'Passwords do not match. Re-enter the same password in both fields.';
+    }
+    if (phone.replace(/\D/g, '').length < 10) {
+      next.phone = 'Enter a valid 10-digit phone number.';
+    }
+    if (!smsConsent) {
+      next.smsConsent = 'Check this box so we can send the verification text.';
+    }
+    if (!termsConsent) {
+      next.termsConsent = 'Check this box to agree to the Terms and Privacy Policy.';
+    }
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
   };
 
   const start = async () => {
-    const error = validate();
-    if (error) {
-      Alert.alert('Check your information', error);
+    if (!validate()) {
       return;
     }
     setSending(true);
+    setErrors({});
     try {
       const result = await lockedAccessAPI.start({
         code: activationCode.trim(),
@@ -147,7 +192,8 @@ export default function LockedAccessSignupModal({
       setPollToken(String(result.pollToken));
     } catch (error: any) {
       setSending(false);
-      Alert.alert('Verification failed', error.response?.data?.error || error.message || 'Please try again.');
+      const normalized = normalizeApiError(error, 'Verification failed. Please check your information and try again.');
+      setErrors({ ...normalized.fields, general: normalized.message });
     }
   };
 
@@ -157,7 +203,7 @@ export default function LockedAccessSignupModal({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
-        <View style={styles.modal}>
+        <ScrollView style={styles.modal} contentContainerStyle={styles.modalContent} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>Create viewer account</Text>
           <Text style={styles.subtitle}>
             {waiting
@@ -172,14 +218,27 @@ export default function LockedAccessSignupModal({
             </View>
           ) : null}
 
-          <TextInput style={styles.input} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} editable={!disabled} />
-          <TextInput style={styles.input} placeholder="Username" autoCapitalize="none" value={username} onChangeText={setUsername} editable={!disabled} />
-          <TextInput style={styles.input} placeholder="Password" secureTextEntry value={password} onChangeText={setPassword} editable={!disabled} />
-          <TextInput style={styles.input} placeholder="Confirm password" secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} editable={!disabled} />
-          <TextInput style={styles.input} placeholder="Phone number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} editable={!disabled} />
+          {errors.general ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorBannerText}>{errors.general}</Text>
+            </View>
+          ) : null}
 
-          <Checkbox checked={smsConsent} onPress={() => setSmsConsent((v) => !v)} label={SMS_TRANSACTIONAL_CONSENT_TEXT} disabled={disabled} />
-          <Checkbox checked={termsConsent} onPress={() => setTermsConsent((v) => !v)} label={SMS_TERMS_CONSENT_SUMMARY} disabled={disabled} />
+          <TextInput style={[styles.input, errors.email && styles.inputError]} placeholder="Email" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={(value) => { setEmail(value); clearError('email'); }} editable={!disabled} />
+          {errors.email ? <Text style={styles.fieldError}>{errors.email}</Text> : null}
+          <TextInput style={[styles.input, errors.username && styles.inputError]} placeholder="Username" autoCapitalize="none" value={username} onChangeText={(value) => { setUsername(value); clearError('username'); }} editable={!disabled} />
+          {errors.username ? <Text style={styles.fieldError}>{errors.username}</Text> : null}
+          <TextInput style={[styles.input, errors.password && styles.inputError]} placeholder="Password" secureTextEntry value={password} onChangeText={(value) => { setPassword(value); clearError('password'); }} editable={!disabled} />
+          {errors.password ? <Text style={styles.fieldError}>{errors.password}</Text> : null}
+          <TextInput style={[styles.input, errors.confirmPassword && styles.inputError]} placeholder="Confirm password" secureTextEntry value={confirmPassword} onChangeText={(value) => { setConfirmPassword(value); clearError('confirmPassword'); }} editable={!disabled} />
+          {errors.confirmPassword ? <Text style={styles.fieldError}>{errors.confirmPassword}</Text> : null}
+          <TextInput style={[styles.input, errors.phone && styles.inputError]} placeholder="Phone number" keyboardType="phone-pad" value={phone} onChangeText={(value) => { setPhone(value); clearError('phone'); }} editable={!disabled} />
+          {errors.phone ? <Text style={styles.fieldError}>{errors.phone}</Text> : null}
+
+          <Checkbox checked={smsConsent} onPress={() => { setSmsConsent((v) => !v); clearError('smsConsent'); }} label={SMS_TRANSACTIONAL_CONSENT_TEXT} disabled={disabled} />
+          {errors.smsConsent ? <Text style={styles.fieldError}>{errors.smsConsent}</Text> : null}
+          <Checkbox checked={termsConsent} onPress={() => { setTermsConsent((v) => !v); clearError('termsConsent'); }} label={SMS_TERMS_CONSENT_SUMMARY} disabled={disabled} />
+          {errors.termsConsent ? <Text style={styles.fieldError}>{errors.termsConsent}</Text> : null}
           <Checkbox checked={smsMarketing} onPress={() => setSmsMarketing((v) => !v)} label={SMS_MARKETING_OPT_IN_TEXT} disabled={disabled} />
           <Checkbox checked={emailMarketing} onPress={() => setEmailMarketing((v) => !v)} label="I agree to receive promotional and marketing emails from MerchTrader." disabled={disabled} />
 
@@ -190,7 +249,7 @@ export default function LockedAccessSignupModal({
           <TouchableOpacity style={styles.cancelButton} onPress={onClose} disabled={sending}>
             <Text style={styles.cancelText}>Cancel</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -218,15 +277,24 @@ const styles = StyleSheet.create({
   modal: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 20,
     width: '100%',
     maxWidth: 460,
     maxHeight: '94%',
   },
+  modalContent: { padding: 20 },
   title: { fontSize: 21, fontWeight: '700', color: '#111827', marginBottom: 8 },
   subtitle: { fontSize: 14, color: '#4b5563', lineHeight: 20, marginBottom: 14 },
   waitingRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
   waitingText: { color: '#374151', fontSize: 14 },
+  errorBanner: {
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  errorBannerText: { color: '#b91c1c', fontSize: 13, lineHeight: 18 },
   input: {
     borderWidth: 1,
     borderColor: '#d1d5db',
@@ -237,6 +305,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: '#fff',
   },
+  inputError: { borderColor: '#ef4444' },
+  fieldError: { color: '#dc2626', fontSize: 12, marginTop: -6, marginBottom: 8, lineHeight: 16 },
   checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginVertical: 6 },
   checkbox: {
     width: 22,

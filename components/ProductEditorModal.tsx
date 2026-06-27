@@ -5,7 +5,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { Product } from '@/shared/product-schema';
 import { Colors } from '@/constants/Colors';
 import * as ImagePicker from 'expo-image-picker';
-import { api, mediaAPI } from '@/services/api';
+import { mediaAPI } from '@/services/api';
 
 interface Props {
   visible: boolean;
@@ -34,6 +34,12 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   );
   const [category, setCategory] = useState<string>(product?.category ?? '');
   const [acknowledgeServiceCharge, setAcknowledgeServiceCharge] = useState(false);
+  const [errors, setErrors] = useState<{
+    name?: string;
+    price?: string;
+    category?: string;
+    serviceCharge?: string;
+  }>({});
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
   const COLORS = ['Red', 'Blue', 'Green', 'Yellow', 'Black', 'White', 'Gray', 'Pink', 'Purple', 'Orange', 'Brown', 'Navy'];
@@ -56,6 +62,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setCategory(product.category ?? '');
       // Reset service charge acknowledgment for new products
       setAcknowledgeServiceCharge(product.id !== 'new');
+      setErrors({});
     } else {
       // Reset all fields when product is null (modal closed)
       setName('');
@@ -69,6 +76,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setAvailableColors([]);
       setCategory('');
       setAcknowledgeServiceCharge(false);
+      setErrors({});
     }
   }, [product]);
 
@@ -214,30 +222,36 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     console.log('🔵 ProductEditorModal: handleSave called');
     console.log('🔵 Current state:', { name, description, price, category, inStock, images });
     
+    const nextErrors: typeof errors = {};
+    if (!name.trim()) {
+      nextErrors.name = 'Product name is required.';
+    }
     if (!category) {
       console.log('🔴 Validation failed: Missing category');
-      Alert.alert('Missing Category', 'Please select a category for this product.');
-      return;
+      nextErrors.category = 'Select a category for this product.';
     }
-    if (!price || isNaN(Number(price))) {
+    if (!price.trim()) {
+      nextErrors.price = 'Price is required.';
+    } else if (isNaN(Number(price)) || Number(price) <= 0) {
       console.log('🔴 Validation failed: Invalid price:', `"${price}"`, 'length:', price.length, 'isNaN:', isNaN(Number(price)));
-      Alert.alert('Invalid Price', 'Please enter a valid numeric price.');
-      return;
+      nextErrors.price = 'Enter a valid price greater than 0.';
     }
 
     // Check service charge acknowledgment for new products
     if (product?.id === 'new' && !acknowledgeServiceCharge) {
       console.log('🔴 Validation failed: Service charge not acknowledged');
-      Alert.alert(
-        'Service Charge Acknowledgment Required',
-        'You must acknowledge that MerchTech collects a 9% service charge on all purchases before creating a product.'
-      );
+      nextErrors.serviceCharge = 'Check this box to acknowledge the 9% service charge before creating a product.';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
+    setErrors({});
     
     console.log('✅ Validation passed, building updates object...');
     const updates: Partial<Product> & { metadata: any } = {
-      name,
+      name: name.trim(),
       description,
       images,
       inStock,
@@ -279,6 +293,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     setAvailableColors([]);
     setCategory('');
     setAcknowledgeServiceCharge(false);
+    setErrors({});
     onClose();
   };
 
@@ -300,11 +315,21 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
             </ThemedText>
             <ThemedText>Name</ThemedText>
             <TextInput
-              style={[styles.input, { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border }]}
+              style={[
+                styles.input,
+                {
+                  color: Colors[colorScheme].text,
+                  borderColor: errors.name ? '#ef4444' : Colors[colorScheme].border,
+                },
+              ]}
               value={name}
-              onChangeText={setName}
+              onChangeText={(value) => {
+                setName(value);
+                setErrors((prev) => ({ ...prev, name: undefined }));
+              }}
               placeholderTextColor={Colors[colorScheme].text}
             />
+            {errors.name ? <ThemedText style={styles.fieldError}>{errors.name}</ThemedText> : null}
             <ThemedText>Description</ThemedText>
             <TextInput
               style={[
@@ -369,12 +394,22 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
             </TouchableOpacity>
             <ThemedText>Price (USD)</ThemedText>
             <TextInput
-              style={[styles.input, { color: Colors[colorScheme].text, borderColor: Colors[colorScheme].border }]}
+              style={[
+                styles.input,
+                {
+                  color: Colors[colorScheme].text,
+                  borderColor: errors.price ? '#ef4444' : Colors[colorScheme].border,
+                },
+              ]}
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(value) => {
+                setPrice(value);
+                setErrors((prev) => ({ ...prev, price: undefined }));
+              }}
               keyboardType="numeric"
               placeholderTextColor={Colors[colorScheme].text}
             />
+            {errors.price ? <ThemedText style={styles.fieldError}>{errors.price}</ThemedText> : null}
             <ThemedText style={{ marginBottom: 8 }}>Category</ThemedText>
             <View style={styles.categoriesContainer}>
               {CATEGORIES.map((cat) => (
@@ -385,6 +420,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
                     console.log('🔵 Category chip pressed:', cat);
                     console.log('🔵 Current category before:', category);
                     setCategory(cat);
+                    setErrors((prev) => ({ ...prev, category: undefined }));
                     console.log('🔵 setCategory called with:', cat);
                   }}
                 >
@@ -392,6 +428,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
                 </TouchableOpacity>
               ))}
             </View>
+            {errors.category ? <ThemedText style={styles.fieldError}>{errors.category}</ThemedText> : null}
             <View style={styles.toggleContainer}>
               <ThemedText>In Stock</ThemedText>
               <Switch value={inStock} onValueChange={setInStock} />
@@ -448,7 +485,10 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
               <View style={styles.serviceChargeContainer}>
                 <TouchableOpacity
                   style={styles.serviceChargeCheckbox}
-                  onPress={() => setAcknowledgeServiceCharge(!acknowledgeServiceCharge)}
+                  onPress={() => {
+                    setAcknowledgeServiceCharge(!acknowledgeServiceCharge);
+                    setErrors((prev) => ({ ...prev, serviceCharge: undefined }));
+                  }}
                 >
                   <View style={[styles.checkbox, acknowledgeServiceCharge && styles.checkboxChecked]}>
                     {acknowledgeServiceCharge && (
@@ -459,6 +499,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
                     I acknowledge that MerchTech collects a 9% service charge on all purchases made through this platform.
                   </ThemedText>
                 </TouchableOpacity>
+                {errors.serviceCharge ? <ThemedText style={styles.fieldError}>{errors.serviceCharge}</ThemedText> : null}
               </View>
             )}
 
@@ -519,6 +560,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 4,
     padding: 8,
+    marginBottom: 12,
+  },
+  fieldError: {
+    color: '#ef4444',
+    fontSize: 12,
+    marginTop: -8,
     marginBottom: 12,
   },
   toggleContainer: {

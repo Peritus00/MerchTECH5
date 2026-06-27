@@ -21,6 +21,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import ShareButton from '@/components/ShareButton';
 import { useSubscriptionLimits } from '@/hooks/useSubscriptionLimits';
+import { normalizeApiError } from '@/utils/formErrors';
 import SubscriptionLimitsCard from '@/components/SubscriptionLimitsCard';
 import { env } from '@/config/environment';
 import {
@@ -190,10 +191,10 @@ export default function MyStoreManager() {
         Alert.alert('Success', 'Product updated successfully.');
         setEditing(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error('🔴 Save failed:', e);
       console.error('🔴 Error details:', e.response?.data || e.message);
-      Alert.alert('Error', 'Failed to save product.');
+      Alert.alert('Error', normalizeApiError(e, 'Failed to save product. Please check the product details and try again.').message);
     }
   };
 

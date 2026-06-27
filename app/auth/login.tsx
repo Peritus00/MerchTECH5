@@ -10,7 +10,6 @@ import {
   ActivityIndicator,
   Text,
   ScrollView,
-  Linking,
   Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -122,15 +121,6 @@ export default function LoginScreen() {
         // Show user-friendly error message
         const errorMessage = error.message || 'Login failed. Please check your credentials.';
         setErrors({ general: errorMessage });
-        
-        // Also show alert for 401 errors to make it more visible
-        if (error.response?.status === 401 || error.status === 401) {
-          Alert.alert(
-            'Sign In Failed',
-            errorMessage,
-            [{ text: 'OK' }]
-          );
-        }
       }
     } finally {
       console.log('🔄 Login Screen: Setting isSubmitting to false');
@@ -406,7 +396,7 @@ export default function LoginScreen() {
               activeOpacity={0.7}
             >
               <ThemedText style={styles.linkText}>
-                Don't have an account? <Text style={styles.linkBold}>Sign up</Text>
+                Do not have an account? <Text style={styles.linkBold}>Sign up</Text>
               </ThemedText>
             </TouchableOpacity>
 
