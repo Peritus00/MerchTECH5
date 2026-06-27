@@ -65,9 +65,16 @@ export default function PreviewVerifyScreen() {
           const contentType = res.data.contentType;
           const contentId = Number(res.data.contentId);
           const pollToken = res.data.pollToken != null ? String(res.data.pollToken) : '';
-          if (res.data.leadSource === 'locked_access' && pollToken) {
-            const completion = await lockedAccessAPI.status(pollToken);
-            if (completion.status === 'verified' && completion.user && completion.token) {
+          if (pollToken) {
+            let completion: Awaited<ReturnType<typeof lockedAccessAPI.status>> | null = null;
+            try {
+              completion = await lockedAccessAPI.status(pollToken);
+            } catch (statusError) {
+              if (res.data.leadSource === 'locked_access') {
+                throw statusError;
+              }
+            }
+            if (completion?.status === 'verified' && completion.user && completion.token) {
               await acceptAuthResponseRef.current({ user: completion.user, token: completion.token });
               if (contentType === 'playlist') {
                 let playbackToken = completion.playbackToken;
@@ -82,7 +89,8 @@ export default function PreviewVerifyScreen() {
                 if (playbackToken) {
                   await AsyncStorage.setItem(`playlist_playback_token_${contentId}`, playbackToken);
                 }
-                router.replace(`/playlist-player/${contentId}` as any);
+                const playbackQuery = playbackToken ? `?playbackToken=${encodeURIComponent(playbackToken)}` : '';
+                router.replace(`/playlist-player/${contentId}${playbackQuery}` as any);
               } else {
                 router.replace(`/slideshow-player/${contentId}` as any);
               }

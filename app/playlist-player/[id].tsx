@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlaylistPlayer from '@/components/PlaylistPlayer';
@@ -16,6 +16,8 @@ import { usePlaylistAccess } from '@/hooks/usePlaylistAccess';
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
+  const params = useLocalSearchParams<{ playbackToken?: string | string[] }>();
+  const routePlaybackToken = Array.isArray(params.playbackToken) ? params.playbackToken[0] : params.playbackToken;
   const { data: playlist, isLoading: loading, isError, error, refetch } = usePlaylistAccess(id);
   const { isAuthenticated } = useAuth();
   
@@ -46,6 +48,16 @@ export default function PlaylistPlayerScreen() {
 
     const loadPlaybackToken = async () => {
       setHasCheckedStoredPlaybackToken(false);
+
+      if (routePlaybackToken && id) {
+        await AsyncStorage.setItem(`playlist_playback_token_${id}`, routePlaybackToken);
+        if (isActive) {
+          setPlaybackToken(routePlaybackToken);
+          setHasCheckedStoredPlaybackToken(true);
+        }
+        router.replace(`/playlist-player/${id}`);
+        return;
+      }
 
       const token = (playlist as any)?.playbackToken;
       if (token && id) {
@@ -79,7 +91,7 @@ export default function PlaylistPlayerScreen() {
     return () => {
       isActive = false;
     };
-  }, [playlist, id]);
+  }, [playlist, id, routePlaybackToken]);
 
   const accessRestricted = Boolean((playlist as any)?.accessRestricted);
   const hasPlaybackToken = Boolean(playbackToken || (playlist as any)?.playbackToken);
