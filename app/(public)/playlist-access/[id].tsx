@@ -39,7 +39,7 @@ export default function PlaylistAccessScreen() {
   const { id } = route.params as { id: string };
   const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
   const smsAutoPreviewStartedRef = useRef(false);
-  const { user, isAuthenticated, register, login } = useAuth();
+  const { user, isAuthenticated, register, login, logout } = useAuth();
 
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
   const [activationCode, setActivationCode] = useState('');
@@ -502,6 +502,17 @@ export default function PlaylistAccessScreen() {
       router.replace(`/playlist-player/${id}`);
     } catch (error) {
       console.error('🔴 PLAYLIST_ACCESS: Error attaching code:', error);
+      if ((error as any)?.response?.status === 401 && (error as any)?.response?.data?.code === 'STALE_SESSION') {
+        await logout();
+        await AsyncStorage.setItem('pending_activation_code', code);
+        setActivationCode(code);
+        setShowLockedAccessSignup(true);
+        Alert.alert(
+          'Session expired',
+          'Your previous viewer session is no longer valid. Continue by creating a fresh viewer account for this code.'
+        );
+        return;
+      }
       Alert.alert('Error', 'Failed to link activation code to your account');
     }
   };

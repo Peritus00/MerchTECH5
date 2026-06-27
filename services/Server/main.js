@@ -704,6 +704,15 @@ function requireCreatorAccount(req, res, next) {
  * @returns {Promise<{ ok: true, activationCode: object } | { ok: false, status: number, error: string }>}
  */
 async function attachActivationCodeForUserId(userId, code) {
+  const userResult = await db.query('SELECT id FROM users WHERE id = $1', [userId]);
+  if (userResult.rows.length === 0) {
+    return {
+      ok: false,
+      status: 401,
+      code: 'STALE_SESSION',
+      error: 'Your session has expired. Please continue with a new viewer account.',
+    };
+  }
   if (!code || typeof code !== 'string') {
     return { ok: false, status: 400, error: 'Activation code is required' };
   }
@@ -14352,7 +14361,7 @@ app.post('/api/activation-codes/attach', authenticateToken, async (req, res) => 
     console.log('🔑 ACTIVATION_CODES: Attaching code to user:', { code, userId: req.user.userId });
     const result = await attachActivationCodeForUserId(req.user.userId, code);
     if (!result.ok) {
-      return res.status(result.status || 400).json({ error: result.error });
+      return res.status(result.status || 400).json({ error: result.error, code: result.code });
     }
     console.log('🔑 ACTIVATION_CODES: Code attached successfully');
     res.json({ message: 'Activation code attached successfully', activationCode: result.activationCode });
