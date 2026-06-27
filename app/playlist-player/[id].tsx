@@ -18,7 +18,6 @@ export default function PlaylistPlayerScreen() {
   const { id } = route.params as { id: string };
   const params = useLocalSearchParams<{ playbackToken?: string | string[] }>();
   const routePlaybackToken = Array.isArray(params.playbackToken) ? params.playbackToken[0] : params.playbackToken;
-  const { data: playlist, isLoading: loading, isError, error, refetch } = usePlaylistAccess(id);
   const { isAuthenticated } = useAuth();
   
   // Demographics survey state
@@ -26,6 +25,8 @@ export default function PlaylistPlayerScreen() {
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [playbackToken, setPlaybackToken] = useState<string | null>(null);
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
+  const queryPlaybackToken = playbackToken || routePlaybackToken || null;
+  const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(id, queryPlaybackToken);
   
   // Guard to prevent multiple scan tracking calls
   const hasTrackedScanRef = useRef<boolean>(false);
@@ -94,11 +95,18 @@ export default function PlaylistPlayerScreen() {
   }, [playlist, id, routePlaybackToken]);
 
   const accessRestricted = Boolean((playlist as any)?.accessRestricted);
-  const hasPlaybackToken = Boolean(playbackToken || (playlist as any)?.playbackToken);
-  const canAccessPlaylist = Boolean(playlist) && (!accessRestricted || hasPlaybackToken);
-  const awaitingAccessDecision = Boolean(playlist) && accessRestricted && !hasCheckedStoredPlaybackToken;
+  const hasPlaybackToken = Boolean(queryPlaybackToken || (playlist as any)?.playbackToken);
+  const hasLoadedPlayableMedia = Array.isArray((playlist as any)?.mediaFiles) && (playlist as any).mediaFiles.length > 0;
+  const canAccessPlaylist = Boolean(playlist) && (!accessRestricted || (hasPlaybackToken && hasLoadedPlayableMedia));
+  const awaitingAccessDecision =
+    Boolean(playlist) &&
+    accessRestricted &&
+    (!hasCheckedStoredPlaybackToken || (hasPlaybackToken && !hasLoadedPlayableMedia && (loading || isFetching)));
   const shouldRedirectForActivation =
-    Boolean(playlist) && accessRestricted && hasCheckedStoredPlaybackToken && !hasPlaybackToken;
+    Boolean(playlist) &&
+    accessRestricted &&
+    hasCheckedStoredPlaybackToken &&
+    (!hasPlaybackToken || (hasPlaybackToken && !hasLoadedPlayableMedia && !loading && !isFetching));
 
   useEffect(() => {
     if (shouldRedirectForActivation) {

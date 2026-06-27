@@ -1177,13 +1177,15 @@ export const slideshowAccessAPI = {
 };
 
 export const playlistAccessAPI = {
-  async getByIdForAccess(id: string, activationCode?: string) {
+  async getByIdForAccess(id: string, activationCode?: string, playbackToken?: string) {
     try {
       console.log('🎵 API: Fetching playlist access for ID:', id, 'with code:', activationCode || 'none');
       
-      const config = activationCode 
-        ? { params: { code: activationCode } }
-        : {};
+      const params = {
+        ...(activationCode ? { code: activationCode } : {}),
+        ...(playbackToken ? { token: playbackToken } : {}),
+      };
+      const config = Object.keys(params).length > 0 ? { params } : {};
       
       const response = await api.get(`/playlist-access/${id}`, config);
       console.log('🎵 API: Playlist access response:', response.data);

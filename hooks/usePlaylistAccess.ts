@@ -4,11 +4,13 @@
 import { useOfflineQuery } from '@/hooks/useOfflineQuery';
 import { api } from '@/services/api';
 
-export function usePlaylistAccess(id: string | undefined) {
+export function usePlaylistAccess(id: string | undefined, playbackToken?: string | null) {
   return useOfflineQuery({
-    queryKey: ['playlist-access', id] as const,
+    queryKey: ['playlist-access', id, playbackToken || null] as const,
     queryFn: async () => {
-      const response = await api.get(`/playlist-access/${id}`);
+      const response = await api.get(`/playlist-access/${id}`, {
+        params: playbackToken ? { token: playbackToken } : undefined,
+      });
       return response.data;
     },
     enabled: !!id,

@@ -619,6 +619,19 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     });
   };
 
+  const appendPlaybackTokenToStreamUrl = useCallback((uri: string) => {
+    if (!playbackToken || !uri.includes('/api/media/') || !uri.includes('/stream')) {
+      return uri;
+    }
+
+    if (/[?&]token=/.test(uri)) {
+      return uri;
+    }
+
+    const separator = uri.includes('?') ? '&' : '?';
+    return `${uri}${separator}token=${encodeURIComponent(playbackToken)}`;
+  }, [playbackToken]);
+
   const formatPrice = useCallback((price: string | number): string => {
     if (typeof price === 'number') {
       return `$${price.toFixed(2)}`;
@@ -678,7 +691,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get(`/playlist-access/${playlistId}`);
+      const response = await api.get(`/playlist-access/${playlistId}`, {
+        params: playbackToken ? { token: playbackToken } : undefined,
+      });
 
       // Normalize server casing to ensure creator userId is available for store routing
       const data = response.data;
@@ -698,7 +713,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     } finally {
       setLoading(false);
     }
-  }, [playlistId, externalMedia, playlist]);
+  }, [playlistId, externalMedia, playlist, playbackToken]);
 
   useEffect(() => {
     fetchPlaylist();
@@ -1541,6 +1556,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     let itemUri = currentItem.url?.startsWith('http') 
       ? currentItem.url 
       : `${api.defaults.baseURL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app'}/api/media/${currentItem.id}/stream`;
+    itemUri = appendPlaybackTokenToStreamUrl(itemUri);
     
     // For web platform, if the URL is cross-origin, try to use same-origin proxy if available
     if (Platform.OS === 'web' && itemUri.includes('merchtech5-production.up.railway.app')) {

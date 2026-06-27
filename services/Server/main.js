@@ -721,8 +721,7 @@ async function attachActivationCodeForUserId(userId, code) {
     codeResult = await db.query(
       `SELECT * FROM activation_codes 
        WHERE code = $1 AND is_active = true AND deleted_at IS NULL
-       AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)`,
+       AND (expires_at IS NULL OR expires_at > NOW())`,
       [code]
     );
   } catch (error) {
@@ -730,8 +729,7 @@ async function attachActivationCodeForUserId(userId, code) {
       codeResult = await db.query(
         `SELECT * FROM activation_codes 
          WHERE code = $1 AND is_active = true
-         AND (expires_at IS NULL OR expires_at > NOW())
-         AND (max_uses IS NULL OR uses_count < max_uses)`,
+         AND (expires_at IS NULL OR expires_at > NOW())`,
         [code]
       );
     } else {
@@ -748,7 +746,10 @@ async function attachActivationCodeForUserId(userId, code) {
     [userId, activationCode.id]
   );
   if (existingResult.rows.length > 0) {
-    return { ok: false, status: 400, error: 'Code already attached to your profile' };
+    return { ok: true, activationCode, alreadyAttached: true };
+  }
+  if (activationCode.max_uses != null && Number(activationCode.uses_count || 0) >= Number(activationCode.max_uses)) {
+    return { ok: false, status: 400, error: 'Activation code has reached its maximum uses' };
   }
   await db.query(
     `INSERT INTO user_activation_codes (user_id, activation_code_id) 
@@ -9787,6 +9788,30 @@ app.get('/api/media/:id/stream', async (req, res) => {
         scanStatus: getMediaScanStatus(media),
       });
     }
+
+    const lockedPlaylistResult = await db.query(
+      `SELECT DISTINCT p.id
+       FROM playlists p
+       JOIN playlist_media pm ON pm.playlist_id = p.id
+       WHERE pm.media_id = $1
+         AND p.requires_activation_code = true
+         AND COALESCE(p.is_public, false) = false
+         AND p.deleted_at IS NULL`,
+      [id]
+    );
+
+    if (lockedPlaylistResult.rows.length > 0) {
+      const hasLockedPlaylistAccess = lockedPlaylistResult.rows.some((row) =>
+        requestHasPlaylistPlaybackAccess(req, row.id)
+      );
+
+      if (!hasLockedPlaylistAccess) {
+        return res.status(403).json({
+          error: 'Activation code required to stream this media',
+          code: 'LOCKED_PLAYLIST_MEDIA',
+        });
+      }
+    }
     
     // Handle S3 files
     let s3Key = media.s3_key;
@@ -10407,6 +10432,17 @@ app.get('/api/playlists/:id', async (req, res) => {
     
     if (!playlist) {
       return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const accessRestricted = playlist.requiresActivationCode && !playlist.isPublic;
+    if (accessRestricted && !requestHasPlaylistPlaybackAccess(req, id)) {
+      return res.json({
+        playlist: {
+          ...playlist,
+          mediaFiles: [],
+          accessRestricted: true,
+        },
+      });
     }
 
     res.json({ playlist });
@@ -11922,6 +11958,35 @@ function buildPlaylistPlaybackToken(contentType, contentId) {
   );
 }
 
+function getPlaybackTokenFromRequest(req) {
+  const queryToken = typeof req.query?.token === 'string' ? req.query.token : null;
+  if (queryToken) return queryToken;
+
+  const authHeader = req.headers.authorization || '';
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
+}
+
+function verifyPlaylistPlaybackToken(playlistId, token) {
+  if (!token) return false;
+  const expectedPlaylistId = parseInt(String(playlistId), 10);
+  if (isNaN(expectedPlaylistId)) return false;
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    return (
+      decoded?.purpose === 'playlist-playback' &&
+      parseInt(String(decoded.playlistId), 10) === expectedPlaylistId
+    );
+  } catch (_) {
+    return false;
+  }
+}
+
+function requestHasPlaylistPlaybackAccess(req, playlistId) {
+  return verifyPlaylistPlaybackToken(playlistId, getPlaybackTokenFromRequest(req));
+}
+
 app.get('/api/locked-access/status', async (req, res) => {
   let client;
   try {
@@ -11943,11 +12008,16 @@ app.get('/api/locked-access/status', async (req, res) => {
 
     if (lead.completed_user_id) {
       const full = await db.query('SELECT * FROM users WHERE id = $1', [lead.completed_user_id]);
-      if (!full.rows.length) return res.status(404).json({ error: 'Completed user not found' });
-      const user = transformUser(full.rows[0]);
-      const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-      const playbackToken = buildPlaylistPlaybackToken(lead.content_type, lead.content_id);
-      return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id, playbackToken });
+      if (full.rows.length) {
+        const user = transformUser(full.rows[0]);
+        const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+        const playbackToken = buildPlaylistPlaybackToken(lead.content_type, lead.content_id);
+        return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id, playbackToken });
+      }
+      console.warn('locked-access/status: completed_user_id points to a deleted user, attempting recovery', {
+        leadId: lead.id,
+        completedUserId: lead.completed_user_id,
+      });
     }
 
     client = await db.getClient();
@@ -11958,12 +12028,31 @@ app.get('/api/locked-access/status', async (req, res) => {
     );
     const lockedLead = lockedLeadResult.rows[0];
     if (lockedLead.completed_user_id) {
-      await client.query('COMMIT');
-      const full = await db.query('SELECT * FROM users WHERE id = $1', [lockedLead.completed_user_id]);
-      const user = transformUser(full.rows[0]);
-      const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-      const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
-      return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
+      const full = await client.query('SELECT * FROM users WHERE id = $1', [lockedLead.completed_user_id]);
+      if (full.rows.length) {
+        const attachResult = await client.query(
+          `INSERT INTO user_activation_codes (user_id, activation_code_id)
+           VALUES ($1, $2)
+           ON CONFLICT (user_id, activation_code_id) DO NOTHING
+           RETURNING id`,
+          [lockedLead.completed_user_id, lockedLead.activation_code_id]
+        );
+        if (attachResult.rows.length > 0) {
+          await client.query(`UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`, [lockedLead.activation_code_id]);
+        }
+        await client.query('COMMIT');
+        const user = transformUser(full.rows[0]);
+        const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+        const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
+        return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
+      }
+      await client.query(
+        `UPDATE preview_phone_leads
+         SET completed_user_id = NULL, account_created_at = NULL, updated_at = NOW()
+         WHERE id = $1`,
+        [lockedLead.id]
+      );
+      lockedLead.completed_user_id = null;
     }
 
     const conflict = await client.query(
@@ -15199,6 +15288,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
           
           // Convert to access format with isFallback flag
           const fallbackAccessRestricted = fallbackPlaylist.requiresActivationCode && !fallbackPlaylist.isPublic;
+          const fallbackHasPlaybackAccess = requestHasPlaylistPlaybackAccess(req, fallbackPlaylist.id);
           const accessData = {
             id: fallbackPlaylist.id,
             userId: fallbackPlaylist.userId,
@@ -15210,7 +15300,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
             previewCouponId: fallbackPlaylist.previewCouponId ?? null,
             createdAt: fallbackPlaylist.createdAt,
             updatedAt: fallbackPlaylist.updatedAt,
-            mediaFiles: fallbackPlaylist.mediaFiles || [],
+            mediaFiles: (!fallbackAccessRestricted || fallbackHasPlaybackAccess) ? (fallbackPlaylist.mediaFiles || []) : [],
             productLinks: fallbackPlaylist.productLinks || [],
             accessRestricted: fallbackAccessRestricted,
             isFallback: true,
@@ -15233,6 +15323,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
     }
     
     const accessRestricted = playlist.requiresActivationCode && !playlist.isPublic;
+    const hasPlaybackAccess = requestHasPlaylistPlaybackAccess(req, id);
     const accessData = {
       id: playlist.id,
       userId: playlist.userId,
@@ -15244,7 +15335,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       previewCouponId: playlist.previewCouponId ?? null,
       createdAt: playlist.createdAt,
       updatedAt: playlist.updatedAt,
-      mediaFiles: playlist.mediaFiles || [],
+      mediaFiles: (!accessRestricted || hasPlaybackAccess) ? (playlist.mediaFiles || []) : [],
       productLinks: playlist.productLinks || [],
       accessRestricted,
       isFallback: false
