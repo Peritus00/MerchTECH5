@@ -7,6 +7,7 @@ import { env } from '@/config/environment';
 interface GoogleSignInResult {
   success: boolean;
   error?: string;
+  redirecting?: boolean;
 }
 
 const GOOGLE_OAUTH_STATE_KEY = 'google_oauth_state';
@@ -48,7 +49,7 @@ export function useGoogleSignIn() {
           `&state=${encodeURIComponent(state)}` +
           `&prompt=select_account`;
         window.location.href = authUrl;
-        return { success: true }; // Page navigates away; caller won't receive this
+        return { success: true, redirecting: true }; // Page navigates away; callback handles return route
       } else {
         // Native implementation
         console.log('📱 Using native Google Sign-In');

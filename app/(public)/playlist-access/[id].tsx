@@ -74,6 +74,7 @@ export default function PlaylistAccessScreen() {
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
   const [showLockedAccessSignup, setShowLockedAccessSignup] = useState(false);
+  const [accessCheckComplete, setAccessCheckComplete] = useState(false);
 
   useEffect(() => {
     fetchPlaylist();
@@ -273,6 +274,7 @@ export default function PlaylistAccessScreen() {
 
     checkingAccessRef.current = true;
     checkedAccessKeyRef.current = accessKey;
+    setAccessCheckComplete(false);
 
     try {
       console.log('🔴 PLAYLIST_ACCESS: ===== STARTING ACCESS CHECK =====');
@@ -405,7 +407,15 @@ export default function PlaylistAccessScreen() {
       checkedAccessKeyRef.current = null;
     } finally {
       checkingAccessRef.current = false;
+      setAccessCheckComplete(true);
     }
+  };
+
+  const handleLoginPress = () => {
+    router.push({
+      pathname: '/auth/login',
+      params: { returnTo: `/playlist-access/${id}` },
+    });
   };
 
   const checkPurchasedAccess = async (playlistId: string): Promise<boolean> => {
@@ -1189,6 +1199,34 @@ export default function PlaylistAccessScreen() {
             )}
           </View>
 
+          {!isAuthenticated && (
+            <View style={styles.optionCard}>
+              <View style={styles.optionHeader}>
+                <MaterialIcons name="login" size={24} color="#3b82f6" />
+                <Text style={styles.optionTitle}>Log In to Your Account</Text>
+              </View>
+              <Text style={styles.optionDescription}>
+                Already attached an activation code to your profile? Log in to unlock this playlist instantly.
+              </Text>
+              <TouchableOpacity
+                style={styles.accessLoginButton}
+                onPress={handleLoginPress}
+              >
+                <MaterialIcons name="account-circle" size={20} color="#1d4ed8" />
+                <Text style={styles.accessLoginButtonText}>Log In</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {isAuthenticated && accessCheckComplete && (
+            <View style={styles.signedInNotice}>
+              <MaterialIcons name="info-outline" size={18} color="#3b82f6" />
+              <Text style={styles.signedInNoticeText}>
+                Signed in as {user?.email || user?.username}. If this playlist is not in your account yet, enter an activation code below or start a preview.
+              </Text>
+            </View>
+          )}
+
           {/* Preview Option */}
           <View style={styles.optionCard}>
             <View style={styles.optionHeader}>
@@ -1442,6 +1480,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#92400e',
+  },
+  accessLoginButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#dbeafe',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    justifyContent: 'center',
+    gap: 8,
+  },
+  accessLoginButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1d4ed8',
+  },
+  signedInNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#eff6ff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    marginBottom: 16,
+  },
+  signedInNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1e40af',
+    lineHeight: 18,
   },
   previewActions: {
     padding: 16,

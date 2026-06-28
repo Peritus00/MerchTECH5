@@ -12,7 +12,7 @@ import {
   ScrollView,
   Modal,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -22,6 +22,11 @@ import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { useGoogleSignIn } from '@/hooks/useGoogleSignIn';
 import { useAppleSignIn } from '@/hooks/useAppleSignIn';
 import { hasPendingShareResume, clearPendingShareResume } from '@/services/webShareTarget';
+import {
+  normalizeReturnToParam,
+  resolvePostLoginRoute,
+  storeAuthReturnTo,
+} from '@/utils/safeReturnTo';
 
 interface FormErrors {
   email?: string;
@@ -43,8 +48,27 @@ export default function LoginScreen() {
 
   const { login, isLoading } = useAuth();
   const router = useRouter();
+  const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
+  const safeReturnTo = normalizeReturnToParam(returnTo);
   const { signIn: googleSignIn, loading: googleLoading } = useGoogleSignIn();
   const { signIn: appleSignIn, loading: appleLoading } = useAppleSignIn();
+
+  const navigateAfterLogin = useCallback(() => {
+    const destination = resolvePostLoginRoute({
+      returnTo,
+      hasPendingShare: Platform.OS === 'web' && hasPendingShareResume(),
+    });
+    if (Platform.OS === 'web' && hasPendingShareResume()) {
+      clearPendingShareResume();
+    }
+    router.replace(destination as any);
+  }, [returnTo, router]);
+
+  const persistReturnToForOAuth = useCallback(() => {
+    if (safeReturnTo) {
+      storeAuthReturnTo(safeReturnTo);
+    }
+  }, [safeReturnTo]);
 
   // Performance monitoring
   useEffect(() => {
@@ -94,13 +118,8 @@ export default function LoginScreen() {
     try {
       console.log('🔄 Login Screen: Calling auth context login...');
       await login(email.trim(), password);
-      console.log('✅ Login Screen: Login successful, navigating to tabs');
-      if (Platform.OS === 'web' && hasPendingShareResume()) {
-        clearPendingShareResume();
-        router.replace('/handle-share');
-      } else {
-        router.replace('/(tabs)');
-      }
+      console.log('✅ Login Screen: Login successful, navigating after login');
+      navigateAfterLogin();
     } catch (error: any) {
       console.error('❌ Login Screen: Login error caught:', error);
       console.error('❌ Error message:', error.message);
@@ -126,7 +145,7 @@ export default function LoginScreen() {
       console.log('🔄 Login Screen: Setting isSubmitting to false');
       setIsSubmitting(false);
     }
-  }, [email, password, validateForm, login, router]);
+  }, [email, password, validateForm, login, navigateAfterLogin]);
 
   const handleForgotPassword = useCallback(() => {
     router.push('/auth/forgot-password');
@@ -157,16 +176,15 @@ export default function LoginScreen() {
   const handleGoogleSignIn = useCallback(async () => {
     console.log('🔄 Login Screen: Google sign-in button clicked');
     try {
+      persistReturnToForOAuth();
       const result = await googleSignIn();
       console.log('🔄 Login Screen: Google sign-in result:', result);
       if (result.success) {
-        console.log('✅ Login Screen: Google sign-in successful, navigating to tabs');
-        if (Platform.OS === 'web' && hasPendingShareResume()) {
-          clearPendingShareResume();
-          router.replace('/handle-share');
-        } else {
-          router.replace('/(tabs)');
+        if ((result as any).redirecting) {
+          return;
         }
+        console.log('✅ Login Screen: Google sign-in successful, navigating after login');
+        navigateAfterLogin();
       } else {
         console.error('❌ Login Screen: Google sign-in failed:', result.error);
         Alert.alert('Sign In Failed', result.error || 'Google sign-in failed');
@@ -175,11 +193,12 @@ export default function LoginScreen() {
       console.error('❌ Login Screen: Google sign-in error:', error);
       Alert.alert('Sign In Failed', error.message || 'Google sign-in failed');
     }
-  }, [googleSignIn, router]);
+  }, [googleSignIn, navigateAfterLogin, persistReturnToForOAuth]);
 
   const handleAppleSignIn = useCallback(async () => {
     console.log('🍎 Apple Sign-In button clicked');
     try {
+      persistReturnToForOAuth();
       console.log('🍎 Calling appleSignIn()...');
       const result = await appleSignIn();
       console.log('🍎 Apple Sign-In result:', result);
@@ -191,13 +210,8 @@ export default function LoginScreen() {
           // No need to do anything else - browser will navigate away
           return;
         }
-        console.log('✅ Apple Sign-In successful, navigating to tabs');
-        if (Platform.OS === 'web' && hasPendingShareResume()) {
-          clearPendingShareResume();
-          router.replace('/handle-share');
-        } else {
-          router.replace('/(tabs)');
-        }
+        console.log('✅ Apple Sign-In successful, navigating after login');
+        navigateAfterLogin();
       } else {
         console.error('❌ Apple Sign-In failed:', result.error);
         const errorMessage = result.error || 'Apple sign-in failed';
@@ -221,7 +235,7 @@ export default function LoginScreen() {
         Alert.alert('Sign In Failed', errorMessage);
       }
     }
-  }, [appleSignIn, router]);
+  }, [appleSignIn, navigateAfterLogin, persistReturnToForOAuth]);
 
   // Memoize computed values to prevent unnecessary re-renders
   const loading = useMemo(() => isLoading || isSubmitting, [isLoading, isSubmitting]);

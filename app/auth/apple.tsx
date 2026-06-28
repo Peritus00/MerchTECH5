@@ -6,6 +6,7 @@ import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
 import { Platform } from 'react-native';
 import { hasPendingShareResume, clearPendingShareResume } from '@/services/webShareTarget';
+import { resolvePostLoginRoute } from '@/utils/safeReturnTo';
 
 /**
  * Apple Sign-In callback handler
@@ -72,13 +73,16 @@ export default function AppleAuthCallback() {
           await socialLoginWithCode('apple', code, undefined, nonce);
           setStatus('success');
           
-          const redirectTo = Platform.OS === 'web' && hasPendingShareResume()
-            ? (() => { clearPendingShareResume(); return '/handle-share'; })()
-            : '/(tabs)';
+          const redirectTo = resolvePostLoginRoute({
+            hasPendingShare: Platform.OS === 'web' && hasPendingShareResume(),
+          });
+          if (Platform.OS === 'web' && hasPendingShareResume()) {
+            clearPendingShareResume();
+          }
           redirectTimerRef.current = setTimeout(() => {
             try {
               if (router && typeof router.replace === 'function') {
-                router.replace(redirectTo);
+                router.replace(redirectTo as any);
               } else {
                 console.warn('⚠️ Router not available, using window.location');
                 window.location.href = '/';
@@ -105,11 +109,17 @@ export default function AppleAuthCallback() {
           await socialLogin('apple', idToken, nonce);
           setStatus('success');
           
+          const redirectTo = resolvePostLoginRoute({
+            hasPendingShare: Platform.OS === 'web' && hasPendingShareResume(),
+          });
+          if (Platform.OS === 'web' && hasPendingShareResume()) {
+            clearPendingShareResume();
+          }
           // Redirect to main app after short delay
           redirectTimerRef.current = setTimeout(() => {
             try {
               if (router && typeof router.replace === 'function') {
-                router.replace('/(tabs)');
+                router.replace(redirectTo as any);
               } else {
                 console.warn('⚠️ Router not available, using window.location');
                 window.location.href = '/';
@@ -139,10 +149,16 @@ export default function AppleAuthCallback() {
             
             await socialLoginWithCode('apple', hashCode, undefined, nonce);
             setStatus('success');
+            const redirectTo = resolvePostLoginRoute({
+              hasPendingShare: Platform.OS === 'web' && hasPendingShareResume(),
+            });
+            if (Platform.OS === 'web' && hasPendingShareResume()) {
+              clearPendingShareResume();
+            }
             redirectTimerRef.current = setTimeout(() => {
               try {
                 if (router && typeof router.replace === 'function') {
-                  router.replace('/(tabs)');
+                  router.replace(redirectTo as any);
                 } else {
                   window.location.href = '/';
                 }
@@ -165,10 +181,16 @@ export default function AppleAuthCallback() {
             
             await socialLogin('apple', hashToken, nonce);
             setStatus('success');
+            const redirectTo = resolvePostLoginRoute({
+              hasPendingShare: Platform.OS === 'web' && hasPendingShareResume(),
+            });
+            if (Platform.OS === 'web' && hasPendingShareResume()) {
+              clearPendingShareResume();
+            }
             redirectTimerRef.current = setTimeout(() => {
               try {
                 if (router && typeof router.replace === 'function') {
-                  router.replace('/(tabs)');
+                  router.replace(redirectTo as any);
                 } else {
                   window.location.href = '/';
                 }
