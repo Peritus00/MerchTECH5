@@ -374,6 +374,43 @@ try {
 const uploadsDir = path.join(__dirname, 'uploads');
 app.use('/uploads', express.static(uploadsDir));
 const distDir = path.join(__dirname, '../../dist');
+
+function isScannerProbePath(requestPath) {
+  let pathname = requestPath;
+  try {
+    pathname = decodeURIComponent(requestPath.split('?')[0] || '/');
+  } catch (_) {
+    pathname = requestPath.split('?')[0] || '/';
+  }
+  const normalized = pathname.toLowerCase().replace(/\/{2,}/g, '/');
+
+  if (normalized.startsWith('/api/')) return false;
+  if (normalized === '/robots.txt' || normalized === '/sitemap.xml') return false;
+
+  return (
+    normalized === '/.env' ||
+    normalized.startsWith('/.env.') ||
+    normalized === '/.git' ||
+    normalized.startsWith('/.git/') ||
+    normalized === '/.svn' ||
+    normalized.startsWith('/.svn/') ||
+    normalized === '/.hg' ||
+    normalized.startsWith('/.hg/') ||
+    normalized.startsWith('/wp-admin') ||
+    normalized.startsWith('/wp-content') ||
+    normalized.startsWith('/wp-includes') ||
+    normalized.startsWith('/phpmyadmin') ||
+    normalized.endsWith('.php')
+  );
+}
+
+app.use((req, res, next) => {
+  if (!isScannerProbePath(req.originalUrl || req.url || '')) {
+    return next();
+  }
+  res.status(404).type('text/plain').send('Not found');
+});
+
 app.use(express.static(distDir));
 
 const storage = multer.memoryStorage();
@@ -6140,12 +6177,7 @@ app.post('/api/auth/login',
   try {
     let { email, password } = req.body;
     
-    // Enhanced debug logging for password issues
     console.log(`🔐 LOGIN ATTEMPT: ${email} (original)`);
-    console.log(`🔐 Password received: ${password ? `[${password.length} chars]` : 'MISSING'}`);
-    console.log(`🔐 Password type: ${typeof password}`);
-    console.log(`🔐 Password contains special chars: ${password ? /[!@#$%^&*(),.?":{}|<>]/.test(password) : false}`);
-    console.log(`🔐 Password JSON: ${JSON.stringify(password)}`);
     console.log(`🔐 Request body keys: ${Object.keys(req.body).join(', ')}`);
     
     // Validate password is present
@@ -6190,26 +6222,19 @@ app.post('/api/auth/login',
       return res.status(401).json({ error: 'Invalid credentials' });
     }
     
-    // Log user info for debugging
     console.log(`🔐 User found: ID=${dbUser.id}, email=${dbUser.email}`);
-    console.log(`🔐 Password hash exists: ${!!dbUser.password_hash}`);
-    console.log(`🔐 Password hash length: ${dbUser.password_hash ? dbUser.password_hash.length : 0}`);
-    console.log(`🔐 Password hash prefix: ${dbUser.password_hash ? dbUser.password_hash.substring(0, 20) : 'N/A'}...`);
     
     const isValidPassword = await bcrypt.compare(password, dbUser.password_hash);
-    console.log(`🔐 bcrypt.compare result: ${isValidPassword}`);
     
     if (!isValidPassword) {
       console.log(`❌ LOGIN FAILED: Password mismatch for ${email}`);
-      console.log(`🔐 Attempted password: [${password.length} chars] ${password.substring(0, 5)}...`);
-      console.log(`🔐 Stored hash prefix: ${dbUser.password_hash.substring(0, 20)}...`);
       
       // Try comparing with trimmed password in case of whitespace issues
       const trimmedPassword = password.trim();
       if (trimmedPassword !== password) {
         console.log(`🔐 Trying trimmed password...`);
         const trimmedMatch = await bcrypt.compare(trimmedPassword, dbUser.password_hash);
-        console.log(`🔐 Trimmed password match: ${trimmedMatch}`);
+        console.log(`🔐 Trimmed password retry completed for ${email}`);
       }
       
       return res.status(401).json({ error: 'Invalid credentials' });
@@ -11958,6 +11983,26 @@ function buildPlaylistPlaybackToken(contentType, contentId) {
   );
 }
 
+const LOCKED_ACCESS_STATUS_CACHE_TTL_MS = 30 * 1000;
+const lockedAccessStatusCache = new Map();
+
+function getCachedLockedAccessStatus(pollToken) {
+  const cached = lockedAccessStatusCache.get(pollToken);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    lockedAccessStatusCache.delete(pollToken);
+    return null;
+  }
+  return cached.payload;
+}
+
+function cacheLockedAccessStatus(pollToken, payload) {
+  lockedAccessStatusCache.set(pollToken, {
+    payload,
+    expiresAt: Date.now() + LOCKED_ACCESS_STATUS_CACHE_TTL_MS,
+  });
+}
+
 function getPlaybackTokenFromRequest(req) {
   const queryToken = typeof req.query?.token === 'string' ? req.query.token : null;
   if (queryToken) return queryToken;
@@ -11987,18 +12032,58 @@ function requestHasPlaylistPlaybackAccess(req, playlistId) {
   return verifyPlaylistPlaybackToken(playlistId, getPlaybackTokenFromRequest(req));
 }
 
+async function userHasActivationCodeAttachment(queryable, userId, activationCodeId) {
+  if (!userId || !activationCodeId) return false;
+  const result = await queryable.query(
+    `SELECT 1
+     FROM user_activation_codes uac
+     JOIN activation_codes ac ON ac.id = uac.activation_code_id
+     WHERE uac.user_id = $1
+       AND uac.activation_code_id = $2
+       AND ac.is_active = true
+       AND ac.deleted_at IS NULL
+       AND (ac.expires_at IS NULL OR ac.expires_at > NOW())
+       AND (ac.max_uses IS NULL OR ac.uses_count < ac.max_uses)
+     LIMIT 1`,
+    [userId, activationCodeId]
+  );
+  return result.rows.length > 0;
+}
+
+async function buildLockedAccessVerifiedPayload(queryable, lead, userRow) {
+  const user = transformUser(userRow);
+  const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
+  const hasProfileAccess = await userHasActivationCodeAttachment(queryable, user.id, lead.activation_code_id);
+  const playbackToken = hasProfileAccess
+    ? buildPlaylistPlaybackToken(lead.content_type, lead.content_id)
+    : null;
+  return {
+    status: 'verified',
+    user,
+    token,
+    contentType: lead.content_type,
+    contentId: lead.content_id,
+    playbackToken,
+  };
+}
+
 app.get('/api/locked-access/status', async (req, res) => {
   let client;
   try {
     if (!(await ensurePreviewLeadTables())) {
       return res.status(503).json({ error: 'Locked access leads not available' });
     }
-    const pollToken = req.query.pollToken;
+    const pollToken = String(req.query.pollToken || '');
     if (!pollToken) return res.status(400).json({ error: 'pollToken required' });
+
+    const cachedStatus = getCachedLockedAccessStatus(pollToken);
+    if (cachedStatus) {
+      return res.json(cachedStatus);
+    }
 
     const leadResult = await db.query(
       `SELECT * FROM preview_phone_leads WHERE public_poll_token = $1::uuid AND lead_source = 'locked_access' LIMIT 1`,
-      [String(pollToken)]
+      [pollToken]
     );
     if (!leadResult.rows.length) return res.status(404).json({ error: 'Not found' });
     const lead = leadResult.rows[0];
@@ -12009,10 +12094,9 @@ app.get('/api/locked-access/status', async (req, res) => {
     if (lead.completed_user_id) {
       const full = await db.query('SELECT * FROM users WHERE id = $1', [lead.completed_user_id]);
       if (full.rows.length) {
-        const user = transformUser(full.rows[0]);
-        const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-        const playbackToken = buildPlaylistPlaybackToken(lead.content_type, lead.content_id);
-        return res.json({ status: 'verified', user, token, contentType: lead.content_type, contentId: lead.content_id, playbackToken });
+        const payload = await buildLockedAccessVerifiedPayload(db, lead, full.rows[0]);
+        cacheLockedAccessStatus(pollToken, payload);
+        return res.json(payload);
       }
       console.warn('locked-access/status: completed_user_id points to a deleted user, attempting recovery', {
         leadId: lead.id,
@@ -12030,21 +12114,10 @@ app.get('/api/locked-access/status', async (req, res) => {
     if (lockedLead.completed_user_id) {
       const full = await client.query('SELECT * FROM users WHERE id = $1', [lockedLead.completed_user_id]);
       if (full.rows.length) {
-        const attachResult = await client.query(
-          `INSERT INTO user_activation_codes (user_id, activation_code_id)
-           VALUES ($1, $2)
-           ON CONFLICT (user_id, activation_code_id) DO NOTHING
-           RETURNING id`,
-          [lockedLead.completed_user_id, lockedLead.activation_code_id]
-        );
-        if (attachResult.rows.length > 0) {
-          await client.query(`UPDATE activation_codes SET uses_count = uses_count + 1 WHERE id = $1`, [lockedLead.activation_code_id]);
-        }
         await client.query('COMMIT');
-        const user = transformUser(full.rows[0]);
-        const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-        const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
-        return res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
+        const payload = await buildLockedAccessVerifiedPayload(db, lockedLead, full.rows[0]);
+        cacheLockedAccessStatus(pollToken, payload);
+        return res.json(payload);
       }
       await client.query(
         `UPDATE preview_phone_leads
@@ -12118,10 +12191,9 @@ app.get('/api/locked-access/status', async (req, res) => {
     }
 
     const full = await db.query('SELECT * FROM users WHERE id = $1', [newUser.id]);
-    const user = transformUser(full.rows[0]);
-    const token = jwt.sign({ userId: user.id, email: user.email, isAdmin: user.isAdmin }, JWT_SECRET, { expiresIn: '24h' });
-    const playbackToken = buildPlaylistPlaybackToken(lockedLead.content_type, lockedLead.content_id);
-    res.json({ status: 'verified', user, token, contentType: lockedLead.content_type, contentId: lockedLead.content_id, playbackToken });
+    const payload = await buildLockedAccessVerifiedPayload(db, lockedLead, full.rows[0]);
+    cacheLockedAccessStatus(pollToken, payload);
+    res.json(payload);
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (_) { /* ignore */ }
@@ -14477,6 +14549,20 @@ app.delete('/api/activation-codes/detach/:codeId', authenticateToken, async (req
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Code not found or not attached to your profile' });
     }
+
+    const leadTokens = await db.query(
+      `SELECT public_poll_token
+       FROM preview_phone_leads
+       WHERE completed_user_id = $1
+         AND activation_code_id = $2
+         AND lead_source = 'locked_access'`,
+      [req.user.userId, codeId]
+    );
+    leadTokens.rows.forEach((row) => {
+      if (row.public_poll_token) {
+        lockedAccessStatusCache.delete(String(row.public_poll_token));
+      }
+    });
     
     console.log('🔑 ACTIVATION_CODES: Code detached successfully');
     res.json({ message: 'Access code removed from your profile' });

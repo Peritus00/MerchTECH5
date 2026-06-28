@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,10 @@ export default function PlaylistAccessScreen() {
   const { id } = route.params as { id: string };
   const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
   const smsAutoPreviewStartedRef = useRef(false);
+  const checkingAccessRef = useRef(false);
+  const checkedAccessKeyRef = useRef<string | null>(null);
+  const redirectingRef = useRef(false);
+  const issuedPlaybackTokenKeysRef = useRef<Set<string>>(new Set());
   const { user, isAuthenticated, register, login, logout } = useAuth();
 
   const [playlist, setPlaylist] = useState<Playlist | null>(null);
@@ -91,7 +95,7 @@ export default function PlaylistAccessScreen() {
     if (playlist) {
       checkExistingAccess();
     }
-  }, [playlist, isAuthenticated, user]);
+  }, [playlist?.id, isAuthenticated, user?.id]);
 
   // Attempt browser geolocation shortly after load and submit
   useEffect(() => {
@@ -240,7 +244,36 @@ export default function PlaylistAccessScreen() {
     }
   };
 
+  const replaceOnce = useCallback((path: string) => {
+    if (redirectingRef.current) {
+      return;
+    }
+    redirectingRef.current = true;
+    router.replace(path as any);
+  }, []);
+
+  const issueAndStorePlaybackToken = useCallback(async (code?: string) => {
+    const key = `${id}:${code || 'profile'}`;
+    if (issuedPlaybackTokenKeysRef.current.has(key)) {
+      return;
+    }
+    issuedPlaybackTokenKeysRef.current.add(key);
+
+    const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, code);
+    if (playbackToken) {
+      await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
+    }
+  }, [id]);
+
   const checkExistingAccess = async () => {
+    const accessKey = `${id}:${playlist?.id || 'playlist'}:${isAuthenticated ? user?.id || 'auth' : 'anon'}`;
+    if (checkingAccessRef.current || checkedAccessKeyRef.current === accessKey || redirectingRef.current) {
+      return;
+    }
+
+    checkingAccessRef.current = true;
+    checkedAccessKeyRef.current = accessKey;
+
     try {
       console.log('🔴 PLAYLIST_ACCESS: ===== STARTING ACCESS CHECK =====');
       console.log('🔴 PLAYLIST_ACCESS: Checking for existing access to playlist:', id);
@@ -266,7 +299,7 @@ export default function PlaylistAccessScreen() {
         if (token) {
           await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
         }
-        router.replace(`/playlist-player/${id}`);
+        replaceOnce(`/playlist-player/${id}`);
         return;
       }
 
@@ -283,10 +316,9 @@ export default function PlaylistAccessScreen() {
               await AsyncStorage.removeItem('pending_activation_code');
               await AsyncStorage.setItem(`playlist_access_${id}`, pendingCode);
               try {
-                const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, pendingCode);
-                if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
-              } catch (e) { /* non-blocking */ }
-              router.replace(`/playlist-player/${id}`);
+                await issueAndStorePlaybackToken(pendingCode);
+              } catch { /* non-blocking */ }
+              replaceOnce(`/playlist-player/${id}`);
               return;
             }
           } catch (e) {
@@ -326,10 +358,9 @@ export default function PlaylistAccessScreen() {
           if (hasValidAccess) {
             console.log('🔴 PLAYLIST_ACCESS: User has valid access code for this playlist, redirecting to playlist player');
             try {
-              const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id);
-              if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
-            } catch (e) { /* non-blocking */ }
-            router.replace(`/playlist-player/${id}`);
+              await issueAndStorePlaybackToken();
+            } catch { /* non-blocking */ }
+            replaceOnce(`/playlist-player/${id}`);
             return;
           } else {
             console.log('🔴 PLAYLIST_ACCESS: User has no valid access codes for this playlist');
@@ -346,37 +377,10 @@ export default function PlaylistAccessScreen() {
       console.log('🔴 PLAYLIST_ACCESS: Checking AsyncStorage for stored code...');
       const storedCode = await AsyncStorage.getItem(`playlist_access_${id}`);
       if (storedCode) {
-        console.log('🔴 PLAYLIST_ACCESS: ⚠️  FOUND STORED CODE - This could be the bypass issue!');
-        console.log('🔴 PLAYLIST_ACCESS: Stored code:', storedCode);
-        console.log('🔴 PLAYLIST_ACCESS: Validating stored code with server...');
-        
-        // SECURITY FIX: Validate the stored code before trusting it
-        try {
-          const validationResult = await accessCodeAPI.validate(storedCode, id);
-          console.log('🔴 PLAYLIST_ACCESS: Validation result:', validationResult);
-          
-          if (validationResult.valid) {
-            console.log('🔴 PLAYLIST_ACCESS: ❌ SECURITY BYPASS DETECTED! Stored code is still valid - this is why user bypasses access screen');
-            console.log('🔴 PLAYLIST_ACCESS: User previously had access but it was removed from their profile');
-            console.log('🔴 PLAYLIST_ACCESS: The stored code should be invalidated when removed from profile');
-            
-            // For now, let's remove the stored code to fix the bypass
-            console.log('🔴 PLAYLIST_ACCESS: 🔒 SECURITY FIX: Removing stored code to prevent bypass');
-            await AsyncStorage.removeItem(`playlist_access_${id}`);
-            console.log('🔴 PLAYLIST_ACCESS: Stored code removed - user will now see access screen');
-            
-            // Don't redirect to media player - show access screen instead
-            // router.replace(`/media-player/${id}`);
-            // return;
-          } else {
-            console.log('🔴 PLAYLIST_ACCESS: ✅ Stored activation code is no longer valid, removing from storage');
-            await AsyncStorage.removeItem(`playlist_access_${id}`);
-          }
-        } catch (error) {
-          console.error('🔴 PLAYLIST_ACCESS: ❌ Error validating stored code:', error);
-          console.log('🔴 PLAYLIST_ACCESS: Removing invalid stored code due to validation error');
-          // Remove invalid stored code
-          await AsyncStorage.removeItem(`playlist_access_${id}`);
+        console.log('🔴 PLAYLIST_ACCESS: Removing stale stored code; saved profile access must come from the server');
+        await AsyncStorage.removeItem(`playlist_access_${id}`);
+        if (!isAuthenticated && !activationCode.trim()) {
+          setActivationCode(storedCode);
         }
       } else {
         console.log('🔴 PLAYLIST_ACCESS: ✅ No stored code found in AsyncStorage');
@@ -387,10 +391,9 @@ export default function PlaylistAccessScreen() {
       if (hasPurchasedAccess) {
         console.log('🔴 PLAYLIST_ACCESS: User has purchased access, redirecting to playlist player');
         try {
-          const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id);
-          if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
-        } catch (e) { /* non-blocking */ }
-        router.replace(`/playlist-player/${id}`);
+          await issueAndStorePlaybackToken();
+        } catch { /* non-blocking */ }
+        replaceOnce(`/playlist-player/${id}`);
         return;
       }
 
@@ -399,6 +402,9 @@ export default function PlaylistAccessScreen() {
       console.log('🔴 PLAYLIST_ACCESS: User will see the activation code input screen');
     } catch (error) {
       console.error('🔴 PLAYLIST_ACCESS: ❌ Error checking existing access:', error);
+      checkedAccessKeyRef.current = null;
+    } finally {
+      checkingAccessRef.current = false;
     }
   };
 
@@ -485,7 +491,7 @@ export default function PlaylistAccessScreen() {
     }
   };
 
-  const handleAttachCodeAndRedirect = async (code: string) => {
+  const handleAttachCodeAndRedirect = useCallback(async (code: string) => {
     try {
       console.log('🔴 PLAYLIST_ACCESS: Attaching code to user account:', code);
       await accessCodeAPI.attach(code);
@@ -494,12 +500,11 @@ export default function PlaylistAccessScreen() {
       await AsyncStorage.setItem(`playlist_access_${id}`, code);
       
       try {
-        const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, code);
-        if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
-      } catch (e) { /* non-blocking */ }
+        await issueAndStorePlaybackToken(code);
+      } catch { /* non-blocking */ }
       
       // Redirect to playlist player
-      router.replace(`/playlist-player/${id}`);
+      replaceOnce(`/playlist-player/${id}`);
     } catch (error) {
       console.error('🔴 PLAYLIST_ACCESS: Error attaching code:', error);
       if ((error as any)?.response?.status === 401 && (error as any)?.response?.data?.code === 'STALE_SESSION') {
@@ -515,17 +520,16 @@ export default function PlaylistAccessScreen() {
       }
       Alert.alert('Error', 'Failed to link activation code to your account');
     }
-  };
+  }, [id, issueAndStorePlaybackToken, logout, replaceOnce]);
 
-  const handleLockedAccessCompleted = async (code: string) => {
+  const handleLockedAccessCompleted = useCallback(async (code: string) => {
     await AsyncStorage.setItem(`playlist_access_${id}`, code);
     await AsyncStorage.removeItem('pending_activation_code');
     try {
-      const { playbackToken } = await playlistAccessAPI.issuePlaybackToken(id, code);
-      if (playbackToken) await AsyncStorage.setItem(`playlist_playback_token_${id}`, playbackToken);
-    } catch (e) { /* non-blocking */ }
-    router.replace(`/playlist-player/${id}`);
-  };
+      await issueAndStorePlaybackToken(code);
+    } catch { /* non-blocking */ }
+    replaceOnce(`/playlist-player/${id}`);
+  }, [id, issueAndStorePlaybackToken, replaceOnce]);
 
   const handleRegistrationSubmit = async () => {
     const { email, password, confirmPassword, username, firstName } = registrationData;

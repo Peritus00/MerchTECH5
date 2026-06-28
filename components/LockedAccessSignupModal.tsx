@@ -65,12 +65,16 @@ export default function LockedAccessSignupModal({
   const [sending, setSending] = useState(false);
   const [pollToken, setPollToken] = useState<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingTickRef = useRef(false);
+  const completedRef = useRef(false);
 
   useEffect(() => {
     if (!visible) {
       setPollToken(null);
       setSending(false);
       setErrors({});
+      pollingTickRef.current = false;
+      completedRef.current = false;
       if (pollTimerRef.current) {
         clearInterval(pollTimerRef.current);
         pollTimerRef.current = null;
@@ -82,12 +86,18 @@ export default function LockedAccessSignupModal({
     if (!visible || !pollToken) return;
 
     const tick = async () => {
+      if (pollingTickRef.current || completedRef.current) {
+        return;
+      }
+      pollingTickRef.current = true;
+
       try {
         const result = await lockedAccessAPI.status(pollToken);
         if (result.status !== 'verified') return;
         if (!result.user || !result.token) {
           throw new Error('Account creation did not return a valid sign-in token.');
         }
+        completedRef.current = true;
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
           pollTimerRef.current = null;
@@ -102,6 +112,7 @@ export default function LockedAccessSignupModal({
         await onCompleted(activationCode.trim());
         onClose();
       } catch (error: any) {
+        completedRef.current = false;
         if (pollTimerRef.current) {
           clearInterval(pollTimerRef.current);
           pollTimerRef.current = null;
@@ -110,6 +121,8 @@ export default function LockedAccessSignupModal({
         setSending(false);
         const normalized = normalizeApiError(error, 'Account setup failed. Please check your information and try again.');
         setErrors({ ...normalized.fields, general: normalized.message });
+      } finally {
+        pollingTickRef.current = false;
       }
     };
 
@@ -171,6 +184,7 @@ export default function LockedAccessSignupModal({
     }
     setSending(true);
     setErrors({});
+    completedRef.current = false;
     try {
       const result = await lockedAccessAPI.start({
         code: activationCode.trim(),
