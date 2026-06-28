@@ -27,6 +27,7 @@ interface Slideshow {
   audioUrl?: string;
   requiresActivationCode: boolean;
   requirePhoneForPreview?: boolean;
+  requirePhoneForOpenAccess?: boolean;
   createdAt: string;
   images: SlideshowImage[];
 }
@@ -39,7 +40,9 @@ interface SlideshowCardProps {
   onPreview: () => void;
   onLinkProducts: () => void;
   onToggleRequirePhone?: () => void;
+  onToggleOpenAccessLeadCapture?: () => void;
   requirePhoneSaving?: boolean;
+  openAccessLeadSaving?: boolean;
 }
 
 const SlideshowCard: React.FC<SlideshowCardProps> = ({
@@ -50,7 +53,9 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
   onPreview,
   onLinkProducts,
   onToggleRequirePhone,
+  onToggleOpenAccessLeadCapture,
   requirePhoneSaving,
+  openAccessLeadSaving,
 }) => {
   const formatDate = (dateString?: string) => {
     if (!dateString) return '--';
@@ -163,6 +168,29 @@ const SlideshowCard: React.FC<SlideshowCardProps> = ({
                 name={(slideshow.requirePhoneForPreview ?? false) ? 'check-box' : 'check-box-outline-blank'}
                 size={18}
                 color={(slideshow.requirePhoneForPreview ?? false) ? '#3b82f6' : '#9ca3af'}
+              />
+            )}
+          </TouchableOpacity>
+        )}
+
+        {onToggleOpenAccessLeadCapture && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={openAccessLeadSaving ? undefined : onToggleOpenAccessLeadCapture}
+            disabled={openAccessLeadSaving}
+            accessibilityLabel={
+              (slideshow.requirePhoneForOpenAccess ?? false)
+                ? 'Open access lead capture is on. Tap to turn off.'
+                : 'Open access lead capture is off. Tap to turn on.'
+            }
+          >
+            {openAccessLeadSaving ? (
+              <ActivityIndicator size="small" color="#10b981" />
+            ) : (
+              <MaterialIcons
+                name={(slideshow.requirePhoneForOpenAccess ?? false) ? 'person-add' : 'person-add-disabled'}
+                size={18}
+                color={(slideshow.requirePhoneForOpenAccess ?? false) ? '#10b981' : '#9ca3af'}
               />
             )}
           </TouchableOpacity>

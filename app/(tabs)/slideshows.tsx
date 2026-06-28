@@ -49,6 +49,7 @@ interface Slideshow {
   audioUrl?: string;
   requiresActivationCode: boolean;
   requirePhoneForPreview?: boolean;
+  requirePhoneForOpenAccess?: boolean;
   previewCouponId?: number | null;
   createdAt: string;
   images: SlideshowImage[];
@@ -58,6 +59,7 @@ interface Slideshow {
 export default function SlideshowsScreen() {
   const [slideshows, setSlideshows] = useState<Slideshow[]>([]);
   const [savingPreviewGateSlideshowIds, setSavingPreviewGateSlideshowIds] = useState<Set<number>>(new Set());
+  const [savingOpenAccessLeadSlideshowIds, setSavingOpenAccessLeadSlideshowIds] = useState<Set<number>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -265,6 +267,39 @@ export default function SlideshowsScreen() {
     }
   };
 
+  const handleToggleOpenAccessLeadCapture = async (slideshow: Slideshow) => {
+    const sid = slideshow.id;
+    if (savingOpenAccessLeadSlideshowIds.has(sid)) return;
+    const nextValue = !(slideshow.requirePhoneForOpenAccess ?? false);
+    setSavingOpenAccessLeadSlideshowIds((prev) => new Set(prev).add(sid));
+    const updated = { ...slideshow, requirePhoneForOpenAccess: nextValue };
+    try {
+      const updatedState = await performOptimisticUpdate({
+        currentState: slideshows,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updated, (s) => s.id),
+        serverMutation: async () => {
+          return await slideshowsAPI.update(String(sid), { requirePhoneForOpenAccess: nextValue });
+        },
+        getItemId: (s) => s.id,
+        refreshState: fetchSlideshows,
+        onError: (error: any) => {
+          Alert.alert('Error', error?.response?.data?.error || 'Failed to update open access lead capture');
+        },
+      });
+      setSlideshows(updatedState);
+    } catch (error: any) {
+      console.error('Slideshow open access lead toggle error:', error);
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to update open access lead capture');
+    } finally {
+      setSavingOpenAccessLeadSlideshowIds((prev) => {
+        const next = new Set(prev);
+        next.delete(sid);
+        return next;
+      });
+    }
+  };
+
   const handlePreviewSlideshow = (slideshow: Slideshow) => {
     console.log(
       `▶️ Play button clicked for slideshow: "${slideshow.name}" (ID: ${slideshow.id})`
@@ -273,7 +308,7 @@ export default function SlideshowsScreen() {
       `❓ Is it locked? (requiresActivationCode): ${slideshow.requiresActivationCode}`
     );
 
-    if (slideshow.requiresActivationCode) {
+    if (slideshow.requiresActivationCode || slideshow.requirePhoneForOpenAccess) {
       console.log('➡️ Slideshow is locked. Navigating to access screen.');
       router.push(`/slideshow-access/${slideshow.id}`);
     } else {
@@ -395,7 +430,9 @@ export default function SlideshowsScreen() {
                   router.push(`/product-links/${slideshow.id}?type=slideshow`);
                 }}
                 onToggleRequirePhone={() => handleToggleRequirePhoneForPreview(slideshow)}
+                onToggleOpenAccessLeadCapture={() => handleToggleOpenAccessLeadCapture(slideshow)}
                 requirePhoneSaving={savingPreviewGateSlideshowIds.has(slideshow.id)}
+                openAccessLeadSaving={savingOpenAccessLeadSlideshowIds.has(slideshow.id)}
               />
             ))}
           </View>

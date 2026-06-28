@@ -48,6 +48,7 @@ export default function PlaylistsScreen() {
   const [selectedTab, setSelectedTab] = useState<'my-playlists' | 'public'>('my-playlists');
   const [searchQuery, setSearchQuery] = useState('');
   const [savingPreviewGatePlaylistIds, setSavingPreviewGatePlaylistIds] = useState<Set<string>>(new Set());
+  const [savingOpenAccessLeadPlaylistIds, setSavingOpenAccessLeadPlaylistIds] = useState<Set<string>>(new Set());
   const [alertConfig, setAlertConfig] = useState<{
     visible: boolean;
     title: string;
@@ -353,7 +354,7 @@ export default function PlaylistsScreen() {
         return;
       }
 
-      if (!playlist.requiresActivationCode) {
+      if (!playlist.requiresActivationCode && !playlist.requirePhoneForOpenAccess) {
         const navigationPath = `/playlist-player/${playlist.id}?type=playlist`;
         router.push(navigationPath);
       } else {
@@ -439,6 +440,41 @@ export default function PlaylistsScreen() {
       Alert.alert('Error', error?.response?.data?.error || 'Failed to update preview gate setting');
     } finally {
       setSavingPreviewGatePlaylistIds((prev) => {
+        const next = new Set(prev);
+        next.delete(playlistId);
+        return next;
+      });
+    }
+  };
+
+  const handleToggleOpenAccessLeadCapture = async (playlist: Playlist) => {
+    const playlistId = String(playlist.id);
+    if (savingOpenAccessLeadPlaylistIds.has(playlistId)) return;
+    const nextValue = !(playlist.requirePhoneForOpenAccess ?? false);
+    setSavingOpenAccessLeadPlaylistIds((prev) => new Set(prev).add(playlistId));
+    const updatedPlaylist = { ...playlist, requirePhoneForOpenAccess: nextValue };
+    try {
+      const { playlistsAPI } = await import('@/services/api');
+      const updatedState = await performOptimisticUpdate({
+        currentState: playlists,
+        mutationType: 'update',
+        optimisticUpdate: updateOptimisticUpdater(updatedPlaylist, (p) => p.id),
+        serverMutation: async () => {
+          const res = await playlistsAPI.update(playlistId, { requirePhoneForOpenAccess: nextValue });
+          return res?.playlist ?? updatedPlaylist;
+        },
+        getItemId: (p) => p.id,
+        refreshState: fetchData,
+        onError: (error: any) => {
+          Alert.alert('Error', error?.response?.data?.error || 'Failed to update open access lead capture');
+        },
+      });
+      setPlaylists(updatedState);
+    } catch (error: any) {
+      console.error('🔴 PLAYLISTS: Error toggling open access lead capture:', error);
+      Alert.alert('Error', error?.response?.data?.error || 'Failed to update open access lead capture');
+    } finally {
+      setSavingOpenAccessLeadPlaylistIds((prev) => {
         const next = new Set(prev);
         next.delete(playlistId);
         return next;
@@ -603,7 +639,9 @@ export default function PlaylistsScreen() {
               onDelete={() => handleDeletePlaylist(playlist.id)}
               onToggleProtection={() => handleToggleProtection(playlist)}
               onToggleRequirePhone={() => handleToggleRequirePhoneForPreview(playlist)}
+              onToggleOpenAccessLeadCapture={() => handleToggleOpenAccessLeadCapture(playlist)}
               requirePhoneSaving={savingPreviewGatePlaylistIds.has(String(playlist.id))}
+              openAccessLeadSaving={savingOpenAccessLeadPlaylistIds.has(String(playlist.id))}
               showActions={selectedTab === 'my-playlists'}
             />
           ))

@@ -29,6 +29,7 @@ import { env } from '@/config/environment';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
+import OpenAccessLeadGateModal from '@/components/OpenAccessLeadGateModal';
 import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
 import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
@@ -39,7 +40,7 @@ export default function SlideshowAccessScreen() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const { id } = route.params as { id: string };
-  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
+  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string; openAccessVerified?: string; leadId?: string }>();
   const smsAutoPreviewStartedRef = useRef(false);
   const { user, isAuthenticated, register, login } = useAuth();
   
@@ -49,6 +50,7 @@ export default function SlideshowAccessScreen() {
   const [isValidating, setIsValidating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showPreviewGateModal, setShowPreviewGateModal] = useState(false);
+  const [showOpenAccessLeadGate, setShowOpenAccessLeadGate] = useState(false);
   const [previewTimeLeft, setPreviewTimeLeft] = useState(30);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -319,6 +321,7 @@ export default function SlideshowAccessScreen() {
       name?: string;
       userId?: number;
       requirePhoneForPreview?: boolean;
+      requirePhoneForOpenAccess?: boolean;
       previewCouponId?: number | null;
     } | null = null;
 
@@ -378,6 +381,8 @@ export default function SlideshowAccessScreen() {
           previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
           requirePhoneForPreview:
             !!(slideshowData.requirePhoneForPreview ?? slideshowData.require_phone_for_preview ?? publicMeta?.requirePhoneForPreview),
+          requirePhoneForOpenAccess:
+            !!(slideshowData.requirePhoneForOpenAccess ?? slideshowData.require_phone_for_open_access ?? publicMeta?.requirePhoneForOpenAccess),
         };
         setSlideshow(mappedSlideshow);
         // Don't set isFullAccess to true - user needs to enter activation code
@@ -394,6 +399,8 @@ export default function SlideshowAccessScreen() {
           previewCouponId: slideshowData.preview_coupon_id ?? slideshowData.previewCouponId ?? null,
           requirePhoneForPreview:
             !!(slideshowData.requirePhoneForPreview ?? slideshowData.require_phone_for_preview ?? publicMeta?.requirePhoneForPreview),
+          requirePhoneForOpenAccess:
+            !!(slideshowData.requirePhoneForOpenAccess ?? slideshowData.require_phone_for_open_access ?? publicMeta?.requirePhoneForOpenAccess),
         };
         setSlideshow(mappedSlideshow);
         // Access is granted, user can view slideshow
@@ -426,6 +433,7 @@ export default function SlideshowAccessScreen() {
           createdAt: new Date().toISOString(),
           userId: publicMeta?.userId,
           requirePhoneForPreview: !!publicMeta?.requirePhoneForPreview,
+          requirePhoneForOpenAccess: !!publicMeta?.requirePhoneForOpenAccess,
           previewCouponId: publicMeta?.previewCouponId ?? null,
         };
         setSlideshow(minimalSlideshow);
@@ -454,6 +462,11 @@ export default function SlideshowAccessScreen() {
       // CRITICAL CHECK: If slideshow doesn't require activation code, redirect directly to slideshow player
       const requiresCode = slideshow.requiresActivationCode;
       if (!requiresCode) {
+        if ((slideshow as any).requirePhoneForOpenAccess === true) {
+          console.log('🎬 SLIDESHOW_ACCESS: Slideshow is open but requires lead capture before playback');
+          setShowOpenAccessLeadGate(true);
+          return;
+        }
         console.log('🎬 SLIDESHOW_ACCESS: Slideshow is NOT protected, redirecting directly to slideshow player');
         router.replace(`/slideshow-player/${id}`);
         return;
@@ -724,6 +737,21 @@ export default function SlideshowAccessScreen() {
     }
   };
 
+  const handleOpenAccessVerified = React.useCallback(async (leadId: number) => {
+    setShowOpenAccessLeadGate(false);
+    await AsyncStorage.setItem(`open_access_lead_slideshow_${id}`, String(leadId));
+    router.replace(`/slideshow-player/${id}?leadId=${encodeURIComponent(String(leadId))}` as any);
+  }, [id]);
+
+  useEffect(() => {
+    if (!slideshow || isLoading) return;
+    const verified = previewQuery.openAccessVerified === '1' || previewQuery.openAccessVerified === 'true';
+    const leadId = Number(previewQuery.leadId);
+    if (!verified || !Number.isFinite(leadId) || leadId <= 0) return;
+    if (slideshow.requiresActivationCode || (slideshow as any).requirePhoneForOpenAccess !== true) return;
+    void handleOpenAccessVerified(leadId);
+  }, [slideshow, isLoading, previewQuery.openAccessVerified, previewQuery.leadId, handleOpenAccessVerified]);
+
   useEffect(() => {
     if (!slideshow || isLoading) return;
     const v = previewQuery.previewVerified;
@@ -777,6 +805,26 @@ export default function SlideshowAccessScreen() {
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <ThemedText style={styles.loadingText}>Loading slideshow...</ThemedText>
+      </ThemedView>
+    );
+  }
+
+  if (!slideshow.requiresActivationCode && (slideshow as any).requirePhoneForOpenAccess) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <MaterialIcons name="slideshow" size={64} color="#3b82f6" />
+        <ThemedText style={styles.loadingText}>Lead capture required...</ThemedText>
+        <ThemedText style={[styles.loadingText, { fontSize: 14, marginTop: 8 }]}>
+          {slideshow.name}
+        </ThemedText>
+        <OpenAccessLeadGateModal
+          visible={showOpenAccessLeadGate}
+          onClose={() => setShowOpenAccessLeadGate(false)}
+          onVerified={handleOpenAccessVerified}
+          contentType="slideshow"
+          contentId={id}
+          contentName={slideshow.name}
+        />
       </ThemedView>
     );
   }

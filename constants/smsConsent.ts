@@ -21,6 +21,12 @@ export const SMS_MARKETING_OPT_IN_TEXT =
   SMS_COMPANY_NAME +
   '. Consent is not a condition of purchase. Reply STOP to opt out. Reply HELP for help. Message and data rates may apply. Message frequency may vary.';
 
+/** Required for sponsor/open-access lead capture where affiliate communications are part of the offer. */
+export const SMS_AFFILIATE_MARKETING_OPT_IN_TEXT =
+  'I agree to receive recurring promotional and marketing text messages from ' +
+  SMS_COMPANY_NAME +
+  ', its sponsors, and affiliates. Reply STOP to opt out. Reply HELP for help. Message and data rates may apply. Message frequency may vary.';
+
 /** Single stored version string for API + DB audit trail. */
 export function buildSmsConsentCopyVersion(): string {
   return `${SMS_TRANSACTIONAL_CONSENT_TEXT} | ${SMS_TERMS_CONSENT_SUMMARY}`;
@@ -29,4 +35,9 @@ export function buildSmsConsentCopyVersion(): string {
 /** Marketing opt-in copy version (stored when user checks optional marketing box). */
 export function buildMarketingConsentCopyVersion(): string {
   return SMS_MARKETING_OPT_IN_TEXT;
+}
+
+/** Marketing copy version for open-access sponsor lead capture. */
+export function buildAffiliateMarketingConsentCopyVersion(): string {
+  return SMS_AFFILIATE_MARKETING_OPT_IN_TEXT;
 }

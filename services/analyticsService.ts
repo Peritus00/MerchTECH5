@@ -105,6 +105,7 @@ export const analyticsService = {
     userLocation?: { city: string; state: string; zip?: string };
     userAge?: string;
     userGender?: string;
+    previewPhoneLeadId?: number;
   }): Promise<void> {
     try {
       const { getOrCreateVisitorId } = await import('@/utils/visitorId');
@@ -176,7 +177,8 @@ export const analyticsService = {
     ageRange?: string,
     gender?: string,
     location?: { city: string; state: string; zip?: string },
-    locationSource?: string
+    locationSource?: string,
+    previewPhoneLeadId?: number
   ): Promise<void> {
     const payload = {
       mediaId,
@@ -187,6 +189,7 @@ export const analyticsService = {
       userGender: gender,
       userLocation: location,
       locationSource,
+      previewPhoneLeadId,
     };
     try {
       await api.post('/analytics/track-media-play', payload);
@@ -212,7 +215,8 @@ export const analyticsService = {
     ageRange?: string,
     gender?: string,
     location?: { city: string; state: string; zip?: string },
-    locationSource?: string
+    locationSource?: string,
+    previewPhoneLeadId?: number
   ): Promise<void> {
     if (playDuration < 30) return;
     const payload = {
@@ -224,6 +228,7 @@ export const analyticsService = {
       userGender: gender,
       userLocation: location,
       locationSource,
+      previewPhoneLeadId,
     };
     try {
       await api.post('/analytics/track-playlist-play', payload);
@@ -248,7 +253,8 @@ export const analyticsService = {
     ageRange?: string,
     gender?: string,
     location?: { city: string; state: string; zip?: string },
-    locationSource?: string
+    locationSource?: string,
+    previewPhoneLeadId?: number
   ): Promise<void> {
     if (playDuration < 30) return;
     const payload = {
@@ -260,6 +266,7 @@ export const analyticsService = {
       userGender: gender,
       userLocation: location,
       locationSource,
+      previewPhoneLeadId,
     };
     try {
       await api.post('/analytics/track-slideshow-play', payload);

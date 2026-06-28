@@ -18,10 +18,20 @@ type VerifySuccessPayload = {
   contentType: 'playlist' | 'slideshow';
   contentId: number;
   pollToken: string;
+  leadId?: number;
+  leadSource?: string;
 };
 
 function buildPreviewAccessPath({ contentType, contentId, pollToken }: VerifySuccessPayload): string {
   const q = `?previewVerified=1&previewToken=${encodeURIComponent(String(pollToken))}`;
+  if (contentType === 'playlist') {
+    return `/playlist-access/${contentId}${q}`;
+  }
+  return `/slideshow-access/${contentId}${q}`;
+}
+
+function buildOpenAccessPath({ contentType, contentId, leadId }: VerifySuccessPayload): string {
+  const q = `?openAccessVerified=1&leadId=${encodeURIComponent(String(leadId || ''))}`;
   if (contentType === 'playlist') {
     return `/playlist-access/${contentId}${q}`;
   }
@@ -65,6 +75,8 @@ export default function PreviewVerifyScreen() {
           const contentType = res.data.contentType;
           const contentId = Number(res.data.contentId);
           const pollToken = res.data.pollToken != null ? String(res.data.pollToken) : '';
+          const leadId = Number(res.data.leadId);
+          const leadSource = res.data.leadSource ? String(res.data.leadSource) : '';
           if (pollToken) {
             let completion: Awaited<ReturnType<typeof lockedAccessAPI.status>> | null = null;
             try {
@@ -104,7 +116,26 @@ export default function PreviewVerifyScreen() {
             Number.isFinite(contentId) &&
             pollToken
           ) {
-            const payload: VerifySuccessPayload = { contentType, contentId, pollToken };
+            const payload: VerifySuccessPayload = {
+              contentType,
+              contentId,
+              pollToken,
+              leadId: Number.isFinite(leadId) ? leadId : undefined,
+              leadSource,
+            };
+            if (leadSource === 'open_access' && payload.leadId) {
+              const path = buildOpenAccessPath(payload);
+              setSuccessPayload(payload);
+              setStatus('ok');
+              setMessage('Verified. Starting your content...');
+              router.replace(path as any);
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                window.setTimeout(() => {
+                  if (!cancelled) router.replace(path as any);
+                }, 400);
+              }
+              return;
+            }
             setSuccessPayload(payload);
             setStatus('ok');
             setMessage('Verified. Starting your preview…');

@@ -16,14 +16,16 @@ import { usePlaylistAccess } from '@/hooks/usePlaylistAccess';
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
-  const params = useLocalSearchParams<{ playbackToken?: string | string[] }>();
+  const params = useLocalSearchParams<{ playbackToken?: string | string[]; leadId?: string | string[] }>();
   const routePlaybackToken = Array.isArray(params.playbackToken) ? params.playbackToken[0] : params.playbackToken;
+  const routeLeadIdParam = Array.isArray(params.leadId) ? params.leadId[0] : params.leadId;
   const { isAuthenticated } = useAuth();
   
   // Demographics survey state
   const [showDemographicsSurvey, setShowDemographicsSurvey] = useState(false);
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [playbackToken, setPlaybackToken] = useState<string | null>(null);
+  const [previewPhoneLeadId, setPreviewPhoneLeadId] = useState<number | null>(null);
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
   const queryPlaybackToken = playbackToken || routePlaybackToken || null;
   const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(id, queryPlaybackToken);
@@ -93,6 +95,29 @@ export default function PlaylistPlayerScreen() {
       isActive = false;
     };
   }, [playlist, id, routePlaybackToken]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadLeadId = async () => {
+      const routeLeadId = routeLeadIdParam ? Number(routeLeadIdParam) : null;
+      if (routeLeadId && Number.isFinite(routeLeadId)) {
+        await AsyncStorage.setItem(`open_access_lead_playlist_${id}`, String(routeLeadId));
+        if (isActive) setPreviewPhoneLeadId(routeLeadId);
+        return;
+      }
+      const storedLeadId = await AsyncStorage.getItem(`open_access_lead_playlist_${id}`);
+      const parsed = storedLeadId ? Number(storedLeadId) : null;
+      if (isActive) {
+        setPreviewPhoneLeadId(parsed && Number.isFinite(parsed) ? parsed : null);
+      }
+    };
+    if (id) {
+      void loadLeadId();
+    }
+    return () => {
+      isActive = false;
+    };
+  }, [id, routeLeadIdParam]);
 
   const accessRestricted = Boolean((playlist as any)?.accessRestricted);
   const hasPlaybackToken = Boolean(queryPlaybackToken || (playlist as any)?.playbackToken);
@@ -214,6 +239,7 @@ export default function PlaylistPlayerScreen() {
   // Track QR scan when playlist loads (only once per mount)
   useEffect(() => {
     if (!canAccessPlaylist || !playlist || hasTrackedScanRef.current) return;
+    if ((playlist as any).requirePhoneForOpenAccess && !previewPhoneLeadId) return;
     const qrId = playlist?.qr_code_id || playlist?.qrCodeId;
     if (!qrId) return;
     hasTrackedScanRef.current = true;
@@ -221,11 +247,12 @@ export default function PlaylistPlayerScreen() {
     analyticsService.trackQRScan(Number(qrId), {
       ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
       ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+      ...(previewPhoneLeadId ? { previewPhoneLeadId } : {}),
     }).catch((e) => {
       console.warn('Analytics track scan failed (playlist-player):', e);
       hasTrackedScanRef.current = false;
     });
-  }, [canAccessPlaylist, playlist, isAuthenticated, userDemographics]);
+  }, [canAccessPlaylist, playlist, isAuthenticated, previewPhoneLeadId, userDemographics]);
 
   const errorMessage = isError && error
     ? (error as any)?.response?.status === 403
@@ -302,6 +329,7 @@ export default function PlaylistPlayerScreen() {
           await analyticsService.trackQRScan(Number(qrId), {
             userAge: demographics.ageRange,
             userGender: demographics.gender,
+            ...(previewPhoneLeadId ? { previewPhoneLeadId } : {}),
           });
           console.log('✅ PLAYER_DEMOGRAPHICS: Scan re-tracked with demographics!');
         }
@@ -324,6 +352,7 @@ export default function PlaylistPlayerScreen() {
         playlistId={id}
         playlist={playlist}
         playbackToken={playbackToken || (playlist as any)?.playbackToken}
+        previewPhoneLeadId={previewPhoneLeadId || undefined}
         autoPlay={false}
       />
       

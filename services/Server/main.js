@@ -606,6 +606,7 @@ app.use('/api/coupons/sms/send', smsSendLimiter);
 
 // Preview phone verification start (stricter than general API limiter)
 app.use('/api/preview-leads/start', previewLeadStartLimiter);
+app.use('/api/open-access-leads/start', previewLeadStartLimiter);
 
 // Preview lead SMS campaign sends (bulk abuse protection)
 app.use('/api/preview-leads/campaign-send', previewLeadCampaignSendLimiter);
@@ -2964,7 +2965,7 @@ function extractUtm(query) {
 // Shared scan writer with dedupe and graceful fallbacks
 // Accepts optional userLocation from request body for user-provided location data
 // Accepts optional visitorId from request body as fallback when cookies don't work
-async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null, userGender = null, fallbackVisitorId = null) {
+async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, userAge = null, userGender = null, fallbackVisitorId = null, previewPhoneLeadId = null) {
   const geo = await resolveGeo(req);
   console.log('💾 writeScan: Geo data received from resolveGeo:', JSON.stringify(geo));
   const ua = req.headers['user-agent'] || '';
@@ -3012,8 +3013,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         if (existsRes.rowCount > 0) {
           const existingScanId = existsRes.rows[0].id;
           
-          // If demographics are provided, update the existing scan instead of creating duplicate
-          if (userAge || userGender) {
+          // If demographics or lead identity are provided, update the existing scan instead of creating duplicate
+          if (userAge || userGender || previewPhoneLeadId) {
             console.log('💾 writeScan: Updating existing scan with demographics:', {
               scanId: existingScanId,
               userAge,
@@ -3025,14 +3026,16 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
                    user_provided_gender = COALESCE($2, user_provided_gender),
                    user_provided_city = COALESCE($3, user_provided_city),
                    user_provided_state = COALESCE($4, user_provided_state),
-                   user_provided_zip = COALESCE($5, user_provided_zip)
-               WHERE id = $6`,
+                   user_provided_zip = COALESCE($5, user_provided_zip),
+                   preview_phone_lead_id = COALESCE($6, preview_phone_lead_id)
+               WHERE id = $7`,
               [
                 userAge || null,
                 userGender || null,
                 userLocation?.city || null,
                 userLocation?.state || null,
                 userLocation?.zip || null,
+                previewPhoneLeadId || null,
                 existingScanId
               ]
             );
@@ -3071,12 +3074,12 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
          qr_code_id, scanned_at, device_type, browser_name, operating_system,
          country_code, country_name, region, city, referrer,
          utm_source, utm_medium, utm_campaign, utm_term, utm_content,
-         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source, user_provided_age_range, user_provided_gender
+         visitor_id, qr_visitor_id, user_provided_city, user_provided_state, user_provided_zip, location_source, user_provided_age_range, user_provided_gender, preview_phone_lead_id
        ) VALUES (
          $1, NOW(), $2, $3, $4,
          $5, NULL, $6, $7, $8,
          $9, $10, $11, $12, $13,
-         CAST($14 AS uuid), $15, $16, $17, $18, $19, $20, $21
+         CAST($14 AS uuid), $15, $16, $17, $18, $19, $20, $21, $22
        )
        RETURNING id`,
       [
@@ -3101,6 +3104,7 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         locationSource,
         userAge || null,
         userGender || null,
+        previewPhoneLeadId || null,
       ]
     );
     
@@ -3123,8 +3127,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
         `INSERT INTO qr_scans (
            qr_code_id, scanned_at, device_type, browser_name, operating_system,
            country_code, region, city, location_source, user_provided_age_range, user_provided_gender,
-           visitor_id, qr_visitor_id, referrer, utm_source, utm_medium, utm_campaign, utm_term, utm_content
-         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, CAST($11 AS uuid), $12, $13, $14, $15, $16, $17, $18)`,
+           visitor_id, qr_visitor_id, referrer, utm_source, utm_medium, utm_campaign, utm_term, utm_content, preview_phone_lead_id
+         ) VALUES ($1, NOW(), $2, $3, $4, $5, $6, $7, $8, $9, $10, CAST($11 AS uuid), $12, $13, $14, $15, $16, $17, $18, $19)`,
         [
           qrCodeId, 
           parsed.deviceType, 
@@ -3143,7 +3147,8 @@ async function writeScan(poolLike, qrCodeId, req, res, userLocation = null, user
           utm.utm_medium,
           utm.utm_campaign,
           utm.utm_term,
-          utm.utm_content
+          utm.utm_content,
+          previewPhoneLeadId || null
         ]
       );
       console.log('💾 writeScan: Fallback insert successful with visitor_id and demographics:', { 
@@ -3413,6 +3418,7 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       userAge, // NEW: User-provided age range (e.g., "18-24", "25-34")
       userGender, // NEW: User-provided gender (Male, Female, Non-binary, etc.)
       visitorId, // NEW: Fallback visitor ID from localStorage when cookies don't work
+      previewPhoneLeadId,
       // ipAddress ignored for privacy
     } = req.body || {};
 
@@ -3439,7 +3445,18 @@ app.post('/api/analytics/track-scan', async (req, res) => {
       hasVisitorId: !!visitorId,
       userAgent: req.headers['user-agent']?.substring(0, 50)
     });
-    const result = await writeScan(pool, qrCodeId, req, res, userLocation, userAge, userGender, visitorId);
+    const numericLeadId = previewPhoneLeadId ? parseInt(String(previewPhoneLeadId), 10) : null;
+    const result = await writeScan(
+      pool,
+      qrCodeId,
+      req,
+      res,
+      userLocation,
+      userAge,
+      userGender,
+      visitorId,
+      Number.isFinite(numericLeadId) ? numericLeadId : null
+    );
 
     console.log('📊 ANALYTICS: track-scan result:', {
       inserted: result.inserted,
@@ -4298,7 +4315,9 @@ app.get('/api/analytics/scans/:qrCodeId', authenticateToken, async (req, res) =>
 // Track media play (all durations - no restriction)
 app.post('/api/analytics/track-media-play', async (req, res) => {
   try {
-    const { mediaId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
+    const { mediaId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource, previewPhoneLeadId } = req.body;
+    const numericLeadId = previewPhoneLeadId ? parseInt(String(previewPhoneLeadId), 10) : null;
+    const leadIdForInsert = Number.isFinite(numericLeadId) ? numericLeadId : null;
 
     if (!mediaId || playDuration === undefined || playDuration === null || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -4356,8 +4375,8 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
     if (isNewPlay) {
       // Insert new play record with demographics
       await db.query(
-        `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        `INSERT INTO media_plays (media_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source, preview_phone_lead_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           mediaId, 
           userId || null, 
@@ -4369,7 +4388,8 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
           userLocation?.city || null,
           userLocation?.state || null,
           userLocation?.zip || null,
-          finalLocationSource
+          finalLocationSource,
+          leadIdForInsert
         ]
       );
 
@@ -4388,8 +4408,9 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
              user_provided_city = COALESCE($4, user_provided_city),
              user_provided_state = COALESCE($5, user_provided_state),
              user_provided_zip = COALESCE($6, user_provided_zip),
-             location_source = COALESCE($7, location_source)
-         WHERE id = $8`,
+             location_source = COALESCE($7, location_source),
+             preview_phone_lead_id = COALESCE($8, preview_phone_lead_id)
+         WHERE id = $9`,
         [
           playDuration,
           userAge || null,
@@ -4398,6 +4419,7 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
           userLocation?.state || null,
           userLocation?.zip || null,
           finalLocationSource,
+          leadIdForInsert,
           existingPlay.rows[0].id
         ]
       );
@@ -4422,7 +4444,9 @@ app.post('/api/analytics/track-media-play', async (req, res) => {
 // Track playlist play (>= 30 seconds)
 app.post('/api/analytics/track-playlist-play', async (req, res) => {
   try {
-    const { playlistId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
+    const { playlistId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource, previewPhoneLeadId } = req.body;
+    const numericLeadId = previewPhoneLeadId ? parseInt(String(previewPhoneLeadId), 10) : null;
+    const leadIdForInsert = Number.isFinite(numericLeadId) ? numericLeadId : null;
 
     if (!playlistId || !playDuration || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -4457,8 +4481,8 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
 
     // Insert play record with demographics
     await db.query(
-      `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `INSERT INTO playlist_plays (playlist_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source, preview_phone_lead_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         playlistId, 
         userId || null, 
@@ -4470,7 +4494,8 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
-        finalLocationSource
+        finalLocationSource,
+        leadIdForInsert
       ]
     );
 
@@ -4498,7 +4523,9 @@ app.post('/api/analytics/track-playlist-play', async (req, res) => {
 // Track slideshow play (>= 30 seconds)
 app.post('/api/analytics/track-slideshow-play', async (req, res) => {
   try {
-    const { slideshowId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource } = req.body;
+    const { slideshowId, playDuration, sessionId, userId, userAge, userGender, userLocation, locationSource, previewPhoneLeadId } = req.body;
+    const numericLeadId = previewPhoneLeadId ? parseInt(String(previewPhoneLeadId), 10) : null;
+    const leadIdForInsert = Number.isFinite(numericLeadId) ? numericLeadId : null;
 
     if (!slideshowId || !playDuration || !sessionId) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -4533,8 +4560,8 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
 
     // Insert play record with demographics
     await db.query(
-      `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      `INSERT INTO slideshow_plays (slideshow_id, user_id, session_id, play_duration, ip_address, user_provided_age_range, user_provided_gender, user_provided_city, user_provided_state, user_provided_zip, location_source, preview_phone_lead_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         slideshowId, 
         userId || null, 
@@ -4546,7 +4573,8 @@ app.post('/api/analytics/track-slideshow-play', async (req, res) => {
         userLocation?.city || null,
         userLocation?.state || null,
         userLocation?.zip || null,
-        finalLocationSource
+        finalLocationSource,
+        leadIdForInsert
       ]
     );
 
@@ -10492,7 +10520,7 @@ async function validateOwnedPreviewCouponId(userId, previewCouponId) {
 
 app.post('/api/playlists', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
-    const { name, description, mediaFileIds, requiresActivationCode, isPublic, previewCouponId } = req.body;
+    const { name, description, mediaFileIds, requiresActivationCode, isPublic, previewCouponId, requirePhoneForOpenAccess } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Playlist name is required' });
@@ -10547,9 +10575,9 @@ app.post('/api/playlists', authenticateToken, requireCreatorAccount, async (req,
 
     const resolvedPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
     const result = await db.query(
-      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, preview_coupon_id, times_created) 
-       VALUES ($1, $2, $3, $4, $5, $6, 1) RETURNING *`,
-      [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false, resolvedPreviewCouponId]
+      `INSERT INTO playlists (user_id, name, description, requires_activation_code, is_public, preview_coupon_id, require_phone_for_open_access, times_created)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 1) RETURNING *`,
+      [req.user.userId, name, description || null, requiresActivationCode || false, isPublic || false, resolvedPreviewCouponId, requirePhoneForOpenAccess === true]
     );
 
     const playlist = result.rows[0];
@@ -10697,7 +10725,7 @@ app.get('/api/playlists/:id', async (req, res) => {
 app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, previewCouponId } = req.body;
+    const { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, requirePhoneForOpenAccess, previewCouponId } = req.body;
 
     if (VERBOSE_PLAYLIST_LOGGING) {
       logger.debug({
@@ -10705,7 +10733,7 @@ app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async 
         message: 'Updating playlist',
         playlistId: id,
         userId: req.user.userId,
-        body: { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, previewCouponId }
+        body: { name, description, requiresActivationCode, isPublic, requirePhoneForPreview, requirePhoneForOpenAccess, previewCouponId }
       });
     }
 
@@ -10759,6 +10787,7 @@ app.patch('/api/playlists/:id', authenticateToken, requireCreatorAccount, async 
     if (requiresActivationCode !== undefined) addUpdateField('requires_activation_code', requiresActivationCode);
     if (isPublic !== undefined) addUpdateField('is_public', isPublic);
     if (requirePhoneForPreview !== undefined) addUpdateField('require_phone_for_preview', requirePhoneForPreview);
+    if (requirePhoneForOpenAccess !== undefined) addUpdateField('require_phone_for_open_access', requirePhoneForOpenAccess);
     if (previewCouponId !== undefined) {
       const nextPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
       addUpdateField('preview_coupon_id', nextPreviewCouponId);
@@ -11058,6 +11087,7 @@ async function getPlaylistWithMedia(playlistId) {
     requiresActivationCode: playlistData.requires_activation_code,
     isPublic: playlistData.is_public,
     requirePhoneForPreview: !!playlistData.require_phone_for_preview,
+    requirePhoneForOpenAccess: !!playlistData.require_phone_for_open_access,
     previewCouponId: playlistData.preview_coupon_id ?? null,
     createdAt: playlistData.created_at,
     updatedAt: playlistData.updated_at,
@@ -11739,6 +11769,48 @@ function assertVerifiedPreviewGateForContent(contentType, row) {
   } else if (contentType === 'slideshow') {
     if (!row.requires_activation_code) {
       return { ok: false, error: 'Preview verification is only for locked slideshows' };
+    }
+  }
+  return { ok: true, ownerUserId: row.user_id };
+}
+
+async function loadOpenAccessContentForLeadGate(contentType, contentId) {
+  const id = parseInt(String(contentId), 10);
+  if (isNaN(id)) return null;
+  if (contentType === 'playlist') {
+    const { rows } = await db.query(
+      `SELECT id, user_id, requires_activation_code, is_public,
+              COALESCE(require_phone_for_open_access, false) AS require_phone_for_open_access
+       FROM playlists WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [id]
+    );
+    return rows[0] || null;
+  }
+  if (contentType === 'slideshow') {
+    const { rows } = await db.query(
+      `SELECT id, user_id, requires_activation_code,
+              COALESCE(require_phone_for_open_access, false) AS require_phone_for_open_access
+       FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [id]
+    );
+    return rows[0] || null;
+  }
+  return null;
+}
+
+function assertOpenAccessLeadGateForContent(contentType, row) {
+  if (!row) return { ok: false, error: 'Content not found' };
+  if (!row.require_phone_for_open_access) {
+    return { ok: false, error: 'Open access lead capture is not enabled for this content' };
+  }
+  if (contentType === 'playlist') {
+    const accessRestricted = !!row.requires_activation_code && !row.is_public;
+    if (accessRestricted) {
+      return { ok: false, error: 'Open access lead capture is only for unlocked playlists' };
+    }
+  } else if (contentType === 'slideshow') {
+    if (row.requires_activation_code) {
+      return { ok: false, error: 'Open access lead capture is only for unlocked slideshows' };
     }
   }
   return { ok: true, ownerUserId: row.user_id };
@@ -12532,6 +12604,125 @@ app.post('/api/preview-leads/start', async (req, res) => {
   }
 });
 
+app.post('/api/open-access-leads/start', async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available. Run migration 040_preview_phone_leads_and_slideshow_phone_gate.sql' });
+    }
+
+    const {
+      fullName,
+      phone,
+      contentType,
+      contentId,
+      transactionalConsent,
+      termsConsent,
+      marketingOptIn,
+      transactionalConsentCopyVersion,
+      marketingConsentCopyVersion,
+    } = req.body || {};
+
+    const trimmedName = String(fullName || '').trim();
+    if (!trimmedName) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+    if (!transactionalConsent) {
+      return res.status(400).json({ error: 'Consent is required to receive the verification text' });
+    }
+    if (!termsConsent) {
+      return res.status(400).json({ error: 'Terms and Privacy Policy agreement is required' });
+    }
+    if (!marketingOptIn) {
+      return res.status(400).json({ error: 'Marketing communications consent is required for open access' });
+    }
+    if (!phone) return res.status(400).json({ error: 'Phone number required' });
+    if (contentType !== 'playlist' && contentType !== 'slideshow') {
+      return res.status(400).json({ error: 'Invalid contentType' });
+    }
+    const cid = parseInt(String(contentId), 10);
+    if (isNaN(cid)) return res.status(400).json({ error: 'Invalid contentId' });
+
+    const row = await loadOpenAccessContentForLeadGate(contentType, cid);
+    const gate = assertOpenAccessLeadGateForContent(contentType, row);
+    if (!gate.ok) {
+      return res.status(400).json({ error: gate.error });
+    }
+
+    const phoneDigits = String(phone).replace(/\D/g, '');
+    if (phoneDigits.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+    const e164 = phoneDigits.startsWith('1') && phoneDigits.length === 11 ? `+${phoneDigits}` : `+1${phoneDigits}`;
+
+    const verificationPlain = crypto.randomBytes(24).toString('hex');
+    const verificationHash = crypto.createHash('sha256').update(verificationPlain, 'utf8').digest('hex');
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000);
+
+    let qrId = null;
+    try {
+      const qrCol = contentType === 'playlist' ? 'playlist_id' : 'slideshow_id';
+      const qrRes = await db.query(
+        `SELECT id FROM qr_codes WHERE ${qrCol} = $1 ORDER BY created_at DESC LIMIT 1`,
+        [cid]
+      );
+      qrId = qrRes.rows[0]?.id || null;
+    } catch (_) {
+      qrId = null;
+    }
+
+    await db.query(
+      `DELETE FROM preview_phone_leads
+       WHERE phone_e164 = $1 AND content_type = $2 AND content_id = $3
+         AND verified_at IS NULL AND lead_source = 'open_access'`,
+      [e164, contentType, cid]
+    );
+
+    const ins = await db.query(
+      `INSERT INTO preview_phone_leads (
+        owner_user_id, content_type, content_id, phone_e164, full_name,
+        verification_token_hash, verification_expires_at,
+        transactional_consent_copy_version, terms_consented, marketing_opt_in,
+        marketing_consent_copy_version, marketing_consented_at, qr_code_id, lead_source
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,NOW(),$11,'open_access')
+      RETURNING id, public_poll_token`,
+      [
+        gate.ownerUserId,
+        contentType,
+        cid,
+        e164,
+        trimmedName,
+        verificationHash,
+        verificationExpires,
+        transactionalConsentCopyVersion || null,
+        !!termsConsent,
+        marketingConsentCopyVersion || null,
+        qrId,
+      ]
+    );
+
+    const leadRow = ins.rows[0];
+    const rawFrontend = process.env.FRONTEND_URL || process.env.EXPO_PUBLIC_FRONTEND_URL || 'http://localhost:8081';
+    const frontend = String(rawFrontend).replace(/\/$/, '');
+    const verifyUrl = `${frontend}/preview-verify?t=${encodeURIComponent(verificationPlain)}`;
+
+    const smsBody = `MerchTrader: Verify your phone to continue: ${verifyUrl} Msg/data rates may apply. Reply STOP to opt out.`;
+    const smsResult = await smsService.sendSms(e164, smsBody, 'transactional');
+    if (smsResult.error) {
+      await db.query(`DELETE FROM preview_phone_leads WHERE id = $1`, [leadRow.id]);
+      return res.status(502).json({ error: smsResult.error, sent: false });
+    }
+
+    await db.query(`UPDATE preview_phone_leads SET last_sms_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [leadRow.id]);
+    await db.query(
+      `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'open_access_sms_sent',$2::jsonb)`,
+      [leadRow.id, JSON.stringify({ providerMessageId: smsResult.messageId || null })]
+    );
+
+    res.json({ ok: true, pollToken: leadRow.public_poll_token, leadId: leadRow.id });
+  } catch (e) {
+    console.error('open-access-leads/start error:', e);
+    res.status(500).json({ error: 'Failed to start open access verification' });
+  }
+});
+
 app.post('/api/preview-leads/verify', async (req, res) => {
   try {
     if (!(await ensurePreviewLeadTables())) {
@@ -12551,7 +12742,14 @@ app.post('/api/preview-leads/verify', async (req, res) => {
       return res.status(400).json({ error: 'Invalid or expired verification link' });
     }
     const lead = rows[0];
-    await db.query(`UPDATE preview_phone_leads SET verified_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
+    await db.query(
+      `UPDATE preview_phone_leads
+       SET verified_at = NOW(),
+           open_access_unlocked_at = CASE WHEN lead_source = 'open_access' THEN NOW() ELSE open_access_unlocked_at END,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [lead.id]
+    );
     await db.query(
       `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'verified','{}'::jsonb)`,
       [lead.id]
@@ -12568,6 +12766,7 @@ app.post('/api/preview-leads/verify', async (req, res) => {
     );
     res.json({
       ok: true,
+      leadId: lead.id,
       pollToken: lead.public_poll_token,
       contentType: lead.content_type,
       contentId: lead.content_id,
@@ -12588,7 +12787,7 @@ app.get('/api/preview-leads/status', async (req, res) => {
     const pollToken = req.query.pollToken;
     if (!pollToken) return res.status(400).json({ error: 'pollToken required' });
     const { rows } = await db.query(
-      `SELECT id, verified_at, content_type, content_id FROM preview_phone_leads WHERE public_poll_token = $1::uuid LIMIT 1`,
+      `SELECT id, verified_at, content_type, content_id, lead_source FROM preview_phone_leads WHERE public_poll_token = $1::uuid LIMIT 1`,
       [String(pollToken)]
     );
     if (!rows.length) return res.status(404).json({ error: 'Not found' });
@@ -12606,7 +12805,14 @@ app.get('/api/preview-leads/status', async (req, res) => {
       JWT_SECRET,
       { expiresIn: '15m' }
     );
-    return res.json({ status: 'verified', unlockToken });
+    return res.json({
+      status: 'verified',
+      leadId: lead.id,
+      contentType: lead.content_type,
+      contentId: lead.content_id,
+      leadSource: lead.lead_source || 'preview_gate',
+      unlockToken,
+    });
   } catch (e) {
     if (e.code === '22P02') {
       return res.status(400).json({ error: 'Invalid pollToken' });
@@ -12624,8 +12830,25 @@ app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
     const ownerId = parseInt(req.user.userId, 10);
     const marketingOnly = String(req.query.marketingOnly || 'false') === 'true';
     const { rows } = await db.query(
-      `SELECT phone_e164, email, verified_at, marketing_opt_in, email_marketing_opt_in,
-              content_type, content_id, coupon_id, lead_source, owner_user_id
+      `SELECT phone_e164, full_name, email, verified_at, marketing_opt_in, email_marketing_opt_in,
+              content_type, content_id, coupon_id, lead_source, owner_user_id,
+              (SELECT MIN(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = preview_phone_leads.id) AS first_scan_at,
+              GREATEST(
+                COALESCE((SELECT MAX(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = preview_phone_leads.id), 'epoch'::timestamp),
+                COALESCE((SELECT MAX(played_at) FROM media_plays mp WHERE mp.preview_phone_lead_id = preview_phone_leads.id), 'epoch'::timestamp),
+                COALESCE((SELECT MAX(played_at) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = preview_phone_leads.id), 'epoch'::timestamp),
+                COALESCE((SELECT MAX(played_at) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = preview_phone_leads.id), 'epoch'::timestamp)
+              ) AS last_activity_at,
+              (
+                (SELECT COUNT(*) FROM media_plays mp WHERE mp.preview_phone_lead_id = preview_phone_leads.id) +
+                (SELECT COUNT(*) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = preview_phone_leads.id) +
+                (SELECT COUNT(*) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = preview_phone_leads.id)
+              ) AS play_count,
+              (
+                COALESCE((SELECT SUM(play_duration) FROM media_plays mp WHERE mp.preview_phone_lead_id = preview_phone_leads.id), 0) +
+                COALESCE((SELECT SUM(play_duration) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = preview_phone_leads.id), 0) +
+                COALESCE((SELECT SUM(play_duration) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = preview_phone_leads.id), 0)
+              ) AS total_play_seconds
        FROM preview_phone_leads
        WHERE owner_user_id = $1 AND verified_at IS NOT NULL
        ${marketingOnly ? 'AND (marketing_opt_in = true OR email_marketing_opt_in = true)' : ''}
@@ -12665,20 +12888,41 @@ async function queryPreviewLeadRows({ ownerId = null, adminMode = false, adminOw
     values.push(query.contentType);
     where.push(`l.content_type = $${values.length}`);
   }
+  if (query.leadSource) {
+    values.push(String(query.leadSource));
+    where.push(`l.lead_source = $${values.length}`);
+  }
   if (query.search) {
     values.push(`%${String(query.search).trim()}%`);
-    where.push(`(l.phone_e164 ILIKE $${values.length} OR l.email ILIKE $${values.length} OR u.email ILIKE $${values.length} OR u.username ILIKE $${values.length})`);
+    where.push(`(l.phone_e164 ILIKE $${values.length} OR l.full_name ILIKE $${values.length} OR l.email ILIKE $${values.length} OR u.email ILIKE $${values.length} OR u.username ILIKE $${values.length})`);
   }
   const limit = Math.min(Math.max(parseInt(String(query.limit || '250'), 10) || 250, 1), 1000);
   values.push(limit);
   const limitParam = values.length;
   const { rows } = await db.query(
     `SELECT l.id, l.owner_user_id, u.email AS owner_email, u.username AS owner_username,
-            l.content_type, l.content_id, l.phone_e164, l.email, l.verified_at,
+            l.content_type, l.content_id, l.phone_e164, l.full_name, l.email, l.verified_at,
             l.marketing_opt_in, l.email_marketing_opt_in, l.coupon_id, l.activation_code_id,
             l.completed_user_id, l.account_created_at, l.lead_source, l.created_at,
             l.transactional_consent_copy_version, l.marketing_consent_copy_version,
-            l.email_marketing_consent_copy_version
+            l.email_marketing_consent_copy_version,
+            (SELECT MIN(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = l.id) AS first_scan_at,
+            GREATEST(
+              COALESCE((SELECT MAX(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = l.id), 'epoch'::timestamp),
+              COALESCE((SELECT MAX(played_at) FROM media_plays mp WHERE mp.preview_phone_lead_id = l.id), 'epoch'::timestamp),
+              COALESCE((SELECT MAX(played_at) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = l.id), 'epoch'::timestamp),
+              COALESCE((SELECT MAX(played_at) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = l.id), 'epoch'::timestamp)
+            ) AS last_activity_at,
+            (
+              (SELECT COUNT(*) FROM media_plays mp WHERE mp.preview_phone_lead_id = l.id) +
+              (SELECT COUNT(*) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = l.id) +
+              (SELECT COUNT(*) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = l.id)
+            ) AS play_count,
+            (
+              COALESCE((SELECT SUM(play_duration) FROM media_plays mp WHERE mp.preview_phone_lead_id = l.id), 0) +
+              COALESCE((SELECT SUM(play_duration) FROM playlist_plays pp WHERE pp.preview_phone_lead_id = l.id), 0) +
+              COALESCE((SELECT SUM(play_duration) FROM slideshow_plays sp WHERE sp.preview_phone_lead_id = l.id), 0)
+            ) AS total_play_seconds
      FROM preview_phone_leads l
      LEFT JOIN users u ON u.id = l.owner_user_id
      WHERE ${where.join(' AND ')}
@@ -15282,6 +15526,7 @@ app.get('/api/slideshows', authenticateToken, async (req, res) => {
           requiresActivationCode: slideshow.requires_activation_code,
           isPublic: slideshow.is_public,
           requirePhoneForPreview: !!slideshow.require_phone_for_preview,
+          requirePhoneForOpenAccess: !!slideshow.require_phone_for_open_access,
           previewCouponId: slideshow.preview_coupon_id ?? null,
           autoplayInterval: slideshow.autoplay_interval,
           transition: slideshow.transition,
@@ -15474,6 +15719,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
       isPublic: slideshow.is_public,
       requiresActivationCode: slideshow.requires_activation_code,
       requirePhoneForPreview: !!slideshow.require_phone_for_preview,
+      requirePhoneForOpenAccess: !!slideshow.require_phone_for_open_access,
       previewCouponId: slideshow.preview_coupon_id ?? null,
       autoplayInterval: slideshow.autoplay_interval,
       backgroundAudioUrl: signedAudioUrl,
@@ -15583,6 +15829,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
             requiresActivationCode: fallbackPlaylist.requiresActivationCode,
             isPublic: fallbackPlaylist.isPublic,
             requirePhoneForPreview: !!fallbackPlaylist.requirePhoneForPreview,
+            requirePhoneForOpenAccess: !!fallbackPlaylist.requirePhoneForOpenAccess,
             previewCouponId: fallbackPlaylist.previewCouponId ?? null,
             createdAt: fallbackPlaylist.createdAt,
             updatedAt: fallbackPlaylist.updatedAt,
@@ -15618,6 +15865,7 @@ app.get('/api/playlist-access/:id', async (req, res) => {
       requiresActivationCode: playlist.requiresActivationCode,
       isPublic: playlist.isPublic,
       requirePhoneForPreview: !!playlist.requirePhoneForPreview,
+      requirePhoneForOpenAccess: !!playlist.requirePhoneForOpenAccess,
       previewCouponId: playlist.previewCouponId ?? null,
       createdAt: playlist.createdAt,
       updatedAt: playlist.updatedAt,
@@ -15938,7 +16186,8 @@ app.get('/api/slideshow-access-public/:id', async (req, res) => {
     try {
       const { rows } = await db.query(
         `SELECT id, name, user_id, requires_activation_code, preview_coupon_id,
-          COALESCE(require_phone_for_preview, false) AS require_phone_for_preview
+          COALESCE(require_phone_for_preview, false) AS require_phone_for_preview,
+          COALESCE(require_phone_for_open_access, false) AS require_phone_for_open_access
          FROM slideshows WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
         [id]
       );
@@ -15950,6 +16199,7 @@ app.get('/api/slideshow-access-public/:id', async (req, res) => {
         userId: s.user_id,
         requiresActivationCode: s.requires_activation_code,
         requirePhoneForPreview: !!s.require_phone_for_preview,
+        requirePhoneForOpenAccess: !!s.require_phone_for_open_access,
         previewCouponId: s.preview_coupon_id ?? null,
       });
     } catch (e) {
@@ -15967,6 +16217,7 @@ app.get('/api/slideshow-access-public/:id', async (req, res) => {
           userId: s.user_id,
           requiresActivationCode: s.requires_activation_code,
           requirePhoneForPreview: false,
+          requirePhoneForOpenAccess: false,
           previewCouponId: s.preview_coupon_id ?? null,
         });
       }
@@ -16342,6 +16593,11 @@ app.get('/api/slideshow-access/:id', authenticateTokenOptional, async (req, res)
     } catch (_) {
       fullSlideshow.requirePhoneForPreview = false;
     }
+    try {
+      fullSlideshow.requirePhoneForOpenAccess = !!fullSlideshow.require_phone_for_open_access;
+    } catch (_) {
+      fullSlideshow.requirePhoneForOpenAccess = false;
+    }
     if (fullSlideshow.preview_coupon_id != null && fullSlideshow.previewCouponId == null) {
       fullSlideshow.previewCouponId = fullSlideshow.preview_coupon_id;
     }
@@ -16399,7 +16655,7 @@ app.get('/api/slideshows/:id/audio-url', authenticateToken, async (req, res) => 
 // Create a new slideshow
 app.post('/api/slideshows', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
-    const { name, description, autoplayInterval, transition, requiresActivationCode, previewCouponId } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, previewCouponId, requirePhoneForOpenAccess } = req.body;
     
     if (!name) {
       return res.status(400).json({ error: 'Slideshow name is required' });
@@ -16438,14 +16694,15 @@ app.post('/api/slideshows', authenticateToken, requireCreatorAccount, async (req
 
     const resolvedPreviewCouponId = await validateOwnedPreviewCouponId(req.user.userId, previewCouponId);
     const result = await db.query(
-      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, preview_coupon_id, times_created) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 1) RETURNING *`,
-      [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false, resolvedPreviewCouponId]
+      `INSERT INTO slideshows (user_id, name, description, autoplay_interval, transition, requires_activation_code, preview_coupon_id, require_phone_for_open_access, times_created)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1) RETURNING *`,
+      [req.user.userId, name, description, autoplayInterval || 5000, transition || 'fade', requiresActivationCode || false, resolvedPreviewCouponId, requirePhoneForOpenAccess === true]
     );
     
     const slideshowRow = result.rows[0];
     const slideshow = {
       ...slideshowRow,
+      requirePhoneForOpenAccess: !!slideshowRow.require_phone_for_open_access,
       images: []
     };
     
@@ -16474,7 +16731,7 @@ app.post('/api/slideshows', authenticateToken, requireCreatorAccount, async (req
 app.patch('/api/slideshows/:id', authenticateToken, requireCreatorAccount, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, autoplayInterval, transition, requiresActivationCode, requirePhoneForPreview, audio_url, previewCouponId } = req.body;
+    const { name, description, autoplayInterval, transition, requiresActivationCode, requirePhoneForPreview, requirePhoneForOpenAccess, audio_url, previewCouponId } = req.body;
     
     console.log('🎬 SLIDESHOWS: ===== SLIDESHOW UPDATE DEBUG START =====');
     console.log('🎬 SLIDESHOWS: Updating slideshow ID:', id);
@@ -16557,9 +16814,10 @@ app.patch('/api/slideshows/:id', authenticateToken, requireCreatorAccount, async
            audio_url = COALESCE($6, audio_url),
            preview_coupon_id = $7,
            require_phone_for_preview = COALESCE($8, require_phone_for_preview),
+           require_phone_for_open_access = COALESCE($9, require_phone_for_open_access),
            updated_at = NOW()
-       WHERE id = $9 RETURNING *`,
-      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, nextPreviewCouponId, requirePhoneForPreview, id]
+       WHERE id = $10 RETURNING *`,
+      [name, description, autoplayInterval, transition, requiresActivationCode, processedAudioUrl, nextPreviewCouponId, requirePhoneForPreview, requirePhoneForOpenAccess, id]
     );
 
     const slideshow = result.rows[0];
@@ -16600,6 +16858,7 @@ app.patch('/api/slideshows/:id', authenticateToken, requireCreatorAccount, async
       transition: slideshow.transition,
       requiresActivationCode: slideshow.requires_activation_code,
       requirePhoneForPreview: !!slideshow.require_phone_for_preview,
+      requirePhoneForOpenAccess: !!slideshow.require_phone_for_open_access,
       previewCouponId: slideshow.preview_coupon_id ?? null,
       backgroundAudioUrl: slideshow.audio_url,
       updatedAt: slideshow.updated_at

@@ -22,6 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 
 type Scope = 'mine' | 'all' | 'admin';
 type ConsentFilter = 'all' | 'sms' | 'email' | 'any';
+type LeadSourceFilter = 'all' | 'open_access' | 'preview_gate' | 'locked_access';
 
 type LeadRow = {
   id: number;
@@ -29,6 +30,7 @@ type LeadRow = {
   owner_email?: string | null;
   owner_username?: string | null;
   phone_e164: string;
+  full_name?: string | null;
   email?: string | null;
   verified_at: string;
   marketing_opt_in: boolean;
@@ -40,12 +42,17 @@ type LeadRow = {
   completed_user_id?: number | null;
   account_created_at?: string | null;
   lead_source?: string;
+  first_scan_at?: string | null;
+  last_activity_at?: string | null;
+  play_count?: number;
+  total_play_seconds?: number;
 };
 
 const csvColumns = [
   'owner_user_id',
   'owner_email',
   'owner_username',
+  'full_name',
   'phone_e164',
   'email',
   'verified_at',
@@ -58,6 +65,10 @@ const csvColumns = [
   'completed_user_id',
   'account_created_at',
   'lead_source',
+  'first_scan_at',
+  'last_activity_at',
+  'play_count',
+  'total_play_seconds',
 ];
 
 function leadsToCsv(rows: LeadRow[]): string {
@@ -66,6 +77,7 @@ function leadsToCsv(rows: LeadRow[]): string {
       r.owner_user_id,
       r.owner_email || '',
       r.owner_username || '',
+      r.full_name || '',
       r.phone_e164,
       r.email || '',
       r.verified_at,
@@ -78,6 +90,10 @@ function leadsToCsv(rows: LeadRow[]): string {
       r.completed_user_id ?? '',
       r.account_created_at || '',
       r.lead_source || '',
+      r.first_scan_at || '',
+      r.last_activity_at && !String(r.last_activity_at).startsWith('1970-') ? r.last_activity_at : '',
+      r.play_count ?? 0,
+      r.total_play_seconds ?? 0,
     ].map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
   );
   return [csvColumns.join(','), ...lines].join('\n');
@@ -122,6 +138,7 @@ export default function PreviewLeadsScreen() {
   const [scope, setScope] = useState<Scope>('mine');
   const [consentFilter, setConsentFilter] = useState<ConsentFilter>('all');
   const [contentType, setContentType] = useState<'all' | 'playlist' | 'slideshow'>('all');
+  const [leadSource, setLeadSource] = useState<LeadSourceFilter>('all');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -136,6 +153,7 @@ export default function PreviewLeadsScreen() {
         smsMarketingOnly: consentFilter === 'sms',
         emailMarketingOnly: consentFilter === 'email',
         contentType: contentType === 'all' ? undefined : contentType,
+        leadSource: leadSource === 'all' ? undefined : leadSource,
         limit: 500,
       });
       setLeads(Array.isArray(data.leads) ? data.leads : []);
@@ -145,7 +163,7 @@ export default function PreviewLeadsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [contentType, consentFilter, isAdmin, scope, search]);
+  }, [contentType, consentFilter, isAdmin, leadSource, scope, search]);
 
   React.useEffect(() => {
     load();
@@ -189,7 +207,7 @@ export default function PreviewLeadsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <ThemedText style={styles.intro}>
-          Manage verified phone and email leads collected from locked content. Copy/export only the consent-safe
+          Manage verified phone and email leads collected from locked and open-access content. Copy/export only the consent-safe
           audience you intend to contact.
         </ThemedText>
 
@@ -223,6 +241,13 @@ export default function PreviewLeadsScreen() {
           <Segment label="Slideshows" active={contentType === 'slideshow'} onPress={() => setContentType('slideshow')} />
         </View>
 
+        <View style={styles.segmentRow}>
+          <Segment label="All sources" active={leadSource === 'all'} onPress={() => setLeadSource('all')} />
+          <Segment label="Open access" active={leadSource === 'open_access'} onPress={() => setLeadSource('open_access')} />
+          <Segment label="Preview" active={leadSource === 'preview_gate'} onPress={() => setLeadSource('preview_gate')} />
+          <Segment label="Locked" active={leadSource === 'locked_access'} onPress={() => setLeadSource('locked_access')} />
+        </View>
+
         {error ? <View style={styles.errBox}><ThemedText style={styles.errText}>{error}</ThemedText></View> : null}
 
         <ThemedText style={styles.count}>
@@ -249,6 +274,7 @@ export default function PreviewLeadsScreen() {
               <ThemedText style={styles.cardTitle}>{lead.phone_e164}</ThemedText>
               <ThemedText style={styles.badge}>{lead.lead_source || 'preview'}</ThemedText>
             </View>
+            <ThemedText style={styles.cardLine}>Name: {lead.full_name || 'not collected'}</ThemedText>
             <ThemedText style={styles.cardLine}>Email: {lead.email || 'not collected'}</ThemedText>
             {isAdmin ? (
               <ThemedText style={styles.cardLine}>
@@ -257,6 +283,12 @@ export default function PreviewLeadsScreen() {
             ) : null}
             <ThemedText style={styles.cardLine}>
               Content: {lead.content_type} #{lead.content_id} | Verified: {new Date(lead.verified_at).toLocaleString()}
+            </ThemedText>
+            <ThemedText style={styles.cardLine}>
+              Activity: {lead.play_count ?? 0} play(s), {lead.total_play_seconds ?? 0}s total
+              {lead.last_activity_at && !String(lead.last_activity_at).startsWith('1970-')
+                ? ` | Last: ${new Date(lead.last_activity_at).toLocaleString()}`
+                : ''}
             </ThemedText>
             <ThemedText style={styles.cardLine}>
               SMS marketing: {lead.marketing_opt_in ? 'yes' : 'no'} | Email marketing: {lead.email_marketing_opt_in ? 'yes' : 'no'}

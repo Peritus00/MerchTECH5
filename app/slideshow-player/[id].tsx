@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
+import { useLocalSearchParams } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,8 +16,11 @@ import { useSlideshowAccess } from '@/hooks/useSlideshowAccess';
 export default function SlideshowPlayerScreen() {
   const route = useRoute();
   const { id } = route.params as { id: string };
+  const params = useLocalSearchParams<{ leadId?: string | string[] }>();
+  const routeLeadIdParam = Array.isArray(params.leadId) ? params.leadId[0] : params.leadId;
   const { data: slideshow, isLoading: loading, isError, error, refetch } = useSlideshowAccess(id);
   const [presignedAudioUrl, setPresignedAudioUrl] = useState<string | null>(null);
+  const [previewPhoneLeadId, setPreviewPhoneLeadId] = useState<number | null>(null);
   const { isAuthenticated } = useAuth();
   
   // Demographics survey state
@@ -30,6 +35,29 @@ export default function SlideshowPlayerScreen() {
       setPresignedAudioUrl(slideshow.audio_url);
     }
   }, [slideshow]);
+
+  useEffect(() => {
+    let isActive = true;
+    const loadLeadId = async () => {
+      const routeLeadId = routeLeadIdParam ? Number(routeLeadIdParam) : null;
+      if (routeLeadId && Number.isFinite(routeLeadId)) {
+        await AsyncStorage.setItem(`open_access_lead_slideshow_${id}`, String(routeLeadId));
+        if (isActive) setPreviewPhoneLeadId(routeLeadId);
+        return;
+      }
+      const storedLeadId = await AsyncStorage.getItem(`open_access_lead_slideshow_${id}`);
+      const parsed = storedLeadId ? Number(storedLeadId) : null;
+      if (isActive) {
+        setPreviewPhoneLeadId(parsed && Number.isFinite(parsed) ? parsed : null);
+      }
+    };
+    if (id) {
+      void loadLeadId();
+    }
+    return () => {
+      isActive = false;
+    };
+  }, [id, routeLeadIdParam]);
 
   // Fetch user demographics if authenticated
   useEffect(() => {
@@ -143,6 +171,7 @@ export default function SlideshowPlayerScreen() {
   // Track QR scan when slideshow loads (only once per mount)
   useEffect(() => {
     if (!slideshow || hasTrackedScanRef.current) return;
+    if ((slideshow as any).requirePhoneForOpenAccess && !previewPhoneLeadId) return;
     const qrId = slideshow?.qr_code_id || slideshow?.qrCodeId;
     if (!qrId) return;
     hasTrackedScanRef.current = true;
@@ -150,11 +179,12 @@ export default function SlideshowPlayerScreen() {
     analyticsService.trackQRScan(Number(qrId), {
       ...(demographics?.ageRange ? { userAge: demographics.ageRange } : {}),
       ...(demographics?.gender ? { userGender: demographics.gender } : {}),
+      ...(previewPhoneLeadId ? { previewPhoneLeadId } : {}),
     }).catch((e) => {
       console.warn('Analytics track scan failed (slideshow-player):', e);
       hasTrackedScanRef.current = false;
     });
-  }, [slideshow, isAuthenticated, userDemographics]);
+  }, [slideshow, isAuthenticated, previewPhoneLeadId, userDemographics]);
 
   const errorMessage = isError && error
     ? (error as any)?.response?.status === 403
@@ -220,6 +250,7 @@ export default function SlideshowPlayerScreen() {
           await analyticsService.trackQRScan(Number(qrId), {
             userAge: demographics.ageRange,
             userGender: demographics.gender,
+            ...(previewPhoneLeadId ? { previewPhoneLeadId } : {}),
           });
           console.log('✅ SLIDESHOW_PLAYER_DEMOGRAPHICS: Scan re-tracked with demographics!');
         }

@@ -27,6 +27,7 @@ import { accessCodeAPI, playlistAccessAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
+import OpenAccessLeadGateModal from '@/components/OpenAccessLeadGateModal';
 import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
 import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
@@ -37,7 +38,7 @@ export default function PlaylistAccessScreen() {
   const route = useRoute();
   const insets = useSafeAreaInsets();
   const { id } = route.params as { id: string };
-  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string }>();
+  const previewQuery = useLocalSearchParams<{ previewVerified?: string; previewToken?: string; openAccessVerified?: string; leadId?: string }>();
   const smsAutoPreviewStartedRef = useRef(false);
   const checkingAccessRef = useRef(false);
   const checkedAccessKeyRef = useRef<string | null>(null);
@@ -51,6 +52,7 @@ export default function PlaylistAccessScreen() {
   const [isValidating, setIsValidating] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [showPreviewGateModal, setShowPreviewGateModal] = useState(false);
+  const [showOpenAccessLeadGate, setShowOpenAccessLeadGate] = useState(false);
   const [previewCompleted, setPreviewCompleted] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -222,6 +224,8 @@ export default function PlaylistAccessScreen() {
             ...playlistData,
             userId: playlistData.user_id || playlistData.userId,
             previewCouponId: playlistData.preview_coupon_id ?? playlistData.previewCouponId ?? null,
+            requirePhoneForOpenAccess:
+              !!(playlistData.requirePhoneForOpenAccess ?? playlistData.require_phone_for_open_access),
           }
         : null;
 
@@ -294,8 +298,13 @@ export default function PlaylistAccessScreen() {
         mediaFiles: playlist.mediaFiles?.length || 0
       });
 
-      // CRITICAL CHECK: If playlist doesn't require activation code, go directly to playlist player
+      // CRITICAL CHECK: If playlist doesn't require activation code, either gate for lead capture or go directly to player
       if (!playlist.requiresActivationCode) {
+        if ((playlist as any).requirePhoneForOpenAccess === true) {
+          console.log('🔴 PLAYLIST_ACCESS: Playlist is open but requires lead capture before playback');
+          setShowOpenAccessLeadGate(true);
+          return;
+        }
         console.log('🔴 PLAYLIST_ACCESS: Playlist is NOT protected, redirecting directly to playlist player');
         const token = (playlist as any).playbackToken;
         if (token) {
@@ -669,6 +678,25 @@ export default function PlaylistAccessScreen() {
     setShowPreview(true);
   };
 
+  const handleOpenAccessVerified = useCallback(async (leadId: number) => {
+    setShowOpenAccessLeadGate(false);
+    await AsyncStorage.setItem(`open_access_lead_playlist_${id}`, String(leadId));
+    const token = (playlist as any)?.playbackToken;
+    if (token) {
+      await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
+    }
+    replaceOnce(`/playlist-player/${id}?leadId=${encodeURIComponent(String(leadId))}`);
+  }, [id, playlist, replaceOnce]);
+
+  useEffect(() => {
+    if (!playlist || isLoading) return;
+    const verified = previewQuery.openAccessVerified === '1' || previewQuery.openAccessVerified === 'true';
+    const leadId = Number(previewQuery.leadId);
+    if (!verified || !Number.isFinite(leadId) || leadId <= 0) return;
+    if (playlist.requiresActivationCode || (playlist as any).requirePhoneForOpenAccess !== true) return;
+    void handleOpenAccessVerified(leadId);
+  }, [playlist, isLoading, previewQuery.openAccessVerified, previewQuery.leadId, handleOpenAccessVerified]);
+
   // After SMS verification link: land on this page with ?previewVerified=1 and jump straight into preview.
   useEffect(() => {
     if (!playlist || isLoading) return;
@@ -734,10 +762,20 @@ export default function PlaylistAccessScreen() {
     return (
       <ThemedView style={styles.loadingContainer}>
         <MaterialIcons name="queue-music" size={64} color="#3b82f6" />
-        <ThemedText style={styles.loadingText}>Starting playlist...</ThemedText>
+        <ThemedText style={styles.loadingText}>
+          {(playlist as any).requirePhoneForOpenAccess ? 'Lead capture required...' : 'Starting playlist...'}
+        </ThemedText>
         <ThemedText style={[styles.loadingText, { fontSize: 14, marginTop: 8 }]}>
           {playlist.name}
         </ThemedText>
+        <OpenAccessLeadGateModal
+          visible={showOpenAccessLeadGate}
+          onClose={() => setShowOpenAccessLeadGate(false)}
+          onVerified={handleOpenAccessVerified}
+          contentType="playlist"
+          contentId={id}
+          contentName={playlist.name}
+        />
       </ThemedView>
     );
   }

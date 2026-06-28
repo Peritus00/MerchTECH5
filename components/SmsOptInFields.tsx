@@ -23,6 +23,7 @@ export interface SmsOptInFieldsProps {
   showMarketingOptIn?: boolean;
   marketingConsent?: boolean;
   onMarketingConsentChange?: (value: boolean) => void;
+  marketingConsentText?: string;
   sending: boolean;
   onSend: () => void;
   /** Primary action label — provider requires "SEND". */
@@ -40,6 +41,7 @@ export default function SmsOptInFields({
   showMarketingOptIn = false,
   marketingConsent = false,
   onMarketingConsentChange,
+  marketingConsentText = SMS_MARKETING_OPT_IN_TEXT,
   sending,
   onSend,
   sendButtonLabel = 'SEND',
@@ -128,7 +130,7 @@ export default function SmsOptInFields({
             color={marketingConsent ? '#3b82f6' : '#9ca3af'}
             style={styles.checkboxIcon}
           />
-          <Text style={styles.checkboxLabel}>{SMS_MARKETING_OPT_IN_TEXT}</Text>
+          <Text style={styles.checkboxLabel}>{marketingConsentText}</Text>
         </TouchableOpacity>
       )}
 

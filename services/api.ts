@@ -676,6 +676,7 @@ export const previewLeadsAPI = {
     return response.data as {
       leads: {
         phone_e164: string;
+        full_name?: string | null;
         email?: string | null;
         verified_at: string;
         marketing_opt_in: boolean;
@@ -685,6 +686,10 @@ export const previewLeadsAPI = {
         coupon_id: number | null;
         lead_source?: string;
         owner_user_id?: number;
+        first_scan_at?: string | null;
+        last_activity_at?: string | null;
+        play_count?: number;
+        total_play_seconds?: number;
       }[];
     };
   },
@@ -698,6 +703,7 @@ export const previewLeadsAPI = {
     smsMarketingOnly?: boolean;
     emailMarketingOnly?: boolean;
     contentType?: 'playlist' | 'slideshow';
+    leadSource?: string;
     limit?: number;
   }) {
     const { admin, ...query } = params || {};
@@ -718,6 +724,7 @@ export const previewLeadsAPI = {
         content_type: string;
         content_id: string | number;
         phone_e164: string;
+        full_name?: string | null;
         email?: string | null;
         verified_at: string;
         marketing_opt_in: boolean;
@@ -728,6 +735,10 @@ export const previewLeadsAPI = {
         account_created_at?: string | null;
         lead_source?: string;
         created_at?: string;
+        first_scan_at?: string | null;
+        last_activity_at?: string | null;
+        play_count?: number;
+        total_play_seconds?: number;
       }[];
     };
   },

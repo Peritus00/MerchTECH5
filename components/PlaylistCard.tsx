@@ -18,7 +18,9 @@ interface PlaylistCardProps {
   onDelete?: () => void;
   onToggleProtection?: () => void;
   onToggleRequirePhone?: () => void;
+  onToggleOpenAccessLeadCapture?: () => void;
   requirePhoneSaving?: boolean;
+  openAccessLeadSaving?: boolean;
   showActions?: boolean;
 }
 
@@ -29,7 +31,9 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
   onDelete,
   onToggleProtection,
   onToggleRequirePhone,
+  onToggleOpenAccessLeadCapture,
   requirePhoneSaving = false,
+  openAccessLeadSaving = false,
   showActions = true,
 }) => {
   const formatDate = (dateString: string) => {
@@ -198,6 +202,32 @@ const PlaylistCard: React.FC<PlaylistCardProps> = ({
                   )}
                 </TouchableOpacity>
                 <Text style={styles.actionLabel}>Phone</Text>
+              </View>
+            )}
+            {onToggleOpenAccessLeadCapture && (
+              <View style={styles.actionItem}>
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  accessibilityLabel={
+                    (playlist.requirePhoneForOpenAccess ?? false)
+                      ? 'Open access lead capture is on. Tap to turn off.'
+                      : 'Open access lead capture is off. Tap to turn on.'
+                  }
+                  accessibilityHint="Toggles whether open access viewers must enter name, phone, and marketing consent"
+                  onPress={openAccessLeadSaving ? undefined : onToggleOpenAccessLeadCapture}
+                  disabled={openAccessLeadSaving}
+                >
+                  {openAccessLeadSaving ? (
+                    <ActivityIndicator size="small" color="#10b981" />
+                  ) : (
+                    <MaterialIcons
+                      name={(playlist.requirePhoneForOpenAccess ?? false) ? "person-add" : "person-add-disabled"}
+                      size={20}
+                      color={(playlist.requirePhoneForOpenAccess ?? false) ? "#10b981" : "#9ca3af"}
+                    />
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.actionLabel}>Leads</Text>
               </View>
             )}
             <View style={styles.actionItem}>

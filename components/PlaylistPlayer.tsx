@@ -76,6 +76,7 @@ interface PlaylistPlayerProps {
   playlist?: any;
   media?: MediaItem[];
   playbackToken?: string;
+  previewPhoneLeadId?: number;
   autoPlay?: boolean;
 }
 
@@ -420,7 +421,7 @@ const QuickPayOverlay = React.memo(({
 });
 QuickPayOverlay.displayName = 'QuickPayOverlay';
 
-const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackToken, autoPlay = false }: PlaylistPlayerProps) => {
+const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackToken, previewPhoneLeadId, autoPlay = false }: PlaylistPlayerProps) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [playlistData, setPlaylistData] = useState<any>(playlist);
   const [playlistTitle, setPlaylistTitle] = useState('');
@@ -1057,7 +1058,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               ageRange,
               gender,
               location,
-              locationSource
+              locationSource,
+              previewPhoneLeadId
             );
             console.log('📊 TRACKING: Successfully called trackMediaPlay');
           } catch (error) {
@@ -1078,7 +1080,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             ageRange,
             gender,
             location,
-            locationSource
+            locationSource,
+            previewPhoneLeadId
           );
         }
 
@@ -1104,7 +1107,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         await trackPlay(playDurationRef.current, true);
       }
     }, 1000); // Update every second
-  }, [playlistData, user]);
+  }, [playlistData, previewPhoneLeadId, user]);
 
   // Store tracking function in ref for use in event listeners
   useEffect(() => {

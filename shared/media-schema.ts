@@ -67,6 +67,7 @@ export interface Playlist {
   requiresActivationCode: boolean;
   isPublic: boolean;
   requirePhoneForPreview?: boolean;
+  requirePhoneForOpenAccess?: boolean;
   previewCouponId?: number | null;
   instagramUrl?: string;
   twitterUrl?: string;
@@ -94,6 +95,8 @@ export interface Slideshow {
   requiresActivationCode: boolean;
   /** When true, locked preview requires verified SMS before 30s preview starts */
   requirePhoneForPreview?: boolean;
+  /** When true, unlocked open access requires verified phone lead capture before playback */
+  requirePhoneForOpenAccess?: boolean;
   previewCouponId?: number | null;
   createdAt: string;
   images: SlideshowImage[];
