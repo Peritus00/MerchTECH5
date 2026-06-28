@@ -59,6 +59,7 @@ interface MediaItem {
   type?: string;
   fileType?: string;
   contentType?: string;
+  duration?: number;
   caption?: string;
   displayOrder?: number;
   productLinks?: ProductLink[];
@@ -82,6 +83,38 @@ const debugLog = (...args: unknown[]) => {
   if (__DEV__) {
     console.log(...args);
   }
+};
+
+const normalizeManifestDurationSeconds = (duration?: number) => {
+  const value = Number(duration);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const seconds = value > 10000 ? value / 1000 : value;
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 12 * 60 * 60) {
+    return null;
+  }
+  return seconds;
+};
+
+const isContinuousAudioEligibleType = (item: MediaItem) => {
+  const itemType = item.media_type || item.fileType || item.type || '';
+  const contentType = (item.contentType || '').toLowerCase();
+  const sourceName = `${item.title || ''} ${item.s3_key || ''} ${item.url || ''}`.toLowerCase();
+  const isAudio =
+    itemType === 'audio' ||
+    contentType.startsWith('audio/') ||
+    /\.(mp3|m4a|aac)(?:$|[?#])/.test(sourceName);
+
+  if (!isAudio) return false;
+
+  return (
+    contentType === 'audio/mpeg' ||
+    contentType === 'audio/mp3' ||
+    contentType === 'audio/aac' ||
+    contentType === 'audio/mp4' ||
+    contentType === 'audio/x-m4a' ||
+    contentType === 'audio/m4a' ||
+    /\.(mp3|m4a|aac)(?:$|[?#])/.test(sourceName)
+  );
 };
 
 interface FeaturedProductsPanelProps {
@@ -245,6 +278,7 @@ const FeaturedProductsPanel = React.memo(({
     </View>
   );
 });
+FeaturedProductsPanel.displayName = 'FeaturedProductsPanel';
 
 interface QuickPayOverlayProps {
   activeProducts: ProductLink[];
@@ -384,6 +418,7 @@ const QuickPayOverlay = React.memo(({
     </View>
   );
 });
+QuickPayOverlay.displayName = 'QuickPayOverlay';
 
 const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackToken, autoPlay = false }: PlaylistPlayerProps) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -404,10 +439,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [userHasInteracted, setUserHasInteracted] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
+  const [continuousAudioSupport, setContinuousAudioSupport] = useState<'unknown' | 'native' | 'hlsjs' | 'none'>('unknown');
+  const [continuousAudioUnavailable, setContinuousAudioUnavailable] = useState(false);
   
   const videoRef = useRef<Video>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
+  const continuousAudioRef = useRef<HTMLAudioElement | null>(null);
+  const continuousHlsRef = useRef<any>(null);
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
   const goToNextVideoRef = useRef<() => void>(() => {});
@@ -436,7 +475,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const playTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const hasTrackedPlayRef = useRef<boolean>(false); // Tracked 30-second milestone for unique plays
   const hasTrackedTotalPlayRef = useRef<boolean>(false); // Tracked initial play for total plays
-  const currentMediaIdRef = useRef<number | null>(null);
+  const currentMediaIdRef = useRef<string | number | null>(null);
   const currentMediaItemRef = useRef<MediaItem | null>(null); // Store current media item for ref callbacks
   const startPlayTrackingRef = useRef<((mediaItem: MediaItem) => Promise<void>) | null>(null); // Store tracking function
 
@@ -725,10 +764,152 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   useMediaPrefetch(playableMedia, currentIndex, 2);
 
+  const manifestPlaylistId = playlistId || (playlistData?.id != null ? String(playlistData.id) : null);
+  const playableMediaSignature = useMemo(
+    () => playableMedia.map((item) => `${item.id}:${item.duration ?? ''}:${item.contentType ?? ''}:${item.fileType ?? ''}:${item.type ?? ''}`).join('|'),
+    [playableMedia]
+  );
+
+  const continuousAudioTracks = useMemo(() => {
+    if (Platform.OS !== 'web' || playableMedia.length === 0 || !manifestPlaylistId) {
+      return [];
+    }
+
+    const tracks: (MediaItem & { durationSeconds: number; startTime: number; endTime: number })[] = [];
+    let cursor = 0;
+
+    for (const item of playableMedia) {
+      const durationSeconds = normalizeManifestDurationSeconds(item.duration);
+      if (!durationSeconds || !isContinuousAudioEligibleType(item)) {
+        return [];
+      }
+
+      const startTime = cursor;
+      const endTime = startTime + durationSeconds;
+      tracks.push({
+        ...item,
+        durationSeconds,
+        startTime,
+        endTime,
+      });
+      cursor = endTime;
+    }
+
+    return tracks;
+  }, [manifestPlaylistId, playableMedia]);
+
+  const continuousAudioManifestUrl = useMemo(() => {
+    if (!manifestPlaylistId || continuousAudioTracks.length === 0) {
+      return null;
+    }
+
+    const baseUrl = api.defaults.baseURL?.replace('/api', '') || 'https://merchtech5-production.up.railway.app';
+    let url = `${baseUrl}/api/playlist-access/${manifestPlaylistId}/audio-manifest.m3u8`;
+    if (playbackToken && !/[?&]token=/.test(url)) {
+      url += `?token=${encodeURIComponent(playbackToken)}`;
+    }
+    return url;
+  }, [continuousAudioTracks.length, manifestPlaylistId, playbackToken]);
+
+  const shouldUseContinuousAudio =
+    Platform.OS === 'web' &&
+    !continuousAudioUnavailable &&
+    !!continuousAudioManifestUrl &&
+    continuousAudioTracks.length === playableMedia.length &&
+    (continuousAudioSupport === 'native' || continuousAudioSupport === 'hlsjs');
+
   // Update refs when values change
   useEffect(() => {
     currentMediaItemRef.current = currentMediaItem;
   }, [currentMediaItem]);
+
+  useEffect(() => {
+    setContinuousAudioUnavailable(false);
+  }, [manifestPlaylistId, playableMediaSignature, playbackToken]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || continuousAudioTracks.length === 0 || !continuousAudioManifestUrl) {
+      setContinuousAudioSupport('none');
+      return;
+    }
+
+    const probe = document.createElement('audio');
+    const nativeHlsSupport = probe.canPlayType('application/vnd.apple.mpegurl') || probe.canPlayType('audio/mpegurl');
+    if (nativeHlsSupport) {
+      setContinuousAudioSupport('native');
+      return;
+    }
+
+    const hasMse =
+      typeof window !== 'undefined' &&
+      typeof (window as any).MediaSource !== 'undefined';
+    setContinuousAudioSupport(hasMse ? 'hlsjs' : 'none');
+  }, [continuousAudioManifestUrl, continuousAudioTracks.length]);
+
+  useEffect(() => {
+    if (!shouldUseContinuousAudio || !continuousAudioManifestUrl || !continuousAudioRef.current) {
+      if (continuousHlsRef.current) {
+        continuousHlsRef.current.destroy();
+        continuousHlsRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const audio = continuousAudioRef.current;
+
+    if (continuousHlsRef.current) {
+      continuousHlsRef.current.destroy();
+      continuousHlsRef.current = null;
+    }
+
+    if (continuousAudioSupport === 'native') {
+      audio.src = continuousAudioManifestUrl;
+      audio.load();
+      return () => {
+        audio.removeAttribute('src');
+        audio.load();
+      };
+    }
+
+    if (continuousAudioSupport === 'hlsjs') {
+      import('hls.js')
+        .then((module) => {
+          if (cancelled || !continuousAudioRef.current) return;
+          const Hls = module.default;
+          if (!Hls.isSupported()) {
+            setContinuousAudioUnavailable(true);
+            return;
+          }
+
+          const hls = new Hls({
+            enableWorker: true,
+            lowLatencyMode: false,
+          });
+          continuousHlsRef.current = hls;
+          hls.loadSource(continuousAudioManifestUrl);
+          hls.attachMedia(continuousAudioRef.current);
+          hls.on(Hls.Events.ERROR, (_event: unknown, data: any) => {
+            if (data?.fatal) {
+              console.warn('🎵 CONTINUOUS_AUDIO: hls.js fatal error, falling back to per-track playback:', data);
+              setContinuousAudioUnavailable(true);
+            }
+          });
+        })
+        .catch((error) => {
+          console.warn('🎵 CONTINUOUS_AUDIO: Failed to load hls.js, falling back:', error);
+          setContinuousAudioUnavailable(true);
+        });
+    }
+
+    return () => {
+      cancelled = true;
+      if (continuousHlsRef.current) {
+        continuousHlsRef.current.destroy();
+        continuousHlsRef.current = null;
+      }
+    };
+  }, [continuousAudioManifestUrl, continuousAudioSupport, shouldUseContinuousAudio]);
 
   // Fetch slideshow data when current item is a slideshow (playlist-aware)
   useEffect(() => {
@@ -816,7 +997,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         // Get age and gender data
         if (user) {
           // For authenticated users, get from demographics helper
-          const demographics = getDemographicsForTracking(true, { ageRange: user.ageRange || null, gender: user.gender || null });
+          const userDemographics = user as any;
+          const demographics = getDemographicsForTracking(true, {
+            ageRange: userDemographics.ageRange || null,
+            gender: userDemographics.gender || null,
+          });
           ageRange = demographics?.ageRange;
           gender = demographics?.gender;
         } else {
@@ -964,12 +1149,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
 
   // Reset tracking when media changes
   useEffect(() => {
+    if (isPlaying) {
+      return;
+    }
+
     playDurationRef.current = 0;
     hasTrackedPlayRef.current = false;
     hasTrackedTotalPlayRef.current = false;
     currentMediaIdRef.current = null;
     stopPlayTracking();
-  }, [currentIndex, stopPlayTracking]);
+  }, [currentIndex, isPlaying, stopPlayTracking]);
 
   // Cleanup retry timeout on unmount
   useEffect(() => {
@@ -1248,6 +1437,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   };
 
   const handlePrevious = () => {
+    if (shouldUseContinuousAudio) {
+      const previousIndex = currentIndex > 0 ? currentIndex - 1 : playableMedia.length - 1;
+      seekToContinuousAudioTrack(previousIndex);
+      return;
+    }
+
     // Preserve play state across manual navigation
     resumeOnAdvanceRef.current = isPlaying;
     stopCurrentMedia();
@@ -1260,6 +1455,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   };
 
   const handleNext = () => {
+    if (shouldUseContinuousAudio) {
+      const nextIndex = currentIndex < playableMedia.length - 1 ? currentIndex + 1 : 0;
+      seekToContinuousAudioTrack(nextIndex);
+      return;
+    }
+
     // Preserve play state across manual navigation
     resumeOnAdvanceRef.current = isPlaying;
     stopCurrentMedia();
@@ -1428,6 +1629,38 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     resumeOnAdvanceRef.current = true;
     goToNextVideo();
   }, [goToNextVideo]);
+
+  const updateContinuousAudioTrackFromTime = useCallback((currentTime: number) => {
+    if (!shouldUseContinuousAudio || continuousAudioTracks.length === 0) {
+      return;
+    }
+
+    const nextIndex = continuousAudioTracks.findIndex((track, index) => {
+      const isLastTrack = index === continuousAudioTracks.length - 1;
+      return currentTime >= track.startTime && (currentTime < track.endTime || isLastTrack);
+    });
+
+    if (nextIndex >= 0 && nextIndex !== currentIndex) {
+      setCurrentIndex(nextIndex);
+    }
+  }, [continuousAudioTracks, currentIndex, shouldUseContinuousAudio]);
+
+  const seekToContinuousAudioTrack = useCallback((index: number) => {
+    const track = continuousAudioTracks[index];
+    const audio = continuousAudioRef.current;
+    if (!track || !audio) {
+      return false;
+    }
+
+    setCurrentIndex(index);
+    audio.currentTime = Math.max(0, track.startTime + 0.01);
+    if (isPlaying || resumeOnAdvanceRef.current) {
+      audio.play().catch((error) => {
+        console.warn('🎵 CONTINUOUS_AUDIO: Failed to resume after seek:', error);
+      });
+    }
+    return true;
+  }, [continuousAudioTracks, isPlaying]);
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -1835,6 +2068,96 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           isMuted,
           currentItem: currentItem.title
         });
+
+        if (shouldUseContinuousAudio) {
+          return (
+            <View style={[styles.audioPlayerContainer, isMobile && !isFullscreen && styles.audioPlayerContainerMobile]}>
+              <View style={styles.audioVisualization}>
+                <View style={styles.audioWaveform}>
+                  {Array.from({ length: 20 }, (_, i) => (
+                    <View
+                      key={i}
+                      style={[
+                        styles.waveformBar,
+                        {
+                          height: Math.random() * 60 + 20,
+                          backgroundColor: isPlaying ? '#3b82f6' : '#e5e7eb',
+                          animationDelay: `${i * 0.1}s`,
+                        },
+                      ]}
+                    />
+                  ))}
+                </View>
+
+                {!isFullscreen && (
+                  <View style={styles.audioInfo}>
+                    <MaterialIcons name="music-note" size={48} color="#3b82f6" />
+                    <Text style={styles.audioTitle}>{currentItem.title}</Text>
+                    <Text style={styles.audioSubtitle}>Continuous Audio Playlist</Text>
+                  </View>
+                )}
+              </View>
+
+              <audio
+                key={`continuous-audio-${manifestPlaylistId}`}
+                crossOrigin="anonymous"
+                ref={(ref) => {
+                  continuousAudioRef.current = ref;
+                  attachMediaController(ref, 'audio');
+                }}
+                style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
+                controls={false}
+                controlsList="nodownload noplaybackrate noremoteplayback"
+                onContextMenu={(e) => e.preventDefault()}
+                muted={isMuted}
+                preload="auto"
+                onLoadedMetadata={() => debugLog('🎵 CONTINUOUS_AUDIO: loadedmetadata')}
+                onPlaying={handleNativeMediaPlaying}
+                onPause={handleNativeMediaPause}
+                onTimeUpdate={(e) => {
+                  updateContinuousAudioTrackFromTime((e.target as HTMLAudioElement).currentTime);
+                }}
+                onError={(e) => {
+                  const audio = e.target as HTMLAudioElement;
+                  console.warn('🎵 CONTINUOUS_AUDIO: Manifest playback failed, falling back to per-track audio:', {
+                    error: audio.error,
+                    networkState: audio.networkState,
+                    readyState: audio.readyState,
+                    src: audio.src,
+                    currentSrc: audio.currentSrc,
+                  });
+                  setContinuousAudioUnavailable(true);
+                }}
+                onCanPlayThrough={() => {
+                  if (userHasInteracted && isPlaying && continuousAudioRef.current) {
+                    const audio = continuousAudioRef.current;
+                    const now = Date.now();
+                    if (!audio.paused) {
+                      return;
+                    }
+                    if (now - lastAutoPlayAttemptAtRef.current < MIN_AUTOPLAY_RETRY_MS) {
+                      return;
+                    }
+                    lastAutoPlayAttemptAtRef.current = now;
+                    audio.play().catch((err) => {
+                      console.warn('🎵 CONTINUOUS_AUDIO: Auto-play on canplaythrough failed:', err);
+                    });
+                  }
+                }}
+                onEnded={() => {
+                  setCurrentIndex(0);
+                  if (isPlaying && continuousAudioRef.current) {
+                    const audio = continuousAudioRef.current;
+                    audio.currentTime = 0;
+                    audio.play().catch((error) => {
+                      console.warn('🎵 CONTINUOUS_AUDIO: Failed to loop playlist:', error);
+                    });
+                  }
+                }}
+              />
+            </View>
+          );
+        }
         
       return (
         <View style={[styles.audioPlayerContainer, isMobile && !isFullscreen && styles.audioPlayerContainerMobile]}>

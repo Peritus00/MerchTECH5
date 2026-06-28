@@ -34,6 +34,7 @@ const shouldSkipRequestResponseLog = (req) => {
 
   // Media streaming endpoints generate many range requests and can spam logs.
   if (/^\/api\/media\/\d+\/stream\b/.test(url)) return true;
+  if (/^\/api\/(?:playlists|playlist-access)\/\d+\/audio-manifest\.m3u8\b/.test(url)) return true;
   if (/^\/api\/slideshow-(audio|images)\/.+\/stream\b/.test(url)) return true;
 
   // Common static assets (especially on web) that don't need per-request logging.

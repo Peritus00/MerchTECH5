@@ -22,6 +22,7 @@ const crypto = require('crypto');
 const socialAuthService = require('./socialAuthService');
 const smsService = require('./services/smsService');
 const {
+  isPlaylistItemActiveOnDate,
   validatePlaylistMediaScheduleItems,
   normalizePlaylistItemFromBody,
   toIsoDateString,
@@ -570,10 +571,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Media stream endpoints - very lenient rate limiting (streaming is expected to be frequent)
-// Apply to paths matching /api/media/*/stream pattern
+// Media stream/manifest endpoints - very lenient rate limiting (streaming is expected to be frequent)
+// Apply to paths matching /api/media/*/stream or playlist audio manifest patterns.
 app.use((req, res, next) => {
-  if (req.path.match(/^\/api\/media\/\d+\/stream$/)) {
+  if (
+    req.path.match(/^\/api\/media\/\d+\/stream$/) ||
+    req.path.match(/^\/api\/(?:playlists|playlist-access)\/\d+\/audio-manifest\.m3u8$/)
+  ) {
     return mediaStreamLimiter(req, res, next);
   }
   next();
@@ -613,7 +617,8 @@ app.use('/api/', (req, res, next) => {
   // req.path here excludes the "/api" mount prefix, so stream paths look like
   // "/media/:id/stream" rather than "/api/media/:id/stream".
   const isStreamEndpoint = /^\/.+\/stream$/.test(req.path);
-  if (isStreamEndpoint) {
+  const isAudioManifestEndpoint = /^\/(?:playlists|playlist-access)\/\d+\/audio-manifest\.m3u8$/.test(req.path);
+  if (isStreamEndpoint || isAudioManifestEndpoint) {
     return next();
   }
   return generalApiLimiter(req, res, next);
@@ -8736,11 +8741,11 @@ async function ensureMediaUploadWorkflowSchema() {
 }
 
 function getMediaUploadStatus(media) {
-    return media?.upload_status || 'ready';
+    return media?.upload_status || media?.uploadStatus || 'ready';
 }
 
 function getMediaScanStatus(media) {
-    return media?.scan_status || (getMediaUploadStatus(media) === 'ready' ? 'clean' : null);
+    return media?.scan_status || media?.scanStatus || (getMediaUploadStatus(media) === 'ready' ? 'clean' : null);
 }
 
 function isMediaReadyForPublicAccess(media) {
@@ -8785,6 +8790,7 @@ function serializeMediaRecord(media, properUrl) {
         updatedAt: media.updated_at,
         fileType: media.file_type,
         contentType: media.content_type,
+    duration: media.duration,
         type: getMediaType(media),
         uploadStatus: getMediaUploadStatus(media),
         scanStatus: getMediaScanStatus(media),
@@ -9736,6 +9742,199 @@ app.get('/api/media/:id', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch media file' });
   }
 });
+
+function getLocalIsoDateString() {
+  const now = new Date();
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000;
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10);
+}
+
+function normalizeAudioManifestDuration(duration) {
+  const value = Number(duration);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Some upload paths store image durations in ms. Audio is normally seconds, but
+  // extremely large values are safer to treat as milliseconds for manifest timing.
+  const seconds = value > 10000 ? value / 1000 : value;
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 12 * 60 * 60) return null;
+  return seconds;
+}
+
+function inferManifestAudioType(media) {
+  const contentType = String(media.contentType || media.content_type || '').toLowerCase();
+  const fileName = String(media.filename || media.title || media.s3_key || media.url || '').toLowerCase();
+
+  if (
+    contentType === 'audio/mpeg' ||
+    contentType === 'audio/mp3' ||
+    fileName.endsWith('.mp3')
+  ) {
+    return 'mp3';
+  }
+
+  if (
+    contentType === 'audio/aac' ||
+    contentType === 'audio/mp4' ||
+    contentType === 'audio/x-m4a' ||
+    contentType === 'audio/m4a' ||
+    fileName.endsWith('.aac') ||
+    fileName.endsWith('.m4a')
+  ) {
+    return 'aac';
+  }
+
+  return null;
+}
+
+function isManifestEligibleAudio(media) {
+  const mediaType = media.media_type || media.fileType || media.file_type || media.type;
+  const contentType = String(media.contentType || media.content_type || '').toLowerCase();
+  const isAudio =
+    mediaType === 'audio' ||
+    contentType.startsWith('audio/') ||
+    inferManifestAudioType(media) !== null;
+
+  return isAudio && inferManifestAudioType(media) !== null;
+}
+
+function appendQueryParam(url, key, value) {
+  if (!value || !url || new RegExp(`[?&]${key}=`).test(url)) {
+    return url;
+  }
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}${key}=${encodeURIComponent(value)}`;
+}
+
+function buildPlaylistAudioManifest(playlistId, tracks, token) {
+  const targetDuration = Math.max(
+    1,
+    ...tracks.map((track) => Math.ceil(track.durationSeconds))
+  );
+  const lines = [
+    '#EXTM3U',
+    '#EXT-X-VERSION:3',
+    `#EXT-X-TARGETDURATION:${targetDuration}`,
+    '#EXT-X-PLAYLIST-TYPE:VOD',
+    '#EXT-X-MEDIA-SEQUENCE:0',
+  ];
+
+  tracks.forEach((track, index) => {
+    if (index > 0) {
+      lines.push('#EXT-X-DISCONTINUITY');
+    }
+    lines.push(`#EXTINF:${track.durationSeconds.toFixed(3)},${String(track.title || `Track ${index + 1}`).replace(/[\r\n,]/g, ' ')}`);
+    lines.push(appendQueryParam(track.url, 'token', token));
+  });
+
+  lines.push('#EXT-X-ENDLIST');
+  return `${lines.join('\n')}\n`;
+}
+
+async function handlePlaylistAudioManifest(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+  try {
+    const { id } = req.params;
+    const playlist = await getPlaylistWithMedia(id);
+
+    if (!playlist) {
+      return res.status(404).json({ error: 'Playlist not found' });
+    }
+
+    const accessRestricted = playlist.requiresActivationCode && !playlist.isPublic;
+    const token = getPlaybackTokenFromRequest(req);
+
+    if (accessRestricted && !requestHasPlaylistPlaybackAccess(req, id)) {
+      return res.status(403).json({
+        error: 'Activation code required to load playlist audio manifest',
+        code: 'LOCKED_PLAYLIST_MANIFEST',
+      });
+    }
+
+    const today = getLocalIsoDateString();
+    const playableMedia = (playlist.mediaFiles || []).filter((media) =>
+      isPlaylistItemActiveOnDate(
+        {
+          scheduleEnabled: !!media.scheduleEnabled,
+          scheduleStartDate: media.scheduleStartDate ?? null,
+          scheduleEndDate: media.scheduleEndDate ?? null,
+          scheduleExactDates: media.scheduleExactDates ?? [],
+          scheduleRecurringRules: media.scheduleRecurringRules ?? [],
+        },
+        today
+      )
+    );
+
+    if (playableMedia.length === 0) {
+      return res.status(404).json({
+        error: 'No playlist media is scheduled for today',
+        code: 'NO_SCHEDULED_MEDIA',
+      });
+    }
+
+    const tracks = [];
+    for (const media of playableMedia) {
+      if (!isMediaReadyForPublicAccess(media)) {
+        return res.status(423).json({
+          error: 'Media is still being security scanned and is not yet available.',
+          code: 'MEDIA_PENDING_SCAN',
+        });
+      }
+
+      if (!isManifestEligibleAudio(media)) {
+        return res.status(422).json({
+          error: 'Playlist contains media that is not eligible for continuous audio playback.',
+          code: 'PLAYLIST_AUDIO_MANIFEST_INELIGIBLE_MEDIA',
+          mediaId: media.id,
+        });
+      }
+
+      const durationSeconds = normalizeAudioManifestDuration(media.duration);
+      if (!durationSeconds) {
+        return res.status(422).json({
+          error: 'Playlist audio manifest requires reliable track durations.',
+          code: 'PLAYLIST_AUDIO_MANIFEST_MISSING_DURATION',
+          mediaId: media.id,
+        });
+      }
+
+      const streamUrl = media.url?.startsWith('http')
+        ? media.url
+        : `${getPublicMediaBaseUrl()}/api/media/${media.id}/stream`;
+
+      tracks.push({
+        id: media.id,
+        title: media.title,
+        url: streamUrl,
+        durationSeconds,
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.setHeader('Content-Disposition', `inline; filename="playlist-${id}-audio.m3u8"`);
+    return res.status(200).send(buildPlaylistAudioManifest(id, tracks, token));
+  } catch (error) {
+    console.error('🎵 AUDIO_MANIFEST: Error generating playlist audio manifest:', error);
+    return res.status(500).json({
+      error: 'Failed to generate playlist audio manifest',
+      code: 'PLAYLIST_AUDIO_MANIFEST_ERROR',
+    });
+  }
+}
+
+app.options(['/api/playlists/:id/audio-manifest.m3u8', '/api/playlist-access/:id/audio-manifest.m3u8'], (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '3600');
+  res.status(204).end();
+});
+
+app.get('/api/playlists/:id/audio-manifest.m3u8', handlePlaylistAudioManifest);
+app.get('/api/playlist-access/:id/audio-manifest.m3u8', handlePlaylistAudioManifest);
 
 // Handle OPTIONS preflight requests for media streaming
 app.options('/api/media/:id/stream', (req, res) => {
@@ -10759,6 +10958,7 @@ async function getPlaylistWithMedia(playlistId) {
     filePath: `/uploads/${media.filename}`,
     fileType: media.file_type,
     contentType: media.content_type,
+    duration: media.duration,
     displayOrder: media.display_order,
     createdAt: media.created_at,
     updatedAt: media.updated_at,
