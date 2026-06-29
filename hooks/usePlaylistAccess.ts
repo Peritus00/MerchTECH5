@@ -14,6 +14,8 @@ export function usePlaylistAccess(id: string | undefined, playbackToken?: string
       return response.data;
     },
     enabled: !!id,
-    staleTime: 1000 * 60 * 2, // 2 min - playlist content doesn't change often
+    // Access-control fields can change while a viewer has the player open.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }

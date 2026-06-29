@@ -26,6 +26,7 @@ export default function PlaylistPlayerScreen() {
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [playbackToken, setPlaybackToken] = useState<string | null>(null);
   const [previewPhoneLeadId, setPreviewPhoneLeadId] = useState<number | null>(null);
+  const [hasCheckedStoredLeadId, setHasCheckedStoredLeadId] = useState(false);
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
   const queryPlaybackToken = playbackToken || routePlaybackToken || null;
   const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(id, queryPlaybackToken);
@@ -99,16 +100,21 @@ export default function PlaylistPlayerScreen() {
   useEffect(() => {
     let isActive = true;
     const loadLeadId = async () => {
+      setHasCheckedStoredLeadId(false);
       const routeLeadId = routeLeadIdParam ? Number(routeLeadIdParam) : null;
       if (routeLeadId && Number.isFinite(routeLeadId)) {
         await AsyncStorage.setItem(`open_access_lead_playlist_${id}`, String(routeLeadId));
-        if (isActive) setPreviewPhoneLeadId(routeLeadId);
+        if (isActive) {
+          setPreviewPhoneLeadId(routeLeadId);
+          setHasCheckedStoredLeadId(true);
+        }
         return;
       }
       const storedLeadId = await AsyncStorage.getItem(`open_access_lead_playlist_${id}`);
       const parsed = storedLeadId ? Number(storedLeadId) : null;
       if (isActive) {
         setPreviewPhoneLeadId(parsed && Number.isFinite(parsed) ? parsed : null);
+        setHasCheckedStoredLeadId(true);
       }
     };
     if (id) {
@@ -122,7 +128,18 @@ export default function PlaylistPlayerScreen() {
   const accessRestricted = Boolean((playlist as any)?.accessRestricted);
   const hasPlaybackToken = Boolean(queryPlaybackToken || (playlist as any)?.playbackToken);
   const hasLoadedPlayableMedia = Array.isArray((playlist as any)?.mediaFiles) && (playlist as any).mediaFiles.length > 0;
-  const canAccessPlaylist = Boolean(playlist) && (!accessRestricted || (hasPlaybackToken && hasLoadedPlayableMedia));
+  const requiresOpenAccessLead = Boolean((playlist as any)?.requirePhoneForOpenAccess);
+  const shouldRedirectForOpenAccessLead =
+    Boolean(playlist) &&
+    requiresOpenAccessLead &&
+    hasCheckedStoredLeadId &&
+    !previewPhoneLeadId &&
+    !loading &&
+    !isFetching;
+  const canAccessPlaylist =
+    Boolean(playlist) &&
+    !shouldRedirectForOpenAccessLead &&
+    (!accessRestricted || (hasPlaybackToken && hasLoadedPlayableMedia));
   const awaitingAccessDecision =
     Boolean(playlist) &&
     accessRestricted &&
@@ -138,6 +155,12 @@ export default function PlaylistPlayerScreen() {
       router.replace(`/playlist-access/${id}`);
     }
   }, [shouldRedirectForActivation, id]);
+
+  useEffect(() => {
+    if (shouldRedirectForOpenAccessLead) {
+      router.replace(`/playlist-access/${id}`);
+    }
+  }, [shouldRedirectForOpenAccessLead, id]);
 
   // Attempt geolocation on player too (some QR flows go straight here)
   useEffect(() => {
@@ -287,12 +310,14 @@ export default function PlaylistPlayerScreen() {
     return null;
   }
 
-  if (awaitingAccessDecision || shouldRedirectForActivation) {
+  if (awaitingAccessDecision || shouldRedirectForActivation || shouldRedirectForOpenAccessLead) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text style={styles.loadingText}>
-          {shouldRedirectForActivation ? 'Opening activation code screen...' : 'Checking playlist access...'}
+          {shouldRedirectForActivation || shouldRedirectForOpenAccessLead
+            ? 'Opening access screen...'
+            : 'Checking playlist access...'}
         </Text>
       </View>
     );

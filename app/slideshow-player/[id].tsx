@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ActivityIndicator, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRoute } from '@react-navigation/native';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import SlideshowPlayer from '@/components/SlideshowPlayer';
@@ -21,6 +21,7 @@ export default function SlideshowPlayerScreen() {
   const { data: slideshow, isLoading: loading, isError, error, refetch } = useSlideshowAccess(id);
   const [presignedAudioUrl, setPresignedAudioUrl] = useState<string | null>(null);
   const [previewPhoneLeadId, setPreviewPhoneLeadId] = useState<number | null>(null);
+  const [hasCheckedStoredLeadId, setHasCheckedStoredLeadId] = useState(false);
   const { isAuthenticated } = useAuth();
   
   // Demographics survey state
@@ -39,16 +40,21 @@ export default function SlideshowPlayerScreen() {
   useEffect(() => {
     let isActive = true;
     const loadLeadId = async () => {
+      setHasCheckedStoredLeadId(false);
       const routeLeadId = routeLeadIdParam ? Number(routeLeadIdParam) : null;
       if (routeLeadId && Number.isFinite(routeLeadId)) {
         await AsyncStorage.setItem(`open_access_lead_slideshow_${id}`, String(routeLeadId));
-        if (isActive) setPreviewPhoneLeadId(routeLeadId);
+        if (isActive) {
+          setPreviewPhoneLeadId(routeLeadId);
+          setHasCheckedStoredLeadId(true);
+        }
         return;
       }
       const storedLeadId = await AsyncStorage.getItem(`open_access_lead_slideshow_${id}`);
       const parsed = storedLeadId ? Number(storedLeadId) : null;
       if (isActive) {
         setPreviewPhoneLeadId(parsed && Number.isFinite(parsed) ? parsed : null);
+        setHasCheckedStoredLeadId(true);
       }
     };
     if (id) {
@@ -58,6 +64,19 @@ export default function SlideshowPlayerScreen() {
       isActive = false;
     };
   }, [id, routeLeadIdParam]);
+
+  const shouldRedirectForOpenAccessLead =
+    Boolean(slideshow) &&
+    Boolean((slideshow as any)?.requirePhoneForOpenAccess) &&
+    hasCheckedStoredLeadId &&
+    !previewPhoneLeadId &&
+    !loading;
+
+  useEffect(() => {
+    if (shouldRedirectForOpenAccessLead) {
+      router.replace(`/slideshow-access/${id}` as any);
+    }
+  }, [shouldRedirectForOpenAccessLead, id]);
 
   // Fetch user demographics if authenticated
   useEffect(() => {
@@ -126,11 +145,11 @@ export default function SlideshowPlayerScreen() {
         }
       }
     };
-    if (slideshow && !loading) {
+    if (slideshow && !loading && !shouldRedirectForOpenAccessLead) {
       const t = setTimeout(submitGeo, 1200);
       return () => clearTimeout(t);
     }
-  }, [slideshow, loading, id]);
+  }, [slideshow, loading, shouldRedirectForOpenAccessLead, id]);
 
   // Show demographics survey after content starts playing
   useEffect(() => {
@@ -143,7 +162,7 @@ export default function SlideshowPlayerScreen() {
       });
       
       // Only show survey after content is loaded
-      if (!slideshow || loading) {
+      if (!slideshow || loading || shouldRedirectForOpenAccessLead) {
         console.log('🔍 SLIDESHOW_PLAYER_DEMOGRAPHICS: Skipping - slideshow not loaded');
         return;
       }
@@ -166,7 +185,7 @@ export default function SlideshowPlayerScreen() {
     };
     
     checkAndShowSurvey();
-  }, [slideshow, loading, isAuthenticated, userDemographics]);
+  }, [slideshow, loading, isAuthenticated, shouldRedirectForOpenAccessLead, userDemographics]);
 
   // Track QR scan when slideshow loads (only once per mount)
   useEffect(() => {
@@ -217,6 +236,15 @@ export default function SlideshowPlayerScreen() {
 
   if (!slideshow) {
     return null;
+  }
+
+  if (shouldRedirectForOpenAccessLead) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Opening access screen...</Text>
+      </View>
+    );
   }
 
   // Demographics survey handler
