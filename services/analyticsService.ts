@@ -1,6 +1,11 @@
 import { AnalyticsSummary, ScanData } from '../types';
 import { api } from './api';
 
+/** Round opt-in coordinates to ~1m precision (5 decimal places). */
+function roundPreciseCoordinate(n: number): number {
+  return Math.round(n * 100000) / 100000;
+}
+
 export const analyticsService = {
   // Get analytics summary from real data
   async getAnalyticsSummary(options?: { days?: number; qrCodeId?: number }): Promise<AnalyticsSummary> {
@@ -37,18 +42,36 @@ export const analyticsService = {
   },
 
   // Submit browser geolocation for a recent scan (links via qr_vid cookie)
-  async submitBrowserGeo(qrCodeId: number, lat: number, lng: number, accuracy?: number): Promise<void> {
+  async submitBrowserGeo(
+    qrCodeId: number,
+    lat: number,
+    lng: number,
+    accuracy?: number,
+    leadId?: number
+  ): Promise<void> {
     try {
-      // Round client-side to ~2 decimals (~1–3 km)
-      const r = (n: number) => Math.round(n * 100) / 100;
       await api.post('/analytics/geo', {
         qrCodeId,
-        lat: r(lat),
-        lng: r(lng),
+        lat: roundPreciseCoordinate(lat),
+        lng: roundPreciseCoordinate(lng),
         accuracy,
+        leadId,
+        consentStatus: 'granted',
       });
     } catch (error) {
       console.error('Error submitting browser geolocation:', error);
+    }
+  },
+
+  async submitGeoConsent(payload: {
+    leadId?: number;
+    qrCodeId?: number;
+    consentStatus: 'denied' | 'unavailable';
+  }): Promise<void> {
+    try {
+      await api.post('/analytics/geo-consent', payload);
+    } catch (error) {
+      console.error('Error submitting geo consent:', error);
     }
   },
 

@@ -31,9 +31,11 @@ export function shouldPromptForLocation(scope: LocationOptInScope): boolean {
   return getLocationOptInDecision(scope) == null;
 }
 
+export type PreciseLocationConsentStatus = 'granted' | 'denied' | 'unavailable' | 'not_requested';
+
 export async function requestBrowserLocation(): Promise<GeolocationPosition> {
   return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => reject(new Error('Geolocation timeout')), 8000);
+    const timeoutId = setTimeout(() => reject(new Error('Geolocation timeout')), 10000);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         clearTimeout(timeoutId);
@@ -43,7 +45,13 @@ export async function requestBrowserLocation(): Promise<GeolocationPosition> {
         clearTimeout(timeoutId);
         reject(err);
       },
-      { enableHighAccuracy: false, maximumAge: 60000, timeout: 8000 }
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
   });
+}
+
+export function geolocationErrorToConsentStatus(err: unknown): PreciseLocationConsentStatus {
+  const code = (err as GeolocationPositionError | undefined)?.code;
+  if (code === 1) return 'denied';
+  return 'unavailable';
 }

@@ -70,6 +70,9 @@ function formatLocation(event: LeadActivityEvent): string {
   if (event.locationSource) {
     parts.push(`source: ${event.locationSource}`);
   }
+  if (event.geoConsent) {
+    parts.push(`consent: ${event.geoConsent}`);
+  }
   return parts.length ? parts.join(' | ') : 'Location unavailable';
 }
 
@@ -203,6 +206,18 @@ export default function LeadActivityModal({ visible, leadId, admin = false, onCl
               <ThemedText style={styles.profileLine}>
                 SMS marketing: {data.lead.marketingOptIn ? 'yes' : 'no'} | Email marketing:{' '}
                 {data.lead.emailMarketingOptIn ? 'yes' : 'no'}
+              </ThemedText>
+              <ThemedText style={styles.profileLine}>
+                Precise location: {data.lead.preciseLocationConsentStatus === 'granted'
+                  ? 'yes'
+                  : data.lead.preciseLocationConsentStatus === 'denied'
+                    ? 'declined'
+                    : data.lead.preciseLocationConsentStatus === 'unavailable'
+                      ? 'unavailable'
+                      : 'not asked'}
+                {data.lead.preciseLocationAccuracyM != null
+                  ? ` (~${data.lead.preciseLocationAccuracyM}m accuracy)`
+                  : ''}
               </ThemedText>
             </View>
 

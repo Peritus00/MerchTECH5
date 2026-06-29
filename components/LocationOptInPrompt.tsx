@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { analyticsService } from '@/services/analyticsService';
 import {
+  geolocationErrorToConsentStatus,
   LocationOptInScope,
   markLocationOptInAccepted,
   markLocationOptInDeclined,
@@ -47,14 +48,28 @@ export default function LocationOptInPrompt({
     return () => clearTimeout(timer);
   }, [delayMs, enabled, scope.contentId, scope.contentType, scope.leadId]);
 
-  const handleDecline = () => {
+  const persistConsent = async (status: 'denied' | 'unavailable') => {
+    try {
+      await analyticsService.submitGeoConsent({
+        leadId: scope.leadId ?? undefined,
+        qrCodeId: qrCodeId ?? undefined,
+        consentStatus: status,
+      });
+    } catch {
+      // Non-blocking; sessionStorage still records the user's choice.
+    }
+  };
+
+  const handleDecline = async () => {
     markLocationOptInDeclined(scope);
+    await persistConsent('denied');
     setVisible(false);
   };
 
   const handleAccept = async () => {
     if (!qrCodeId) {
       markLocationOptInDeclined(scope);
+      await persistConsent('unavailable');
       setVisible(false);
       return;
     }
@@ -65,12 +80,14 @@ export default function LocationOptInPrompt({
         Number(qrCodeId),
         pos.coords.latitude,
         pos.coords.longitude,
-        pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
+        pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined,
+        scope.leadId ?? undefined
       );
       markLocationOptInAccepted(scope);
       setVisible(false);
-    } catch {
+    } catch (err) {
       markLocationOptInDeclined(scope);
+      await persistConsent(geolocationErrorToConsentStatus(err));
       setVisible(false);
     } finally {
       setSubmitting(false);
@@ -88,10 +105,10 @@ export default function LocationOptInPrompt({
           <View style={styles.iconWrap}>
             <MaterialIcons name="location-on" size={28} color="#2563eb" />
           </View>
-          <ThemedText style={styles.title}>Share your location?</ThemedText>
+          <ThemedText style={styles.title}>Share precise location?</ThemedText>
           <ThemedText style={styles.body}>
-            Optional: help sponsors understand where content is enjoyed. We store rounded coordinates only and never
-            block playback if you decline.
+            Optional: share your device location so sponsors can research where content is enjoyed. We store precise
+            coordinates only when you agree. Declining will not block playback.
           </ThemedText>
           <View style={styles.actions}>
             <TouchableOpacity style={styles.secondaryBtn} onPress={handleDecline} disabled={submitting}>

@@ -711,6 +711,10 @@ export type LeadActivityProfile = {
   emailMarketingConsentCopyVersion?: string | null;
   openAccessUnlockedAt?: string | null;
   createdAt?: string | null;
+  preciseLocationConsentStatus?: string | null;
+  preciseLocationConsentedAt?: string | null;
+  preciseLocationAccuracyM?: number | null;
+  hasPreciseLocation?: boolean;
 };
 
 export type LeadActivityResponse = {
@@ -743,6 +747,10 @@ export const previewLeadsAPI = {
         coupon_id: number | null;
         lead_source?: string;
         owner_user_id?: number;
+        precise_location_consent_status?: string | null;
+        precise_location_consented_at?: string | null;
+        precise_location_accuracy_m?: number | null;
+        has_precise_location?: boolean;
         first_scan_at?: string | null;
         last_activity_at?: string | null;
         play_count?: number;
@@ -761,6 +769,7 @@ export const previewLeadsAPI = {
     emailMarketingOnly?: boolean;
     contentType?: 'playlist' | 'slideshow';
     leadSource?: string;
+    preciseLocation?: 'granted' | 'denied' | 'unavailable' | 'not_requested';
     limit?: number;
   }) {
     const { admin, ...query } = params || {};
@@ -792,6 +801,10 @@ export const previewLeadsAPI = {
         account_created_at?: string | null;
         lead_source?: string;
         created_at?: string;
+        precise_location_consent_status?: string | null;
+        precise_location_consented_at?: string | null;
+        precise_location_accuracy_m?: number | null;
+        has_precise_location?: boolean;
         first_scan_at?: string | null;
         last_activity_at?: string | null;
         play_count?: number;

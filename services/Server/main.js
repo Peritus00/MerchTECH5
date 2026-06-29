@@ -1159,25 +1159,48 @@ app.get('/api/admin/geo-debug', authenticateToken, isAdmin, (req, res) => {
   });
 });
 
+function roundPreciseCoordinate(n) {
+  return Math.round(Number(n) * 100000) / 100000;
+}
+
+async function updateLeadPreciseLocationConsent(leadId, status, { accuracy = null, scanId = null } = {}) {
+  if (!leadId || !status) return;
+  const allowed = ['granted', 'denied', 'unavailable', 'not_requested'];
+  if (!allowed.includes(status)) return;
+  try {
+    await db.query(
+      `UPDATE preview_phone_leads
+          SET precise_location_consent_status = $2,
+              precise_location_consented_at = NOW(),
+              precise_location_accuracy_m = CASE WHEN $2 = 'granted' THEN $3 ELSE NULL END,
+              precise_location_source_scan_id = CASE WHEN $2 = 'granted' THEN $4 ELSE precise_location_source_scan_id END,
+              updated_at = NOW()
+        WHERE id = $1 AND verified_at IS NOT NULL`,
+      [leadId, status, accuracy, scanId]
+    );
+  } catch (e) {
+    console.warn('updateLeadPreciseLocationConsent failed:', e.message);
+  }
+}
+
 // Submit browser geolocation to upgrade recent scan's geo (no auth; links via cookie)
 app.post('/api/analytics/geo', async (req, res) => {
   try {
-    const { qrCodeId, lat, lng, accuracy } = req.body || {};
+    const { qrCodeId, lat, lng, accuracy, leadId, consentStatus } = req.body || {};
     if (typeof lat !== 'number' || typeof lng !== 'number') {
       return res.status(400).json({ error: 'lat, lng required' });
     }
-    // Round server-side as well for privacy
-    const r = (n) => Math.round(n * 100) / 100;
-    const latR = r(lat);
-    const lngR = r(lng);
+    const latR = roundPreciseCoordinate(lat);
+    const lngR = roundPreciseCoordinate(lng);
     const visitorId = getOrSetVisitorId(req, res);
+    const numericLeadId = leadId != null && leadId !== '' ? parseInt(String(leadId), 10) : null;
 
-    // Find most recent scan for this visitor and QR within dedupe window (default 60s)
-    const windowSeconds = parseInt(process.env.SCAN_DEDUP_WINDOW_SECONDS || '60', 10);
+    // Longer window than scan dedupe: prompt may appear after playback starts
+    const windowSeconds = parseInt(process.env.GEO_UPGRADE_WINDOW_SECONDS || '300', 10);
     let recent;
     if (qrCodeId) {
       recent = await db.query(
-        `SELECT id, city, region, country_code, location_source
+        `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
            FROM qr_scans
           WHERE qr_code_id = $1
             AND COALESCE(qr_visitor_id, visitor_id::text) = $2
@@ -1187,9 +1210,8 @@ app.post('/api/analytics/geo', async (req, res) => {
         [qrCodeId, visitorId, windowSeconds]
       );
     } else {
-      // Fallback: last scan for this visitor across any QR in the window
       recent = await db.query(
-        `SELECT id, city, region, country_code, location_source
+        `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
            FROM qr_scans
           WHERE COALESCE(qr_visitor_id, visitor_id::text) = $1
             AND scanned_at >= NOW() - ($2 || ' seconds')::interval
@@ -1199,13 +1221,20 @@ app.post('/api/analytics/geo', async (req, res) => {
       );
     }
 
+    let scanId = recent.rows[0]?.id || null;
+    const resolvedLeadId = numericLeadId || recent.rows[0]?.preview_phone_lead_id || null;
+
     if (recent.rowCount === 0) {
-      // Nothing to upgrade; silently accept
+      if (resolvedLeadId && (consentStatus === 'granted' || !consentStatus)) {
+        await updateLeadPreciseLocationConsent(resolvedLeadId, 'granted', {
+          accuracy: accuracy || null,
+          scanId: null,
+        });
+      }
       return res.json({ success: true, updated: 0 });
     }
 
     let city = null, region = null, countryCode = null;
-    // Optional reverse geocoding
     try {
       if (process.env.GEOCODER_PROVIDER && process.env.GEOCODER_API_KEY) {
         const provider = String(process.env.GEOCODER_PROVIDER).toLowerCase();
@@ -1222,32 +1251,75 @@ app.post('/api/analytics/geo', async (req, res) => {
       // Ignore geocoder failures
     }
 
-    // Only upgrade if current row is lower priority or fields are empty
     const row = recent.rows[0];
+    scanId = row.id;
     const shouldUpgrade = row.location_source === 'auto' || row.location_source === 'unknown' || !row.city;
 
     if (!shouldUpgrade) {
-      // Still update lat/lng for analytics if present
       await db.query(
         `UPDATE qr_scans SET geo_lat = COALESCE($2, geo_lat), geo_lng = COALESCE($3, geo_lng), geo_accuracy_m = COALESCE($4, geo_accuracy_m)
           WHERE id = $1`,
         [row.id, latR, lngR, accuracy || null]
       );
-      return res.json({ success: true, updated: 0 });
+    } else {
+      await db.query(
+        `UPDATE qr_scans
+            SET geo_lat = $2, geo_lng = $3, geo_accuracy_m = $4,
+                city = COALESCE($5, city), region = COALESCE($6, region), country_code = COALESCE($7, country_code),
+                location_source = 'browser', geo_consent = 'browser-granted'
+          WHERE id = $1`,
+        [row.id, latR, lngR, accuracy || null, city, region, countryCode]
+      );
     }
 
-    await db.query(
-      `UPDATE qr_scans
-          SET geo_lat = $2, geo_lng = $3, geo_accuracy_m = $4,
-              city = COALESCE($5, city), region = COALESCE($6, region), country_code = COALESCE($7, country_code),
-              location_source = 'browser', geo_consent = 'browser-granted'
-        WHERE id = $1`,
-      [row.id, latR, lngR, accuracy || null, city, region, countryCode]
-    );
-    return res.json({ success: true, updated: 1 });
+    const leadForConsent = resolvedLeadId || row.preview_phone_lead_id;
+    if (leadForConsent) {
+      await updateLeadPreciseLocationConsent(leadForConsent, 'granted', {
+        accuracy: accuracy || null,
+        scanId: row.id,
+      });
+    }
+
+    return res.json({ success: true, updated: shouldUpgrade ? 1 : 0, scanId: row.id });
   } catch (e) {
     console.error('📍 Browser geo submit failed:', e.message);
     return res.status(500).json({ error: 'Failed to save geolocation' });
+  }
+});
+
+app.post('/api/analytics/geo-consent', async (req, res) => {
+  try {
+    const { leadId, qrCodeId, consentStatus } = req.body || {};
+    const status = String(consentStatus || '').toLowerCase();
+    if (status !== 'denied' && status !== 'unavailable') {
+      return res.status(400).json({ error: 'consentStatus must be denied or unavailable' });
+    }
+    const numericLeadId = leadId != null && leadId !== '' ? parseInt(String(leadId), 10) : null;
+    let resolvedLeadId = Number.isFinite(numericLeadId) ? numericLeadId : null;
+
+    if (!resolvedLeadId && qrCodeId) {
+      const visitorId = getOrSetVisitorId(req, res);
+      const windowSeconds = parseInt(process.env.GEO_UPGRADE_WINDOW_SECONDS || '300', 10);
+      const recent = await db.query(
+        `SELECT preview_phone_lead_id FROM qr_scans
+          WHERE qr_code_id = $1
+            AND COALESCE(qr_visitor_id, visitor_id::text) = $2
+            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+          ORDER BY scanned_at DESC
+          LIMIT 1`,
+        [qrCodeId, visitorId, windowSeconds]
+      );
+      resolvedLeadId = recent.rows[0]?.preview_phone_lead_id || null;
+    }
+
+    if (resolvedLeadId) {
+      await updateLeadPreciseLocationConsent(resolvedLeadId, status);
+    }
+
+    return res.json({ success: true, leadId: resolvedLeadId, consentStatus: status });
+  } catch (e) {
+    console.error('📍 Geo consent submit failed:', e.message);
+    return res.status(500).json({ error: 'Failed to save geo consent' });
   }
 });
 
@@ -12832,6 +12904,9 @@ app.get('/api/preview-leads/export', authenticateToken, async (req, res) => {
     const { rows } = await db.query(
       `SELECT phone_e164, full_name, email, verified_at, marketing_opt_in, email_marketing_opt_in,
               content_type, content_id, coupon_id, lead_source, owner_user_id,
+              precise_location_consent_status, precise_location_consented_at,
+              precise_location_accuracy_m,
+              (precise_location_consent_status = 'granted') AS has_precise_location,
               (SELECT MIN(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = preview_phone_leads.id) AS first_scan_at,
               GREATEST(
                 COALESCE((SELECT MAX(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = preview_phone_leads.id), 'epoch'::timestamp),
@@ -12892,6 +12967,15 @@ async function queryPreviewLeadRows({ ownerId = null, adminMode = false, adminOw
     values.push(String(query.leadSource));
     where.push(`l.lead_source = $${values.length}`);
   }
+  if (query.preciseLocation === 'granted') {
+    where.push(`l.precise_location_consent_status = 'granted'`);
+  } else if (query.preciseLocation === 'denied') {
+    where.push(`l.precise_location_consent_status = 'denied'`);
+  } else if (query.preciseLocation === 'not_requested') {
+    where.push(`COALESCE(l.precise_location_consent_status, 'not_requested') = 'not_requested'`);
+  } else if (query.preciseLocation === 'unavailable') {
+    where.push(`l.precise_location_consent_status = 'unavailable'`);
+  }
   if (query.search) {
     values.push(`%${String(query.search).trim()}%`);
     where.push(`(l.phone_e164 ILIKE $${values.length} OR l.full_name ILIKE $${values.length} OR l.email ILIKE $${values.length} OR u.email ILIKE $${values.length} OR u.username ILIKE $${values.length})`);
@@ -12906,6 +12990,11 @@ async function queryPreviewLeadRows({ ownerId = null, adminMode = false, adminOw
             l.completed_user_id, l.account_created_at, l.lead_source, l.created_at,
             l.transactional_consent_copy_version, l.marketing_consent_copy_version,
             l.email_marketing_consent_copy_version,
+            l.precise_location_consent_status,
+            l.precise_location_consented_at,
+            l.precise_location_accuracy_m,
+            l.precise_location_source_scan_id,
+            (l.precise_location_consent_status = 'granted') AS has_precise_location,
             (SELECT MIN(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = l.id) AS first_scan_at,
             GREATEST(
               COALESCE((SELECT MAX(scanned_at) FROM qr_scans qs WHERE qs.preview_phone_lead_id = l.id), 'epoch'::timestamp),
@@ -12938,7 +13027,8 @@ async function queryLeadActivity(leadId, { ownerId = null, adminMode = false } =
     `SELECT l.id, l.owner_user_id, l.full_name, l.phone_e164, l.email, l.lead_source,
             l.content_type, l.content_id, l.verified_at, l.marketing_opt_in, l.email_marketing_opt_in,
             l.transactional_consent_copy_version, l.marketing_consent_copy_version,
-            l.email_marketing_consent_copy_version, l.open_access_unlocked_at, l.created_at
+            l.email_marketing_consent_copy_version, l.open_access_unlocked_at, l.created_at,
+            l.precise_location_consent_status, l.precise_location_consented_at, l.precise_location_accuracy_m
      FROM preview_phone_leads l
      WHERE l.id = $1 AND l.verified_at IS NOT NULL`,
     [leadId]
@@ -13128,6 +13218,11 @@ async function queryLeadActivity(leadId, { ownerId = null, adminMode = false } =
       emailMarketingConsentCopyVersion: lead.email_marketing_consent_copy_version,
       openAccessUnlockedAt: lead.open_access_unlocked_at,
       createdAt: lead.created_at,
+      preciseLocationConsentStatus: lead.precise_location_consent_status || 'not_requested',
+      preciseLocationConsentedAt: lead.precise_location_consented_at,
+      preciseLocationAccuracyM:
+        lead.precise_location_accuracy_m != null ? Number(lead.precise_location_accuracy_m) : null,
+      hasPreciseLocation: lead.precise_location_consent_status === 'granted',
     },
     summary: {
       scanCount,

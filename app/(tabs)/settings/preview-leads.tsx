@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 type Scope = 'mine' | 'all' | 'admin';
 type ConsentFilter = 'all' | 'sms' | 'email' | 'any';
 type LeadSourceFilter = 'all' | 'open_access' | 'preview_gate' | 'locked_access';
+type PreciseLocationFilter = 'all' | 'granted' | 'denied' | 'not_requested' | 'unavailable';
 
 type LeadRow = {
   id: number;
@@ -43,6 +44,10 @@ type LeadRow = {
   completed_user_id?: number | null;
   account_created_at?: string | null;
   lead_source?: string;
+  precise_location_consent_status?: string | null;
+  precise_location_consented_at?: string | null;
+  precise_location_accuracy_m?: number | null;
+  has_precise_location?: boolean;
   first_scan_at?: string | null;
   last_activity_at?: string | null;
   play_count?: number;
@@ -66,11 +71,28 @@ const csvColumns = [
   'completed_user_id',
   'account_created_at',
   'lead_source',
+  'precise_location_consent_status',
+  'precise_location_consented_at',
+  'precise_location_accuracy_m',
+  'has_precise_location',
   'first_scan_at',
   'last_activity_at',
   'play_count',
   'total_play_seconds',
 ];
+
+function formatPreciseLocationStatus(status?: string | null): string {
+  switch (status) {
+    case 'granted':
+      return 'yes';
+    case 'denied':
+      return 'declined';
+    case 'unavailable':
+      return 'unavailable';
+    default:
+      return 'not asked';
+  }
+}
 
 function leadsToCsv(rows: LeadRow[]): string {
   const lines = rows.map((r) =>
@@ -91,6 +113,10 @@ function leadsToCsv(rows: LeadRow[]): string {
       r.completed_user_id ?? '',
       r.account_created_at || '',
       r.lead_source || '',
+      r.precise_location_consent_status || 'not_requested',
+      r.precise_location_consented_at || '',
+      r.precise_location_accuracy_m ?? '',
+      r.has_precise_location ? 'true' : 'false',
       r.first_scan_at || '',
       r.last_activity_at && !String(r.last_activity_at).startsWith('1970-') ? r.last_activity_at : '',
       r.play_count ?? 0,
@@ -140,6 +166,7 @@ export default function PreviewLeadsScreen() {
   const [consentFilter, setConsentFilter] = useState<ConsentFilter>('all');
   const [contentType, setContentType] = useState<'all' | 'playlist' | 'slideshow'>('all');
   const [leadSource, setLeadSource] = useState<LeadSourceFilter>('all');
+  const [preciseLocationFilter, setPreciseLocationFilter] = useState<PreciseLocationFilter>('all');
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
   const [activityModalVisible, setActivityModalVisible] = useState(false);
 
@@ -157,6 +184,7 @@ export default function PreviewLeadsScreen() {
         emailMarketingOnly: consentFilter === 'email',
         contentType: contentType === 'all' ? undefined : contentType,
         leadSource: leadSource === 'all' ? undefined : leadSource,
+        preciseLocation: preciseLocationFilter === 'all' ? undefined : preciseLocationFilter,
         limit: 500,
       });
       setLeads(Array.isArray(data.leads) ? data.leads : []);
@@ -166,7 +194,7 @@ export default function PreviewLeadsScreen() {
     } finally {
       setLoading(false);
     }
-  }, [contentType, consentFilter, isAdmin, leadSource, scope, search]);
+  }, [contentType, consentFilter, isAdmin, leadSource, preciseLocationFilter, scope, search]);
 
   React.useEffect(() => {
     load();
@@ -174,6 +202,10 @@ export default function PreviewLeadsScreen() {
 
   const smsMarketing = useMemo(() => leads.filter((l) => l.marketing_opt_in), [leads]);
   const emailMarketing = useMemo(() => leads.filter((l) => l.email_marketing_opt_in && l.email), [leads]);
+  const preciseGranted = useMemo(
+    () => leads.filter((l) => l.precise_location_consent_status === 'granted' || l.has_precise_location),
+    [leads]
+  );
 
   const copyValues = async (values: string[], label: string) => {
     const unique = Array.from(new Set(values.filter(Boolean)));
@@ -251,10 +283,17 @@ export default function PreviewLeadsScreen() {
           <Segment label="Locked" active={leadSource === 'locked_access'} onPress={() => setLeadSource('locked_access')} />
         </View>
 
+        <View style={styles.segmentRow}>
+          <Segment label="All location" active={preciseLocationFilter === 'all'} onPress={() => setPreciseLocationFilter('all')} />
+          <Segment label="Precise yes" active={preciseLocationFilter === 'granted'} onPress={() => setPreciseLocationFilter('granted')} />
+          <Segment label="Declined" active={preciseLocationFilter === 'denied'} onPress={() => setPreciseLocationFilter('denied')} />
+          <Segment label="No answer" active={preciseLocationFilter === 'not_requested'} onPress={() => setPreciseLocationFilter('not_requested')} />
+        </View>
+
         {error ? <View style={styles.errBox}><ThemedText style={styles.errText}>{error}</ThemedText></View> : null}
 
         <ThemedText style={styles.count}>
-          Verified: {leads.length} | SMS marketing: {smsMarketing.length} | Email marketing: {emailMarketing.length}
+          Verified: {leads.length} | SMS marketing: {smsMarketing.length} | Email marketing: {emailMarketing.length} | Precise location: {preciseGranted.length}
         </ThemedText>
 
         <View style={styles.row}>
@@ -303,6 +342,10 @@ export default function PreviewLeadsScreen() {
             </ThemedText>
             <ThemedText style={styles.cardLine}>
               SMS marketing: {lead.marketing_opt_in ? 'yes' : 'no'} | Email marketing: {lead.email_marketing_opt_in ? 'yes' : 'no'}
+            </ThemedText>
+            <ThemedText style={styles.cardLine}>
+              Precise location: {formatPreciseLocationStatus(lead.precise_location_consent_status)}
+              {lead.precise_location_accuracy_m != null ? ` (~${lead.precise_location_accuracy_m}m)` : ''}
             </ThemedText>
             <ThemedText style={styles.cardLine}>
               Account: {lead.completed_user_id ? `viewer #${lead.completed_user_id}` : 'no linked account'}
