@@ -1172,8 +1172,8 @@ async function updateLeadPreciseLocationConsent(leadId, status, { accuracy = nul
       `UPDATE preview_phone_leads
           SET precise_location_consent_status = $2,
               precise_location_consented_at = NOW(),
-              precise_location_accuracy_m = CASE WHEN $2 = 'granted' THEN $3 ELSE NULL END,
-              precise_location_source_scan_id = CASE WHEN $2 = 'granted' THEN $4 ELSE precise_location_source_scan_id END,
+              precise_location_accuracy_m = CASE WHEN $2 = 'granted' THEN $3::integer ELSE NULL::integer END,
+              precise_location_source_scan_id = CASE WHEN $2 = 'granted' THEN $4::integer ELSE precise_location_source_scan_id END,
               updated_at = NOW()
         WHERE id = $1 AND verified_at IS NOT NULL`,
       [leadId, status, accuracy, scanId]
@@ -1183,55 +1183,131 @@ async function updateLeadPreciseLocationConsent(leadId, status, { accuracy = nul
   }
 }
 
+function resolveVisitorIdForGeoLink(req, bodyVisitorId = null) {
+  const cookieHeader = req.headers.cookie || '';
+  const match = cookieHeader.match(/(?:^|;\s*)qr_vid=([^;]+)/);
+  const cookieVisitorId = match ? match[1] : null;
+  const normalizedBodyId =
+    typeof bodyVisitorId === 'string' && bodyVisitorId.trim() ? bodyVisitorId.trim() : null;
+
+  // Prefer explicit client ID (localStorage) over cookie to match track-scan behavior.
+  if (normalizedBodyId) {
+    return normalizedBodyId;
+  }
+  if (cookieVisitorId) {
+    return cookieVisitorId;
+  }
+  return null;
+}
+
+async function findRecentScanForGeoUpgrade({ qrCodeId = null, visitorId = null, leadId = null, windowSeconds = null } = {}) {
+  const numericQrCodeId =
+    qrCodeId != null && qrCodeId !== '' ? parseInt(String(qrCodeId), 10) : null;
+  const numericLeadId = leadId != null && leadId !== '' ? parseInt(String(leadId), 10) : null;
+  const lookupWindowSeconds =
+    windowSeconds || parseInt(process.env.GEO_UPGRADE_WINDOW_SECONDS || '300', 10);
+
+  // Lead-linked scans are the most reliable anchor for open-access flows.
+  if (Number.isFinite(numericLeadId)) {
+    if (Number.isFinite(numericQrCodeId)) {
+      const byLeadAndQr = await db.query(
+        `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
+           FROM qr_scans
+          WHERE preview_phone_lead_id = $1
+            AND qr_code_id = $2
+            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+          ORDER BY scanned_at DESC
+          LIMIT 1`,
+        [numericLeadId, numericQrCodeId, lookupWindowSeconds]
+      );
+      if (byLeadAndQr.rowCount > 0) return byLeadAndQr.rows[0];
+    }
+
+    const byLead = await db.query(
+      `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
+         FROM qr_scans
+        WHERE preview_phone_lead_id = $1
+          AND scanned_at >= NOW() - ($2 || ' seconds')::interval
+        ORDER BY scanned_at DESC
+        LIMIT 1`,
+      [numericLeadId, lookupWindowSeconds]
+    );
+    if (byLead.rowCount > 0) return byLead.rows[0];
+  }
+
+  if (Number.isFinite(numericQrCodeId) && visitorId) {
+    const byVisitor = await db.query(
+      `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
+         FROM qr_scans
+        WHERE qr_code_id = $1
+          AND COALESCE(qr_visitor_id, visitor_id::text) = $2
+          AND scanned_at >= NOW() - ($3 || ' seconds')::interval
+        ORDER BY scanned_at DESC
+        LIMIT 1`,
+      [numericQrCodeId, visitorId, lookupWindowSeconds]
+    );
+    if (byVisitor.rowCount > 0) return byVisitor.rows[0];
+  }
+
+  if (Number.isFinite(numericQrCodeId)) {
+    const byQr = await db.query(
+      `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
+         FROM qr_scans
+        WHERE qr_code_id = $1
+          AND scanned_at >= NOW() - ($2 || ' seconds')::interval
+        ORDER BY scanned_at DESC
+        LIMIT 1`,
+      [numericQrCodeId, lookupWindowSeconds]
+    );
+    if (byQr.rowCount > 0) return byQr.rows[0];
+  }
+
+  if (visitorId) {
+    const byVisitorOnly = await db.query(
+      `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
+         FROM qr_scans
+        WHERE COALESCE(qr_visitor_id, visitor_id::text) = $1
+          AND scanned_at >= NOW() - ($2 || ' seconds')::interval
+        ORDER BY scanned_at DESC
+        LIMIT 1`,
+      [visitorId, lookupWindowSeconds]
+    );
+    if (byVisitorOnly.rowCount > 0) return byVisitorOnly.rows[0];
+  }
+
+  return null;
+}
+
 // Submit browser geolocation to upgrade recent scan's geo (no auth; links via cookie)
 app.post('/api/analytics/geo', async (req, res) => {
   try {
-    const { qrCodeId, lat, lng, accuracy, leadId, consentStatus } = req.body || {};
+    const { qrCodeId, lat, lng, accuracy, leadId, consentStatus, visitorId: bodyVisitorId } = req.body || {};
     if (typeof lat !== 'number' || typeof lng !== 'number') {
       return res.status(400).json({ error: 'lat, lng required' });
     }
     const latR = roundPreciseCoordinate(lat);
     const lngR = roundPreciseCoordinate(lng);
-    const visitorId = getOrSetVisitorId(req, res);
+    const visitorId = resolveVisitorIdForGeoLink(req, bodyVisitorId);
     const numericLeadId = leadId != null && leadId !== '' ? parseInt(String(leadId), 10) : null;
 
-    // Longer window than scan dedupe: prompt may appear after playback starts
     const windowSeconds = parseInt(process.env.GEO_UPGRADE_WINDOW_SECONDS || '300', 10);
-    let recent;
-    if (qrCodeId) {
-      recent = await db.query(
-        `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
-           FROM qr_scans
-          WHERE qr_code_id = $1
-            AND COALESCE(qr_visitor_id, visitor_id::text) = $2
-            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
-          ORDER BY scanned_at DESC
-          LIMIT 1`,
-        [qrCodeId, visitorId, windowSeconds]
-      );
-    } else {
-      recent = await db.query(
-        `SELECT id, city, region, country_code, location_source, preview_phone_lead_id
-           FROM qr_scans
-          WHERE COALESCE(qr_visitor_id, visitor_id::text) = $1
-            AND scanned_at >= NOW() - ($2 || ' seconds')::interval
-          ORDER BY scanned_at DESC
-          LIMIT 1`,
-        [visitorId, windowSeconds]
-      );
-    }
+    const row = await findRecentScanForGeoUpgrade({
+      qrCodeId,
+      visitorId,
+      leadId: numericLeadId,
+      windowSeconds,
+    });
 
-    let scanId = recent.rows[0]?.id || null;
-    const resolvedLeadId = numericLeadId || recent.rows[0]?.preview_phone_lead_id || null;
+    const resolvedLeadId = numericLeadId || row?.preview_phone_lead_id || null;
 
-    if (recent.rowCount === 0) {
+    if (!row) {
       if (resolvedLeadId && (consentStatus === 'granted' || !consentStatus)) {
         await updateLeadPreciseLocationConsent(resolvedLeadId, 'granted', {
           accuracy: accuracy || null,
           scanId: null,
         });
       }
-      return res.json({ success: true, updated: 0 });
+      return res.json({ success: true, updated: 0, matchedBy: null });
     }
 
     let city = null, region = null, countryCode = null;
@@ -1251,8 +1327,7 @@ app.post('/api/analytics/geo', async (req, res) => {
       // Ignore geocoder failures
     }
 
-    const row = recent.rows[0];
-    scanId = row.id;
+    const scanId = row.id;
     const shouldUpgrade = row.location_source === 'auto' || row.location_source === 'unknown' || !row.city;
 
     if (!shouldUpgrade) {
@@ -1289,7 +1364,7 @@ app.post('/api/analytics/geo', async (req, res) => {
 
 app.post('/api/analytics/geo-consent', async (req, res) => {
   try {
-    const { leadId, qrCodeId, consentStatus } = req.body || {};
+    const { leadId, qrCodeId, consentStatus, visitorId: bodyVisitorId } = req.body || {};
     const status = String(consentStatus || '').toLowerCase();
     if (status !== 'denied' && status !== 'unavailable') {
       return res.status(400).json({ error: 'consentStatus must be denied or unavailable' });
@@ -1297,19 +1372,16 @@ app.post('/api/analytics/geo-consent', async (req, res) => {
     const numericLeadId = leadId != null && leadId !== '' ? parseInt(String(leadId), 10) : null;
     let resolvedLeadId = Number.isFinite(numericLeadId) ? numericLeadId : null;
 
-    if (!resolvedLeadId && qrCodeId) {
-      const visitorId = getOrSetVisitorId(req, res);
+    if (!resolvedLeadId) {
+      const visitorId = resolveVisitorIdForGeoLink(req, bodyVisitorId);
       const windowSeconds = parseInt(process.env.GEO_UPGRADE_WINDOW_SECONDS || '300', 10);
-      const recent = await db.query(
-        `SELECT preview_phone_lead_id FROM qr_scans
-          WHERE qr_code_id = $1
-            AND COALESCE(qr_visitor_id, visitor_id::text) = $2
-            AND scanned_at >= NOW() - ($3 || ' seconds')::interval
-          ORDER BY scanned_at DESC
-          LIMIT 1`,
-        [qrCodeId, visitorId, windowSeconds]
-      );
-      resolvedLeadId = recent.rows[0]?.preview_phone_lead_id || null;
+      const row = await findRecentScanForGeoUpgrade({
+        qrCodeId,
+        visitorId,
+        leadId: null,
+        windowSeconds,
+      });
+      resolvedLeadId = row?.preview_phone_lead_id || null;
     }
 
     if (resolvedLeadId) {

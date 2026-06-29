@@ -65,5 +65,21 @@ assert(formatPreciseLocationStatus('denied') === 'declined', 'denied label');
 assert(formatPreciseLocationStatus('unavailable') === 'unavailable', 'unavailable label');
 assert(formatPreciseLocationStatus(null) === 'not asked', 'default label');
 
+function buildScanLookupOrder(hasLeadId, hasQrCodeId, hasVisitorId) {
+  const order = [];
+  if (hasLeadId && hasQrCodeId) order.push('lead+qr');
+  if (hasLeadId) order.push('lead');
+  if (hasQrCodeId && hasVisitorId) order.push('qr+visitor');
+  if (hasQrCodeId) order.push('qr');
+  if (hasVisitorId) order.push('visitor');
+  return order;
+}
+
+console.log('\nTesting scan lookup priority...');
+assert(
+  buildScanLookupOrder(true, true, true).join(',') === 'lead+qr,lead,qr+visitor,qr,visitor',
+  'full lookup chain prefers lead first'
+);
+assert(buildScanLookupOrder(false, true, true).join(',') === 'qr+visitor,qr,visitor', 'qr flow without lead');
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

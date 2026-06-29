@@ -50,12 +50,14 @@ export const analyticsService = {
     leadId?: number
   ): Promise<void> {
     try {
+      const { getOrCreateVisitorId } = await import('@/utils/visitorId');
       await api.post('/analytics/geo', {
         qrCodeId,
         lat: roundPreciseCoordinate(lat),
         lng: roundPreciseCoordinate(lng),
         accuracy,
         leadId,
+        visitorId: getOrCreateVisitorId(),
         consentStatus: 'granted',
       });
     } catch (error) {
@@ -69,7 +71,11 @@ export const analyticsService = {
     consentStatus: 'denied' | 'unavailable';
   }): Promise<void> {
     try {
-      await api.post('/analytics/geo-consent', payload);
+      const { getOrCreateVisitorId } = await import('@/utils/visitorId');
+      await api.post('/analytics/geo-consent', {
+        ...payload,
+        visitorId: getOrCreateVisitorId(),
+      });
     } catch (error) {
       console.error('Error submitting geo consent:', error);
     }
