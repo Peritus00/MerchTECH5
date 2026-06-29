@@ -12933,6 +12933,213 @@ async function queryPreviewLeadRows({ ownerId = null, adminMode = false, adminOw
   return rows;
 }
 
+async function queryLeadActivity(leadId, { ownerId = null, adminMode = false } = {}) {
+  const leadRes = await db.query(
+    `SELECT l.id, l.owner_user_id, l.full_name, l.phone_e164, l.email, l.lead_source,
+            l.content_type, l.content_id, l.verified_at, l.marketing_opt_in, l.email_marketing_opt_in,
+            l.transactional_consent_copy_version, l.marketing_consent_copy_version,
+            l.email_marketing_consent_copy_version, l.open_access_unlocked_at, l.created_at
+     FROM preview_phone_leads l
+     WHERE l.id = $1 AND l.verified_at IS NOT NULL`,
+    [leadId]
+  );
+  if (!leadRes.rows.length) {
+    return { notFound: true };
+  }
+  const lead = leadRes.rows[0];
+  if (!adminMode && lead.owner_user_id !== ownerId) {
+    return { forbidden: true };
+  }
+
+  const { rows: eventRows } = await db.query(
+    `SELECT * FROM (
+       SELECT 'scan'::text AS event_type,
+              qs.id AS event_id,
+              qs.scanned_at AS occurred_at,
+              qs.qr_code_id,
+              qc.name AS qr_code_name,
+              NULL::integer AS media_id,
+              NULL::text AS media_title,
+              NULL::integer AS playlist_id,
+              NULL::text AS playlist_name,
+              NULL::integer AS slideshow_id,
+              NULL::text AS slideshow_name,
+              qs.device_type,
+              qs.browser_name,
+              qs.operating_system,
+              qs.city,
+              qs.region AS state,
+              qs.country_code,
+              qs.country_name,
+              qs.geo_lat,
+              qs.geo_lng,
+              qs.geo_accuracy_m,
+              qs.location_source,
+              qs.geo_consent,
+              NULL::integer AS play_duration
+       FROM qr_scans qs
+       LEFT JOIN qr_codes qc ON qc.id = qs.qr_code_id
+       WHERE qs.preview_phone_lead_id = $1
+
+       UNION ALL
+
+       SELECT 'media_play'::text,
+              mp.id,
+              mp.played_at,
+              NULL::integer,
+              NULL::text,
+              mp.media_id,
+              m.title,
+              NULL::integer,
+              NULL::text,
+              NULL::integer,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              mp.user_provided_city,
+              mp.user_provided_state,
+              NULL::text,
+              NULL::text,
+              NULL::numeric,
+              NULL::numeric,
+              NULL::numeric,
+              mp.location_source,
+              NULL::text,
+              mp.play_duration
+       FROM media_plays mp
+       LEFT JOIN media m ON m.id = mp.media_id
+       WHERE mp.preview_phone_lead_id = $1
+
+       UNION ALL
+
+       SELECT 'playlist_play'::text,
+              pp.id,
+              pp.played_at,
+              NULL::integer,
+              NULL::text,
+              NULL::integer,
+              NULL::text,
+              pp.playlist_id,
+              pl.name,
+              NULL::integer,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              pp.user_provided_city,
+              pp.user_provided_state,
+              NULL::text,
+              NULL::text,
+              NULL::numeric,
+              NULL::numeric,
+              NULL::numeric,
+              pp.location_source,
+              NULL::text,
+              pp.play_duration
+       FROM playlist_plays pp
+       LEFT JOIN playlists pl ON pl.id = pp.playlist_id
+       WHERE pp.preview_phone_lead_id = $1
+
+       UNION ALL
+
+       SELECT 'slideshow_play'::text,
+              sp.id,
+              sp.played_at,
+              NULL::integer,
+              NULL::text,
+              NULL::integer,
+              NULL::text,
+              NULL::integer,
+              NULL::text,
+              sp.slideshow_id,
+              ss.name,
+              NULL::text,
+              NULL::text,
+              NULL::text,
+              sp.user_provided_city,
+              sp.user_provided_state,
+              NULL::text,
+              NULL::text,
+              NULL::numeric,
+              NULL::numeric,
+              NULL::numeric,
+              sp.location_source,
+              NULL::text,
+              sp.play_duration
+       FROM slideshow_plays sp
+       LEFT JOIN slideshows ss ON ss.id = sp.slideshow_id
+       WHERE sp.preview_phone_lead_id = $1
+     ) combined
+     ORDER BY occurred_at DESC`,
+    [leadId]
+  );
+
+  const events = eventRows.map((row) => ({
+    id: row.event_id,
+    eventType: row.event_type,
+    occurredAt: row.occurred_at,
+    qrCodeId: row.qr_code_id,
+    qrCodeName: row.qr_code_name,
+    mediaId: row.media_id,
+    mediaTitle: row.media_title,
+    playlistId: row.playlist_id,
+    playlistName: row.playlist_name,
+    slideshowId: row.slideshow_id,
+    slideshowName: row.slideshow_name,
+    deviceType: row.device_type,
+    browserName: row.browser_name,
+    operatingSystem: row.operating_system,
+    city: row.city,
+    state: row.state,
+    countryCode: row.country_code,
+    countryName: row.country_name,
+    geoLat: row.geo_lat != null ? Number(row.geo_lat) : null,
+    geoLng: row.geo_lng != null ? Number(row.geo_lng) : null,
+    geoAccuracyM: row.geo_accuracy_m != null ? Number(row.geo_accuracy_m) : null,
+    locationSource: row.location_source,
+    geoConsent: row.geo_consent,
+    playDuration: row.play_duration != null ? Number(row.play_duration) : null,
+  }));
+
+  const scanCount = events.filter((e) => e.eventType === 'scan').length;
+  const playCount = events.filter((e) => e.eventType !== 'scan').length;
+  const totalPlaySeconds = events.reduce((sum, e) => sum + (e.playDuration || 0), 0);
+  const firstScanAt = events.filter((e) => e.eventType === 'scan').reduce((min, e) => {
+    if (!min || new Date(e.occurredAt) < new Date(min)) return e.occurredAt;
+    return min;
+  }, null);
+  const lastActivityAt = events.length ? events[0].occurredAt : null;
+
+  return {
+    lead: {
+      id: lead.id,
+      fullName: lead.full_name,
+      phoneE164: lead.phone_e164,
+      email: lead.email,
+      leadSource: lead.lead_source,
+      contentType: lead.content_type,
+      contentId: lead.content_id,
+      verifiedAt: lead.verified_at,
+      marketingOptIn: !!lead.marketing_opt_in,
+      emailMarketingOptIn: !!lead.email_marketing_opt_in,
+      transactionalConsentCopyVersion: lead.transactional_consent_copy_version,
+      marketingConsentCopyVersion: lead.marketing_consent_copy_version,
+      emailMarketingConsentCopyVersion: lead.email_marketing_consent_copy_version,
+      openAccessUnlockedAt: lead.open_access_unlocked_at,
+      createdAt: lead.created_at,
+    },
+    summary: {
+      scanCount,
+      playCount,
+      totalPlaySeconds,
+      firstScanAt,
+      lastActivityAt,
+    },
+    events,
+  };
+}
+
 app.get('/api/preview-leads/list', authenticateToken, async (req, res) => {
   try {
     if (!(await ensurePreviewLeadTables())) {
@@ -12944,6 +13151,50 @@ app.get('/api/preview-leads/list', authenticateToken, async (req, res) => {
   } catch (e) {
     console.error('preview-leads/list error:', e);
     res.status(500).json({ error: 'Failed to load leads' });
+  }
+});
+
+app.get('/api/preview-leads/:id/activity', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const leadId = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(leadId)) {
+      return res.status(400).json({ error: 'Invalid lead id' });
+    }
+    const ownerId = parseInt(req.user.userId, 10);
+    const result = await queryLeadActivity(leadId, { ownerId });
+    if (result.notFound) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    if (result.forbidden) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    res.json(result);
+  } catch (e) {
+    console.error('preview-leads/activity error:', e);
+    res.status(500).json({ error: 'Failed to load lead activity' });
+  }
+});
+
+app.get('/api/admin/preview-leads/:id/activity', authenticateToken, isAdmin, async (req, res) => {
+  try {
+    if (!(await ensurePreviewLeadTables())) {
+      return res.status(503).json({ error: 'Preview leads not available' });
+    }
+    const leadId = parseInt(String(req.params.id), 10);
+    if (!Number.isFinite(leadId)) {
+      return res.status(400).json({ error: 'Invalid lead id' });
+    }
+    const result = await queryLeadActivity(leadId, { adminMode: true });
+    if (result.notFound) {
+      return res.status(404).json({ error: 'Lead not found' });
+    }
+    res.json(result);
+  } catch (e) {
+    console.error('admin/preview-leads/activity error:', e);
+    res.status(500).json({ error: 'Failed to load lead activity' });
   }
 });
 

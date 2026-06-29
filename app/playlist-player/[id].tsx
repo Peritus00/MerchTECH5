@@ -8,6 +8,7 @@ import PlaylistPlayer from '@/components/PlaylistPlayer';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import LocationOptInPrompt from '@/components/LocationOptInPrompt';
 import { saveUserAge } from '@/utils/ageStorage';
 import { saveUserGender } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -161,67 +162,6 @@ export default function PlaylistPlayerScreen() {
       router.replace(`/playlist-access/${id}`);
     }
   }, [shouldRedirectForOpenAccessLead, id]);
-
-  // Attempt geolocation on player too (some QR flows go straight here)
-  useEffect(() => {
-    const submitGeo = async () => {
-      try {
-        if (!('geolocation' in navigator)) return;
-        
-        // Check if geolocation is allowed via Permissions API (avoids Permissions-Policy violation logs)
-        try {
-          if ('permissions' in navigator) {
-            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-            if (permissionStatus.state === 'denied') {
-              // Permission explicitly denied, don't attempt geolocation
-              return;
-            }
-          }
-        } catch {
-          // Permissions API not available or blocked, continue to try geolocation anyway
-        }
-        
-        // Check if geolocation is allowed (may be blocked by Permissions-Policy)
-        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) => {
-          // Set a timeout to prevent hanging
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Geolocation timeout'));
-          }, 3000);
-          
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              clearTimeout(timeoutId);
-              resolve(pos);
-            },
-            (err) => {
-              clearTimeout(timeoutId);
-              reject(err);
-            },
-            { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
-          );
-        });
-        
-        const pos = await getPos();
-        const qrId = (playlist as any)?.qr_code_id || (playlist as any)?.qrCodeId;
-        await analyticsService.submitBrowserGeo(
-          qrId ? Number(qrId) : Number(id),
-          pos.coords.latitude,
-          pos.coords.longitude,
-          pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
-        );
-      } catch (error: any) {
-        // Silently ignore geolocation errors (permissions policy, user denial, timeout, etc.)
-        // Don't log or throw - geolocation is optional
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('Geolocation not available:', error?.message || 'unknown error');
-        }
-      }
-    };
-    if (canAccessPlaylist && !loading) {
-      const t = setTimeout(submitGeo, 1200);
-      return () => clearTimeout(t);
-    }
-  }, [canAccessPlaylist, playlist, loading, id]);
 
   // Show demographics survey after content starts playing
   useEffect(() => {
@@ -379,6 +319,12 @@ export default function PlaylistPlayerScreen() {
         playbackToken={playbackToken || (playlist as any)?.playbackToken}
         previewPhoneLeadId={previewPhoneLeadId || undefined}
         autoPlay={false}
+      />
+
+      <LocationOptInPrompt
+        enabled={canAccessPlaylist && !loading}
+        scope={{ contentType: 'playlist', contentId: id, leadId: previewPhoneLeadId }}
+        qrCodeId={(playlist as any)?.qr_code_id || (playlist as any)?.qrCodeId || Number(id)}
       />
       
       {/* Demographics Survey Overlay */}

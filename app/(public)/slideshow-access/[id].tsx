@@ -30,6 +30,7 @@ import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
 import PreviewGateModal from '@/components/PreviewGateModal';
 import OpenAccessLeadGateModal from '@/components/OpenAccessLeadGateModal';
+import LocationOptInPrompt from '@/components/LocationOptInPrompt';
 import BuyActivationCodeModal from '@/components/BuyActivationCodeModal';
 import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
@@ -76,6 +77,16 @@ export default function SlideshowAccessScreen() {
   const [userDemographics, setUserDemographics] = useState<{ ageRange?: string; gender?: string } | null>(null);
   const [showBuyCodeModal, setShowBuyCodeModal] = useState(false);
   const [showLockedAccessSignup, setShowLockedAccessSignup] = useState(false);
+  const [storedLeadId, setStoredLeadId] = useState<number | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem(`open_access_lead_slideshow_${id}`).then((value) => {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        setStoredLeadId(parsed);
+      }
+    });
+  }, [id]);
 
   // Format slideshow data for PreviewPlayer component - MUST be before any conditional returns
   const formattedMediaFiles = React.useMemo(() => {
@@ -203,66 +214,6 @@ export default function SlideshowAccessScreen() {
     
     checkAndShowSurvey();
   }, [slideshow, isLoading, isAuthenticated, userDemographics, showRegistrationFlow, showAppDownload]);
-
-  // Attempt browser geolocation shortly after load and submit
-  useEffect(() => {
-    const submitGeo = async () => {
-      try {
-        const qrId = (slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId;
-        if (!qrId) return;
-        if (!('geolocation' in navigator)) return;
-        
-        // Check if geolocation is allowed via Permissions API (avoids Permissions-Policy violation logs)
-        try {
-          if ('permissions' in navigator) {
-            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-            if (permissionStatus.state === 'denied') {
-              // Permission explicitly denied, don't attempt geolocation
-              return;
-            }
-          }
-        } catch (permError) {
-          // Permissions API not available or blocked, continue to try geolocation anyway
-        }
-        
-        // Check if geolocation is allowed (may be blocked by Permissions-Policy)
-        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) => {
-          // Set a timeout to prevent hanging
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Geolocation timeout'));
-          }, 3000);
-          
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              clearTimeout(timeoutId);
-              resolve(pos);
-            },
-            (err) => {
-              clearTimeout(timeoutId);
-              reject(err);
-            },
-            { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
-          );
-        });
-        
-        const pos = await getPos();
-        const { analyticsService } = await import('@/services/analyticsService');
-        await analyticsService.submitBrowserGeo(
-          Number(qrId), pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
-        );
-      } catch (error: any) {
-        // Silently ignore geolocation errors (permissions policy, user denial, timeout, etc.)
-        // Don't log or throw - geolocation is optional
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('Geolocation not available:', error?.message || 'unknown error');
-        }
-      }
-    };
-    if (slideshow && !isLoading) {
-      const t = setTimeout(submitGeo, 1500);
-      return () => clearTimeout(t);
-    }
-  }, [slideshow, isLoading]);
 
   // Check access after slideshow is loaded or user authentication changes
   useEffect(() => {
@@ -809,6 +760,9 @@ export default function SlideshowAccessScreen() {
     );
   }
 
+  const effectiveLeadId = storedLeadId ?? (Number(previewQuery.leadId) > 0 ? Number(previewQuery.leadId) : null);
+  const slideshowQrCodeId = (slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId || Number(id);
+
   if (!slideshow.requiresActivationCode && (slideshow as any).requirePhoneForOpenAccess) {
     return (
       <ThemedView style={styles.loadingContainer}>
@@ -841,6 +795,12 @@ export default function SlideshowAccessScreen() {
           onPreviewComplete={handlePreviewComplete}
           backgroundAudioUrl={slideshow.audioUrl}
           userId={slideshow.userId}
+        />
+
+        <LocationOptInPrompt
+          enabled
+          scope={{ contentType: 'slideshow', contentId: id, leadId: effectiveLeadId }}
+          qrCodeId={slideshowQrCodeId}
         />
       </ThemedView>
     );
@@ -909,6 +869,12 @@ export default function SlideshowAccessScreen() {
           slideshowId={id}
           slideshow={slideshow}
           autoPlay={false}
+        />
+
+        <LocationOptInPrompt
+          enabled
+          scope={{ contentType: 'slideshow', contentId: id, leadId: effectiveLeadId }}
+          qrCodeId={slideshowQrCodeId}
         />
       </ThemedView>
     );

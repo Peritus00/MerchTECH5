@@ -18,6 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { previewLeadsAPI } from '@/services/api';
+import LeadActivityModal from '@/components/LeadActivityModal';
 import { useAuth } from '@/contexts/AuthContext';
 
 type Scope = 'mine' | 'all' | 'admin';
@@ -139,6 +140,8 @@ export default function PreviewLeadsScreen() {
   const [consentFilter, setConsentFilter] = useState<ConsentFilter>('all');
   const [contentType, setContentType] = useState<'all' | 'playlist' | 'slideshow'>('all');
   const [leadSource, setLeadSource] = useState<LeadSourceFilter>('all');
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const [activityModalVisible, setActivityModalVisible] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,7 +226,7 @@ export default function PreviewLeadsScreen() {
           style={styles.search}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search phone, email, owner..."
+          placeholder="Search name, phone, or email..."
           placeholderTextColor="#9ca3af"
           autoCapitalize="none"
         />
@@ -269,7 +272,15 @@ export default function PreviewLeadsScreen() {
         {loading ? <ActivityIndicator size="large" color="#3b82f6" style={styles.loading} /> : null}
 
         {leads.map((lead) => (
-          <View key={lead.id} style={styles.card}>
+          <TouchableOpacity
+            key={lead.id}
+            style={styles.card}
+            onPress={() => {
+              setSelectedLeadId(lead.id);
+              setActivityModalVisible(true);
+            }}
+            activeOpacity={0.85}
+          >
             <View style={styles.cardHeader}>
               <ThemedText style={styles.cardTitle}>{lead.phone_e164}</ThemedText>
               <ThemedText style={styles.badge}>{lead.lead_source || 'preview'}</ThemedText>
@@ -296,9 +307,23 @@ export default function PreviewLeadsScreen() {
             <ThemedText style={styles.cardLine}>
               Account: {lead.completed_user_id ? `viewer #${lead.completed_user_id}` : 'no linked account'}
             </ThemedText>
-          </View>
+            <View style={styles.activityRow}>
+              <ThemedText style={styles.activityLink}>View activity</ThemedText>
+              <MaterialIcons name="chevron-right" size={18} color="#2563eb" />
+            </View>
+          </TouchableOpacity>
         ))}
       </ScrollView>
+
+      <LeadActivityModal
+        visible={activityModalVisible}
+        leadId={selectedLeadId}
+        admin={isAdmin && scope !== 'mine'}
+        onClose={() => {
+          setActivityModalVisible(false);
+          setSelectedLeadId(null);
+        }}
+      />
     </ThemedView>
   );
 }
@@ -356,4 +381,6 @@ const styles = StyleSheet.create({
   cardTitle: { color: '#111827', fontWeight: '700', fontSize: 16 },
   badge: { color: '#1d4ed8', backgroundColor: '#dbeafe', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, fontSize: 11, overflow: 'hidden' },
   cardLine: { color: '#4b5563', fontSize: 13, lineHeight: 20 },
+  activityRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, gap: 2 },
+  activityLink: { color: '#2563eb', fontWeight: '700', fontSize: 13 },
 });

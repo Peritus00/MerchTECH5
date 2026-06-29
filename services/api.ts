@@ -668,6 +668,63 @@ export const couponAPI = {
 };
 
 /** Verified preview phone leads (owner export). */
+export type LeadActivityEvent = {
+  id: number;
+  eventType: 'scan' | 'media_play' | 'playlist_play' | 'slideshow_play';
+  occurredAt: string;
+  qrCodeId?: number | null;
+  qrCodeName?: string | null;
+  mediaId?: number | null;
+  mediaTitle?: string | null;
+  playlistId?: number | null;
+  playlistName?: string | null;
+  slideshowId?: number | null;
+  slideshowName?: string | null;
+  deviceType?: string | null;
+  browserName?: string | null;
+  operatingSystem?: string | null;
+  city?: string | null;
+  state?: string | null;
+  countryCode?: string | null;
+  countryName?: string | null;
+  geoLat?: number | null;
+  geoLng?: number | null;
+  geoAccuracyM?: number | null;
+  locationSource?: string | null;
+  geoConsent?: string | null;
+  playDuration?: number | null;
+};
+
+export type LeadActivityProfile = {
+  id: number;
+  fullName?: string | null;
+  phoneE164: string;
+  email?: string | null;
+  leadSource?: string | null;
+  contentType: string;
+  contentId: string | number;
+  verifiedAt: string;
+  marketingOptIn: boolean;
+  emailMarketingOptIn: boolean;
+  transactionalConsentCopyVersion?: string | null;
+  marketingConsentCopyVersion?: string | null;
+  emailMarketingConsentCopyVersion?: string | null;
+  openAccessUnlockedAt?: string | null;
+  createdAt?: string | null;
+};
+
+export type LeadActivityResponse = {
+  lead: LeadActivityProfile;
+  summary: {
+    scanCount: number;
+    playCount: number;
+    totalPlaySeconds: number;
+    firstScanAt: string | null;
+    lastActivityAt: string | null;
+  };
+  events: LeadActivityEvent[];
+};
+
 export const previewLeadsAPI = {
   async exportLeads(marketingOnly?: boolean) {
     const response = await api.get('/preview-leads/export', {
@@ -741,6 +798,13 @@ export const previewLeadsAPI = {
         total_play_seconds?: number;
       }[];
     };
+  },
+
+  async getLeadActivity(leadId: number, params?: { admin?: boolean }) {
+    const response = await api.get(
+      params?.admin ? `/admin/preview-leads/${leadId}/activity` : `/preview-leads/${leadId}/activity`
+    );
+    return response.data as LeadActivityResponse;
   },
 
   /** Deduped verified contacts (one row per phone) for text campaigns */

@@ -8,6 +8,7 @@ import SlideshowPlayer from '@/components/SlideshowPlayer';
 import { useAuth } from '@/contexts/AuthContext';
 import { analyticsService } from '@/services/analyticsService';
 import DemographicsSurveyOverlay from '@/components/DemographicsSurveyOverlay';
+import LocationOptInPrompt from '@/components/LocationOptInPrompt';
 import { saveUserAge } from '@/utils/ageStorage';
 import { saveUserGender } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
@@ -89,67 +90,6 @@ export default function SlideshowPlayerScreen() {
     };
     loadUserDemographics();
   }, [isAuthenticated]);
-
-  // Attempt geolocation on player as well
-  useEffect(() => {
-    const submitGeo = async () => {
-      try {
-        if (!('geolocation' in navigator)) return;
-        
-        // Check if geolocation is allowed via Permissions API (avoids Permissions-Policy violation logs)
-        try {
-          if ('permissions' in navigator) {
-            const permissionStatus = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
-            if (permissionStatus.state === 'denied') {
-              // Permission explicitly denied, don't attempt geolocation
-              return;
-            }
-          }
-        } catch (permError) {
-          // Permissions API not available or blocked, continue to try geolocation anyway
-        }
-        
-        // Check if geolocation is allowed (may be blocked by Permissions-Policy)
-        const getPos = () => new Promise<GeolocationPosition>((resolve, reject) => {
-          // Set a timeout to prevent hanging
-          const timeoutId = setTimeout(() => {
-            reject(new Error('Geolocation timeout'));
-          }, 3000);
-          
-          navigator.geolocation.getCurrentPosition(
-            (pos) => {
-              clearTimeout(timeoutId);
-              resolve(pos);
-            },
-            (err) => {
-              clearTimeout(timeoutId);
-              reject(err);
-            },
-            { enableHighAccuracy: false, maximumAge: 60000, timeout: 3000 }
-          );
-        });
-        
-        const pos = await getPos();
-        const qrId = (slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId;
-        await analyticsService.submitBrowserGeo(
-          qrId ? Number(qrId) : Number(id),
-          pos.coords.latitude,
-          pos.coords.longitude,
-          pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined
-        );
-      } catch (error: any) {
-        // Silently ignore geolocation errors (permissions policy, user denial, timeout, etc.)
-        // Don't log or throw - geolocation is optional
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('Geolocation not available:', error?.message || 'unknown error');
-        }
-      }
-    };
-    if (slideshow && !loading && !shouldRedirectForOpenAccessLead) {
-      const t = setTimeout(submitGeo, 1200);
-      return () => clearTimeout(t);
-    }
-  }, [slideshow, loading, shouldRedirectForOpenAccessLead, id]);
 
   // Show demographics survey after content starts playing
   useEffect(() => {
@@ -301,6 +241,12 @@ export default function SlideshowPlayerScreen() {
         slideshowId={id}
         slideshow={{ ...slideshow, audioUrl: presignedAudioUrl }}
         autoPlay={false}
+      />
+
+      <LocationOptInPrompt
+        enabled={Boolean(slideshow) && !loading && !shouldRedirectForOpenAccessLead}
+        scope={{ contentType: 'slideshow', contentId: id, leadId: previewPhoneLeadId }}
+        qrCodeId={(slideshow as any)?.qr_code_id || (slideshow as any)?.qrCodeId || Number(id)}
       />
       
       {/* Demographics Survey Overlay */}
