@@ -876,6 +876,52 @@ export const previewLeadsAPI = {
   },
 };
 
+export const openAccessLeadsAPI = {
+  async checkAccess(contentType: 'playlist' | 'slideshow', contentId: string) {
+    const response = await api.get('/open-access-leads/access', {
+      params: { contentType, contentId },
+    });
+    return response.data as {
+      hasAccess: boolean;
+      access?: {
+        id: number;
+        contentType: string;
+        contentId: number;
+        source: string;
+        leadId?: number | null;
+        purchaseId?: number | null;
+        createdAt?: string;
+      };
+    };
+  },
+
+  async attach(data: {
+    contentType: 'playlist' | 'slideshow';
+    contentId: string;
+    leadId?: number;
+    source?: string;
+    purchaseId?: number;
+  }) {
+    const response = await api.post('/open-access-leads/attach', data);
+    return response.data as { ok: boolean; access: Record<string, unknown> };
+  },
+
+  async start(data: {
+    fullName: string;
+    phone: string;
+    contentType: 'playlist' | 'slideshow';
+    contentId: string;
+    transactionalConsent: boolean;
+    termsConsent: boolean;
+    marketingOptIn: boolean;
+    transactionalConsentCopyVersion?: string;
+    marketingConsentCopyVersion?: string;
+  }) {
+    const response = await api.post('/open-access-leads/start', data);
+    return response.data as { ok: boolean; pollToken?: string; leadId?: number; error?: string };
+  },
+};
+
 export const lockedAccessAPI = {
   async start(data: {
     code: string;

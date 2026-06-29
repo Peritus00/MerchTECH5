@@ -11853,6 +11853,63 @@ async function ensurePreviewLeadTables() {
   }
 }
 
+async function ensureUserContentAccessTable() {
+  try {
+    const r = await db.query(
+      `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'user_content_access' LIMIT 1`
+    );
+    return r.rows.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function getUserContentAccessRow(userId, contentType, contentId) {
+  if (!(await ensureUserContentAccessTable())) return null;
+  const uid = parseInt(String(userId), 10);
+  const cid = parseInt(String(contentId), 10);
+  if (isNaN(uid) || isNaN(cid)) return null;
+  if (contentType !== 'playlist' && contentType !== 'slideshow') return null;
+  const { rows } = await db.query(
+    `SELECT id, user_id, content_type, content_id, source, lead_id, purchase_id, created_at
+     FROM user_content_access
+     WHERE user_id = $1 AND content_type = $2 AND content_id = $3
+     LIMIT 1`,
+    [uid, contentType, cid]
+  );
+  return rows[0] || null;
+}
+
+async function upsertUserContentAccess(userId, contentType, contentId, opts = {}) {
+  if (!(await ensureUserContentAccessTable())) {
+    throw new Error('user_content_access table not available');
+  }
+  const uid = parseInt(String(userId), 10);
+  const cid = parseInt(String(contentId), 10);
+  if (isNaN(uid) || isNaN(cid)) {
+    throw new Error('Invalid user or content id');
+  }
+  if (contentType !== 'playlist' && contentType !== 'slideshow') {
+    throw new Error('Invalid contentType');
+  }
+  const source = opts.source || 'open_access_lead';
+  const leadId = opts.leadId != null ? parseInt(String(opts.leadId), 10) : null;
+  const purchaseId = opts.purchaseId != null ? parseInt(String(opts.purchaseId), 10) : null;
+  const { rows } = await db.query(
+    `INSERT INTO user_content_access (user_id, content_type, content_id, source, lead_id, purchase_id, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (user_id, content_type, content_id)
+     DO UPDATE SET
+       source = COALESCE(EXCLUDED.source, user_content_access.source),
+       lead_id = COALESCE(EXCLUDED.lead_id, user_content_access.lead_id),
+       purchase_id = COALESCE(EXCLUDED.purchase_id, user_content_access.purchase_id),
+       updated_at = NOW()
+     RETURNING id, user_id, content_type, content_id, source, lead_id, purchase_id, created_at`,
+    [uid, contentType, cid, source, Number.isFinite(leadId) ? leadId : null, Number.isFinite(purchaseId) ? purchaseId : null]
+  );
+  return rows[0];
+}
+
 async function ensurePreviewLeadCampaignTables() {
   try {
     const r = await db.query(
@@ -12748,7 +12805,106 @@ app.post('/api/preview-leads/start', async (req, res) => {
   }
 });
 
-app.post('/api/open-access-leads/start', async (req, res) => {
+app.get('/api/open-access-leads/access', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureUserContentAccessTable())) {
+      return res.status(503).json({ error: 'User content access not available. Run migration 046_user_content_access.sql' });
+    }
+    const { contentType, contentId } = req.query || {};
+    if (contentType !== 'playlist' && contentType !== 'slideshow') {
+      return res.status(400).json({ error: 'Invalid contentType' });
+    }
+    const cid = parseInt(String(contentId), 10);
+    if (isNaN(cid)) return res.status(400).json({ error: 'Invalid contentId' });
+
+    const userId = parseInt(req.user.userId, 10);
+    const access = await getUserContentAccessRow(userId, contentType, cid);
+    if (!access) {
+      return res.json({ hasAccess: false });
+    }
+    return res.json({
+      hasAccess: true,
+      access: {
+        id: access.id,
+        contentType: access.content_type,
+        contentId: access.content_id,
+        source: access.source,
+        leadId: access.lead_id,
+        purchaseId: access.purchase_id,
+        createdAt: access.created_at,
+      },
+    });
+  } catch (e) {
+    console.error('open-access-leads/access error:', e);
+    res.status(500).json({ error: 'Failed to check content access' });
+  }
+});
+
+app.post('/api/open-access-leads/attach', authenticateToken, async (req, res) => {
+  try {
+    if (!(await ensureUserContentAccessTable())) {
+      return res.status(503).json({ error: 'User content access not available. Run migration 046_user_content_access.sql' });
+    }
+    const { contentType, contentId, leadId, source, purchaseId } = req.body || {};
+    if (contentType !== 'playlist' && contentType !== 'slideshow') {
+      return res.status(400).json({ error: 'Invalid contentType' });
+    }
+    const cid = parseInt(String(contentId), 10);
+    if (isNaN(cid)) return res.status(400).json({ error: 'Invalid contentId' });
+
+    const row = await loadOpenAccessContentForLeadGate(contentType, cid);
+    const gate = assertOpenAccessLeadGateForContent(contentType, row);
+    if (!gate.ok) {
+      return res.status(400).json({ error: gate.error });
+    }
+
+    const userId = parseInt(req.user.userId, 10);
+    let parsedLeadId = leadId != null ? parseInt(String(leadId), 10) : null;
+    if (parsedLeadId != null && (!Number.isFinite(parsedLeadId) || parsedLeadId <= 0)) {
+      return res.status(400).json({ error: 'Invalid leadId' });
+    }
+
+    if (parsedLeadId) {
+      const leadCheck = await db.query(
+        `SELECT id, user_id, verified_at, content_type, content_id, lead_source
+         FROM preview_phone_leads WHERE id = $1 LIMIT 1`,
+        [parsedLeadId]
+      );
+      if (!leadCheck.rows.length) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+      const lead = leadCheck.rows[0];
+      if (lead.content_type !== contentType || parseInt(String(lead.content_id), 10) !== cid) {
+        return res.status(400).json({ error: 'Lead does not match this content' });
+      }
+      if (lead.lead_source !== 'open_access') {
+        return res.status(400).json({ error: 'Lead is not an open access lead' });
+      }
+      if (!lead.verified_at) {
+        return res.status(400).json({ error: 'Lead is not verified yet' });
+      }
+      if (lead.user_id && parseInt(String(lead.user_id), 10) !== userId) {
+        return res.status(403).json({ error: 'Lead belongs to another user' });
+      }
+      if (!lead.user_id) {
+        await db.query(`UPDATE preview_phone_leads SET user_id = $1, updated_at = NOW() WHERE id = $2`, [userId, parsedLeadId]);
+      }
+    }
+
+    const access = await upsertUserContentAccess(userId, contentType, cid, {
+      source: source || (parsedLeadId ? 'open_access_lead' : 'account'),
+      leadId: parsedLeadId,
+      purchaseId: purchaseId != null ? parseInt(String(purchaseId), 10) : null,
+    });
+
+    res.json({ ok: true, access });
+  } catch (e) {
+    console.error('open-access-leads/attach error:', e);
+    res.status(500).json({ error: 'Failed to attach content access' });
+  }
+});
+
+app.post('/api/open-access-leads/start', authenticateTokenOptional, async (req, res) => {
   try {
     if (!(await ensurePreviewLeadTables())) {
       return res.status(503).json({ error: 'Preview leads not available. Run migration 040_preview_phone_leads_and_slideshow_phone_gate.sql' });
@@ -12819,13 +12975,15 @@ app.post('/api/open-access-leads/start', async (req, res) => {
       [e164, contentType, cid]
     );
 
+    const authUserId = req.user?.userId ? parseInt(String(req.user.userId), 10) : null;
+
     const ins = await db.query(
       `INSERT INTO preview_phone_leads (
         owner_user_id, content_type, content_id, phone_e164, full_name,
         verification_token_hash, verification_expires_at,
         transactional_consent_copy_version, terms_consented, marketing_opt_in,
-        marketing_consent_copy_version, marketing_consented_at, qr_code_id, lead_source
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,NOW(),$11,'open_access')
+        marketing_consent_copy_version, marketing_consented_at, qr_code_id, lead_source, user_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10,NOW(),$11,'open_access',$12)
       RETURNING id, public_poll_token`,
       [
         gate.ownerUserId,
@@ -12839,6 +12997,7 @@ app.post('/api/open-access-leads/start', async (req, res) => {
         !!termsConsent,
         marketingConsentCopyVersion || null,
         qrId,
+        Number.isFinite(authUserId) ? authUserId : null,
       ]
     );
 
@@ -12898,6 +13057,18 @@ app.post('/api/preview-leads/verify', async (req, res) => {
       `INSERT INTO preview_phone_lead_events (lead_id, event_type, meta) VALUES ($1,'verified','{}'::jsonb)`,
       [lead.id]
     );
+
+    if (lead.lead_source === 'open_access' && lead.user_id && (await ensureUserContentAccessTable())) {
+      try {
+        await upsertUserContentAccess(parseInt(String(lead.user_id), 10), lead.content_type, lead.content_id, {
+          source: 'open_access_lead',
+          leadId: lead.id,
+        });
+      } catch (attachErr) {
+        console.warn('preview-leads/verify: failed to attach user content access:', attachErr?.message || attachErr);
+      }
+    }
+
     const unlockToken = jwt.sign(
       {
         typ: 'preview_unlock',
@@ -13899,6 +14070,32 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())`,
                   [session.id, playlistIdVal, slideshowIdVal, createdByVal, phoneE164 || '', priceCentsVal, maxUsesVal, activationCodeId]
                 );
+
+                const purchaserUserId = session.metadata?.userId
+                  ? parseInt(String(session.metadata.userId), 10)
+                  : null;
+                if (Number.isFinite(purchaserUserId) && purchaserUserId > 0) {
+                  try {
+                    await attachActivationCodeForUserId(purchaserUserId, code);
+                  } catch (attachCodeErr) {
+                    console.warn('💳 STRIPE_WEBHOOK: Failed to attach activation code to user:', attachCodeErr?.message || attachCodeErr);
+                  }
+
+                  if (await ensureUserContentAccessTable()) {
+                    try {
+                      const attachContentType = playlistIdVal ? 'playlist' : 'slideshow';
+                      const attachContentId = playlistIdVal || slideshowIdVal;
+                      if (attachContentId) {
+                        await upsertUserContentAccess(purchaserUserId, attachContentType, attachContentId, {
+                          source: 'purchase',
+                          purchaseId: activationCodeId,
+                        });
+                      }
+                    } catch (accessErr) {
+                      console.warn('💳 STRIPE_WEBHOOK: Failed to attach user content access:', accessErr?.message || accessErr);
+                    }
+                  }
+                }
 
                 const smsResult = await smsService.sendActivationCodeSms(phoneE164, code, contentName || 'Content');
                 if (smsResult.error) {
@@ -15486,8 +15683,8 @@ app.post('/api/activation-codes/validate', async (req, res) => {
   }
 });
 
-// Create Stripe checkout session for activation code purchase (guest, no auth required)
-app.post('/api/activation-codes/purchase-session', async (req, res) => {
+// Create Stripe checkout session for activation code purchase (guest or authenticated)
+app.post('/api/activation-codes/purchase-session', authenticateTokenOptional, async (req, res) => {
   try {
     const { playlistId, slideshowId, phone, successUrl, cancelUrl } = req.body;
 
@@ -15532,8 +15729,10 @@ app.post('/api/activation-codes/purchase-session', async (req, res) => {
     const expiresAt = null;
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
-    const defaultSuccess = `${baseUrl}/store/checkout-success?type=activation_code&session_id={CHECKOUT_SESSION_ID}`;
+    const defaultSuccess = `${baseUrl}/store/checkout-success?type=activation_code&session_id={CHECKOUT_SESSION_ID}&contentType=${contentType}&contentId=${contentId}`;
     const defaultCancel = `${baseUrl}/store/checkout-cancel`;
+
+    const authUserId = req.user?.userId ? parseInt(String(req.user.userId), 10) : null;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -15560,6 +15759,7 @@ app.post('/api/activation-codes/purchase-session', async (req, res) => {
         priceCents: String(priceCents),
         maxUses: String(maxUses),
         contentName,
+        userId: Number.isFinite(authUserId) ? String(authUserId) : '',
       },
     });
 

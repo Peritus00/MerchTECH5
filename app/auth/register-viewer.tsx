@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { settingsAPI } from '@/services/api';
+import { normalizeReturnToParam, resolvePostLoginRoute } from '@/utils/safeReturnTo';
 
 interface FormErrors {
   email?: string;
@@ -29,7 +30,8 @@ interface FormErrors {
 }
 
 export default function RegisterViewerScreen() {
-  const params = useLocalSearchParams<{ activationCode?: string }>();
+  const params = useLocalSearchParams<{ activationCode?: string; returnTo?: string }>();
+  const safeReturnTo = normalizeReturnToParam(params.returnTo);
   const initialCode =
     typeof params.activationCode === 'string'
       ? params.activationCode
@@ -139,7 +141,9 @@ export default function RegisterViewerScreen() {
       setIsSubmitting(false);
       return;
     }
-    router.replace('/(tabs)/');
+    router.replace(
+      resolvePostLoginRoute({ returnTo: params.returnTo }) as any
+    );
     setIsSubmitting(false);
   };
 
@@ -322,7 +326,15 @@ export default function RegisterViewerScreen() {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.loginLinkButton} onPress={() => router.push('/auth/login')}>
+            <TouchableOpacity
+              style={styles.loginLinkButton}
+              onPress={() =>
+                router.push({
+                  pathname: '/auth/login',
+                  params: safeReturnTo ? { returnTo: safeReturnTo } : undefined,
+                })
+              }
+            >
               <View style={styles.loginLinkContainer}>
                 <ThemedText style={styles.checkboxText}>Already have an account? </ThemedText>
                 <ThemedText style={styles.linkBold}>Sign in</ThemedText>

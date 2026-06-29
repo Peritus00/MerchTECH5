@@ -34,6 +34,7 @@ import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
+import { resolveOpenAccessLeadBypass } from '@/utils/openAccessLeadGate';
 
 export default function PlaylistAccessScreen() {
   const route = useRoute();
@@ -254,6 +255,21 @@ export default function PlaylistAccessScreen() {
       if (!playlist.requiresActivationCode) {
         if ((playlist as any).requirePhoneForOpenAccess === true) {
           console.log('🔴 PLAYLIST_ACCESS: Playlist is open but requires lead capture before playback');
+          const bypass = await resolveOpenAccessLeadBypass({
+            contentType: 'playlist',
+            contentId: id,
+            isAuthenticated,
+          });
+          if (bypass.bypass) {
+            const token = (playlist as any)?.playbackToken;
+            if (token) {
+              await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
+            }
+            const leadQuery =
+              bypass.leadId != null ? `?leadId=${encodeURIComponent(String(bypass.leadId))}` : '';
+            replaceOnce(`/playlist-player/${id}${leadQuery}`);
+            return;
+          }
           setShowOpenAccessLeadGate(true);
           return;
         }
@@ -730,6 +746,7 @@ export default function PlaylistAccessScreen() {
           contentType="playlist"
           contentId={id}
           contentName={playlist.name}
+          returnTo={`/playlist-access/${id}`}
         />
       </ThemedView>
     );

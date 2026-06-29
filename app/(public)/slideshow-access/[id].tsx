@@ -36,6 +36,7 @@ import LockedAccessSignupModal from '@/components/LockedAccessSignupModal';
 import { saveUserAge, getAgeForTracking } from '@/utils/ageStorage';
 import { saveUserGender, getGenderForTracking } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
+import { resolveOpenAccessLeadBypass } from '@/utils/openAccessLeadGate';
 
 export default function SlideshowAccessScreen() {
   const route = useRoute();
@@ -415,6 +416,17 @@ export default function SlideshowAccessScreen() {
       if (!requiresCode) {
         if ((slideshow as any).requirePhoneForOpenAccess === true) {
           console.log('🎬 SLIDESHOW_ACCESS: Slideshow is open but requires lead capture before playback');
+          const bypass = await resolveOpenAccessLeadBypass({
+            contentType: 'slideshow',
+            contentId: id,
+            isAuthenticated,
+          });
+          if (bypass.bypass) {
+            const leadQuery =
+              bypass.leadId != null ? `?leadId=${encodeURIComponent(String(bypass.leadId))}` : '';
+            router.replace(`/slideshow-player/${id}${leadQuery}` as any);
+            return;
+          }
           setShowOpenAccessLeadGate(true);
           return;
         }
@@ -778,6 +790,7 @@ export default function SlideshowAccessScreen() {
           contentType="slideshow"
           contentId={id}
           contentName={slideshow.name}
+          returnTo={`/slideshow-access/${id}`}
         />
       </ThemedView>
     );

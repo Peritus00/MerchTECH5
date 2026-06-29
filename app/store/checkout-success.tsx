@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,15 +9,26 @@ import { useAuth } from '@/contexts/AuthContext';
 
 export default function CheckoutSuccess() {
   const router = useRouter();
-  const { session_id, type } = useLocalSearchParams<{ session_id?: string; type?: string }>();
+  const { session_id, type, contentType, contentId } = useLocalSearchParams<{
+    session_id?: string;
+    type?: string;
+    contentType?: string;
+    contentId?: string;
+  }>();
   const { cart, clearCart, getTotalPrice } = useCart();
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [purchaseTracked, setPurchaseTracked] = React.useState(false);
 
   const isActivationCodePurchase = type === 'activation_code';
+  const normalizedContentType =
+    contentType === 'playlist' || contentType === 'slideshow' ? contentType : undefined;
+  const normalizedContentId = typeof contentId === 'string' ? contentId : undefined;
+  const contentAccessPath =
+    normalizedContentType && normalizedContentId
+      ? `/${normalizedContentType === 'playlist' ? 'playlist-access' : 'slideshow-access'}/${normalizedContentId}`
+      : undefined;
 
   React.useEffect(() => {
-    // Track purchase before clearing cart (skip for activation code - no cart)
     const trackPurchase = async () => {
       if (isActivationCodePurchase) {
         return;
@@ -29,25 +40,16 @@ export default function CheckoutSuccess() {
       try {
         const stripeSessionId = Array.isArray(session_id) ? session_id[0] : session_id;
         const totalAmount = getTotalPrice();
-        
-        // Format cart items for tracking
-        const items = cart.map(item => ({
+
+        const items = cart.map((item) => ({
           productId: item.product.id,
           productName: item.product.name,
           quantity: item.quantity,
           price: item.product.price,
         }));
 
-        console.log('📊 ANALYTICS: Tracking purchase from checkout-success');
-        await analyticsService.trackPurchase(
-          stripeSessionId,
-          items,
-          totalAmount,
-          user?.id
-        );
-        
+        await analyticsService.trackPurchase(stripeSessionId, items, totalAmount, user?.id);
         setPurchaseTracked(true);
-        console.log('📊 ANALYTICS: Purchase tracked successfully');
       } catch (error) {
         console.error('Error tracking purchase:', error);
       }
@@ -58,7 +60,29 @@ export default function CheckoutSuccess() {
         clearCart();
       }
     });
-  }, [session_id, cart, purchaseTracked, isActivationCodePurchase]);
+  }, [session_id, cart, purchaseTracked, isActivationCodePurchase, clearCart, getTotalPrice, user?.id]);
+
+  const handleCreateAccount = () => {
+    router.push({
+      pathname: '/auth/register-viewer',
+      params: contentAccessPath ? { returnTo: contentAccessPath } : undefined,
+    });
+  };
+
+  const handleLogin = () => {
+    router.push({
+      pathname: '/auth/login',
+      params: contentAccessPath ? { returnTo: contentAccessPath } : undefined,
+    });
+  };
+
+  const handleContinueToContent = () => {
+    if (contentAccessPath) {
+      router.replace(contentAccessPath as any);
+      return;
+    }
+    router.replace('/(tabs)/store');
+  };
 
   return (
     <ThemedView style={styles.container}>
@@ -70,19 +94,83 @@ export default function CheckoutSuccess() {
           ? 'Your activation code has been sent via text. Check your phone and enter the code to access your content.'
           : 'Your payment was successful.'}
       </ThemedText>
-      <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)/store')}>
-        <ThemedText style={styles.homeText}>
-          {isActivationCodePurchase ? 'Back to Store' : 'Continue Shopping'}
-        </ThemedText>
-      </TouchableOpacity>
+
+      {isActivationCodePurchase && !isAuthenticated && (
+        <View style={styles.accountPrompt}>
+          <ThemedText style={styles.accountPromptTitle}>Save your purchase</ThemedText>
+          <ThemedText style={styles.accountPromptText}>
+            Create a free account or sign in so we can remember your access and stop asking for
+            verification again.
+          </ThemedText>
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleCreateAccount}>
+            <ThemedText style={styles.primaryBtnText}>Create account</ThemedText>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleLogin}>
+            <ThemedText style={styles.secondaryBtnText}>Log in</ThemedText>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {contentAccessPath ? (
+        <TouchableOpacity style={styles.homeBtn} onPress={handleContinueToContent}>
+          <ThemedText style={styles.homeText}>Continue to content</ThemedText>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)/store')}>
+          <ThemedText style={styles.homeText}>
+            {isActivationCodePurchase ? 'Back to Store' : 'Continue Shopping'}
+          </ThemedText>
+        </TouchableOpacity>
+      )}
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container:{flex:1,justifyContent:'center',alignItems:'center',padding:24},
-  title:{marginBottom:12,textAlign:'center'},
-  subtitle:{textAlign:'center',opacity:0.8,marginBottom:32},
-  homeBtn:{backgroundColor:'#2563eb',paddingHorizontal:24,paddingVertical:12,borderRadius:8},
-  homeText:{color:'#fff',fontSize:16,fontWeight:'600'},
-}); 
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  title: { marginBottom: 12, textAlign: 'center' },
+  subtitle: { textAlign: 'center', opacity: 0.8, marginBottom: 24 },
+  accountPrompt: {
+    width: '100%',
+    maxWidth: 420,
+    marginBottom: 24,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: '#f9fafb',
+  },
+  accountPromptTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  accountPromptText: {
+    fontSize: 14,
+    opacity: 0.85,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  primaryBtn: {
+    backgroundColor: '#2563eb',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginBottom: 10,
+    alignItems: 'center',
+  },
+  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  secondaryBtnText: { fontSize: 16, fontWeight: '600' },
+  homeBtn: { backgroundColor: '#2563eb', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
+  homeText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+});
