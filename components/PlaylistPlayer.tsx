@@ -479,6 +479,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const currentMediaIdRef = useRef<string | number | null>(null);
   const currentMediaItemRef = useRef<MediaItem | null>(null); // Store current media item for ref callbacks
   const startPlayTrackingRef = useRef<((mediaItem: MediaItem) => Promise<void>) | null>(null); // Store tracking function
+  const trackingMediaIdRef = useRef<string | number | null>(null);
+  const isAdvancingRef = useRef(false);
+  const autoSkipCountRef = useRef(0);
+  const autoSkipWindowStartRef = useRef(0);
+  const AUTO_SKIP_WINDOW_MS = 10000;
+  const AUTO_SKIP_MAX = 6;
+  const [autoSkipCircuitOpen, setAutoSkipCircuitOpen] = useState(false);
 
   const { addToCart, cart, getTotalItems } = useCart();
   const { user } = useAuth();
@@ -763,7 +770,18 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     return playableMedia.length > 0 ? playableMedia[currentIndex] : null;
   }, [playableMedia, currentIndex]);
 
-  useMediaPrefetch(playableMedia, currentIndex, 2);
+  const mediaPrefetchOptions = useMemo(
+    () => ({
+      playbackToken,
+      appendStreamToken: appendPlaybackTokenToStreamUrl,
+      skipStreamPrefetchWithoutToken:
+        !!(playlistData?.requires_activation_code || playlistData?.requiresActivationCode) &&
+        !(playlistData?.is_public ?? playlistData?.isPublic),
+    }),
+    [appendPlaybackTokenToStreamUrl, playbackToken, playlistData]
+  );
+
+  useMediaPrefetch(playableMedia, currentIndex, 2, mediaPrefetchOptions);
 
   const manifestPlaylistId = playlistId || (playlistData?.id != null ? String(playlistData.id) : null);
   const playableMediaSignature = useMemo(
@@ -1121,47 +1139,62 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   }, []);
 
-  // Effect to manage play tracking based on isPlaying state
-  useEffect(() => {
-    console.log('📊 TRACKING: Effect triggered', { 
-      isPlaying, 
-      hasMediaItem: !!currentMediaItem, 
-      mediaId: currentMediaItem?.id,
-      mediaType: currentMediaItem?.media_type 
-    });
-    
-    if (isPlaying && currentMediaItem) {
-      // Only track audio/video, not images
-      const currentMediaType = currentMediaItem.media_type || currentMediaItem.fileType || currentMediaItem.type;
-      if (currentMediaType === 'audio' || currentMediaType === 'video') {
-        console.log('📊 TRACKING: Starting play tracking for media:', currentMediaItem.id);
-        startPlayTracking(currentMediaItem);
-      } else {
-        console.log('📊 TRACKING: Skipping tracking for non-audio/video media');
-      }
-    } else {
-      console.log('📊 TRACKING: Stopping play tracking');
-      stopPlayTracking();
-    }
-
-    // Cleanup on unmount or media change
-    return () => {
-      stopPlayTracking();
-    };
-  }, [isPlaying, currentMediaItem, startPlayTracking, stopPlayTracking]);
-
-  // Reset tracking when media changes
-  useEffect(() => {
-    if (isPlaying) {
+  const startTrackingForCurrentMedia = useCallback(() => {
+    const mediaItem = currentMediaItemRef.current;
+    const trackFn = startPlayTrackingRef.current;
+    const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
+    if (!mediaItem || !trackFn || (mediaType !== 'audio' && mediaType !== 'video')) {
       return;
     }
 
+    if (trackingMediaIdRef.current === mediaItem.id) {
+      return;
+    }
+
+    trackingMediaIdRef.current = mediaItem.id;
+    trackFn(mediaItem);
+  }, []);
+
+  // Effect to manage play tracking: stop timer when paused; start only via guarded helper
+  useEffect(() => {
+    if (!isPlaying) {
+      stopPlayTracking();
+    }
+
+    return () => {
+      stopPlayTracking();
+    };
+  }, [isPlaying, stopPlayTracking]);
+
+  // Reset per-track analytics state when the current index changes
+  useEffect(() => {
+    trackingMediaIdRef.current = null;
     playDurationRef.current = 0;
     hasTrackedPlayRef.current = false;
     hasTrackedTotalPlayRef.current = false;
     currentMediaIdRef.current = null;
     stopPlayTracking();
-  }, [currentIndex, isPlaying, stopPlayTracking]);
+  }, [currentIndex, stopPlayTracking]);
+
+  // Start tracking once per media id when playback is active
+  useEffect(() => {
+    if (!isPlaying || !currentMediaItem) {
+      return;
+    }
+
+    const currentMediaType =
+      currentMediaItem.media_type || currentMediaItem.fileType || currentMediaItem.type;
+    if (currentMediaType !== 'audio' && currentMediaType !== 'video') {
+      return;
+    }
+
+    if (trackingMediaIdRef.current === currentMediaItem.id) {
+      return;
+    }
+
+    trackingMediaIdRef.current = currentMediaItem.id;
+    startPlayTracking(currentMediaItem);
+  }, [currentIndex, currentMediaItem, isPlaying, startPlayTracking]);
 
   // Cleanup retry timeout on unmount
   useEffect(() => {
@@ -1268,19 +1301,52 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   }, [isPlaying, userHasInteracted]);
 
-  const goToNextVideo = useCallback(() => {
-    // Stop current media first
+  const resetAutoSkipCircuit = useCallback(() => {
+    autoSkipCountRef.current = 0;
+    autoSkipWindowStartRef.current = 0;
+    setAutoSkipCircuitOpen(false);
+  }, []);
+
+  const goToNextVideo = useCallback((options?: { userInitiated?: boolean }) => {
+    if (isAdvancingRef.current) {
+      return;
+    }
+
+    if (!options?.userInitiated) {
+      const now = Date.now();
+      if (
+        autoSkipWindowStartRef.current === 0 ||
+        now - autoSkipWindowStartRef.current > AUTO_SKIP_WINDOW_MS
+      ) {
+        autoSkipWindowStartRef.current = now;
+        autoSkipCountRef.current = 0;
+      }
+
+      autoSkipCountRef.current += 1;
+      if (autoSkipCountRef.current > AUTO_SKIP_MAX) {
+        console.warn('🎵 AUTO_SKIP: Circuit breaker tripped, stopping auto-advance');
+        setAutoSkipCircuitOpen(true);
+        setIsPlaying(false);
+        stopCurrentMedia();
+        setContinuousAudioUnavailable(true);
+        return;
+      }
+    } else {
+      resetAutoSkipCircuit();
+    }
+
+    isAdvancingRef.current = true;
     stopCurrentMedia();
-    
-    // Small delay to let cleanup complete before switching
+
     setTimeout(() => {
       if (currentIndex < playableMedia.length - 1) {
         setCurrentIndex(currentIndex + 1);
       } else {
         setCurrentIndex(0);
       }
-    }, 100); // 100ms for cleanup
-  }, [currentIndex, playableMedia.length, stopCurrentMedia]);
+      isAdvancingRef.current = false;
+    }, 100);
+  }, [currentIndex, playableMedia.length, resetAutoSkipCircuit, stopCurrentMedia]);
 
   useEffect(() => {
     goToNextVideoRef.current = goToNextVideo;
@@ -1361,14 +1427,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       if (status.isPlaying && !status.didJustFinish) {
         console.log('📊 TRACKING: expo-av playback started, ensuring tracking');
         setIsPlaying(true);
-        // Ensure tracking starts for mobile playback
-        const mediaItem = currentMediaItemRef.current;
-        const trackFn = startPlayTrackingRef.current;
-        const itemMediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
-        if (mediaItem && trackFn && (itemMediaType === 'audio' || itemMediaType === 'video')) {
-          console.log('📊 TRACKING: Starting tracking from expo-av playback status for media:', mediaItem.id);
-          trackFn(mediaItem);
-        }
+        resetAutoSkipCircuit();
+        startTrackingForCurrentMedia();
       } else if (!status.isPlaying && !status.didJustFinish) {
         setIsPlaying(false);
       }
@@ -1379,7 +1439,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         goToNextVideo();
       }
     }
-  }, [goToNextVideo, videoDimensions]);
+  }, [goToNextVideo, resetAutoSkipCircuit, startTrackingForCurrentMedia, videoDimensions]);
 
   // Reset video position, dimensions, zoom, and fullscreen when changing videos
   useEffect(() => {
@@ -1440,6 +1500,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   };
 
   const handlePrevious = () => {
+    resetAutoSkipCircuit();
     if (shouldUseContinuousAudio) {
       const previousIndex = currentIndex > 0 ? currentIndex - 1 : playableMedia.length - 1;
       seekToContinuousAudioTrack(previousIndex);
@@ -1467,7 +1528,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     // Preserve play state across manual navigation
     resumeOnAdvanceRef.current = isPlaying;
     stopCurrentMedia();
-    goToNextVideo();
+    goToNextVideo({ userInitiated: true });
   };
 
   const handleZoomIn = () => {
@@ -1591,19 +1652,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   };
 
-  const startTrackingForCurrentMedia = useCallback(() => {
-    const mediaItem = currentMediaItemRef.current;
-    const trackFn = startPlayTrackingRef.current;
-    const mediaType = mediaItem?.media_type || mediaItem?.fileType || mediaItem?.type;
-    if (mediaItem && trackFn && (mediaType === 'audio' || mediaType === 'video')) {
-      trackFn(mediaItem);
-    }
-  }, []);
-
   const handleNativeMediaPlaying = useCallback(() => {
     setIsPlaying(true);
+    resetAutoSkipCircuit();
     startTrackingForCurrentMedia();
-  }, [startTrackingForCurrentMedia]);
+  }, [resetAutoSkipCircuit, startTrackingForCurrentMedia]);
 
   const handleHtml5VideoPlaying = useCallback(() => {
     console.log('🎵 HTML5_VIDEO: onPlaying - React event');
@@ -2487,6 +2540,15 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                     <ActivityIndicator size="large" color="#3b82f6" />
                     <Text style={styles.reconnectingText}>Reconnecting...</Text>
                     <Text style={styles.reconnectingSubtext}>Attempt {retryAttempt} of {maxRetriesRef.current}</Text>
+                  </View>
+                )}
+
+                {autoSkipCircuitOpen && (
+                  <View style={styles.reconnectingOverlay}>
+                    <Text style={styles.reconnectingText}>Playback paused</Text>
+                    <Text style={styles.reconnectingSubtext}>
+                      Several tracks failed to load. Tap play or choose another track to continue.
+                    </Text>
                   </View>
                 )}
             </View>

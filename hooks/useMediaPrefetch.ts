@@ -16,6 +16,12 @@ interface MediaItem {
   contentType?: string;
 }
 
+export interface MediaPrefetchOptions {
+  playbackToken?: string;
+  appendStreamToken?: (uri: string) => string;
+  skipStreamPrefetchWithoutToken?: boolean;
+}
+
 function getMediaUrl(item: MediaItem): string | null {
   const url = item?.proxy_url || item?.url;
   if (!url || typeof url !== 'string') return null;
@@ -32,10 +38,42 @@ function isImage(item: MediaItem, url: string | null): boolean {
   );
 }
 
+function isStreamUrl(url: string): boolean {
+  return url.includes('/api/media/') && url.includes('/stream');
+}
+
+function resolvePrefetchUrl(
+  url: string,
+  options?: MediaPrefetchOptions
+): string | null {
+  if (!isStreamUrl(url)) {
+    return url;
+  }
+
+  if (options?.appendStreamToken) {
+    return options.appendStreamToken(url);
+  }
+
+  if (options?.playbackToken) {
+    if (/[?&]token=/.test(url)) {
+      return url;
+    }
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}token=${encodeURIComponent(options.playbackToken)}`;
+  }
+
+  if (options?.skipStreamPrefetchWithoutToken) {
+    return null;
+  }
+
+  return url;
+}
+
 export function useMediaPrefetch(
   media: MediaItem[],
   currentIndex: number,
-  prefetchCount = 2
+  prefetchCount = 2,
+  options?: MediaPrefetchOptions
 ) {
   useEffect(() => {
     if (!media?.length) return;
@@ -52,11 +90,14 @@ export function useMediaPrefetch(
         }
         // For video/audio on web, pre-buffer first 256KB so playback starts immediately on track change
         if (Platform.OS === 'web' && !isImg) {
-          fetch(url, {
-            method: 'GET',
-            headers: { Range: 'bytes=0-262143' },
-            cache: 'force-cache',
-          }).catch(() => {});
+          const prefetchUrl = resolvePrefetchUrl(url, options);
+          if (prefetchUrl) {
+            fetch(prefetchUrl, {
+              method: 'GET',
+              headers: { Range: 'bytes=0-262143' },
+              cache: 'force-cache',
+            }).catch(() => {});
+          }
         }
       }
     }
@@ -64,5 +105,5 @@ export function useMediaPrefetch(
     if (urlsToPrefetch.length > 0) {
       Image.prefetch(urlsToPrefetch, { cachePolicy: 'disk' }).catch(() => {});
     }
-  }, [media, currentIndex, prefetchCount]);
+  }, [media, currentIndex, options?.appendStreamToken, options?.playbackToken, options?.skipStreamPrefetchWithoutToken, prefetchCount]);
 }

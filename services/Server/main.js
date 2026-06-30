@@ -10185,28 +10185,12 @@ app.get('/api/media/:id/stream', async (req, res) => {
       });
     }
 
-    const lockedPlaylistResult = await db.query(
-      `SELECT DISTINCT p.id
-       FROM playlists p
-       JOIN playlist_media pm ON pm.playlist_id = p.id
-       WHERE pm.media_id = $1
-         AND p.requires_activation_code = true
-         AND COALESCE(p.is_public, false) = false
-         AND p.deleted_at IS NULL`,
-      [id]
-    );
-
-    if (lockedPlaylistResult.rows.length > 0) {
-      const hasLockedPlaylistAccess = lockedPlaylistResult.rows.some((row) =>
-        requestHasPlaylistPlaybackAccess(req, row.id)
-      );
-
-      if (!hasLockedPlaylistAccess) {
-        return res.status(403).json({
-          error: 'Activation code required to stream this media',
-          code: 'LOCKED_PLAYLIST_MEDIA',
-        });
-      }
+    const streamAuth = await checkMediaStreamAuthorization(req, id, media);
+    if (!streamAuth.allowed) {
+      return res.status(streamAuth.status).json({
+        error: streamAuth.error,
+        code: streamAuth.code,
+      });
     }
     
     // Handle S3 files
@@ -12474,6 +12458,111 @@ function cacheLockedAccessStatus(pollToken, payload) {
     payload,
     expiresAt: Date.now() + LOCKED_ACCESS_STATUS_CACHE_TTL_MS,
   });
+}
+
+const STREAM_AUTH_CACHE_TTL_MS = 60_000;
+const mediaOpenPlaylistCache = new Map();
+const mediaLockedPlaylistsCache = new Map();
+
+function getStreamAuthCacheEntry(cache, key) {
+  const cached = cache.get(key);
+  if (!cached) return undefined;
+  if (cached.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return undefined;
+  }
+  return cached.value;
+}
+
+function setStreamAuthCacheEntry(cache, key, value) {
+  cache.set(key, {
+    value,
+    expiresAt: Date.now() + STREAM_AUTH_CACHE_TTL_MS,
+  });
+}
+
+async function isMediaInOpenPlaylist(mediaId, mediaRow = null) {
+  const cacheKey = String(mediaId);
+  const cached = getStreamAuthCacheEntry(mediaOpenPlaylistCache, cacheKey);
+  if (cached !== undefined) return cached;
+
+  if (mediaRow?.is_public === true) {
+    setStreamAuthCacheEntry(mediaOpenPlaylistCache, cacheKey, true);
+    return true;
+  }
+
+  const result = await db.query(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM playlists p
+       JOIN playlist_media pm ON pm.playlist_id = p.id
+       WHERE pm.media_id = $1
+         AND p.deleted_at IS NULL
+         AND (
+           COALESCE(p.is_public, false) = true
+           OR COALESCE(p.requires_activation_code, false) = false
+         )
+     ) AS exists`,
+    [mediaId]
+  );
+  const exists = !!result.rows[0]?.exists;
+  setStreamAuthCacheEntry(mediaOpenPlaylistCache, cacheKey, exists);
+  return exists;
+}
+
+async function getLockedPlaylistIdsForMedia(mediaId) {
+  const cacheKey = String(mediaId);
+  const cached = getStreamAuthCacheEntry(mediaLockedPlaylistsCache, cacheKey);
+  if (cached !== undefined) return cached;
+
+  const result = await db.query(
+    `SELECT DISTINCT p.id
+     FROM playlists p
+     JOIN playlist_media pm ON pm.playlist_id = p.id
+     WHERE pm.media_id = $1
+       AND p.requires_activation_code = true
+       AND COALESCE(p.is_public, false) = false
+       AND p.deleted_at IS NULL`,
+    [mediaId]
+  );
+  const ids = result.rows.map((row) => row.id);
+  setStreamAuthCacheEntry(mediaLockedPlaylistsCache, cacheKey, ids);
+  return ids;
+}
+
+async function checkMediaStreamAuthorization(req, mediaId, mediaRow) {
+  try {
+    const isOpenlyReachable = await isMediaInOpenPlaylist(mediaId, mediaRow);
+    if (isOpenlyReachable) {
+      return { allowed: true };
+    }
+
+    const lockedPlaylistIds = await getLockedPlaylistIdsForMedia(mediaId);
+    if (lockedPlaylistIds.length === 0) {
+      return { allowed: true };
+    }
+
+    const hasLockedPlaylistAccess = lockedPlaylistIds.some((playlistId) =>
+      requestHasPlaylistPlaybackAccess(req, playlistId)
+    );
+
+    if (!hasLockedPlaylistAccess) {
+      return {
+        allowed: false,
+        status: 403,
+        error: 'Activation code required to stream this media',
+        code: 'LOCKED_PLAYLIST_MEDIA',
+      };
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    console.error(
+      'MEDIA_STREAM_AUTH: DB error during authorization check, failing open:',
+      err?.message || err
+    );
+    return { allowed: true, failOpen: true };
+  }
 }
 
 function getPlaybackTokenFromRequest(req) {
