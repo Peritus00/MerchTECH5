@@ -49,6 +49,7 @@ import { getDemographicsForTracking } from '@/utils/demographicsHelper';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
+import { continuousAudioEnabled } from '@/config/environment';
 
 interface MediaItem {
   id: string | number;
@@ -831,6 +832,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   }, [continuousAudioTracks.length, manifestPlaylistId, playbackToken]);
 
   const shouldUseContinuousAudio =
+    continuousAudioEnabled &&
     Platform.OS === 'web' &&
     !continuousAudioUnavailable &&
     !!continuousAudioManifestUrl &&
@@ -847,7 +849,18 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   }, [manifestPlaylistId, playableMediaSignature, playbackToken]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || continuousAudioTracks.length === 0 || !continuousAudioManifestUrl) {
+    if (Platform.OS !== 'web' || playableMedia.length === 0) {
+      return;
+    }
+    if (!continuousAudioEnabled) {
+      console.log(
+        '🎵 CONTINUOUS_AUDIO: Disabled — using per-track player. Set EXPO_PUBLIC_CONTINUOUS_AUDIO_ENABLED=true to compare HLS mode.'
+      );
+    }
+  }, [manifestPlaylistId, playableMedia.length]);
+
+  useEffect(() => {
+    if (!continuousAudioEnabled || Platform.OS !== 'web' || continuousAudioTracks.length === 0 || !continuousAudioManifestUrl) {
       setContinuousAudioSupport('none');
       return;
     }

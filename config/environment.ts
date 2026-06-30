@@ -14,6 +14,8 @@ export interface EnvironmentConfig {
   GOOGLE_CLIENT_ID: string;
   /** Apple OAuth Client/Service ID - must match backend APPLE_CLIENT_ID/APPLE_SERVICE_ID */
   APPLE_CLIENT_ID: string | null;
+  /** Playlist-level HLS continuous audio (web). Set EXPO_PUBLIC_CONTINUOUS_AUDIO_ENABLED=true to enable. */
+  CONTINUOUS_AUDIO_ENABLED: boolean;
 }
 
 /**
@@ -89,6 +91,9 @@ class Environment {
       || process.env.EXPO_PUBLIC_APPLE_SERVICE_ID?.trim()
       || null;
 
+    const continuousAudioEnabled =
+      process.env.EXPO_PUBLIC_CONTINUOUS_AUDIO_ENABLED === 'true';
+
     return {
       API_BASE_URL: apiBaseUrl,
       NODE_ENV: nodeEnv,
@@ -98,6 +103,7 @@ class Environment {
       EXPO_PROJECT_ID: process.env.EXPO_PROJECT_ID || 'your-expo-project-id',
       GOOGLE_CLIENT_ID: googleClientId,
       APPLE_CLIENT_ID: appleClientId,
+      CONTINUOUS_AUDIO_ENABLED: continuousAudioEnabled,
     };
   }
 
@@ -173,6 +179,10 @@ class Environment {
     return this.config.APPLE_CLIENT_ID;
   }
 
+  get continuousAudioEnabled(): boolean {
+    return this.config.CONTINUOUS_AUDIO_ENABLED;
+  }
+
   /** Callback host for OAuth redirects - always use canonical frontend URL */
   get oauthCallbackHost(): string {
     return this.config.FRONTEND_URL;
@@ -188,6 +198,7 @@ class Environment {
     console.log(`  Is Production: ${this.config.IS_PRODUCTION}`);
     console.log(`  Google Client ID: ${this.config.GOOGLE_CLIENT_ID ? this.config.GOOGLE_CLIENT_ID.substring(0, 30) + '...' : 'not set'}`);
     console.log(`  Apple Client ID: ${this.config.APPLE_CLIENT_ID ? 'configured' : 'not set'}`);
+    console.log(`  Continuous Audio: ${this.config.CONTINUOUS_AUDIO_ENABLED ? 'enabled' : 'disabled'}`);
   }
 
   // Get full configuration object
@@ -209,6 +220,7 @@ export const {
   expoProjectId,
   googleClientId,
   appleClientId,
+  continuousAudioEnabled,
   oauthCallbackHost,
 } = env;
 
