@@ -4,6 +4,8 @@ import React, {
   useCallback,
   useRef,
   useMemo,
+  forwardRef,
+  useImperativeHandle,
 } from 'react';
 import {
   View,
@@ -59,14 +61,20 @@ interface SlideshowPlayerProps {
   embedInPlaylist?: boolean;
 }
 
-const SlideshowPlayer = ({
+export interface SlideshowPlayerHandle {
+  /** Hard-stop the looping background track. Used by PlaylistPlayer, whose own stop
+   *  logic only reaches HTML media elements and cannot see this player's audio. */
+  stopAudio: () => void;
+}
+
+const SlideshowPlayer = forwardRef<SlideshowPlayerHandle, SlideshowPlayerProps>(({
   slideshowId,
   slideshow,
   autoPlay = false,
   showFeaturedProducts = true,
   showDiscussionPanel = true,
   embedInPlaylist = false,
-}: SlideshowPlayerProps) => {
+}, forwardedRef) => {
   const [slideshowData, setSlideshowData] = useState<any>(slideshow);
   const [images, setImages] = useState<SlideshowImage[]>([]);
   const [loading, setLoading] = useState(!slideshow);
@@ -339,6 +347,17 @@ const SlideshowPlayer = ({
       audioPlayerRef.current?.pause();
     }
   }, [isPlaying]);
+
+  useImperativeHandle(
+    forwardedRef,
+    () => ({
+      stopAudio: () => {
+        setIsPlaying(false);
+        audioPlayerRef.current?.pause();
+      },
+    }),
+    []
+  );
 
   useEffect(() => {
     if (Platform.OS === 'web') {
@@ -869,7 +888,9 @@ const SlideshowPlayer = ({
     </View>
     </TouchableWithoutFeedback>
   );
-};
+});
+
+SlideshowPlayer.displayName = 'SlideshowPlayer';
 
 const styles = StyleSheet.create({
   center: {

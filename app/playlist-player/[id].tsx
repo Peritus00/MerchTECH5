@@ -30,10 +30,17 @@ export default function PlaylistPlayerScreen() {
   const [hasCheckedStoredLeadId, setHasCheckedStoredLeadId] = useState(false);
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
   const queryPlaybackToken = playbackToken || routePlaybackToken || null;
-  const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(id, queryPlaybackToken);
+  const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(
+    id,
+    queryPlaybackToken,
+    hasCheckedStoredPlaybackToken
+  );
   
   // Guard to prevent multiple scan tracking calls
   const hasTrackedScanRef = useRef<boolean>(false);
+  // The token param is stripped from the URL exactly once per mount; re-running the
+  // replace on every render of this effect restarts the screen and the access query.
+  const hasStrippedTokenParamRef = useRef<boolean>(false);
 
   // Fetch user demographics if authenticated
   useEffect(() => {
@@ -47,41 +54,34 @@ export default function PlaylistPlayerScreen() {
     loadUserDemographics();
   }, [isAuthenticated]);
 
-  // Store playback token when playlist has it; load from storage when not in response (e.g. after protected access)
+  // Resolve the playback token from the URL or storage *before* the access query is
+  // allowed to run. Firing the query first and then setting the token changes the query
+  // key, which used to cost a second full access request on every single mount.
   useEffect(() => {
     let isActive = true;
 
     const loadPlaybackToken = async () => {
-      setHasCheckedStoredPlaybackToken(false);
-
-      if (routePlaybackToken && id) {
-        await AsyncStorage.setItem(`playlist_playback_token_${id}`, routePlaybackToken);
-        if (isActive) {
-          setPlaybackToken(routePlaybackToken);
-          setHasCheckedStoredPlaybackToken(true);
-        }
-        router.replace(`/playlist-player/${id}`);
-        return;
-      }
-
-      const token = (playlist as any)?.playbackToken;
-      if (token && id) {
-        await AsyncStorage.setItem(`playlist_playback_token_${id}`, token);
-        if (isActive) {
-          setPlaybackToken(token);
-          setHasCheckedStoredPlaybackToken(true);
-        }
-        return;
-      }
-
       if (!id) {
         if (isActive) setHasCheckedStoredPlaybackToken(true);
         return;
       }
 
+      if (routePlaybackToken) {
+        await AsyncStorage.setItem(`playlist_playback_token_${id}`, routePlaybackToken);
+        if (isActive) {
+          setPlaybackToken(routePlaybackToken);
+          setHasCheckedStoredPlaybackToken(true);
+        }
+        if (!hasStrippedTokenParamRef.current) {
+          hasStrippedTokenParamRef.current = true;
+          router.replace(`/playlist-player/${id}`);
+        }
+        return;
+      }
+
       try {
         const storedToken = await AsyncStorage.getItem(`playlist_playback_token_${id}`);
-        if (isActive) {
+        if (isActive && storedToken) {
           setPlaybackToken(storedToken);
         }
       } finally {
@@ -96,7 +96,16 @@ export default function PlaylistPlayerScreen() {
     return () => {
       isActive = false;
     };
-  }, [playlist, id, routePlaybackToken]);
+  }, [id, routePlaybackToken]);
+
+  // Persist a token issued by the access response. Depending on the token string rather
+  // than the response object keeps this from re-running on every refetch.
+  const responsePlaybackToken = (playlist as any)?.playbackToken ?? null;
+  useEffect(() => {
+    if (!id || !responsePlaybackToken) return;
+    AsyncStorage.setItem(`playlist_playback_token_${id}`, responsePlaybackToken).catch(() => {});
+    setPlaybackToken((current) => (current === responsePlaybackToken ? current : responsePlaybackToken));
+  }, [id, responsePlaybackToken]);
 
   useEffect(() => {
     let isActive = true;
@@ -225,7 +234,7 @@ export default function PlaylistPlayerScreen() {
         : (error as any)?.response?.data?.message || 'Failed to load playlist'
     : null;
 
-  if (loading && !playlist) {
+  if ((loading || !hasCheckedStoredPlaybackToken) && !playlist) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#3b82f6" />

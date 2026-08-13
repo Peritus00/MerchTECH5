@@ -36,7 +36,7 @@ import { ProductLink } from '@/shared/media-schema';
 import { isPlaylistItemActiveOnDate, todayIsoDateInLocalTimezone } from '@/shared/playlistSchedule';
 import { useCart } from '@/contexts/CartContext';
 import PlaylistChat from './PlaylistChat';
-import SlideshowPlayer from './SlideshowPlayer';
+import SlideshowPlayer, { SlideshowPlayerHandle } from './SlideshowPlayer';
 import { Alert } from 'react-native';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 import { analyticsService } from '@/services/analyticsService';
@@ -449,6 +449,11 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   const continuousAudioRef = useRef<HTMLAudioElement | null>(null);
   const continuousHlsRef = useRef<any>(null);
+  // Every <audio>/<video> element this player has attached. The single-element refs above
+  // only ever point at the most recently attached node, so they cannot stop an element that
+  // is mid-swap (track change, continuous-audio fallback) and is still producing sound.
+  const mediaElementsRef = useRef<Set<HTMLMediaElement>>(new Set());
+  const slideshowPlayerRef = useRef<SlideshowPlayerHandle | null>(null);
   // When advancing (next/prev or track end), remember whether we should resume playback on the next item
   const resumeOnAdvanceRef = useRef<boolean>(false);
   const goToNextVideoRef = useRef<() => void>(() => {});
@@ -1237,6 +1242,20 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   }, []);
 
+  // Silence every element this player owns except the one that should be audible.
+  const pauseAllMediaExcept = useCallback((keep?: HTMLMediaElement | null) => {
+    mediaElementsRef.current.forEach((element) => {
+      if (element === keep) return;
+      try {
+        element.pause();
+      } catch (e) {}
+      if (!element.isConnected) {
+        mediaElementsRef.current.delete(element);
+      }
+    });
+    slideshowPlayerRef.current?.stopAudio();
+  }, []);
+
   // Stop any currently playing media before switching tracks to avoid overlap
   const stopCurrentMedia = useCallback(() => {
     if (stallTimeoutRef.current) {
@@ -1271,6 +1290,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       }
     }
 
+    // The refs above only cover the most recently attached nodes; sweep the rest.
+    pauseAllMediaExcept();
+
     // Pause expo-av player (mobile) or shimmed web audio
     if (Platform.OS !== 'web' && (videoRef.current as any)?.stopAsync) {
       try {
@@ -1290,7 +1312,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
 
     setIsPlaying(false);
-  }, []);
+  }, [pauseAllMediaExcept]);
 
   // Play/pause synchronization - only handle the current track's Video component
   useEffect(() => {
@@ -1475,22 +1497,43 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   }, [currentIndex]);
 
-  // Cleanup media when track changes
+  // Cleanup media when track changes.
+  // The elements are captured here, while they are still the *current* track's nodes.
+  // Reading html5AudioRef/html5VideoRef inside the cleanup would be too late: React
+  // attaches the incoming element's ref before running passive effect cleanups, so the
+  // cleanup would pause the track that is starting and leave the outgoing one playing.
   useEffect(() => {
+    const outgoingVideo = html5VideoRef.current;
+    const outgoingAudio = html5AudioRef.current;
     return () => {
-      // Ensure old media stops when index changes
-      if (html5VideoRef.current) {
+      if (outgoingVideo) {
         try {
-          html5VideoRef.current.pause();
+          outgoingVideo.pause();
         } catch (e) {}
       }
-      if (html5AudioRef.current) {
+      if (outgoingAudio) {
         try {
-          html5AudioRef.current.pause();
+          outgoingAudio.pause();
         } catch (e) {}
       }
     };
   }, [currentIndex]);
+
+  // Stop everything this player owns when it unmounts, so a remount never layers a second
+  // set of media elements on top of a still-audible first set.
+  useEffect(() => {
+    const elements = mediaElementsRef.current;
+    return () => {
+      elements.forEach((element) => {
+        try {
+          element.pause();
+          element.removeAttribute('src');
+          element.load();
+        } catch (e) {}
+      });
+      elements.clear();
+    };
+  }, []);
 
   // If we advanced while playing, auto-resume playback on the new item
   useEffect(() => {
@@ -1768,6 +1811,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       }
       return;
     }
+    // Drop nodes React has already removed from the document so a long session with many
+    // track changes does not retain a detached element per track.
+    mediaElementsRef.current.forEach((element) => {
+      if (!element.isConnected) {
+        mediaElementsRef.current.delete(element);
+      }
+    });
+    mediaElementsRef.current.add(ref);
     if (kind === 'video') {
       html5VideoRef.current = ref as HTMLVideoElement;
     } else {
@@ -1785,6 +1836,25 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       },
     };
   }, []);
+
+  // Stable ref callbacks. Inline arrows here would be a new function identity on every
+  // render, making React detach (null) and reattach the element each time and leaving a
+  // window where the *Ref.current is null and stopCurrentMedia() silently does nothing.
+  const attachVideoElement = useCallback(
+    (ref: HTMLVideoElement | null) => attachMediaController(ref, 'video'),
+    [attachMediaController]
+  );
+  const attachAudioElement = useCallback(
+    (ref: HTMLAudioElement | null) => attachMediaController(ref, 'audio'),
+    [attachMediaController]
+  );
+  const attachContinuousAudioElement = useCallback(
+    (ref: HTMLAudioElement | null) => {
+      continuousAudioRef.current = ref;
+      attachMediaController(ref, 'audio');
+    },
+    [attachMediaController]
+  );
 
   const renderCurrentMedia = () => {
     const currentItem = playableMedia[currentIndex];
@@ -1834,6 +1904,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         return (
           <View style={styles.embedSlideshowOuterCompact}>
             <SlideshowPlayer
+              ref={slideshowPlayerRef}
               slideshow={mapped}
               autoPlay={isPlaying}
               showFeaturedProducts={false}
@@ -1951,7 +2022,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         return (
           <video
             key={`video-${currentIndex}-${currentItem.id}`}
-            ref={(ref) => attachMediaController(ref, 'video')}
+            ref={attachVideoElement}
             src={itemUri}
             style={{
               ...(getVideoStyle() as React.CSSProperties),
@@ -2170,10 +2241,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               <audio
                 key={`continuous-audio-${manifestPlaylistId}`}
                 crossOrigin="anonymous"
-                ref={(ref) => {
-                  continuousAudioRef.current = ref;
-                  attachMediaController(ref, 'audio');
-                }}
+                ref={attachContinuousAudioElement}
                 style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
                 controls={false}
                 controlsList="nodownload noplaybackrate noremoteplayback"
@@ -2261,7 +2329,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             <audio
               key={`audio-${currentIndex}-${currentItem.id}`}
               crossOrigin="anonymous"
-              ref={(ref) => attachMediaController(ref, 'audio')}
+              ref={attachAudioElement}
               src={itemUri}
               style={{ width: '100%', maxWidth: 600 } as React.CSSProperties}
               controls={false}
