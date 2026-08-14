@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { adminSettingsAPI, settingsAPI } from '@/services/api';
 import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback';
@@ -21,8 +22,9 @@ import { MaterialIconWithFallback } from '@/components/MaterialIconWithFallback'
 export default function SignupControlScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
   const insets = useSafeAreaInsets();
-  
+
   const [signupsEnabled, setSignupsEnabled] = useState<boolean>(true);
   const [viewerSignupsEnabled, setViewerSignupsEnabled] = useState<boolean>(false);
   const [viewerUpgradesEnabled, setViewerUpgradesEnabled] = useState<boolean>(true);
@@ -30,9 +32,6 @@ export default function SignupControlScreen() {
   const [saving, setSaving] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [updatedBy, setUpdatedBy] = useState<number | null>(null);
-
-  // Check if user is admin
-  const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
 
   useEffect(() => {
     if (!isAdmin) {

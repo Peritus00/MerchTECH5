@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { adminAPI } from '@/services/api';
 import { DeletedQRCode, DeletedPlaylist, DeletedSlideshow, DeletedActivationCode } from '@/types';
 
@@ -34,6 +35,7 @@ export default function RestoreDeletedScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
   const [activeTab, setActiveTab] = useState<TabType>('qr-codes');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +53,7 @@ export default function RestoreDeletedScreen() {
     if (user === null) {
       return;
     }
-    if (!user.isAdmin && user.email !== 'djjetfuel@gmail.com') {
+    if (!isAdmin) {
       Alert.alert('Access Denied', 'You do not have permission to access this page', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -82,7 +84,7 @@ export default function RestoreDeletedScreen() {
   };
 
   useEffect(() => {
-    if (user?.isAdmin || user?.email === 'djjetfuel@gmail.com') {
+    if (isAdmin) {
       fetchDeletedItems();
     }
   }, [user]);

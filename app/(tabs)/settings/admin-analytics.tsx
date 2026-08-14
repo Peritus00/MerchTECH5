@@ -16,6 +16,7 @@ import { LineChart, BarChart } from 'react-native-chart-kit';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { adminAPI } from '@/services/api';
 import { AdminUserStats, AdminUserHistory } from '@/types';
 
@@ -128,14 +129,12 @@ export default function AdminAnalyticsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
   const [stats, setStats] = useState<AdminUserStats | null>(null);
   const [history, setHistory] = useState<AdminUserHistory | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Check if user is admin
-  const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
 
   useEffect(() => {
     if (!isAdmin) {

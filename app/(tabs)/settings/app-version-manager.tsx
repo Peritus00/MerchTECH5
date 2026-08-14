@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import * as DocumentPicker from 'expo-document-picker';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -37,6 +38,7 @@ const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://merchtech5-productio
 
 export default function AppVersionManagerScreen() {
   const { user: currentUser } = useAuth();
+  const isAdmin = useIsAdmin();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [versions, setVersions] = useState<AppVersion[]>([]);
@@ -55,7 +57,7 @@ export default function AppVersionManagerScreen() {
       return;
     }
 
-    if (!currentUser?.isAdmin && currentUser?.email !== 'djjetfuel@gmail.com') {
+    if (!isAdmin) {
       Alert.alert('Access Denied', 'You do not have permission to access this page', [
         { text: 'OK', onPress: () => router.replace('/') }
       ]);

@@ -26,6 +26,7 @@ import { AddToPlaylistModal } from '@/components/AddToPlaylistModal';
 import CustomAlert from '@/components/CustomAlert';
 import EditPlaylistModal from '@/components/EditPlaylistModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import {
   performOptimisticUpdate,
   createOptimisticUpdater,
@@ -100,7 +101,7 @@ export default function PlaylistsScreen() {
     });
   }, [user?.id]);
 
-  const isAdmin = !!(user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel'));
+  const isAdmin = useIsAdmin();
 
   const fetchData = async () => {
     try {

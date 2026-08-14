@@ -24,6 +24,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { downloadAdvancedQRCode, QRCodeFormat } from '@/services/qrUtils';
 import { captureRef } from 'react-native-view-shot';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 
 interface AdvancedQREditorProps {
   visible: boolean;
@@ -77,8 +78,8 @@ export const AdvancedQREditor: React.FC<AdvancedQREditorProps> = ({
   const { user } = useAuth();
   console.log('🔘 COMPONENT: useAuth successful, user:', user);
   
-  // Check if user is admin (djjetfuel)
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
+  // Check if user is admin
+  const isAdmin = useIsAdmin();
   console.log('🔘 COMPONENT: isAdmin calculated:', isAdmin);
 
   const [activeTab, setActiveTab] = useState<TabType>('content');

@@ -168,8 +168,8 @@ function RootLayoutNav() {
           !inTabsGroup
         ) {
           // Only redirect new users to subscription if they're not already in tabs or subscription
-          // Dev user bypass - skip subscription flow
-          if (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel') {
+          // Admin/dev user bypass - skip subscription flow
+          if (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel') {
             console.log('🔴 Dev user detected, redirecting to dashboard');
             router.replace('/');
           } else {

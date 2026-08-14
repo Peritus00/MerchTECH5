@@ -274,7 +274,10 @@ app.use(helmet({
 // Note: While express.json/urlencoded don't parse multipart/form-data (multer handles that),
 // we set these limits high enough to ensure no middleware rejects large file uploads
 // Multer has its own 500MB limit, so we match that here
-app.use(express.json({ limit: '500mb' })); // Increased to support video uploads via /api/upload
+app.use(express.json({
+  limit: '500mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+})); // Increased to support video uploads via /api/upload; rawBody captured for Stripe webhook verification
 app.use(express.urlencoded({ limit: '500mb', extended: true })); // Increased to support video uploads
 
 // Phase 3: Performance Optimization Middleware (after body parsing, before routes)
@@ -14091,9 +14094,9 @@ app.get('/api/coupons/sms-status', authenticateToken, isAdmin, async (req, res) 
 });
 
 // ---------- STRIPE WEBHOOK HANDLER ----------
-// Note: This endpoint needs raw body, so it should be placed before JSON middleware
-// or use express.raw() specifically for this route
-app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+// Raw body is captured by the global express.json() verify callback (req.rawBody).
+// The route-level express.raw() is no longer needed.
+app.post('/api/webhooks/stripe', async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
@@ -14106,7 +14109,7 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
 
   try {
     // Verify webhook signature
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookSecret);
     console.log('✅ STRIPE_WEBHOOK: Signature verified for event:', event.type);
   } catch (err) {
     console.error('⚠️ STRIPE_WEBHOOK: Signature verification failed:', err.message);
@@ -14119,6 +14122,82 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
       case 'checkout.session.completed': {
         const session = event.data.object;
         console.log('💳 STRIPE_WEBHOOK: Checkout completed for session:', session.id);
+
+        // Event ticket fulfillment
+        if (session.metadata?.type === 'event_ticket') {
+          try {
+            const { event_id, ticket_type_id, quantity: qtyStr, attendee_email } = session.metadata || {};
+            const qty = parseInt(qtyStr, 10) || 1;
+
+            // Idempotency: only fulfill if order is still pending
+            const orderUpdate = await db.query(
+              `UPDATE event_ticket_orders
+               SET status='fulfilled', fulfilled_at=NOW()
+               WHERE stripe_session_id=$1 AND status='pending'
+               RETURNING id, ticket_type_id, quantity`,
+              [session.id]
+            );
+
+            if (orderUpdate.rows[0]) {
+              const { ticket_type_id: typeId, quantity: orderedQty } = orderUpdate.rows[0];
+
+              // Move from reserved to sold
+              await db.query(
+                `UPDATE ticket_types
+                 SET quantity_sold = quantity_sold + $1,
+                     quantity_reserved = GREATEST(quantity_reserved - $1, 0)
+                 WHERE id = $2`,
+                [orderedQty, typeId]
+              );
+
+              // Create or find attendee
+              let attendeeId = null;
+              if (attendee_email) {
+                const existingAttendee = await db.query(
+                  'SELECT id FROM attendees WHERE event_id=$1 AND email=$2',
+                  [event_id, attendee_email.toLowerCase()]
+                );
+                if (existingAttendee.rows[0]) {
+                  attendeeId = existingAttendee.rows[0].id;
+                } else {
+                  const newAttendee = await db.query(
+                    `INSERT INTO attendees (event_id, email, source)
+                     VALUES ($1,$2,'in_house') RETURNING id`,
+                    [event_id, attendee_email.toLowerCase()]
+                  );
+                  attendeeId = newAttendee.rows[0].id;
+                }
+              }
+
+              // Fetch access level for token defaults
+              const ttResult = await db.query(
+                `SELECT al.drink_tokens_default, al.food_tokens_default
+                 FROM ticket_types tt JOIN access_levels al ON al.id=tt.access_level_id
+                 WHERE tt.id=$1`,
+                [typeId]
+              );
+              const drinkTokens = ttResult.rows[0]?.drink_tokens_default || 0;
+              const foodTokens = ttResult.rows[0]?.food_tokens_default || 0;
+
+              // Issue tickets
+              for (let i = 0; i < orderedQty; i++) {
+                await db.query(
+                  `INSERT INTO tickets
+                     (event_id, attendee_id, ticket_type_id, drink_tokens_remaining, food_tokens_remaining)
+                   VALUES ($1,$2,$3,$4,$5)`,
+                  [event_id, attendeeId, typeId, drinkTokens, foodTokens]
+                );
+              }
+
+              console.log(`🎟️ STRIPE_WEBHOOK: Issued ${orderedQty} event ticket(s) for session ${session.id}`);
+            } else {
+              console.log('🎟️ STRIPE_WEBHOOK: event_ticket order already fulfilled or not found, skipping');
+            }
+          } catch (ticketErr) {
+            console.error('🎟️ STRIPE_WEBHOOK: event_ticket fulfillment failed:', ticketErr.message);
+          }
+          break;
+        }
 
         // Activation code purchase flow (guest, no auth)
         if (session.metadata?.type === 'activation_code') {
@@ -14312,6 +14391,33 @@ app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), asyn
           console.error('💳 STRIPE_WEBHOOK: Failed to record order/items:', err);
         }
 
+        break;
+      }
+
+      // ── EVENT TICKET fulfillment ──────────────────────────────────────────────
+      case 'checkout.session.expired': {
+        const expiredSession = event.data.object;
+        if (expiredSession.metadata?.type !== 'event_ticket') break;
+
+        // Idempotency guard: only release reservation if order is still 'pending'
+        const expiredOrder = await db.query(
+          `UPDATE event_ticket_orders
+           SET status = 'expired'
+           WHERE stripe_session_id = $1 AND status = 'pending'
+           RETURNING ticket_type_id, quantity`,
+          [expiredSession.id]
+        );
+
+        if (expiredOrder.rows[0]) {
+          const { ticket_type_id, quantity } = expiredOrder.rows[0];
+          await db.query(
+            `UPDATE ticket_types
+             SET quantity_reserved = GREATEST(quantity_reserved - $1, 0)
+             WHERE id = $2`,
+            [quantity, ticket_type_id]
+          );
+          console.log(`🎟️ STRIPE_WEBHOOK: Released ${quantity} soft-reserved tickets for type ${ticket_type_id}`);
+        }
         break;
       }
 
@@ -19924,6 +20030,17 @@ function generateMediaPlayerHTML(playlist) {
 
 // REMOVED: app.get('/playlist-access/:id') - This was interfering with React Native app's client-side routing
 // The React Native app handles this route through app/(public)/playlist-access/[id].tsx
+
+// Event Access Control routers (mounted before error handler)
+app.use('/api/events', require('./routes/events'));
+app.use('/api/events', require('./routes/tickets'));
+app.use('/api/events', require('./routes/credentials'));
+app.use('/api/scan', require('./routes/scanning'));
+app.use('/api/ticket-sync', require('./routes/ticketSync'));
+// Public ticket lookup (no auth) - for digital ticket screen
+app.use('/api/tickets', require('./routes/tickets'));
+// POS entitlement redemption
+app.use('/api/pos', require('./routes/pos'));
 
 // Global error handler (must be after all routes)
 app.use(errorHandler);

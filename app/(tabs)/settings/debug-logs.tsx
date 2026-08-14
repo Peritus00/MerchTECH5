@@ -5,12 +5,14 @@ import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { logStorage, type LogEntry } from '@/utils/debugLogger';
 
 export default function DebugLogsScreen() {
   const { user } = useAuth();
+  const isAdmin = useIsAdmin();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -18,8 +20,6 @@ export default function DebugLogsScreen() {
   const [filterLevel, setFilterLevel] = useState<'all' | 'log' | 'warn' | 'error' | 'info'>('all');
   const scrollViewRef = useRef<ScrollView>(null);
   const [autoScroll, setAutoScroll] = useState(true);
-
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
 
   useEffect(() => {
     // Update logs every second

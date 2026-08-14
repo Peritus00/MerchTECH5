@@ -16,6 +16,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { adminAPI, profileAPI } from '@/services/api';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -50,7 +51,7 @@ export default function ProfileScreen() {
   const [pushNotificationLoading, setPushNotificationLoading] = useState(false);
 
   // Admin section state
-  const isAdmin = user && (user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel' || (user as any).isAdmin);
+  const isAdmin = useIsAdmin();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);

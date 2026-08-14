@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons'; // Import MaterialIcons
 import * as Clipboard from 'expo-clipboard';
 import { MerchTechLogo } from '@/components/MerchTechLogo';
 import { useAppVersion } from '@/hooks/useAppVersion';
+import { useIsAdmin } from '@/hooks/useIsAdmin';
 
 export default function Settings() {
   const router = useRouter();
@@ -19,6 +20,7 @@ export default function Settings() {
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { currentVersion, versionInfo, checkForUpdates, isChecking } = useAppVersion();
   const insets = useSafeAreaInsets();
+  const isAdmin = useIsAdmin();
 
   // Refresh user data on mount to ensure admin status is up to date
   React.useEffect(() => {
@@ -27,8 +29,6 @@ export default function Settings() {
     }
   }, [isAuthenticated]);
 
-  // Check if user is admin (check isAdmin property or specific admin account)
-  const isAdmin = user && (user.isAdmin || user.email === 'djjetfuel@gmail.com' || user.username === 'djjetfuel');
   // Check if user can view logs (admin or has canViewLogs permission)
   const canViewLogs = isAdmin || (user && user.canViewLogs);
 
@@ -38,9 +38,6 @@ export default function Settings() {
   console.log('🔧 SETTINGS: User username:', user?.username);
   console.log('🔧 SETTINGS: Platform.OS:', Platform.OS);
   console.log('🔧 SETTINGS: Is admin check:', isAdmin);
-  console.log('🔧 SETTINGS: User object keys:', user ? Object.keys(user) : 'no user');
-  console.log('🔧 SETTINGS: User email check:', user?.email === 'djjetfuel@gmail.com');
-  console.log('🔧 SETTINGS: User username check:', user?.username === 'djjetfuel');
 
   if (isAdmin) {
     console.log('🔧 SETTINGS: Adding admin options to settings');
@@ -300,6 +297,14 @@ export default function Settings() {
       },
       icon: '📊',
     }] : []),
+    ...(isAdmin ? [{
+      title: 'Event Access Control',
+      description: 'Manage events, credentials, scanning staff, and ticket access',
+      onPress: () => {
+        router.push('/(tabs)/settings/events');
+      },
+      icon: '🎟️',
+    }] : []),
     {
       title: 'Privacy Policy',
       description: 'View our privacy policy',
@@ -475,7 +480,7 @@ export default function Settings() {
         </ThemedView>
 
          {/* Test Email Button (for debugging - dev only) */}
-         {user?.email === 'djjetfuel@gmail.com' && (
+         {isAdmin && (
            <TouchableOpacity style={[styles.optionCard, { padding: 16 }]} onPress={testEmailDelivery}>
               <ThemedView style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <MaterialIcons name="email" size={24} color="#28a745" style={{ marginRight: 16 }} />

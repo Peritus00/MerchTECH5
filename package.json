@@ -32,6 +32,13 @@
     "db:verify-preview-coupon-schema": "node ./scripts/verify-preview-coupon-schema.js",
     "db:migrate-activation-code-purchase": "node ./scripts/run-activation-code-purchase-migration.js",
     "db:migrate-user-content-access": "node ./scripts/run-user-content-access-migration.js",
+    "db:migrate-events-core": "node ./scripts/run-events-core-migration.js",
+    "db:migrate-tickets-attendees": "node ./scripts/run-tickets-attendees-migration.js",
+    "db:migrate-credentials": "node ./scripts/run-credentials-migration.js",
+    "db:migrate-scanning-sync": "node ./scripts/run-scanning-sync-migration.js",
+    "db:migrate-entitlements": "node ./scripts/run-entitlement-redemptions-migration.js",
+    "events:generate-mock": "node ./scripts/generate-mock-event-data.js",
+    "events:stress-test": "node ./scripts/stress-test-scanner.js",
     "db:backfill-slideshow-media": "node ./scripts/backfill-slideshow-media.js",
     "qr:migrate-logos-to-s3": "node ./scripts/migrate-qr-logos-to-s3.js",
     "postinstall": "patch-package"
