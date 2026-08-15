@@ -73,6 +73,7 @@
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
+    "dexie": "^4.4.4",
     "dotenv": "^16.6.1",
     "expo": "~53.0.24",
     "expo-apple-authentication": "~7.2.4",

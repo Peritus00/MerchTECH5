@@ -103,4 +103,9 @@ class EventDb extends Dexie {
   }
 }
 
-export const eventDb = new EventDb();
+// Guard against SSR / Node.js environments where IndexedDB is unavailable.
+// All actual Dexie calls happen inside useEffect or event handlers (browser-only),
+// so the stub is never invoked at runtime — it only satisfies the module import.
+export const eventDb: EventDb = (typeof window !== 'undefined' && 'indexedDB' in window)
+  ? new EventDb()
+  : ({} as EventDb);
