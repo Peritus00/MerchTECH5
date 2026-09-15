@@ -3629,11 +3629,16 @@ app.post('/api/analytics/track-scan', async (req, res) => {
 // Apply caching middleware - cache for 2 minutes (analytics data changes frequently)
 app.get('/api/analytics/summary', authenticateToken, 
   require('./config/performance').cacheMiddleware({ 
-    ttl: 120000, // 2 minutes cache
+    ttl: 600000, // 10 minutes cache — reduces pool pressure from heavy dedup CTEs
     keyGenerator: (req) => `analytics:summary:${req.user.userId}:${req.query.days || 7}:${req.query.qrCodeId || 'all'}`
   }),
   async (req, res) => {
+  let analyticsClient;
   try {
+    analyticsClient = await db.getClient();
+    await analyticsClient.query('SET LOCAL statement_timeout = 15000');
+    const q = (text, params) => analyticsClient.query(text, params);
+
     const userId = req.user.userId;
     console.log('📊 ANALYTICS: Computing summary for user:', userId);
 
@@ -3701,7 +3706,7 @@ app.get('/api/analytics/summary', authenticateToken,
         ${hasQrFilter ? 'AND s.qr_code_id = $2' : ''}
         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
       )`;
-      totalRes = await db.query(
+      totalRes = await q(
         `${totalScansCTE}
          SELECT COUNT(*) AS c FROM dedup_all`,
         hasQrFilter ? [userId, qrFilterId] : [userId]
@@ -3711,7 +3716,7 @@ app.get('/api/analytics/summary', authenticateToken,
     let last24HoursRes;
     try { 
       // Debug: Check actual scan timestamps
-      const debugScans = await db.query(
+      const debugScans = await q(
         `SELECT s.scanned_at, 
                 s.scanned_at >= $2 as is_in_last_24h,
                 EXTRACT(EPOCH FROM (NOW() - s.scanned_at))/3600 as hours_ago
@@ -3731,7 +3736,7 @@ app.get('/api/analytics/summary', authenticateToken,
         }))
       });
       
-      last24HoursRes = await db.query(
+      last24HoursRes = await q(
         `${dedupCTE}
          SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
         hasQrFilter ? [userId, last24Hours, qrFilterId] : [userId, last24Hours]
@@ -3740,14 +3745,14 @@ app.get('/api/analytics/summary', authenticateToken,
     } catch (e) { console.warn('📊 SUMMARY last24HoursRes failed:', e.message); last24HoursRes = { rows: [{ c: 0 }] }; }
 
     let weekRes;
-    try { weekRes = await db.query(
+    try { weekRes = await q(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       hasQrFilter ? [userId, weekStart, qrFilterId] : [userId, weekStart]
     ); } catch (e) { console.warn('📊 SUMMARY weekRes failed:', e.message); weekRes = { rows: [{ c: 0 }] }; }
 
     let monthRes;
-    try { monthRes = await db.query(
+    try { monthRes = await q(
       `${dedupCTE}
        SELECT COUNT(*) AS c FROM dedup d WHERE d.scanned_at >= $2`,
       hasQrFilter ? [userId, monthStart, qrFilterId] : [userId, monthStart]
@@ -3756,7 +3761,7 @@ app.get('/api/analytics/summary', authenticateToken,
     // Count unique visitors using visitor_id when available (matches writeScan logic)
     let uniqueVisitorsRes;
     try {
-      uniqueVisitorsRes = await db.query(
+      uniqueVisitorsRes = await q(
         `SELECT COUNT(*) AS c FROM (
            SELECT DISTINCT
              COALESCE(qr_visitor_id, visitor_id::text, ip_address::text, CONCAT(COALESCE(browser_name,'?'), '|', COALESCE(operating_system,'?'))) AS vkey
@@ -3773,7 +3778,7 @@ app.get('/api/analytics/summary', authenticateToken,
 
     // Hourly distribution (last 24h)
     let hourlyRes;
-    try { hourlyRes = await db.query(
+    try { hourlyRes = await q(
       `${dedupCTE}
        SELECT EXTRACT(HOUR FROM d.scanned_at) AS hr, COUNT(*) AS c
        FROM dedup d
@@ -3788,7 +3793,7 @@ app.get('/api/analytics/summary', authenticateToken,
     // Daily scan history (last N days)
     let dailyScanHistoryRes;
     try {
-      dailyScanHistoryRes = await db.query(
+      dailyScanHistoryRes = await q(
         `${dedupCTE}
          SELECT 
            DATE(d.scanned_at) as scan_date,
@@ -3848,7 +3853,7 @@ app.get('/api/analytics/summary', authenticateToken,
          GROUP BY country
          ORDER BY count DESC
          LIMIT 10`;
-      countriesRes = await db.query(
+      countriesRes = await q(
         countriesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -3880,7 +3885,7 @@ app.get('/api/analytics/summary', authenticateToken,
           COALESCE(s.country_name, s.country_code, '')
         ORDER BY count DESC
         LIMIT 10`;
-      citiesRes = await db.query(
+      citiesRes = await q(
         citiesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -3917,7 +3922,7 @@ app.get('/api/analytics/summary', authenticateToken,
           q.id,
           q.name
         ORDER BY city, scan_count DESC`;
-      cityQRCodesRes = await db.query(
+      cityQRCodesRes = await q(
         cityQRCodesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -3928,7 +3933,7 @@ app.get('/api/analytics/summary', authenticateToken,
 
     // Top devices
     let devicesRes;
-    try { devicesRes = await db.query(
+    try { devicesRes = await q(
       `SELECT COALESCE(s.device_type, s.device, 'Unknown') AS device, COUNT(*) AS count
          FROM qr_scans s
          JOIN qr_codes q ON s.qr_code_id = q.id
@@ -3962,7 +3967,7 @@ app.get('/api/analytics/summary', authenticateToken,
             WHEN '65+' THEN 7
             ELSE 8
           END`;
-      ageRangesRes = await db.query(
+      ageRangesRes = await q(
         ageRangesSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -3994,7 +3999,7 @@ app.get('/api/analytics/summary', authenticateToken,
             WHEN 'Open-ended' THEN 5
             ELSE 6
           END`;
-      genderDistRes = await db.query(
+      genderDistRes = await q(
         genderDistSql,
         hasQrFilter ? [userId, rangeStart, qrFilterId] : [userId, rangeStart]
       );
@@ -4007,7 +4012,7 @@ app.get('/api/analytics/summary', authenticateToken,
 
     // Recent scans - prioritize QR code name, but show playlist/slideshow name if QR code name is generic
     let recentRes;
-    try { recentRes = await db.query(
+    try { recentRes = await q(
       `WITH dedup AS (
          SELECT DISTINCT ON (
            s.qr_code_id,
@@ -4081,7 +4086,7 @@ app.get('/api/analytics/summary', authenticateToken,
     ); } catch (e) {
       console.warn('📊 SUMMARY recentRes dedup failed, falling back to raw scans:', e.message);
       try {
-        recentRes = await db.query(
+        recentRes = await q(
           `WITH qr_with_extracted_ids AS (
              SELECT 
                q.id,
@@ -4163,7 +4168,7 @@ app.get('/api/analytics/summary', authenticateToken,
         ORDER BY s.qr_code_id, COALESCE(s.qr_visitor_id, s.visitor_id::text, s.ip_address::text, CONCAT(COALESCE(s.browser_name,'?'), '|', COALESCE(s.operating_system,'?'))), date_trunc('minute', s.scanned_at), s.scanned_at ASC
       )`;
       
-      mostPopularQRRes = await db.query(
+      mostPopularQRRes = await q(
         `${mostPopularCTE}
          SELECT 
            q.id as qr_code_id,
@@ -4197,10 +4202,10 @@ app.get('/api/analytics/summary', authenticateToken,
     
     const playsTotals = { media: 0, playlist: 0, slideshow: 0, uniqueUsers: 0 };
     try {
-      const mediaTotal = await db.query(`SELECT COUNT(*) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
-      const playlistTotal = await db.query(`SELECT COUNT(*) AS c FROM playlist_plays pp JOIN playlists p ON pp.playlist_id = p.id WHERE p.user_id = $1`, [userId]);
-      const slideshowTotal = await db.query(`SELECT COUNT(*) AS c FROM slideshow_plays sp JOIN slideshows s ON sp.slideshow_id = s.id WHERE s.user_id = $1`, [userId]);
-      const uniqueUsers = await db.query(`SELECT COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      const mediaTotal = await q(`SELECT COUNT(*) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
+      const playlistTotal = await q(`SELECT COUNT(*) AS c FROM playlist_plays pp JOIN playlists p ON pp.playlist_id = p.id WHERE p.user_id = $1`, [userId]);
+      const slideshowTotal = await q(`SELECT COUNT(*) AS c FROM slideshow_plays sp JOIN slideshows s ON sp.slideshow_id = s.id WHERE s.user_id = $1`, [userId]);
+      const uniqueUsers = await q(`SELECT COUNT(DISTINCT COALESCE(mp.user_id::text, mp.session_id)) AS c FROM media_plays mp JOIN media m ON mp.media_id = m.id WHERE m.user_id = $1`, [userId]);
       playsTotals.media = parseInt(mediaTotal.rows[0]?.c || 0);
       playsTotals.playlist = parseInt(playlistTotal.rows[0]?.c || 0);
       playsTotals.slideshow = parseInt(slideshowTotal.rows[0]?.c || 0);
@@ -4315,6 +4320,14 @@ app.get('/api/analytics/summary', authenticateToken,
       mostPopularQRCode: null,
       recentScans: [],
     });
+  } finally {
+    if (analyticsClient) {
+      try {
+        analyticsClient.release();
+      } catch (_releaseErr) {
+        // Pool discards dead connections on release failure
+      }
+    }
   }
 });
 
@@ -20095,6 +20108,25 @@ app.get('*', (req, res) => {
 });
 
 
+// Ensure analytics indexes exist — reduces slow dedup CTEs on qr_scans
+async function ensureAnalyticsIndexes() {
+  const indexStatements = [
+    'CREATE INDEX IF NOT EXISTS idx_qr_scans_qr_code_scanned_at ON qr_scans(qr_code_id, scanned_at DESC)',
+    'CREATE INDEX IF NOT EXISTS idx_qr_scans_visitor_id_scanned_at ON qr_scans(visitor_id, scanned_at DESC) WHERE visitor_id IS NOT NULL',
+    'CREATE INDEX IF NOT EXISTS idx_qr_scans_qr_visitor_id_scanned_at ON qr_scans(qr_visitor_id, scanned_at DESC) WHERE qr_visitor_id IS NOT NULL',
+    'CREATE INDEX IF NOT EXISTS idx_qr_scans_scanned_at ON qr_scans(scanned_at DESC)',
+  ];
+  try {
+    console.log('🔧 STARTUP: Ensuring analytics indexes on qr_scans...');
+    for (const statement of indexStatements) {
+      await db.query(statement, [], { queryName: 'ensure_analytics_indexes', timeout: 30000 });
+    }
+    console.log('✅ STARTUP: Analytics indexes verified');
+  } catch (err) {
+    console.warn('⚠️ STARTUP: Analytics index creation failed (non-critical):', err.message);
+  }
+}
+
 // Database fix function - runs on startup
 async function fixActivationCodes() {
   try {
@@ -20267,6 +20299,7 @@ let server;
 
       try {
         console.log('🔧 Running startup database fixes...');
+        await ensureAnalyticsIndexes();
         await fixActivationCodes();
         console.log('✅ Startup database fixes completed');
       } catch (err) {

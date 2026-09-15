@@ -25,7 +25,7 @@ import {
   Ionicons,
 } from '@expo/vector-icons';
 import Swiper from 'react-native-web-swiper';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
   IAudioPlayer,
@@ -78,7 +78,8 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<any>(null);
+  const html5VideoRef = useRef<HTMLVideoElement | null>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   
   // Video error handling state
@@ -541,6 +542,65 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
     return media.length > 0 ? media[currentIndex] : null;
   }, [media, currentIndex]);
 
+  const isCurrentVideo = currentMediaItem?.media_type === 'video';
+
+  const activeVideoUrl = useMemo(() => {
+    if (!isCurrentVideo || !currentMediaItem) {
+      return null;
+    }
+    return currentMediaItem.s3_key || currentMediaItem.url || null;
+  }, [currentMediaItem, isCurrentVideo]);
+
+  const mobileVideoPlayer = useVideoPlayer(
+    Platform.OS !== 'web' ? activeVideoUrl : null,
+    (player) => {
+      player.loop = true;
+      player.muted = isMuted;
+    }
+  );
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !mobileVideoPlayer) {
+      return;
+    }
+    mobileVideoPlayer.muted = isMuted;
+  }, [isMuted, mobileVideoPlayer]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      videoRef.current = html5VideoRef.current
+        ? {
+            playAsync: () => html5VideoRef.current!.play(),
+            pauseAsync: () => {
+              html5VideoRef.current?.pause();
+              return Promise.resolve();
+            },
+            setPositionAsync: (position: number) => {
+              if (html5VideoRef.current) {
+                html5VideoRef.current.currentTime = position / 1000;
+              }
+              return Promise.resolve();
+            },
+          }
+        : null;
+      return;
+    }
+    if (!mobileVideoPlayer || !isCurrentVideo) {
+      return;
+    }
+    videoRef.current = {
+      playAsync: () => Promise.resolve(mobileVideoPlayer.play()),
+      pauseAsync: () => {
+        mobileVideoPlayer.pause();
+        return Promise.resolve();
+      },
+      setPositionAsync: (position: number) => {
+        mobileVideoPlayer.currentTime = position / 1000;
+        return Promise.resolve();
+      },
+    };
+  }, [mobileVideoPlayer, isCurrentVideo]);
+
   const backgroundAudioUrl = useMemo(() => {
     // For slideshows, use the slideshow.audioUrl directly
     if (slideshow?.audioUrl) {
@@ -753,28 +813,27 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
     const itemUri = item.s3_key || item.url || 'https://placehold.co/400x300?text=No+Image';
 
     if (isVideo) {
-      return (
-        <Video
-          ref={isActive ? videoRef : null}
-          source={{ uri: itemUri }}
-          rate={1.0}
-          volume={1.0}
-          isMuted={isMuted || !isActive}
-          shouldPlay={isActive && isPlaying}
-          isLooping
-          resizeMode={ResizeMode.CONTAIN}
-          style={styles.media}
-          useNativeControls={false}
-          onError={handleVideoError}
-          onPlaybackStatusUpdate={(status) => {
-            // Stall detection: track buffering state
-            if (status.isBuffering) {
+      if (!isActive) {
+        return <View style={styles.media} />;
+      }
+
+      if (Platform.OS === 'web') {
+        return (
+          <video
+            ref={(el) => {
+              html5VideoRef.current = el;
+            }}
+            src={itemUri}
+            preload="auto"
+            muted={isMuted}
+            loop
+            playsInline
+            style={{ width: '100%', height: '100%', objectFit: 'contain' } as React.CSSProperties}
+            onError={() => handleVideoError({ code: 2, message: 'HTML5 video error' })}
+            onWaiting={() => {
               if (!stallStartTimeRef.current) {
-                // Buffering just started
                 stallStartTimeRef.current = Date.now();
                 setIsStalled(false);
-                
-                // Set timeout to detect stall
                 if (stallTimeoutRef.current) {
                   clearTimeout(stallTimeoutRef.current);
                 }
@@ -782,13 +841,9 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                   handleStallDetected();
                 }, STALL_THRESHOLD_MS);
               }
-            } else {
-              // Not buffering - clear stall tracking
+            }}
+            onPlaying={() => {
               if (stallStartTimeRef.current) {
-                const bufferingDuration = Date.now() - stallStartTimeRef.current;
-                if (bufferingDuration > STALL_THRESHOLD_MS) {
-                  console.log(`✅ STALL_RECOVERED: Buffering resolved after ${bufferingDuration}ms`);
-                }
                 stallStartTimeRef.current = null;
                 setIsStalled(false);
               }
@@ -796,8 +851,19 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
                 clearTimeout(stallTimeoutRef.current);
                 stallTimeoutRef.current = null;
               }
-            }
-          }}
+            }}
+          />
+        );
+      }
+
+      return (
+        <VideoView
+          style={styles.media}
+          player={mobileVideoPlayer}
+          allowsFullscreen
+          allowsPictureInPicture={false}
+          contentFit="contain"
+          nativeControls={false}
         />
       );
     } else {

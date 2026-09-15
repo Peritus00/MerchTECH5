@@ -26,7 +26,8 @@ import {
   FontAwesome5,
   Ionicons,
 } from '@expo/vector-icons';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, AVPlaybackStatus } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Image as ExpoImage } from 'expo-image';
 import createAudioPlayer, {
   IAudioPlayer,
@@ -444,7 +445,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [continuousAudioSupport, setContinuousAudioSupport] = useState<'unknown' | 'native' | 'hlsjs' | 'none'>('unknown');
   const [continuousAudioUnavailable, setContinuousAudioUnavailable] = useState(false);
   
-  const videoRef = useRef<Video>(null);
+  const videoRef = useRef<any>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
   const html5AudioRef = useRef<HTMLAudioElement | null>(null); // keep web audio ref for cleanup
   const continuousAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -685,6 +686,19 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     return `${uri}${separator}token=${encodeURIComponent(playbackToken)}`;
   }, [playbackToken]);
 
+  const resolveStreamUrlForItem = useCallback(
+    (item: MediaItem) => {
+      const baseUrl =
+        api.defaults.baseURL?.replace('/api', '') ||
+        'https://merchtech5-production.up.railway.app';
+      const uri = item.url?.startsWith('http')
+        ? item.url
+        : `${baseUrl}/api/media/${item.id}/stream`;
+      return appendPlaybackTokenToStreamUrl(uri);
+    },
+    [appendPlaybackTokenToStreamUrl]
+  );
+
   const formatPrice = useCallback((price: string | number): string => {
     if (typeof price === 'number') {
       return `$${price.toFixed(2)}`;
@@ -788,6 +802,59 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   );
 
   useMediaPrefetch(playableMedia, currentIndex, 2, mediaPrefetchOptions);
+
+  const nextVideoPreloadUri = useMemo(() => {
+    if (Platform.OS !== 'web' || playableMedia.length === 0) {
+      return null;
+    }
+    const nextIndex =
+      currentIndex < playableMedia.length - 1 ? currentIndex + 1 : 0;
+    if (playableMedia.length === 1) {
+      return null;
+    }
+    const nextItem = playableMedia[nextIndex];
+    if (!nextItem) {
+      return null;
+    }
+    const itemType = nextItem.media_type || nextItem.fileType || nextItem.type;
+    const isVideo =
+      itemType === 'video' || nextItem.contentType?.startsWith('video/');
+    if (!isVideo) {
+      return null;
+    }
+    return resolveStreamUrlForItem(nextItem);
+  }, [playableMedia, currentIndex, resolveStreamUrlForItem]);
+
+  const isCurrentItemVideo = useMemo(() => {
+    if (!currentMediaItem) {
+      return false;
+    }
+    const itemType =
+      currentMediaItem.media_type ||
+      currentMediaItem.fileType ||
+      currentMediaItem.type;
+    return (
+      itemType === 'video' ||
+      currentMediaItem.contentType?.startsWith('video/')
+    );
+  }, [currentMediaItem]);
+
+  const mobileVideoUrl = useMemo(() => {
+    if (Platform.OS === 'web' || !currentMediaItem || !isCurrentItemVideo) {
+      return null;
+    }
+    return resolveStreamUrlForItem(currentMediaItem);
+  }, [currentMediaItem, isCurrentItemVideo, resolveStreamUrlForItem]);
+
+  const mobileVideoPlayerConfig = useCallback(
+    (player: { loop: boolean; muted: boolean }) => {
+      player.loop = false;
+      player.muted = isMuted;
+    },
+    [isMuted]
+  );
+
+  const mobileVideoPlayer = useVideoPlayer(mobileVideoUrl, mobileVideoPlayerConfig);
 
   const manifestPlaylistId = playlistId || (playlistData?.id != null ? String(playlistData.id) : null);
   const playableMediaSignature = useMemo(
@@ -1386,6 +1453,76 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   useEffect(() => {
     goToNextVideoRef.current = goToNextVideo;
   }, [goToNextVideo]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !mobileVideoPlayer) {
+      return;
+    }
+    mobileVideoPlayer.muted = isMuted;
+  }, [isMuted, mobileVideoPlayer]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !mobileVideoPlayer || !userHasInteracted) {
+      return;
+    }
+    if (isPlaying && isCurrentItemVideo) {
+      mobileVideoPlayer.play();
+    } else {
+      mobileVideoPlayer.pause();
+    }
+  }, [isPlaying, userHasInteracted, mobileVideoPlayer, isCurrentItemVideo]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !mobileVideoPlayer || !isCurrentItemVideo) {
+      return;
+    }
+    if (
+      !mobileVideoPlayer.playing &&
+      mobileVideoPlayer.duration > 0 &&
+      mobileVideoPlayer.currentTime >= mobileVideoPlayer.duration - 0.3
+    ) {
+      resumeOnAdvanceRef.current = true;
+      goToNextVideo();
+    }
+  }, [
+    mobileVideoPlayer?.playing,
+    mobileVideoPlayer?.currentTime,
+    mobileVideoPlayer?.duration,
+    isCurrentItemVideo,
+    goToNextVideo,
+    mobileVideoPlayer,
+  ]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    if (!mobileVideoPlayer || !isCurrentItemVideo) {
+      return;
+    }
+    videoRef.current = {
+      playAsync: () => Promise.resolve(mobileVideoPlayer.play()),
+      pauseAsync: () => {
+        mobileVideoPlayer.pause();
+        return Promise.resolve();
+      },
+      setPositionAsync: (position: number) => {
+        mobileVideoPlayer.currentTime = position / 1000;
+        return Promise.resolve();
+      },
+      stopAsync: () => {
+        mobileVideoPlayer.pause();
+        mobileVideoPlayer.currentTime = 0;
+        return Promise.resolve();
+      },
+      presentFullscreenPlayer: async () => {
+        setIsFullscreen(true);
+      },
+      dismissFullscreenPlayer: async () => {
+        setIsFullscreen(false);
+      },
+    };
+  }, [mobileVideoPlayer, isCurrentItemVideo]);
 
   const handleVideoError = useCallback((error: any) => {
     console.error('🎵 VIDEO_ERROR: Media playback failed:', error);
@@ -2030,6 +2167,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             }}
             controls={false}
             playsInline
+            preload="auto"
             controlsList="nodownload noplaybackrate noremoteplayback"
             disablePictureInPicture
             onContextMenu={(e) => e.preventDefault()}
@@ -2168,32 +2306,14 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           />
         );
       } else {
-        // Use expo-av Video for mobile
         return (
-          <Video
-            ref={videoRef}
-            source={{ uri: itemUri }}
-            rate={1.0}
-            volume={1.0}
-            isMuted={isMuted}
-            shouldPlay={isPlaying}
-            isLooping={false}
-            resizeMode={isFullscreen ? ResizeMode.COVER : ResizeMode.CONTAIN}
+          <VideoView
             style={getVideoStyle()}
-            useNativeControls={true}
-            // On iOS ensure controls show and video plays inline when available
-            // Note: expo-av handles inline playback on iOS Safari when not fullscreen
-            onPlaybackStatusUpdate={(status) => {
-              onPlaybackStatusUpdate(status);
-              if ((status as any).isLoaded) {
-                const s = status as any;
-                if (typeof s.isPlaying === 'boolean') {
-                  setIsPlaying(s.isPlaying);
-                }
-              }
-            }}
-            onFullscreenUpdate={(status) => setIsFullscreen(status.fullscreenUpdate === 1)}
-            onError={handleVideoError}
+            player={mobileVideoPlayer}
+            allowsFullscreen
+            allowsPictureInPicture={false}
+            contentFit={isFullscreen ? 'cover' : 'contain'}
+            nativeControls
           />
         );
       }
@@ -2571,7 +2691,18 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
               !isFullscreen && { minHeight: estimatedVideoHeight }
             ]}>
                 {renderCurrentMedia()}
-                
+                {nextVideoPreloadUri && (
+                  <video
+                    key={`preload-${nextVideoPreloadUri}`}
+                    src={nextVideoPreloadUri}
+                    preload="auto"
+                    muted
+                    playsInline
+                    style={{ display: 'none' }}
+                    aria-hidden="true"
+                  />
+                )}
+
                 {/* Play Overlay - shown until first user interaction */}
                 {!userHasInteracted && !isPlaying && (
                   <TouchableOpacity 

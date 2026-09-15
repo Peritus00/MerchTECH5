@@ -42,6 +42,16 @@ function isStreamUrl(url: string): boolean {
   return url.includes('/api/media/') && url.includes('/stream');
 }
 
+function isVideoUrl(url: string, item: MediaItem): boolean {
+  const t = item?.media_type || item?.fileType || item?.type || '';
+  const ct = item?.contentType || '';
+  return (
+    t === 'video' ||
+    ct.startsWith('video/') ||
+    /\.(mp4|mov|webm|m4v)$/i.test(url)
+  );
+}
+
 function resolvePrefetchUrl(
   url: string,
   options?: MediaPrefetchOptions
@@ -88,13 +98,16 @@ export function useMediaPrefetch(
         if (isImg) {
           urlsToPrefetch.push(url);
         }
-        // For video/audio on web, pre-buffer first 256KB so playback starts immediately on track change
+        // For video/audio on web, pre-buffer so playback starts immediately on track change
         if (Platform.OS === 'web' && !isImg) {
           const prefetchUrl = resolvePrefetchUrl(url, options);
           if (prefetchUrl) {
+            const isVideo = isVideoUrl(url, item);
+            // Video needs ~2MB to fill browser buffer; audio/images stay at 256KB
+            const rangeEnd = isVideo ? 2097151 : 262143;
             fetch(prefetchUrl, {
               method: 'GET',
-              headers: { Range: 'bytes=0-262143' },
+              headers: { Range: `bytes=0-${rangeEnd}` },
               cache: 'force-cache',
             }).catch(() => {});
           }
