@@ -44,8 +44,7 @@
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "package": "com.peritus00.merchtech",
-      "googleServicesFile": "./google-services.json",
-      "targetSdkVersion": 36
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "bundler": "metro",
@@ -62,6 +61,15 @@
     "plugins": [
       "expo-router",
       "expo-audio",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "targetSdkVersion": 36,
+            "compileSdkVersion": 36
+          }
+        }
+      ],
       "expo-web-browser",
       "expo-notifications",
       "expo-document-picker",
