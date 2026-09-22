@@ -44,7 +44,8 @@
         "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "package": "com.peritus00.merchtech",
-      "googleServicesFile": "./google-services.json"
+      "googleServicesFile": "./google-services.json",
+      "targetSdkVersion": 36
     },
     "web": {
       "bundler": "metro",
