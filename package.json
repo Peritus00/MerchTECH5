@@ -1,7 +1,7 @@
 {
   "name": "my-app",
   "main": "expo-router/entry",
-  "version": "1.1.1",
+  "version": "1.1.5",
   "scripts": {
     "start": "node ./services/Server/main.js",
     "reset-project": "node ./scripts/reset-project.js",
