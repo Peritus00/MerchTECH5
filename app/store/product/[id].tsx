@@ -13,6 +13,7 @@ import { useCart } from '@/contexts/CartContext';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ShareButton from '@/components/ShareButton';
+import { CartHeader } from '@/components/CartHeader';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
 
 const { width } = Dimensions.get('window');
@@ -383,6 +384,7 @@ export default function ProductDetailsScreen() {
               type="product"
               compact={true}
             />
+            <CartHeader color="#000" size={26} />
           </View>
         </View>
 
@@ -488,15 +490,15 @@ export default function ProductDetailsScreen() {
                 onPress={() => adjustQuantity(-1)}
                 disabled={quantity <= 1}
               >
-                <Ionicons name="remove" size={20} color={quantity <= 1 ? "#ccc" : "#000"} />
+                <Ionicons name="remove" size={20} color={quantity <= 1 ? "#666" : "#fff"} />
               </TouchableOpacity>
               <Text style={styles.quantityText}>{quantity}</Text>
-              <TouchableOpacity 
-                style={styles.quantityBtn} 
+              <TouchableOpacity
+                style={styles.quantityBtn}
                 onPress={() => adjustQuantity(1)}
                 disabled={quantity >= 10}
               >
-                <Ionicons name="add" size={20} color={quantity >= 10 ? "#ccc" : "#000"} />
+                <Ionicons name="add" size={20} color={quantity >= 10 ? "#666" : "#fff"} />
               </TouchableOpacity>
             </View>
           </View>
@@ -632,6 +634,7 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   imageCarouselContainer: {
     position: 'relative',
@@ -767,6 +770,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     minWidth: 40,
     textAlign: 'center',
+    color: '#fff',
   },
   actionRow: {
     flexDirection: 'row',

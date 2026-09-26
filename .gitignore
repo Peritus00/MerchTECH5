@@ -69,3 +69,6 @@ eb-backend-deploy-*.zip
 *.sqlite
 *.sqlite3
 *.log
+
+# Google Play service account key
+google-play-service-account.json
