@@ -11782,12 +11782,28 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
         }
       }
 
-      // Handle product images
+      // Handle product images - Stripe requires valid public HTTPS URLs (no spaces, no auth)
       let productImages = [];
       if (prod.images && prod.images.length > 0) {
-        const firstImage = prod.images[0];
-        if (firstImage) {
-          productImages = [firstImage];
+        for (const img of prod.images) {
+          if (!img) continue;
+          try {
+            // Parse and re-serialize to get a properly encoded URL
+            const parsed = new URL(img);
+            // Encode spaces and special chars in the pathname only (preserve slashes)
+            parsed.pathname = parsed.pathname
+              .split('/')
+              .map(seg => encodeURIComponent(decodeURIComponent(seg)))
+              .join('/');
+            const encodedUrl = parsed.toString();
+            // Only include images from public HTTPS sources accessible by Stripe
+            if (encodedUrl.startsWith('https://') && !encodedUrl.includes('localhost')) {
+              productImages = [encodedUrl];
+              break; // Stripe only needs one valid image
+            }
+          } catch (imgErr) {
+            console.warn('⚠️ CHECKOUT: Skipping invalid image URL:', img, imgErr.message);
+          }
         }
       }
 
