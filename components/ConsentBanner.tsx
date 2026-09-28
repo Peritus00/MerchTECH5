@@ -12,11 +12,6 @@ export const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentGiven }) 
 
   useEffect(() => {
     checkConsentStatus();
-    
-    // Load Termly script for web platform
-    if (Platform.OS === 'web') {
-      loadTermlyScript();
-    }
   }, []);
 
   const checkConsentStatus = async () => {
@@ -30,36 +25,6 @@ export const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentGiven }) 
       setShowBanner(true);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const loadTermlyScript = () => {
-    // Only load on web platform
-    if (Platform.OS !== 'web') return;
-
-    try {
-      // Check if script is already loaded
-      const existingScript = document.querySelector('script[src*="termly.io"]');
-      if (existingScript) return;
-
-      const script = document.createElement('script');
-      script.src = 'https://app.termly.io/resource-blocker/0a3f7eee-d48f-45b0-b48b-60a5a1161ff3?autoBlock=on';
-      script.async = true;
-      script.onload = () => {
-        console.log('Termly script loaded successfully');
-        // Hide our custom banner since Termly will handle it
-        setShowBanner(false);
-      };
-      script.onerror = () => {
-        console.error('Failed to load Termly script');
-        // Show our fallback banner
-        setShowBanner(true);
-      };
-      
-      document.head.appendChild(script);
-    } catch (error) {
-      console.error('Error loading Termly script:', error);
-      setShowBanner(true);
     }
   };
 

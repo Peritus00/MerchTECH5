@@ -37,15 +37,18 @@ class ConsentService {
   async setConsentPreferences(preferences: Partial<ConsentPreferences>): Promise<void> {
     try {
       const currentConsent = await this.getConsentStatus();
+      // Spread order: start with current saved values, then apply new preferences,
+      // and always stamp a fresh timestamp + version so hasValidConsent() passes.
       const updatedConsent: ConsentPreferences = {
         necessary: true, // Always true
-        analytics: preferences.analytics ?? false,
-        marketing: preferences.marketing ?? false,
-        preferences: preferences.preferences ?? false,
+        analytics: false,
+        marketing: false,
+        preferences: false,
+        ...currentConsent,  // layer in previously saved values
+        ...preferences,     // apply the new changes
+        // These must come LAST so they're never overwritten by stale stored values
         timestamp: new Date().toISOString(),
         version: this.consentVersion,
-        ...currentConsent,
-        ...preferences,
       };
 
       await AsyncStorage.setItem('user_consent_preferences', JSON.stringify(updatedConsent));
