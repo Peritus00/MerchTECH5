@@ -35,9 +35,9 @@ SplashScreen.preventAutoHideAsync();
 function MetaPixelHead() {
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const pixelId = process.env.EXPO_PUBLIC_META_PIXEL_ID?.trim();
+    const pixelId = (process.env.EXPO_PUBLIC_META_PIXEL_ID?.trim()) || '1403052175139220';
     if (!pixelId) {
-      console.warn('[MetaPixel] EXPO_PUBLIC_META_PIXEL_ID is not set — pixel skipped');
+      console.warn('[MetaPixel] No pixel ID available — pixel skipped');
       return;
     }
     if (document.getElementById('meta-pixel-init')) return;
