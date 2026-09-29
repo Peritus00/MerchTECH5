@@ -11295,10 +11295,21 @@ app.get('/api/analytics/sales-summary', authenticateToken,
     );
 
     const recent = await db.query(
-      `SELECT stripe_session_id, total_amount, purchased_at
-         FROM orders
-        WHERE user_id = $1 AND purchased_at >= NOW() - ($2 || ' days')::interval
-        ORDER BY purchased_at DESC
+      `SELECT o.id, o.stripe_session_id, o.total_amount, o.purchased_at,
+              o.customer_email,
+              o.shipping_name, o.shipping_line1, o.shipping_line2,
+              o.shipping_city, o.shipping_state, o.shipping_postal_code,
+              o.shipping_country, o.shipping_cost, o.shipping_method,
+              json_agg(json_build_object(
+                'product', oi.product_name,
+                'quantity', oi.quantity,
+                'amount', oi.amount
+              )) AS items
+         FROM orders o
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.user_id = $1 AND o.purchased_at >= NOW() - ($2 || ' days')::interval
+        GROUP BY o.id
+        ORDER BY o.purchased_at DESC
         LIMIT 10`,
       [userId, days]
     );
@@ -11318,6 +11329,67 @@ app.get('/api/analytics/sales-summary', authenticateToken,
   } catch (e) {
     console.error('📊 SALES SUMMARY error:', e);
     res.status(500).json({ totalRevenue: 0, orders: 0, items: 0, topProducts: [], recent: [], windowDays: 30 });
+  }
+});
+
+// ── /api/orders  ─────────────────────────────────────────────────────────────
+// Returns paginated orders with shipping address + line items for the
+// authenticated seller.  Used by the My Sales screen.
+app.get('/api/orders', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const limit  = Math.min(parseInt(req.query.limit)  || 50, 200);
+    const offset = Math.max(parseInt(req.query.offset) || 0,   0);
+
+    const { rows } = await db.query(
+      `SELECT o.id,
+              o.stripe_session_id,
+              o.total_amount,
+              o.currency,
+              o.customer_email,
+              o.purchased_at,
+              o.shipping_name,
+              o.shipping_line1,
+              o.shipping_line2,
+              o.shipping_city,
+              o.shipping_state,
+              o.shipping_postal_code,
+              o.shipping_country,
+              o.shipping_cost,
+              o.shipping_method,
+              COALESCE(
+                json_agg(
+                  json_build_object(
+                    'product',  oi.product_name,
+                    'quantity', oi.quantity,
+                    'amount',   oi.amount
+                  )
+                ) FILTER (WHERE oi.id IS NOT NULL),
+                '[]'
+              ) AS items
+         FROM orders o
+         LEFT JOIN order_items oi ON oi.order_id = o.id
+        WHERE o.user_id = $1
+        GROUP BY o.id
+        ORDER BY o.purchased_at DESC
+        LIMIT $2 OFFSET $3`,
+      [userId, limit, offset]
+    );
+
+    const countResult = await db.query(
+      'SELECT COUNT(*) AS total FROM orders WHERE user_id = $1',
+      [userId]
+    );
+
+    res.json({
+      orders: rows,
+      total: parseInt(countResult.rows[0]?.total || 0),
+      limit,
+      offset,
+    });
+  } catch (err) {
+    console.error('🔴 GET /api/orders error:', err);
+    res.status(500).json({ error: 'Failed to fetch orders' });
   }
 });
 
@@ -11830,10 +11902,56 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     const metadata = { userId: req.user?.userId ? String(req.user.userId) : 'guest' };
     if (coupon) metadata.couponId = String(coupon.id);
 
+    // Build shipping options — use env-configured Stripe rate IDs when available,
+    // otherwise fall back to inline rate definitions (no dashboard pre-setup needed).
+    const standardRateId  = process.env.STRIPE_SHIPPING_RATE_STANDARD;
+    const expressRateId   = process.env.STRIPE_SHIPPING_RATE_EXPRESS;
+    const freeRateId      = process.env.STRIPE_SHIPPING_RATE_FREE;
+
+    let shippingOptions;
+    if (standardRateId || expressRateId || freeRateId) {
+      // Use dashboard-managed shipping rates
+      shippingOptions = [
+        freeRateId     && { shipping_rate: freeRateId },
+        standardRateId && { shipping_rate: standardRateId },
+        expressRateId  && { shipping_rate: expressRateId },
+      ].filter(Boolean);
+    } else {
+      // Inline rate definitions — no Stripe dashboard setup required
+      shippingOptions = [
+        {
+          shipping_rate_data: {
+            type: 'fixed_amount',
+            fixed_amount: { amount: 599, currency: 'usd' },
+            display_name: 'Standard Shipping',
+            delivery_estimate: {
+              minimum: { unit: 'business_day', value: 5 },
+              maximum: { unit: 'business_day', value: 7 },
+            },
+          },
+        },
+        {
+          shipping_rate_data: {
+            type: 'fixed_amount',
+            fixed_amount: { amount: 1499, currency: 'usd' },
+            display_name: 'Express Shipping',
+            delivery_estimate: {
+              minimum: { unit: 'business_day', value: 2 },
+              maximum: { unit: 'business_day', value: 3 },
+            },
+          },
+        },
+      ];
+    }
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
+      shipping_address_collection: {
+        allowed_countries: ['US', 'CA', 'GB', 'AU'],
+      },
+      shipping_options: shippingOptions,
       success_url: successUrl || `${process.env.FRONTEND_URL}/store/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/store/checkout-cancel`,
       metadata,
@@ -14351,14 +14469,50 @@ app.post('/api/webhooks/stripe', async (req, res) => {
 
           let orderId;
           if (existing.rows.length === 0) {
+            // Extract shipping details from the completed session
+            const sd = session.shipping_details;
+            const sc = session.shipping_cost;
             const inserted = await db.query(
-              `INSERT INTO orders (user_id, stripe_session_id, total_amount, currency, customer_email)
-               VALUES ($1, $2, $3, $4, $5)
-               ON CONFLICT (stripe_session_id) DO UPDATE SET total_amount = EXCLUDED.total_amount
+              `INSERT INTO orders
+                 (user_id, stripe_session_id, total_amount, currency, customer_email,
+                  shipping_name, shipping_line1, shipping_line2, shipping_city,
+                  shipping_state, shipping_postal_code, shipping_country,
+                  shipping_cost, shipping_method)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+               ON CONFLICT (stripe_session_id) DO UPDATE
+                 SET total_amount         = EXCLUDED.total_amount,
+                     shipping_name        = EXCLUDED.shipping_name,
+                     shipping_line1       = EXCLUDED.shipping_line1,
+                     shipping_line2       = EXCLUDED.shipping_line2,
+                     shipping_city        = EXCLUDED.shipping_city,
+                     shipping_state       = EXCLUDED.shipping_state,
+                     shipping_postal_code = EXCLUDED.shipping_postal_code,
+                     shipping_country     = EXCLUDED.shipping_country,
+                     shipping_cost        = EXCLUDED.shipping_cost,
+                     shipping_method      = EXCLUDED.shipping_method
                RETURNING id`,
-              [userId, session.id, session.amount_total || 0, session.currency || 'usd', session.customer_details?.email || null]
+              [
+                userId,
+                session.id,
+                session.amount_total || 0,
+                session.currency || 'usd',
+                session.customer_details?.email || null,
+                // Shipping address fields
+                sd?.name || null,
+                sd?.address?.line1 || null,
+                sd?.address?.line2 || null,
+                sd?.address?.city || null,
+                sd?.address?.state || null,
+                sd?.address?.postal_code || null,
+                sd?.address?.country || null,
+                sc?.amount_total || 0,
+                sc?.shipping_rate ? (typeof sc.shipping_rate === 'string' ? sc.shipping_rate : sc.shipping_rate?.display_name || null) : null,
+              ]
             );
             orderId = inserted.rows[0].id;
+            if (sd?.address?.line1) {
+              console.log(`💳 STRIPE_WEBHOOK: Shipping address captured for order ${orderId}: ${sd.address.line1}, ${sd.address.city}`);
+            }
           } else {
             orderId = existing.rows[0].id;
           }
@@ -20143,6 +20297,30 @@ async function ensureAnalyticsIndexes() {
   }
 }
 
+// ── Shipping columns migration ──────────────────────────────────────────────
+// Adds shipping fields to the orders table if they don't already exist.
+// Safe to run on every startup (idempotent).
+async function ensureShippingColumns() {
+  try {
+    console.log('🔧 STARTUP: Ensuring shipping columns exist on orders table...');
+    await db.query(`
+      ALTER TABLE orders
+        ADD COLUMN IF NOT EXISTS shipping_name         TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_line1        TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_line2        TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_city         TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_state        TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_postal_code  TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_country      TEXT,
+        ADD COLUMN IF NOT EXISTS shipping_cost         INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS shipping_method       TEXT
+    `);
+    console.log('✅ STARTUP: Shipping columns verified on orders table');
+  } catch (err) {
+    console.warn('⚠️ STARTUP: Shipping column migration failed (non-critical):', err.message);
+  }
+}
+
 // Database fix function - runs on startup
 async function fixActivationCodes() {
   try {
@@ -20317,6 +20495,7 @@ let server;
         console.log('🔧 Running startup database fixes...');
         await ensureAnalyticsIndexes();
         await fixActivationCodes();
+        await ensureShippingColumns();
         console.log('✅ Startup database fixes completed');
       } catch (err) {
         console.error('⚠️  Startup database fixes failed (non-critical):', err.message);

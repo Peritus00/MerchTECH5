@@ -597,6 +597,70 @@ export const paymentAPI = {
 // Alias for backward compatibility
 export const checkoutAPI = paymentAPI;
 
+export interface ShippingAddress {
+  name: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+}
+
+export interface OrderItem {
+  product: string;
+  quantity: number;
+  amount: number;
+}
+
+export interface Order {
+  id: number;
+  stripeSessionId: string;
+  totalAmount: number;
+  currency: string;
+  customerEmail: string | null;
+  purchasedAt: string;
+  shippingName: string | null;
+  shippingLine1: string | null;
+  shippingLine2: string | null;
+  shippingCity: string | null;
+  shippingState: string | null;
+  shippingPostalCode: string | null;
+  shippingCountry: string | null;
+  shippingCost: number;
+  shippingMethod: string | null;
+  items: OrderItem[];
+}
+
+export const ordersAPI = {
+  async list(limit = 50, offset = 0): Promise<{ orders: Order[]; total: number; limit: number; offset: number }> {
+    const response = await api.get('/orders', { params: { limit, offset } });
+    // Map snake_case DB fields to camelCase
+    const raw = response.data;
+    return {
+      ...raw,
+      orders: raw.orders.map((o: any): Order => ({
+        id: o.id,
+        stripeSessionId: o.stripe_session_id,
+        totalAmount: o.total_amount,
+        currency: o.currency,
+        customerEmail: o.customer_email,
+        purchasedAt: o.purchased_at,
+        shippingName: o.shipping_name,
+        shippingLine1: o.shipping_line1,
+        shippingLine2: o.shipping_line2,
+        shippingCity: o.shipping_city,
+        shippingState: o.shipping_state,
+        shippingPostalCode: o.shipping_postal_code,
+        shippingCountry: o.shipping_country,
+        shippingCost: o.shipping_cost ?? 0,
+        shippingMethod: o.shipping_method,
+        items: o.items ?? [],
+      })),
+    };
+  },
+};
+
 export const couponAPI = {
   async list() {
     const response = await api.get('/coupons');
