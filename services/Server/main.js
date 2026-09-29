@@ -219,6 +219,8 @@ app.use(helmet({
         "https://accounts.google.com", // For Google Sign-In
         "https://*.googleapis.com", // For Google APIs
         "https://appleid.apple.com", // For Apple Sign-In
+        "https://www.facebook.com", // Meta Pixel event delivery
+        "https://connect.facebook.net", // Meta Pixel script host
       ],
       scriptSrc: [
         "'self'",
@@ -229,6 +231,7 @@ app.use(helmet({
         "https://accounts.google.com", // For Google Sign-In script
         "https://*.googleapis.com", // For Google API scripts
         "https://appleid.apple.com", // For Apple Sign-In script
+        "https://connect.facebook.net", // Meta Pixel (fbevents.js)
       ],
       styleSrc: [
         "'self'",
@@ -247,6 +250,7 @@ app.use(helmet({
         "https://*.googleapis.com", // For Google API images
         "https://*.gstatic.com", // For Google static resources (icons, etc.)
         "https://appleid.apple.com", // For Apple Sign-In images/icons
+        "https://www.facebook.com", // Meta Pixel noscript fallback
       ],
       mediaSrc: [
         "'self'",
@@ -12920,6 +12924,77 @@ app.get('/api/locked-access/status', async (req, res) => {
   }
 });
 
+app.post('/api/waitlist/subscribe', async (req, res) => {
+  try {
+    const { email, phone, playlistId, source, marketingConsent } = req.body || {};
+    const normalizedEmail =
+      typeof email === 'string' && email.trim().length > 0 ? email.trim().toLowerCase() : null;
+    const normalizedPhone = typeof phone === 'string' ? phone.trim() : '';
+    const phoneDigits = normalizedPhone.replace(/\D/g, '');
+
+    if (!playlistId) {
+      return res.status(400).json({ error: 'playlistId is required' });
+    }
+    const parsedPlaylistId = parseInt(String(playlistId), 10);
+    if (!Number.isFinite(parsedPlaylistId)) {
+      return res.status(400).json({ error: 'Invalid playlistId' });
+    }
+
+    if (!normalizedEmail && phoneDigits.length < 10) {
+      return res.status(400).json({ error: 'Email or a valid phone number is required' });
+    }
+    if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({ error: 'Invalid email address' });
+    }
+    if (phoneDigits.length > 0 && phoneDigits.length < 10) {
+      return res.status(400).json({ error: 'Invalid phone number' });
+    }
+
+    const tableReady = await db.query(`
+      SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'waitlist_leads'
+      LIMIT 1
+    `);
+    if (tableReady.rows.length === 0) {
+      return res.status(503).json({ error: 'Waitlist is not available yet. Please try again shortly.' });
+    }
+
+    const ipAddress =
+      (req.headers['x-forwarded-for'] && String(req.headers['x-forwarded-for']).split(',')[0].trim()) ||
+      req.ip ||
+      null;
+
+    await db.query(
+      `INSERT INTO waitlist_leads (email, phone, playlist_id, source, ip_address)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [
+        normalizedEmail,
+        phoneDigits.length >= 10 ? normalizedPhone : null,
+        parsedPlaylistId,
+        typeof source === 'string' && source.trim() ? source.trim() : 'splash',
+        ipAddress,
+      ]
+    );
+
+    const eventId = `waitlist-${uuidv4()}`;
+    await sendMetaConversionEvent({
+      eventName: 'Lead',
+      eventId,
+      email: normalizedEmail,
+      phone: phoneDigits.length >= 10 ? normalizedPhone : null,
+    });
+
+    res.json({
+      success: true,
+      eventId,
+      marketingConsent: !!marketingConsent,
+    });
+  } catch (err) {
+    console.error('WAITLIST: subscribe error:', err);
+    res.status(500).json({ error: 'Failed to join waitlist' });
+  }
+});
+
 app.post('/api/preview-leads/start', async (req, res) => {
   try {
     if (!(await ensureCouponTables())) {
@@ -14240,6 +14315,104 @@ app.get('/api/coupons/sms-status', authenticateToken, isAdmin, async (req, res) 
   res.json({ configured: smsService.isSmsConfigured() });
 });
 
+// ---------- META CONVERSIONS API ----------
+function hashMetaEmailForCapi(email) {
+  if (!email || typeof email !== 'string') return null;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+  return crypto.createHash('sha256').update(normalized).digest('hex');
+}
+
+function hashMetaPhoneForCapi(phone) {
+  if (!phone || typeof phone !== 'string') return null;
+  let digits = phone.replace(/\D/g, '');
+  if (digits.length === 10) digits = `1${digits}`;
+  if (!digits) return null;
+  return crypto.createHash('sha256').update(digits).digest('hex');
+}
+
+async function sendMetaConversionEvent({
+  eventName,
+  eventId,
+  email,
+  phone,
+  value,
+  currency,
+}) {
+  const pixelId = process.env.META_PIXEL_ID;
+  const accessToken = process.env.META_CONVERSIONS_API_TOKEN;
+  if (!pixelId || !accessToken) {
+    return;
+  }
+
+  const userData = {};
+  const em = hashMetaEmailForCapi(email);
+  if (em) userData.em = [em];
+  const ph = hashMetaPhoneForCapi(phone);
+  if (ph) userData.ph = [ph];
+
+  const eventPayload = {
+    event_name: eventName,
+    event_time: Math.floor(Date.now() / 1000),
+    event_id: eventId,
+    action_source: 'website',
+    user_data: userData,
+  };
+
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    eventPayload.custom_data = {
+      value,
+      currency: (currency || 'usd').toUpperCase(),
+    };
+  }
+
+  try {
+    const response = await fetch(`https://graph.facebook.com/v19.0/${pixelId}/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: [eventPayload],
+        access_token: accessToken,
+      }),
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      console.warn('META_CAPI: Event failed', eventName, body);
+    } else {
+      console.log('META_CAPI: Event sent', eventName, eventId);
+    }
+  } catch (err) {
+    console.warn('META_CAPI: Request error', err?.message || err);
+  }
+}
+
+async function sendMetaPurchaseEvent({ eventId, email, phone, value, currency }) {
+  if (!eventId) return;
+  const dollars =
+    typeof value === 'number' && !Number.isNaN(value) ? value / 100 : undefined;
+  await sendMetaConversionEvent({
+    eventName: 'Purchase',
+    eventId,
+    email,
+    phone,
+    value: dollars,
+    currency,
+  });
+}
+
+async function maybeSendMetaPurchaseFromSession(session, extra = {}) {
+  if (!session || session.payment_status !== 'paid') return;
+  const amountTotal = session.amount_total || 0;
+  if (amountTotal <= 0) return;
+  await sendMetaPurchaseEvent({
+    eventId: session.id,
+    email: session.customer_details?.email || extra.email,
+    phone: extra.phone,
+    value: amountTotal,
+    currency: session.currency || 'usd',
+  });
+}
+
 // ---------- STRIPE WEBHOOK HANDLER ----------
 // Raw body is captured by the global express.json() verify callback (req.rawBody).
 // The route-level express.raw() is no longer needed.
@@ -14418,6 +14591,11 @@ app.post('/api/webhooks/stripe', async (req, res) => {
                 } else {
                   console.log('💳 STRIPE_WEBHOOK: Activation code sent via SMS to', phoneE164);
                 }
+
+                await maybeSendMetaPurchaseFromSession(session, {
+                  phone: phoneE164 || session.metadata?.phoneE164,
+                  email: session.customer_details?.email,
+                });
               }
             }
           } catch (acErr) {
@@ -14550,6 +14728,11 @@ app.post('/api/webhooks/stripe', async (req, res) => {
           }
 
           console.log('💳 STRIPE_WEBHOOK: Order recorded and events mirrored');
+
+          await maybeSendMetaPurchaseFromSession(session, {
+            email: session.customer_details?.email,
+            phone: session.customer_details?.phone,
+          });
 
           // Notify merchant via email (best-effort)
           try {
@@ -20300,6 +20483,35 @@ async function ensureAnalyticsIndexes() {
 // ── Shipping columns migration ──────────────────────────────────────────────
 // Adds shipping fields to the orders table if they don't already exist.
 // Safe to run on every startup (idempotent).
+async function ensureWaitlistTable() {
+  try {
+    console.log('🔧 STARTUP: Ensuring waitlist_leads table exists...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS waitlist_leads (
+        id SERIAL PRIMARY KEY,
+        email TEXT,
+        phone TEXT,
+        playlist_id INTEGER,
+        source TEXT DEFAULT 'splash',
+        ip_address TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_waitlist_leads_email ON waitlist_leads (email)
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_waitlist_leads_playlist_id ON waitlist_leads (playlist_id)
+    `);
+    await db.query(`
+      CREATE INDEX IF NOT EXISTS idx_waitlist_leads_created_at ON waitlist_leads (created_at)
+    `);
+    console.log('✅ STARTUP: waitlist_leads table verified');
+  } catch (err) {
+    console.warn('⚠️ STARTUP: waitlist_leads migration failed (non-critical):', err.message);
+  }
+}
+
 async function ensureShippingColumns() {
   try {
     console.log('🔧 STARTUP: Ensuring shipping columns exist on orders table...');
@@ -20495,6 +20707,7 @@ let server;
         console.log('🔧 Running startup database fixes...');
         await ensureAnalyticsIndexes();
         await fixActivationCodes();
+        await ensureWaitlistTable();
         await ensureShippingColumns();
         console.log('✅ Startup database fixes completed');
       } catch (err) {
