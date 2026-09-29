@@ -31,6 +31,51 @@ import '@/utils/debugLogger';
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+/** Web: inject Meta Pixel base code + initial PageView */
+function MetaPixelHead() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const pixelId = process.env.EXPO_PUBLIC_META_PIXEL_ID?.trim();
+    if (!pixelId) {
+      console.warn('[MetaPixel] EXPO_PUBLIC_META_PIXEL_ID is not set — pixel skipped');
+      return;
+    }
+    if (document.getElementById('meta-pixel-init')) return;
+
+    // Mark as initialized so this only runs once
+    const marker = document.createElement('div');
+    marker.id = 'meta-pixel-init';
+    marker.style.display = 'none';
+    document.head.appendChild(marker);
+
+    // Set up the fbq stub entirely in JS — no innerHTML/inline script needed
+    if (!window.fbq) {
+      const fbq: any = function (...args: unknown[]) {
+        fbq.callMethod ? fbq.callMethod(...args) : fbq.queue.push(args);
+      };
+      window.fbq = fbq;
+      window._fbq = fbq;
+      fbq.push = fbq;
+      fbq.loaded = true;
+      fbq.version = '2.0';
+      fbq.queue = [];
+    }
+
+    // Load fbevents.js as a proper external script (not inline — avoids all CSP issues)
+    const script = document.createElement('script');
+    script.id = 'meta-fbevents';
+    script.async = true;
+    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    document.head.appendChild(script);
+
+    // These calls are queued by the stub and replayed once fbevents.js loads
+    window.fbq('init', pixelId);
+    window.fbq('track', 'PageView');
+    console.log('[MetaPixel] Pixel initialized with ID:', pixelId);
+  }, []);
+  return null;
+}
+
 /** Web PWA: inject manifest link and register service worker for share target */
 function WebPWAHead() {
   useEffect(() => {
@@ -205,6 +250,7 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <ShareIntentProvider>
         <WebPWAHead />
+        <MetaPixelHead />
         <ShareIntentRedirect />
         <View style={{ flex: 1 }}>
       <Stack>

@@ -69,6 +69,7 @@
     "FRONTEND_URL": "https://www.merchtrader.org",
     "EXPO_PUBLIC_APPLE_CLIENT_ID": "com.peritus00.merchtech.signin",
     "EXPO_PUBLIC_APPLE_SERVICE_ID": "com.peritus00.merchtech.signin",
+    "EXPO_PUBLIC_META_PIXEL_ID": "1403052175139220",
     "CACHE_BUST": "20251011-LAYOUT-FIX"
   }
 } 
