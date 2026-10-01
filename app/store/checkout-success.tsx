@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, TouchableOpacity, View, Platform } from 'react-native';
 import { ThemedView } from '@/components/ThemedView';
 import { ThemedText } from '@/components/ThemedText';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -130,6 +130,12 @@ export default function CheckoutSuccess() {
       router.replace(contentAccessPath as any);
       return;
     }
+    // On web, do a hard redirect back to buynow.merchtrader.org so guest purchasers
+    // aren't caught by the auth guard and dumped at the login page.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.href = 'https://buynow.merchtrader.org';
+      return;
+    }
     router.replace('/(tabs)/store');
   };
 
@@ -165,7 +171,16 @@ export default function CheckoutSuccess() {
           <ThemedText style={styles.homeText}>Continue to content</ThemedText>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity style={styles.homeBtn} onPress={() => router.replace('/(tabs)/store')}>
+        <TouchableOpacity
+          style={styles.homeBtn}
+          onPress={() => {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.location.href = 'https://buynow.merchtrader.org';
+            } else {
+              router.replace('/(tabs)/store');
+            }
+          }}
+        >
           <ThemedText style={styles.homeText}>
             {isActivationCodePurchase ? 'Back to Store' : 'Continue Shopping'}
           </ThemedText>
