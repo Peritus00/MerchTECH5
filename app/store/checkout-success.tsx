@@ -6,6 +6,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useCart } from '@/contexts/CartContext';
 import { analyticsService } from '@/services/analyticsService';
 import { useAuth } from '@/contexts/AuthContext';
+import { trackMetaPurchase } from '@/utils/metaPixel';
+
+const ACTIVATION_CODE_PRICE_USD = 5;
 
 export default function CheckoutSuccess() {
   const router = useRouter();
@@ -15,9 +18,18 @@ export default function CheckoutSuccess() {
     contentType?: string;
     contentId?: string;
   }>();
-  const { cart, clearCart, getTotalPrice } = useCart();
+  const { cart, clearCart } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [purchaseTracked, setPurchaseTracked] = React.useState(false);
+  const [metaPurchaseTracked, setMetaPurchaseTracked] = React.useState(false);
+
+  // Capture cart at mount time so the effect doesn't re-fire when cart is cleared
+  const cartSnapshot = React.useRef(cart);
+  React.useEffect(() => {
+    if (cart.length > 0) {
+      cartSnapshot.current = cart;
+    }
+  }, [cart]);
 
   const isActivationCodePurchase = type === 'activation_code';
   const normalizedContentType =
@@ -29,19 +41,28 @@ export default function CheckoutSuccess() {
       : undefined;
 
   React.useEffect(() => {
-    const trackPurchase = async () => {
-      if (isActivationCodePurchase) {
-        return;
-      }
-      if (purchaseTracked || !session_id || cart.length === 0) {
-        return;
-      }
+    if (isActivationCodePurchase || purchaseTracked || !session_id) {
+      return;
+    }
 
+    const currentCart = cartSnapshot.current;
+    if (currentCart.length === 0) {
+      return;
+    }
+
+    const trackPurchase = async () => {
       try {
         const stripeSessionId = Array.isArray(session_id) ? session_id[0] : session_id;
-        const totalAmount = getTotalPrice();
+        const totalAmount = currentCart.reduce((total, item) => {
+          const p = item.product;
+          const unitPrice =
+            p.prices?.length ? p.prices[0].unit_amount :
+            p.metadata ? Number(p.metadata.price || p.metadata.unit_amount || 0) :
+            p.price ?? 0;
+          return total + unitPrice * item.quantity;
+        }, 0);
 
-        const items = cart.map((item) => ({
+        const items = currentCart.map((item) => ({
           productId: item.product.id,
           productName: item.product.name,
           quantity: item.quantity,
@@ -50,17 +71,45 @@ export default function CheckoutSuccess() {
 
         await analyticsService.trackPurchase(stripeSessionId, items, totalAmount, user?.id);
         setPurchaseTracked(true);
+
+        if (!metaPurchaseTracked) {
+          trackMetaPurchase({
+            eventId: stripeSessionId,
+            value: totalAmount / 100,
+            currency: 'USD',
+            contentIds: currentCart.map((item) => String(item.product.id)),
+            numItems: currentCart.reduce((sum, item) => sum + item.quantity, 0),
+          });
+          setMetaPurchaseTracked(true);
+        }
+
+        // Clear cart only after successful tracking — not in .then() so we
+        // don't re-trigger this effect via the cart dependency
+        clearCart();
       } catch (error) {
         console.error('Error tracking purchase:', error);
       }
     };
 
-    trackPurchase().then(() => {
-      if (!isActivationCodePurchase) {
-        clearCart();
-      }
+    trackPurchase();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session_id, purchaseTracked, isActivationCodePurchase, user?.id]);
+
+  React.useEffect(() => {
+    if (!isActivationCodePurchase || metaPurchaseTracked || !session_id) {
+      return;
+    }
+    const stripeSessionId = Array.isArray(session_id) ? session_id[0] : session_id;
+    if (!stripeSessionId) {
+      return;
+    }
+    trackMetaPurchase({
+      eventId: stripeSessionId,
+      value: ACTIVATION_CODE_PRICE_USD,
+      currency: 'USD',
     });
-  }, [session_id, cart, purchaseTracked, isActivationCodePurchase, clearCart, getTotalPrice, user?.id]);
+    setMetaPurchaseTracked(true);
+  }, [isActivationCodePurchase, metaPurchaseTracked, session_id]);
 
   const handleCreateAccount = () => {
     router.push({

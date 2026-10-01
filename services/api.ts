@@ -584,11 +584,26 @@ export const paymentAPI = {
     cancelUrl: string,
     couponCode?: string
   ) {
+    // Forward Meta click/browser cookies for CAPI server-side matching
+    let fbp: string | undefined;
+    let fbc: string | undefined;
+    if (typeof document !== 'undefined') {
+      const cookieMap = Object.fromEntries(
+        document.cookie.split('; ').filter(Boolean).map((c) => {
+          const idx = c.indexOf('=');
+          return [c.slice(0, idx), c.slice(idx + 1)];
+        })
+      );
+      fbp = cookieMap['_fbp'] || undefined;
+      fbc = cookieMap['_fbc'] || undefined;
+    }
     const response = await api.post('/checkout/session', {
       items,
       successUrl,
       cancelUrl,
       couponCode: couponCode?.trim() || undefined,
+      fbp,
+      fbc,
     });
     return response.data;
   },
@@ -937,6 +952,19 @@ export const previewLeadsAPI = {
         }[];
       }[];
     };
+  },
+};
+
+export const waitlistAPI = {
+  async subscribe(data: {
+    email?: string;
+    phone?: string;
+    playlistId: string;
+    source?: string;
+    marketingConsent?: boolean;
+  }) {
+    const response = await api.post('/waitlist/subscribe', data);
+    return response.data as { success: boolean; eventId?: string };
   },
 };
 

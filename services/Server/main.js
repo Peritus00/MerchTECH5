@@ -11521,12 +11521,16 @@ app.post('/api/stripe/create-checkout-session', authenticateToken, async (req, r
           product_data: {
             name: tierInfo.name,
             description: `Subscription to ${tierInfo.name}`,
+            tax_code: 'txcd_10000000', // General – Electronically Supplied Services (digital subscription)
           },
           unit_amount: unitAmount,
+          tax_behavior: 'exclusive', // tax added on top; required for Stripe Tax
         },
         quantity: 1,
       }],
       mode: 'payment',
+      automatic_tax: { enabled: true }, // Stripe Tax: calculates & collects tax automatically
+      billing_address_collection: 'required', // needed so Stripe knows customer location for tax
       success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.FRONTEND_URL}/subscription`,
       customer_email: user.email,
@@ -11791,7 +11795,7 @@ async function resolveCouponForPreviewSms({ couponId, contentType, contentId }) 
 // ---------- CHECKOUT ROUTE ----------
 app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) => {
   try {
-    const { items, successUrl, cancelUrl, couponCode } = req.body;
+    const { items, successUrl, cancelUrl, couponCode, fbp, fbc } = req.body;
 
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'No items provided' });
@@ -11890,8 +11894,10 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
             name: prod.name,
             description: prod.description || 'No description available.',
             images: productImages,
+            tax_code: 'txcd_99999999', // General – Tangible Personal Property (physical merch)
           },
           unit_amount: unitAmount,
+          tax_behavior: 'exclusive', // tax added on top; required for Stripe Tax
         },
         quantity: it.quantity,
       };
@@ -11905,6 +11911,16 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     
     const metadata = { userId: req.user?.userId ? String(req.user.userId) : 'guest' };
     if (coupon) metadata.couponId = String(coupon.id);
+
+    // Store browser-matching signals for CAPI (captured at purchase intent, not webhook time)
+    const productIds = items.map((it) => String(it.productId)).join(',');
+    if (productIds) metadata.productIds = productIds.slice(0, 500);
+    if (fbp && typeof fbp === 'string') metadata.fbp = fbp.slice(0, 150);
+    if (fbc && typeof fbc === 'string') metadata.fbc = fbc.slice(0, 150);
+    const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.ip || '';
+    if (clientIp) metadata.clientIp = clientIp.slice(0, 50);
+    const clientUserAgent = req.headers['user-agent'] || '';
+    if (clientUserAgent) metadata.clientUserAgent = clientUserAgent.slice(0, 500);
 
     // Build shipping options — use env-configured Stripe rate IDs when available,
     // otherwise fall back to inline rate definitions (no dashboard pre-setup needed).
@@ -11952,6 +11968,8 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
       payment_method_types: ['card'],
       line_items,
       mode: 'payment',
+      automatic_tax: { enabled: true }, // Stripe Tax: calculates & collects tax automatically
+      // shipping_address_collection already provides customer location; no billing_address_collection needed
       shipping_address_collection: {
         allowed_countries: ['US', 'CA', 'GB', 'AU'],
       },
@@ -14338,6 +14356,11 @@ async function sendMetaConversionEvent({
   phone,
   value,
   currency,
+  clientIp,
+  clientUserAgent,
+  fbp,
+  fbc,
+  contentIds,
 }) {
   const pixelId = process.env.META_PIXEL_ID;
   const accessToken = process.env.META_CONVERSIONS_API_TOKEN;
@@ -14350,6 +14373,11 @@ async function sendMetaConversionEvent({
   if (em) userData.em = [em];
   const ph = hashMetaPhoneForCapi(phone);
   if (ph) userData.ph = [ph];
+  // Browser-matching signals — improve event match quality significantly
+  if (clientIp) userData.client_ip_address = clientIp;
+  if (clientUserAgent) userData.client_user_agent = clientUserAgent;
+  if (fbp) userData.fbp = fbp;
+  if (fbc) userData.fbc = fbc;
 
   const eventPayload = {
     event_name: eventName,
@@ -14363,6 +14391,15 @@ async function sendMetaConversionEvent({
     eventPayload.custom_data = {
       value,
       currency: (currency || 'usd').toUpperCase(),
+    };
+  }
+  // Content IDs allow Meta to match purchase back to specific catalog products
+  if (Array.isArray(contentIds) && contentIds.length > 0) {
+    eventPayload.custom_data = {
+      ...(eventPayload.custom_data || {}),
+      content_ids: contentIds,
+      content_type: 'product',
+      num_items: contentIds.length,
     };
   }
 
@@ -14386,7 +14423,7 @@ async function sendMetaConversionEvent({
   }
 }
 
-async function sendMetaPurchaseEvent({ eventId, email, phone, value, currency }) {
+async function sendMetaPurchaseEvent({ eventId, email, phone, value, currency, clientIp, clientUserAgent, fbp, fbc, contentIds }) {
   if (!eventId) return;
   const dollars =
     typeof value === 'number' && !Number.isNaN(value) ? value / 100 : undefined;
@@ -14397,6 +14434,11 @@ async function sendMetaPurchaseEvent({ eventId, email, phone, value, currency })
     phone,
     value: dollars,
     currency,
+    clientIp,
+    clientUserAgent,
+    fbp,
+    fbc,
+    contentIds,
   });
 }
 
@@ -14404,12 +14446,22 @@ async function maybeSendMetaPurchaseFromSession(session, extra = {}) {
   if (!session || session.payment_status !== 'paid') return;
   const amountTotal = session.amount_total || 0;
   if (amountTotal <= 0) return;
+  // Read browser-matching signals captured at checkout creation time
+  const metadata = session.metadata || {};
+  const contentIds = metadata.productIds
+    ? metadata.productIds.split(',').filter(Boolean)
+    : (extra.contentIds || []);
   await sendMetaPurchaseEvent({
     eventId: session.id,
     email: session.customer_details?.email || extra.email,
-    phone: extra.phone,
+    phone: extra.phone || session.customer_details?.phone,
     value: amountTotal,
     currency: session.currency || 'usd',
+    clientIp: metadata.clientIp || extra.clientIp,
+    clientUserAgent: metadata.clientUserAgent || extra.clientUserAgent,
+    fbp: metadata.fbp || extra.fbp,
+    fbc: metadata.fbc || extra.fbc,
+    contentIds,
   });
 }
 
@@ -14595,6 +14647,7 @@ app.post('/api/webhooks/stripe', async (req, res) => {
                 await maybeSendMetaPurchaseFromSession(session, {
                   phone: phoneE164 || session.metadata?.phoneE164,
                   email: session.customer_details?.email,
+                  // browser signals already in session.metadata — picked up automatically
                 });
               }
             }
@@ -14732,6 +14785,8 @@ app.post('/api/webhooks/stripe', async (req, res) => {
           await maybeSendMetaPurchaseFromSession(session, {
             email: session.customer_details?.email,
             phone: session.customer_details?.phone,
+            // browser signals (fbp, fbc, clientIp, clientUserAgent, productIds) are read
+            // from session.metadata automatically inside maybeSendMetaPurchaseFromSession
           });
 
           // Notify merchant via email (best-effort)
@@ -16303,12 +16358,16 @@ app.post('/api/activation-codes/purchase-session', authenticateTokenOptional, as
           product_data: {
             name: `Activation Code: ${contentName}`,
             description: `One-time activation code for ${contentName}. Code will be sent via text.`,
+            tax_code: 'txcd_20030000', // Specified digital products (digital access code)
           },
           unit_amount: priceCents,
+          tax_behavior: 'exclusive', // tax added on top; required for Stripe Tax
         },
         quantity: 1,
       }],
       mode: 'payment',
+      automatic_tax: { enabled: true }, // Stripe Tax: calculates & collects tax automatically
+      billing_address_collection: 'required', // needed so Stripe knows customer location for tax
       success_url: successUrl || defaultSuccess,
       cancel_url: cancelUrl || defaultCancel,
       metadata: {

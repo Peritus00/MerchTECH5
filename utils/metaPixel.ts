@@ -60,12 +60,19 @@ export function trackMetaPurchase(options: {
   eventId: string;
   value?: number;
   currency?: string;
+  contentIds?: string[];
+  numItems?: number;
 }): void {
   const params: Record<string, unknown> = {
     currency: (options.currency || 'USD').toUpperCase(),
   };
   if (typeof options.value === 'number' && !Number.isNaN(options.value) && options.value > 0) {
     params.value = options.value;
+  }
+  if (options.contentIds && options.contentIds.length > 0) {
+    params.content_ids = options.contentIds;
+    params.content_type = 'product';
+    params.num_items = options.numItems ?? options.contentIds.length;
   }
   trackMetaEvent('Purchase', params, options.eventId);
 }

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '@/services/analyticsService';
 import { getSessionId } from '@/utils/sessionTracking';
@@ -102,9 +102,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
-  };
+  }, []);
 
   const getUnitPrice = (p: Product): number => {
     if (p.prices && p.prices.length) return p.prices[0].unit_amount;
@@ -115,16 +115,16 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return 0;
   };
 
-  const getTotalPrice = () => {
+  const getTotalPrice = useCallback(() => {
     return cart.reduce((total, item) => {
       const price = getUnitPrice(item.product);
       return total + price * item.quantity;
     }, 0);
-  };
+  }, [cart]);
 
-  const getTotalItems = () => {
+  const getTotalItems = useCallback(() => {
     return cart.reduce((total, item) => total + item.quantity, 0);
-  };
+  }, [cart]);
 
   const value: CartContextType = {
     cart,
