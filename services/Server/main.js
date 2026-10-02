@@ -20592,6 +20592,41 @@ async function ensureShippingColumns() {
   }
 }
 
+// Activity logs table - runs on startup to create it if missing.
+// This is the root cause of the persistent ~10% error rate: every request
+// attempts INSERT INTO activity_logs and fails silently with 42P01 (table not found).
+async function ensureActivityLogsTable() {
+  try {
+    console.log('🔧 STARTUP: Ensuring activity_logs table exists...');
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS activity_logs (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        action_type VARCHAR(100) NOT NULL,
+        resource_type VARCHAR(50),
+        resource_id INTEGER,
+        ip_address INET,
+        user_agent TEXT,
+        request_method VARCHAR(10),
+        endpoint VARCHAR(255),
+        status_code INTEGER,
+        metadata JSONB DEFAULT '{}',
+        error_message TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_user_id ON activity_logs(user_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_action_type ON activity_logs(action_type)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_created_at ON activity_logs(created_at DESC)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_resource ON activity_logs(resource_type, resource_id)`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_activity_logs_endpoint ON activity_logs(endpoint)`);
+    await db.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_logs BOOLEAN DEFAULT FALSE`);
+    console.log('✅ STARTUP: activity_logs table verified');
+  } catch (err) {
+    console.warn('⚠️ STARTUP: activity_logs migration failed (non-critical):', err.message);
+  }
+}
+
 // Database fix function - runs on startup
 async function fixActivationCodes() {
   try {
@@ -20773,6 +20808,7 @@ let server;
 
       try {
         console.log('🔧 Running startup database fixes...');
+        await ensureActivityLogsTable();
         await ensureAnalyticsIndexes();
         await fixActivationCodes();
         await ensureWaitlistTable();
@@ -20781,6 +20817,9 @@ let server;
       } catch (err) {
         console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
       }
+
+      // Start Neon keepalive AFTER all startup migrations are done
+      db.startKeepalive();
     });
 
     server.on('error', (err) => {
@@ -20819,6 +20858,9 @@ const gracefulShutdown = async (signal) => {
   server.close(async () => {
     console.log('✅ HTTP server closed');
     
+    // Stop the DB keepalive timer before closing the pool
+    db.stopKeepalive();
+
     try {
       // Use resilience patterns for cleanup
       const { withTimeout, retryWithBackoff } = require('./config/resilience');

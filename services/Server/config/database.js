@@ -467,6 +467,35 @@ const close = async () => {
   }
 };
 
+// Keepalive ping for Neon serverless databases.
+// Neon suspends the DB after ~5 minutes of idle time, which terminates
+// all existing connections and causes 1-2.6 second cold-start latency on
+// the next request. Pinging every 4 minutes prevents suspension.
+let _keepaliveTimer = null;
+const startKeepalive = () => {
+  if (_keepaliveTimer) return; // already running
+  const INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
+  _keepaliveTimer = setInterval(async () => {
+    try {
+      await query('SELECT 1', [], { queryName: 'db_keepalive', timeout: 5000 });
+      logger.info({ type: 'db_keepalive', message: 'Database keepalive ping successful', timestamp: new Date().toISOString() });
+    } catch (err) {
+      // Don't crash — pool will reconnect on the next real request
+      logger.warn({ type: 'db_keepalive_failed', message: 'Database keepalive ping failed (pool will reconnect)', error: err.message, timestamp: new Date().toISOString() });
+    }
+  }, INTERVAL_MS);
+  // Allow process to exit cleanly even if timer is running
+  if (_keepaliveTimer.unref) _keepaliveTimer.unref();
+  logger.info({ type: 'db_keepalive_started', message: 'Neon DB keepalive started (4-minute interval)', timestamp: new Date().toISOString() });
+};
+
+const stopKeepalive = () => {
+  if (_keepaliveTimer) {
+    clearInterval(_keepaliveTimer);
+    _keepaliveTimer = null;
+  }
+};
+
 module.exports = {
   pool,
   query,
@@ -476,6 +505,8 @@ module.exports = {
   resetMetrics,
   healthCheck,
   close,
+  startKeepalive,
+  stopKeepalive,
   DEFAULT_QUERY_TIMEOUT,
   isRecoverableDbError
 };
