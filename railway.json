@@ -6,7 +6,7 @@
   },
   "deploy": {
     "startCommand": "npm run server:prod",
-    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyType": "ALWAYS",
     "restartPolicyMaxRetries": 10
   }
 } 
