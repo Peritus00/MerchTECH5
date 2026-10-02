@@ -20683,17 +20683,26 @@ process.on('uncaughtException', (error) => {
   const { isRecoverableDbError } = require('./config/database');
   const recoverable = isRecoverableDbError(error);
 
+  // ERR_HTTP_HEADERS_SENT is a benign race condition (e.g. client aborts mid-response).
+  // It must NEVER take down the server.
+  const isHeadersSentError = error.code === 'ERR_HTTP_HEADERS_SENT';
+
   errorLogger.error({
     type: 'uncaught_exception',
     message: 'Uncaught exception detected',
     error: error.message,
     stack: error.stack,
-    recoverable,
+    recoverable: recoverable || isHeadersSentError,
     timestamp: new Date().toISOString()
   });
 
   console.error('❌ UNCAUGHT EXCEPTION:', error.message);
   console.error('❌ Stack:', error.stack);
+
+  if (isHeadersSentError) {
+    console.warn('⚠️  ERR_HTTP_HEADERS_SENT (client aborted mid-response) - NOT shutting down.');
+    return;
+  }
 
   if (recoverable && server) {
     console.warn('⚠️  Recoverable DB error - NOT shutting down. Pool will reconnect.');

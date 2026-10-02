@@ -220,12 +220,17 @@ function createActivityLogger(dbInstance) {
 
     // Override res.json to capture response
     res.json = function(body) {
+      if (this.headersSent) return this;
       responseData = body;
       return originalJson.call(this, body);
     };
 
     // Override res.send to capture response
+    // Guard against double-send (e.g. ECONNABORTED triggers Express's onaborted
+    // handler which can call res.send again after headers are already sent,
+    // causing ERR_HTTP_HEADERS_SENT and a fatal uncaught exception).
     res.send = function(body) {
+      if (this.headersSent) return this;
       responseData = body;
       return originalSend.call(this, body);
     };
