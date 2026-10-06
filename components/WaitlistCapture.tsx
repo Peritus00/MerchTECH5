@@ -18,11 +18,13 @@ import { SMS_MARKETING_OPT_IN_TEXT } from '@/constants/smsConsent';
 interface WaitlistCaptureProps {
   playlistId: string;
   batchLabel?: string;
+  onDismiss?: () => void;
 }
 
 export default function WaitlistCapture({
   playlistId,
   batchLabel = 'Batch 001',
+  onDismiss,
 }: WaitlistCaptureProps) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -94,8 +96,21 @@ export default function WaitlistCapture({
 
   return (
     <View style={styles.card}>
-      <Text style={styles.heading}>Not ready for {batchLabel}?</Text>
-      <Text style={styles.subheading}>Join the waitlist for the next drop.</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerText}>
+          <Text style={styles.heading}>Not ready for {batchLabel}?</Text>
+          <Text style={styles.subheading}>Join the waitlist for the next drop.</Text>
+        </View>
+        {onDismiss && (
+          <TouchableOpacity 
+            onPress={onDismiss}
+            style={styles.closeButton}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <MaterialIcons name="close" size={24} color="#9ca3af" />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <TextInput
         style={styles.input}
@@ -183,6 +198,19 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  headerText: {
+    flex: 1,
+    marginRight: 8,
+  },
+  closeButton: {
+    padding: 4,
+  },
   heading: {
     color: '#f9fafb',
     fontSize: 17,
@@ -192,7 +220,6 @@ const styles = StyleSheet.create({
   subheading: {
     color: '#d1d5db',
     fontSize: 14,
-    marginBottom: 14,
     lineHeight: 20,
   },
   input: {

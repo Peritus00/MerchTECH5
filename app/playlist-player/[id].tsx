@@ -38,6 +38,8 @@ export default function PlaylistPlayerScreen() {
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
   const [hasAcceptedDisclaimer, setHasAcceptedDisclaimer] = useState(false);
   const [hasCheckedDisclaimerStorage, setHasCheckedDisclaimerStorage] = useState(false);
+  const [waitlistDismissed, setWaitlistDismissed] = useState(false);
+  const [hasCheckedWaitlistStorage, setHasCheckedWaitlistStorage] = useState(false);
   const queryPlaybackToken = playbackToken || routePlaybackToken || null;
   const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(
     id,
@@ -219,6 +221,39 @@ export default function PlaylistPlayerScreen() {
     };
   }, [id, canAccessPlaylist]);
 
+  // Check if waitlist has been dismissed for playlist 85
+  useEffect(() => {
+    if (String(id) !== '85') {
+      setHasCheckedWaitlistStorage(true);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadWaitlistDismissal = async () => {
+      try {
+        const dismissed = await AsyncStorage.getItem(`waitlist_dismissed_${id}`);
+        if (isActive) {
+          setWaitlistDismissed(dismissed === 'true');
+        }
+      } catch {
+        if (isActive) {
+          setWaitlistDismissed(false);
+        }
+      } finally {
+        if (isActive) {
+          setHasCheckedWaitlistStorage(true);
+        }
+      }
+    };
+
+    void loadWaitlistDismissal();
+
+    return () => {
+      isActive = false;
+    };
+  }, [id]);
+
   // Show demographics survey after content starts playing
   useEffect(() => {
     const checkAndShowSurvey = async () => {
@@ -378,7 +413,7 @@ export default function PlaylistPlayerScreen() {
     }
   };
 
-  const showWaitlistCapture = String(id) === '85';
+  const showWaitlistCapture = String(id) === '85' && hasCheckedWaitlistStorage && !waitlistDismissed;
 
   const handleDisclaimerAccept = async () => {
     try {
@@ -387,6 +422,15 @@ export default function PlaylistPlayerScreen() {
       // Still allow playback if persistence fails; user explicitly accepted in-session.
     }
     setHasAcceptedDisclaimer(true);
+  };
+
+  const handleWaitlistDismiss = async () => {
+    try {
+      await AsyncStorage.setItem(`waitlist_dismissed_${id}`, 'true');
+    } catch {
+      // Continue even if storage fails
+    }
+    setWaitlistDismissed(true);
   };
 
   return (
@@ -402,7 +446,7 @@ export default function PlaylistPlayerScreen() {
           />
           {showWaitlistCapture ? (
             <View style={styles.waitlistOverlay} pointerEvents="box-none">
-              <WaitlistCapture playlistId={id} />
+              <WaitlistCapture playlistId={id} onDismiss={handleWaitlistDismiss} />
             </View>
           ) : null}
         </View>
