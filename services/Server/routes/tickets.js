@@ -370,12 +370,18 @@ router.post('/:eventId/ticket-types/:typeId/checkout',
         line_items: [{
           price_data: {
             currency: 'usd',
-            product_data: { name: ticketType.name },
+            product_data: {
+              name: ticketType.name,
+              tax_code: 'txcd_45020000', // Admission to entertainment events
+            },
             unit_amount: ticketType.price_cents,
+            tax_behavior: 'exclusive', // tax added on top; required for Stripe Tax
           },
           quantity,
         }],
         mode: 'payment',
+        automatic_tax: { enabled: true }, // Stripe Tax: calculates & collects tax automatically
+        billing_address_collection: 'required', // needed so Stripe knows customer location for tax
         success_url: success_url || `${process.env.FRONTEND_URL}/tickets/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: cancel_url || `${process.env.FRONTEND_URL}/tickets/cancel`,
         customer_email: attendee_email,

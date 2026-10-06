@@ -13,6 +13,13 @@ import { saveUserAge } from '@/utils/ageStorage';
 import { saveUserGender } from '@/utils/genderStorage';
 import { shouldShowDemographicsSurvey, fetchUserDemographics, saveDemographics, getDemographicsForTracking } from '@/utils/demographicsHelper';
 import { usePlaylistAccess } from '@/hooks/usePlaylistAccess';
+import WaitlistCapture from '@/components/WaitlistCapture';
+import LiabilityDisclaimerModal from '@/components/LiabilityDisclaimerModal';
+import {
+  hasStoredDisclaimerAcceptance,
+  playlistDisclaimerStorageKey,
+} from '@/utils/playlistDisclaimerStorage';
+import { trackMetaViewContent } from '@/utils/metaPixel';
 
 export default function PlaylistPlayerScreen() {
   const route = useRoute();
@@ -29,6 +36,8 @@ export default function PlaylistPlayerScreen() {
   const [previewPhoneLeadId, setPreviewPhoneLeadId] = useState<number | null>(null);
   const [hasCheckedStoredLeadId, setHasCheckedStoredLeadId] = useState(false);
   const [hasCheckedStoredPlaybackToken, setHasCheckedStoredPlaybackToken] = useState(false);
+  const [hasAcceptedDisclaimer, setHasAcceptedDisclaimer] = useState(false);
+  const [hasCheckedDisclaimerStorage, setHasCheckedDisclaimerStorage] = useState(false);
   const queryPlaybackToken = playbackToken || routePlaybackToken || null;
   const { data: playlist, isLoading: loading, isFetching, isError, error, refetch } = usePlaylistAccess(
     id,
@@ -38,6 +47,7 @@ export default function PlaylistPlayerScreen() {
   
   // Guard to prevent multiple scan tracking calls
   const hasTrackedScanRef = useRef<boolean>(false);
+  const hasTrackedViewContentRef = useRef<boolean>(false);
   // The token param is stripped from the URL exactly once per mount; re-running the
   // replace on every render of this effect restarts the screen and the access query.
   const hasStrippedTokenParamRef = useRef<boolean>(false);
@@ -150,6 +160,10 @@ export default function PlaylistPlayerScreen() {
     Boolean(playlist) &&
     !shouldRedirectForOpenAccessLead &&
     (!accessRestricted || (hasPlaybackToken && hasLoadedPlayableMedia));
+  const canUsePlayer =
+    canAccessPlaylist && hasCheckedDisclaimerStorage && hasAcceptedDisclaimer;
+  const showDisclaimerModal =
+    canAccessPlaylist && hasCheckedDisclaimerStorage && !hasAcceptedDisclaimer;
   const awaitingAccessDecision =
     Boolean(playlist) &&
     accessRestricted &&
@@ -172,6 +186,39 @@ export default function PlaylistPlayerScreen() {
     }
   }, [shouldRedirectForOpenAccessLead, id]);
 
+  useEffect(() => {
+    if (!id || !canAccessPlaylist) {
+      setHasCheckedDisclaimerStorage(false);
+      setHasAcceptedDisclaimer(false);
+      return;
+    }
+
+    let isActive = true;
+
+    const loadDisclaimerAcceptance = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(playlistDisclaimerStorageKey(id));
+        if (isActive) {
+          setHasAcceptedDisclaimer(hasStoredDisclaimerAcceptance(stored));
+        }
+      } catch {
+        if (isActive) {
+          setHasAcceptedDisclaimer(false);
+        }
+      } finally {
+        if (isActive) {
+          setHasCheckedDisclaimerStorage(true);
+        }
+      }
+    };
+
+    void loadDisclaimerAcceptance();
+
+    return () => {
+      isActive = false;
+    };
+  }, [id, canAccessPlaylist]);
+
   // Show demographics survey after content starts playing
   useEffect(() => {
     const checkAndShowSurvey = async () => {
@@ -183,7 +230,7 @@ export default function PlaylistPlayerScreen() {
       });
       
       // Only show survey after content is loaded
-      if (!playlist || loading || !canAccessPlaylist) {
+      if (!playlist || loading || !canUsePlayer) {
         console.log('🔍 PLAYER_DEMOGRAPHICS: Skipping - playlist not loaded');
         return;
       }
@@ -206,11 +253,11 @@ export default function PlaylistPlayerScreen() {
     };
     
     checkAndShowSurvey();
-  }, [playlist, loading, isAuthenticated, userDemographics, canAccessPlaylist]);
+  }, [playlist, loading, isAuthenticated, userDemographics, canUsePlayer]);
 
   // Track QR scan when playlist loads (only once per mount)
   useEffect(() => {
-    if (!canAccessPlaylist || !playlist || hasTrackedScanRef.current) return;
+    if (!canUsePlayer || !playlist || hasTrackedScanRef.current) return;
     if ((playlist as any).requirePhoneForOpenAccess && !previewPhoneLeadId) return;
     const qrId = playlist?.qr_code_id || playlist?.qrCodeId;
     if (!qrId) return;
@@ -224,7 +271,18 @@ export default function PlaylistPlayerScreen() {
       console.warn('Analytics track scan failed (playlist-player):', e);
       hasTrackedScanRef.current = false;
     });
-  }, [canAccessPlaylist, playlist, isAuthenticated, previewPhoneLeadId, userDemographics]);
+  }, [canUsePlayer, playlist, isAuthenticated, previewPhoneLeadId, userDemographics]);
+
+  useEffect(() => {
+    if (!canUsePlayer || !playlist || hasTrackedViewContentRef.current) return;
+    if (String(id) !== '85') return;
+    hasTrackedViewContentRef.current = true;
+    trackMetaViewContent({
+      contentId: String(id),
+      contentName: playlist?.name || playlist?.title,
+      contentType: 'playlist',
+    });
+  }, [canUsePlayer, playlist, id]);
 
   const errorMessage = isError && error
     ? (error as any)?.response?.status === 403
@@ -320,18 +378,52 @@ export default function PlaylistPlayerScreen() {
     }
   };
 
+  const showWaitlistCapture = String(id) === '85';
+
+  const handleDisclaimerAccept = async () => {
+    try {
+      await AsyncStorage.setItem(playlistDisclaimerStorageKey(id), 'true');
+    } catch {
+      // Still allow playback if persistence fails; user explicitly accepted in-session.
+    }
+    setHasAcceptedDisclaimer(true);
+  };
+
   return (
     <>
-      <PlaylistPlayer
-        playlistId={id}
-        playlist={playlist}
-        playbackToken={playbackToken || (playlist as any)?.playbackToken}
-        previewPhoneLeadId={previewPhoneLeadId || undefined}
-        autoPlay={false}
+      {canUsePlayer ? (
+        <View style={styles.playerShell}>
+          <PlaylistPlayer
+            playlistId={id}
+            playlist={playlist}
+            playbackToken={playbackToken || (playlist as any)?.playbackToken}
+            previewPhoneLeadId={previewPhoneLeadId || undefined}
+            autoPlay={false}
+          />
+          {showWaitlistCapture ? (
+            <View style={styles.waitlistOverlay} pointerEvents="box-none">
+              <WaitlistCapture playlistId={id} />
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={styles.center}>
+          {!hasCheckedDisclaimerStorage ? (
+            <>
+              <ActivityIndicator size="large" color="#3b82f6" />
+              <Text style={styles.loadingText}>Preparing playlist...</Text>
+            </>
+          ) : null}
+        </View>
+      )}
+
+      <LiabilityDisclaimerModal
+        visible={showDisclaimerModal}
+        onAccept={handleDisclaimerAccept}
       />
 
       <LocationOptInPrompt
-        enabled={canAccessPlaylist && !loading}
+        enabled={canUsePlayer && !loading}
         scope={{ contentType: 'playlist', contentId: id, leadId: previewPhoneLeadId }}
         qrCodeId={(playlist as any)?.qr_code_id || (playlist as any)?.qrCodeId || Number(id)}
       />
@@ -347,6 +439,18 @@ export default function PlaylistPlayerScreen() {
 }
 
 const styles = StyleSheet.create({
+  playerShell: {
+    flex: 1,
+  },
+  waitlistOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 50,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',

@@ -51,6 +51,8 @@ import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
 import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 import { continuousAudioEnabled } from '@/config/environment';
+import SizeSelectorModal from '@/components/SizeSelectorModal';
+import { productsAPI } from '@/services/api';
 
 interface MediaItem {
   id: string | number;
@@ -123,6 +125,7 @@ const isContinuousAudioEligibleType = (item: MediaItem) => {
 interface FeaturedProductsPanelProps {
   productLinks?: ProductLink[];
   isStackedLayout: boolean;
+  preOrderNote?: string;
   productImageIndexes: Record<string, number>;
   onImageNavigate: (productId: string, direction: 'prev' | 'next', imageCount: number) => void;
   onBuyNow: (productLink: ProductLink) => void;
@@ -134,6 +137,7 @@ interface FeaturedProductsPanelProps {
 const FeaturedProductsPanel = React.memo(({
   productLinks,
   isStackedLayout,
+  preOrderNote,
   productImageIndexes,
   onImageNavigate,
   onBuyNow,
@@ -243,6 +247,10 @@ const FeaturedProductsPanel = React.memo(({
                       )}
                     </View>
                   )}
+
+                  {preOrderNote ? (
+                    <Text style={styles.preOrderNoteText}>{preOrderNote}</Text>
+                  ) : null}
 
                   {link.description && (
                     <Text style={styles.enhancedProductDescription} numberOfLines={2}>
@@ -444,6 +452,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [pendingCheckoutUrl, setPendingCheckoutUrl] = useState<string | null>(null);
   const [continuousAudioSupport, setContinuousAudioSupport] = useState<'unknown' | 'native' | 'hlsjs' | 'none'>('unknown');
   const [continuousAudioUnavailable, setContinuousAudioUnavailable] = useState(false);
+  const [sizeSelectorVisible, setSizeSelectorVisible] = useState(false);
+  const [selectedProductLink, setSelectedProductLink] = useState<ProductLink | null>(null);
+  const [productSizes, setProductSizes] = useState<string[]>([]);
   
   const videoRef = useRef<any>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -620,45 +631,81 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const handleBuyNow = async (productLink: ProductLink) => {
     if (isCheckoutLoading) return;
     setIsCheckoutLoading(true);
-    setPendingCheckoutUrl(null);
-    resumeAfterCheckoutReturnRef.current = Platform.OS !== 'web' && isPlaying;
-    const preparedCheckoutWindow =
-      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
+    
     try {
-      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
-      const returnUrl =
-        Platform.OS === 'web' && typeof window !== 'undefined'
-          ? window.location.href
-          : base;
-      const successUrl = `${base}/store/checkout-success`;
-      const cancelUrl = returnUrl;
-
-      const items = [{ productId: productLink.id, quantity: 1 }];
-      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
-
-      const launchResult = await launchStripeCheckout(
-        url,
-        'PlaylistPlayer',
-        preparedCheckoutWindow
-      );
-      if (launchResult.status === 'blocked') {
-        setPendingCheckoutUrl(url);
-      }
-      if (Platform.OS !== 'web') {
-        setTimeout(() => {
-          if (resumeAfterCheckoutReturnRef.current) {
-            resumeAfterCheckoutReturnRef.current = false;
-            setIsPlaying(true);
-          }
-        }, 150);
+      // Fetch full product details to check for sizes
+      const productDetails = await productsAPI.getProductById(String(productLink.id));
+      const product = productDetails.product || productDetails;
+      
+      if (product.hasSizes && product.availableSizes && product.availableSizes.length > 0) {
+        // Show size selector modal
+        setSelectedProductLink(productLink);
+        setProductSizes(product.availableSizes);
+        setSizeSelectorVisible(true);
+        setIsCheckoutLoading(false);
+      } else {
+        // No sizes needed - add to cart and redirect
+        addToCart(product);
+        Alert.alert(
+          'Added to Cart',
+          `${productLink.title} has been added to your cart!`,
+          [
+            { text: 'Continue', style: 'cancel' },
+            { 
+              text: 'View Cart', 
+              onPress: () => {
+                if (Platform.OS === 'web') {
+                  window.location.href = '/store/cart';
+                } else {
+                  router.push('/store/cart');
+                }
+              }
+            }
+          ]
+        );
+        setIsCheckoutLoading(false);
       }
     } catch (error) {
-      resumeAfterCheckoutReturnRef.current = false;
-      preparedCheckoutWindow?.close();
       console.error('Buy now error:', error);
-      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
-    } finally {
+      Alert.alert('Error', 'Failed to load product details. Please try again.');
       setIsCheckoutLoading(false);
+    }
+  };
+
+  const handleSizeSelected = async (size: string) => {
+    if (!selectedProductLink) return;
+    
+    try {
+      // Fetch product details again to add to cart
+      const productDetails = await productsAPI.getProductById(String(selectedProductLink.id));
+      const product = productDetails.product || productDetails;
+      
+      // Add to cart with selected size
+      addToCart(product, size);
+      
+      Alert.alert(
+        'Added to Cart',
+        `${selectedProductLink.title} (${size}) has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          { 
+            text: 'View Cart', 
+            onPress: () => {
+              if (Platform.OS === 'web') {
+                window.location.href = '/store/cart';
+              } else {
+                router.push('/store/cart');
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      Alert.alert('Error', 'Failed to add item to cart. Please try again.');
+    } finally {
+      setSelectedProductLink(null);
+      setProductSizes([]);
     }
   };
 
@@ -2676,6 +2723,20 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           isCompactLayout && !isFullscreen && styles.scrollContentCompact,
         ]}
       >
+        {!isFullscreen && isCompactLayout && (
+          <FeaturedProductsPanel
+            productLinks={playlistData?.productLinks}
+            isStackedLayout
+            preOrderNote={playlistTitle}
+            productImageIndexes={productImageIndexes}
+            onImageNavigate={handleImageNavigation}
+            onBuyNow={handleBuyNow}
+            onAddToCart={handleAddToCart}
+            formatPrice={formatPrice}
+            renderStars={renderStars}
+          />
+        )}
+
         <View style={[styles.slideshowMainContent, isFullscreen && styles.fullscreenMainContent, isCompactLayout && styles.mobileMainContent]}>
         <View style={[
             styles.slideshowLeftPanel,
@@ -2835,25 +2896,13 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                   </Text>
                 </View>
             </View>
-
-            {!isFullscreen && isCompactLayout && (
-              <FeaturedProductsPanel
-                productLinks={playlistData?.productLinks}
-                isStackedLayout
-                productImageIndexes={productImageIndexes}
-                onImageNavigate={handleImageNavigation}
-                onBuyNow={handleBuyNow}
-                onAddToCart={handleAddToCart}
-                formatPrice={formatPrice}
-                renderStars={renderStars}
-              />
-            )}
         </View>
 
         {!isFullscreen && !isCompactLayout && (
           <FeaturedProductsPanel
             productLinks={playlistData?.productLinks}
             isStackedLayout={isCompactLayout}
+            preOrderNote={playlistTitle}
             productImageIndexes={productImageIndexes}
             onImageNavigate={handleImageNavigation}
             onBuyNow={handleBuyNow}
@@ -2907,6 +2956,19 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           <Text style={styles.exitButtonText}>Exit</Text>
         </TouchableOpacity>
       )}
+
+      {/* Size Selector Modal */}
+      <SizeSelectorModal
+        visible={sizeSelectorVisible}
+        productName={selectedProductLink?.title || ''}
+        sizes={productSizes}
+        onSelectSize={handleSizeSelected}
+        onClose={() => {
+          setSizeSelectorVisible(false);
+          setSelectedProductLink(null);
+          setProductSizes([]);
+        }}
+      />
     </View>
     </TouchableWithoutFeedback>
   );
@@ -3179,6 +3241,13 @@ const styles = StyleSheet.create({
         color: '#6b7280',
         textDecorationLine: 'line-through',
         marginLeft: 8,
+      },
+      preOrderNoteText: {
+        color: '#f59e0b',
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 4,
+        marginBottom: 4,
       },
       enhancedProductDescription: {
         fontSize: 14,
