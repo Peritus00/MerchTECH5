@@ -8653,6 +8653,15 @@ app.patch('/api/products/:id', authenticateToken, requireCreatorAccount, async (
       [name, description, inStock, formattedMetadata, isSuspended, images, price, formattedPrices, category, id]
     );
 
+    // Cascade name change to product_links so the playlist player always
+    // shows the current product name without requiring a manual re-link.
+    if (name) {
+      await db.query(
+        `UPDATE product_links SET title = $1 WHERE product_id = $2`,
+        [name, id]
+      );
+    }
+
     const updated = await db.query('SELECT * FROM products WHERE id = $1', [id]);
     res.json({ product: updated.rows[0] });
   } catch (err) {
@@ -11206,7 +11215,7 @@ async function getPlaylistWithMedia(playlistId) {
       return {
         id: link.product_id.toString(), // Use product_id, not link.id
         linkId: link.id.toString(), // Keep link ID for reference
-        title: link.title,
+        title: link.product_name || link.title,
         url: link.url,
         description: link.description,
         imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
@@ -16930,12 +16939,7 @@ app.get('/api/slideshows/:id', async (req, res) => {
         return {
           id: link.product_id.toString(), // Use product_id, not link.id
           linkId: link.id.toString(), // Keep link ID for reference
-          title: link.title,
-          url: link.url,
-          description: link.description,
-          imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
-          images: link.product_images || (link.image_url ? [link.image_url] : []),
-          displayOrder: link.display_order,
+          title: link.product_name || link.title,
           isActive: link.is_active,
           price: formattedPrice,
           productName: link.product_name
@@ -17370,7 +17374,7 @@ app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
       return {
         id: link.product_id.toString(),
         linkId: link.id.toString(),
-        title: link.title,
+        title: link.product_name || link.title,
         url: link.url,
         description: link.description,
         imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
@@ -17557,7 +17561,7 @@ app.get('/api/slideshow-access/:id', authenticateTokenOptional, async (req, res)
             return {
               id: link.product_id.toString(),
               linkId: link.id.toString(),
-              title: link.title,
+              title: link.product_name || link.title,
               url: link.url,
               description: link.description,
               imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
@@ -17738,7 +17742,7 @@ app.get('/api/slideshow-access/:id', authenticateTokenOptional, async (req, res)
       return {
         id: link.product_id.toString(), // Use product_id, not link.id
         linkId: link.id.toString(), // Keep link ID for reference
-        title: link.title,
+        title: link.product_name || link.title,
         url: link.url,
         description: link.description,
         imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
@@ -18712,7 +18716,7 @@ app.get('/api/slideshow-preview/:id', async (req, res) => {
         return {
           id: link.product_id.toString(),
           linkId: link.id.toString(),
-          title: link.title,
+          title: link.product_name || link.title,
           url: link.url,
           description: link.description,
           imageUrl: link.product_images && link.product_images.length > 0 ? link.product_images[0] : link.image_url,
