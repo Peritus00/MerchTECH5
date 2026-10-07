@@ -637,36 +637,28 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       const productDetails = await productsAPI.getProductById(String(productLink.id));
       const product = productDetails.product || productDetails;
       
-      if (product.hasSizes && product.availableSizes && product.availableSizes.length > 0) {
+      console.log('🛒 PLAYLIST_PLAYER: Product details for buy now:', {
+        id: product.id,
+        name: product.name,
+        hasSizes: product.metadata?.hasSizes,
+        availableSizes: product.metadata?.availableSizes
+      });
+      
+      // Check for sizes in product metadata (where they're actually stored)
+      if (product.metadata?.hasSizes && product.metadata?.availableSizes && product.metadata.availableSizes.length > 0) {
         // Show size selector modal
+        console.log('🛒 PLAYLIST_PLAYER: Product has sizes, showing size selector');
         setSelectedProductLink(productLink);
-        setProductSizes(product.availableSizes);
+        setProductSizes(product.metadata.availableSizes);
         setSizeSelectorVisible(true);
         setIsCheckoutLoading(false);
       } else {
-        // No sizes needed - add to cart and redirect
-        addToCart(product);
-        Alert.alert(
-          'Added to Cart',
-          `${productLink.title} has been added to your cart!`,
-          [
-            { text: 'Continue', style: 'cancel' },
-            { 
-              text: 'View Cart', 
-              onPress: () => {
-                if (Platform.OS === 'web') {
-                  window.location.href = '/store/cart';
-                } else {
-                  router.push('/store/cart');
-                }
-              }
-            }
-          ]
-        );
-        setIsCheckoutLoading(false);
+        // No sizes needed - go directly to Stripe checkout
+        console.log('🛒 PLAYLIST_PLAYER: No sizes needed, going directly to Stripe checkout');
+        await proceedToCheckout(productLink.id);
       }
     } catch (error) {
-      console.error('Buy now error:', error);
+      console.error('🔴 PLAYLIST_PLAYER: Buy now error:', error);
       Alert.alert('Error', 'Failed to load product details. Please try again.');
       setIsCheckoutLoading(false);
     }
@@ -676,36 +668,65 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     if (!selectedProductLink) return;
     
     try {
-      // Fetch product details again to add to cart
-      const productDetails = await productsAPI.getProductById(String(selectedProductLink.id));
-      const product = productDetails.product || productDetails;
+      console.log('🛒 PLAYLIST_PLAYER: Size selected:', size, 'for product:', selectedProductLink.id);
       
-      // Add to cart with selected size
-      addToCart(product, size);
-      
-      Alert.alert(
-        'Added to Cart',
-        `${selectedProductLink.title} (${size}) has been added to your cart!`,
-        [
-          { text: 'Continue', style: 'cancel' },
-          { 
-            text: 'View Cart', 
-            onPress: () => {
-              if (Platform.OS === 'web') {
-                window.location.href = '/store/cart';
-              } else {
-                router.push('/store/cart');
-              }
-            }
-          }
-        ]
-      );
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      Alert.alert('Error', 'Failed to add item to cart. Please try again.');
-    } finally {
+      // Close the modal first
+      setSizeSelectorVisible(false);
+      const productId = selectedProductLink.id;
       setSelectedProductLink(null);
       setProductSizes([]);
+      
+      // Go directly to Stripe checkout with the selected size
+      await proceedToCheckout(productId, size);
+    } catch (error) {
+      console.error('🔴 PLAYLIST_PLAYER: Error proceeding to checkout with size:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+      setIsCheckoutLoading(false);
+    }
+  };
+
+  const proceedToCheckout = async (productId: string | number, size?: string) => {
+    setPendingCheckoutUrl(null);
+    const preparedCheckoutWindow =
+      Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
+    
+    try {
+      const base = Platform.OS === 'web' ? window.location.origin : 'yourappscheme://';
+      const returnUrl =
+        Platform.OS === 'web' && typeof window !== 'undefined'
+          ? window.location.href
+          : base;
+      const successUrl = `${base}/store/checkout-success`;
+      const cancelUrl = returnUrl;
+
+      // Create checkout session with product and optional size
+      const items = [{ 
+        productId, 
+        quantity: 1,
+        ...(size && { size }) // Include size if provided
+      }];
+      
+      console.log('🛒 PLAYLIST_PLAYER: Creating checkout session with items:', items);
+      const { url } = await paymentAPI.createSession(items, successUrl, cancelUrl);
+
+      console.log('🛒 PLAYLIST_PLAYER: Launching Stripe checkout:', url);
+      const launchResult = await launchStripeCheckout(
+        url,
+        'PlaylistPlayer',
+        preparedCheckoutWindow
+      );
+      
+      if (launchResult.status === 'blocked') {
+        console.log('🔴 PLAYLIST_PLAYER: Checkout blocked by popup blocker');
+        setPendingCheckoutUrl(url);
+      }
+      
+      setIsCheckoutLoading(false);
+    } catch (error) {
+      preparedCheckoutWindow?.close();
+      console.error('🔴 PLAYLIST_PLAYER: Checkout error:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+      setIsCheckoutLoading(false);
     }
   };
 
