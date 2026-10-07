@@ -11824,6 +11824,37 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     const productsMap = new Map();
     rows.forEach((p) => productsMap.set(String(p.id), p));
 
+    const parseProductMetadata = (raw) => {
+      if (!raw) return {};
+      if (typeof raw === 'object') return raw;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return {};
+      }
+    };
+
+    for (const it of items) {
+      const prod = productsMap.get(String(it.productId));
+      if (!prod) {
+        return res.status(404).json({ error: `Product ${it.productId} not found` });
+      }
+
+      const prodMeta = parseProductMetadata(prod.metadata);
+      const qty = Number(it.quantity) || 1;
+
+      if (prodMeta.hasSizes) {
+        if (!it.size) {
+          return res.status(400).json({ error: 'Please select a size for this product' });
+        }
+        const sizeInventory = prodMeta.sizeInventory || {};
+        const available = Number(sizeInventory[it.size]) || 0;
+        if (available < qty) {
+          return res.status(400).json({ error: `Size ${it.size} is out of stock` });
+        }
+      }
+    }
+
     const line_items = [];
     let coupon = null;
     let eligibleProductIds = null;
@@ -11902,11 +11933,13 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
         }
       }
 
+      const displayName = it.size ? `${prod.name} (${it.size})` : prod.name;
+
       const lineItem = {
         price_data: {
           currency: 'usd',
           product_data: {
-            name: prod.name,
+            name: displayName,
             description: prod.description || 'No description available.',
             images: productImages,
             tax_code: 'txcd_99999999', // General – Tangible Personal Property (physical merch)
@@ -11925,6 +11958,13 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
     }
     
     const metadata = { userId: req.user?.userId ? String(req.user.userId) : 'guest' };
+    metadata.items = JSON.stringify(
+      items.map((it) => ({
+        productId: it.productId,
+        quantity: Number(it.quantity) || 1,
+        ...(it.size ? { size: it.size } : {}),
+      }))
+    );
     if (coupon) metadata.couponId = String(coupon.id);
 
     // Store browser-matching signals for CAPI (captured at purchase intent, not webhook time)
@@ -14758,6 +14798,44 @@ app.post('/api/webhooks/stripe', async (req, res) => {
             orderId = inserted.rows[0].id;
             if (sd?.address?.line1) {
               console.log(`💳 STRIPE_WEBHOOK: Shipping address captured for order ${orderId}: ${sd.address.line1}, ${sd.address.city}`);
+            }
+
+            if (session.metadata?.items) {
+              try {
+                const checkoutItems = JSON.parse(session.metadata.items);
+                for (const item of checkoutItems) {
+                  if (!item?.size || !item?.productId) continue;
+                  const decrementQty = Number(item.quantity) || 1;
+                  const sizeKey = String(item.size);
+                  const result = await db.query(
+                    `UPDATE products
+                     SET metadata = jsonb_set(
+                       COALESCE(metadata, '{}'::jsonb),
+                       ARRAY['sizeInventory', $3],
+                       to_jsonb(
+                         GREATEST(
+                           0,
+                           COALESCE((metadata->'sizeInventory'->>$3)::int, 0) - $1
+                         )
+                       ),
+                       true
+                     ),
+                     updated_at = NOW()
+                     WHERE id = $2
+                       AND COALESCE((metadata->'sizeInventory'->>$3)::int, 0) >= $1
+                     RETURNING id`,
+                    [decrementQty, item.productId, sizeKey]
+                  );
+                  if (result.rows.length === 0) {
+                    console.error(
+                      `💳 STRIPE_WEBHOOK: Failed to decrement inventory for product ${item.productId} size ${sizeKey}`
+                    );
+                  }
+                }
+                console.log('💳 STRIPE_WEBHOOK: Size inventory decremented for session:', session.id);
+              } catch (invErr) {
+                console.error('💳 STRIPE_WEBHOOK: Error decrementing size inventory:', invErr);
+              }
             }
           } else {
             orderId = existing.rows[0].id;

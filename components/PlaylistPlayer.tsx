@@ -644,13 +644,22 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         availableSizes: product.metadata?.availableSizes
       });
       
-      // Check for sizes in product metadata (where they're actually stored)
-      if (product.metadata?.hasSizes && product.metadata?.availableSizes && product.metadata.availableSizes.length > 0) {
-        // Show size selector modal
-        console.log('🛒 PLAYLIST_PLAYER: Product has sizes, showing size selector');
+      const sizeInventory = product.metadata?.sizeInventory || {};
+      const availableSizesWithStock =
+        product.metadata?.hasSizes && product.metadata?.availableSizes
+          ? product.metadata.availableSizes.filter(
+              (size: string) => (Number(sizeInventory[size]) || 0) > 0
+            )
+          : [];
+
+      if (availableSizesWithStock.length > 0) {
+        console.log('🛒 PLAYLIST_PLAYER: Product has sizes in stock, showing size selector');
         setSelectedProductLink(productLink);
-        setProductSizes(product.metadata.availableSizes);
+        setProductSizes(availableSizesWithStock);
         setSizeSelectorVisible(true);
+        setIsCheckoutLoading(false);
+      } else if (product.metadata?.hasSizes && product.metadata?.availableSizes?.length > 0) {
+        Alert.alert('Out of Stock', 'This product is currently out of stock in all sizes.');
         setIsCheckoutLoading(false);
       } else {
         // No sizes needed - go directly to Stripe checkout

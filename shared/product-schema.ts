@@ -21,7 +21,14 @@ export interface Product {
   creator?: {
     username: string;
   };
-  metadata?: Record<string, string>; // Stripe metadata
+  metadata?: Record<string, unknown> & {
+    hasSizes?: boolean;
+    availableSizes?: string[];
+    sizeInventory?: Record<string, number>;
+    hasColors?: boolean;
+    availableColors?: string[];
+    price?: number;
+  };
   prices: ProductPrice[]; // Stripe prices for this product
 }
 

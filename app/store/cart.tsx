@@ -63,7 +63,11 @@ export default function CartScreen() {
     }
 
     try {
-      const items = cart.map((c) => ({ productId: c.product.id, quantity: c.quantity }));
+      const items = cart.map((c) => ({
+        productId: c.product.id,
+        quantity: c.quantity,
+        ...(c.size ? { size: c.size } : {}),
+      }));
       const successUrl = `${absBase}/store/checkout-success`;
       const cancelUrl = `${absBase}/store/cart`;
 

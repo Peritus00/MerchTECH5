@@ -28,6 +28,19 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   const [availableSizes, setAvailableSizes] = useState<string[]>(
     product?.metadata?.availableSizes ?? []
   );
+  const [sizeInventory, setSizeInventory] = useState<Record<string, number>>(
+    () => {
+      const raw = product?.metadata?.sizeInventory;
+      if (!raw || typeof raw !== 'object') return {};
+      const parsed: Record<string, number> = {};
+      for (const [size, qty] of Object.entries(raw)) {
+        const n = Number(qty);
+        if (!Number.isNaN(n) && n > 0) parsed[size] = Math.floor(n);
+      }
+      return parsed;
+    }
+  );
+  const [sizeInventoryInputs, setSizeInventoryInputs] = useState<Record<string, string>>({});
   const [hasColors, setHasColors] = useState(product?.metadata?.hasColors ?? false);
   const [availableColors, setAvailableColors] = useState<string[]>(
     product?.metadata?.availableColors ?? []
@@ -57,6 +70,20 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setInStock(product.in_stock ?? true);
       setHasSizes(product.metadata?.hasSizes ?? false);
       setAvailableSizes(product.metadata?.availableSizes ?? []);
+      const invRaw = product.metadata?.sizeInventory;
+      const inv: Record<string, number> = {};
+      const invInputs: Record<string, string> = {};
+      if (invRaw && typeof invRaw === 'object') {
+        for (const [size, qty] of Object.entries(invRaw)) {
+          const n = Number(qty);
+          if (!Number.isNaN(n) && n > 0) {
+            inv[size] = Math.floor(n);
+            invInputs[size] = String(Math.floor(n));
+          }
+        }
+      }
+      setSizeInventory(inv);
+      setSizeInventoryInputs(invInputs);
       setHasColors(product.metadata?.hasColors ?? false);
       setAvailableColors(product.metadata?.availableColors ?? []);
       setCategory(product.category ?? '');
@@ -72,6 +99,8 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setInStock(true);
       setHasSizes(false);
       setAvailableSizes([]);
+      setSizeInventory({});
+      setSizeInventoryInputs({});
       setHasColors(false);
       setAvailableColors([]);
       setCategory('');
@@ -81,9 +110,34 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   }, [product]);
 
   const toggleSize = (size: string) => {
-    setAvailableSizes((prevSizes) =>
-      prevSizes.includes(size) ? prevSizes.filter((s) => s !== size) : [...prevSizes, size]
-    );
+    setAvailableSizes((prevSizes) => {
+      if (prevSizes.includes(size)) {
+        setSizeInventory((prev) => {
+          const next = { ...prev };
+          delete next[size];
+          return next;
+        });
+        setSizeInventoryInputs((prev) => {
+          const next = { ...prev };
+          delete next[size];
+          return next;
+        });
+        return prevSizes.filter((s) => s !== size);
+      }
+      setSizeInventory((prev) => ({ ...prev, [size]: 0 }));
+      setSizeInventoryInputs((prev) => ({ ...prev, [size]: '' }));
+      return [...prevSizes, size];
+    });
+  };
+
+  const updateSizeInventoryInput = (size: string, value: string) => {
+    const digitsOnly = value.replace(/[^\d]/g, '');
+    setSizeInventoryInputs((prev) => ({ ...prev, [size]: digitsOnly }));
+    const parsed = digitsOnly === '' ? 0 : parseInt(digitsOnly, 10);
+    setSizeInventory((prev) => ({
+      ...prev,
+      [size]: Number.isNaN(parsed) ? 0 : parsed,
+    }));
   };
 
   const toggleColor = (color: string) => {
@@ -247,6 +301,22 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setErrors(nextErrors);
       return;
     }
+
+    if (hasSizes && availableSizes.length > 0) {
+      const missingSizeInventory = availableSizes.filter(
+        (size) => !sizeInventory[size] || sizeInventory[size] <= 0
+      );
+
+      if (missingSizeInventory.length > 0) {
+        Alert.alert(
+          'Missing Size Quantities',
+          `Please enter quantities for: ${missingSizeInventory.join(', ')}.\n\nEither uncheck these sizes or enter the number available.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
     setErrors({});
     
     console.log('✅ Validation passed, building updates object...');
@@ -269,6 +339,12 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
         ...product?.metadata,
         hasSizes,
         availableSizes: hasSizes ? availableSizes : [],
+        sizeInventory: hasSizes
+          ? availableSizes.reduce<Record<string, number>>((acc, size) => {
+              acc[size] = sizeInventory[size] ?? 0;
+              return acc;
+            }, {})
+          : {},
         hasColors,
         availableColors: hasColors ? availableColors : [],
         price: Math.round(Number(price) * 100),
@@ -289,6 +365,8 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     setInStock(true);
     setHasSizes(false);
     setAvailableSizes([]);
+    setSizeInventory({});
+    setSizeInventoryInputs({});
     setHasColors(false);
     setAvailableColors([]);
     setCategory('');
@@ -441,18 +519,41 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
               <>
                 <ThemedText style={{ marginBottom: 8 }}>Available Sizes</ThemedText>
                 <View style={styles.sizesContainer}>
-                  {SIZES.map((size) => (
-                    <TouchableOpacity
-                      key={size}
-                      style={styles.sizeCheckbox}
-                      onPress={() => toggleSize(size)}
-                    >
-                      <ThemedText style={styles.checkboxText}>
-                        {`[${availableSizes.includes(size) ? 'X' : ' '}] `}
-                      </ThemedText>
-                      <ThemedText>{size}</ThemedText>
-                    </TouchableOpacity>
-                  ))}
+                  {SIZES.map((size) => {
+                    const isSelected = availableSizes.includes(size);
+                    return (
+                      <View key={size} style={styles.sizeRow}>
+                        <TouchableOpacity
+                          style={styles.sizeCheckbox}
+                          onPress={() => toggleSize(size)}
+                        >
+                          <ThemedText style={styles.checkboxText}>
+                            {`[${isSelected ? 'X' : ' '}] `}
+                          </ThemedText>
+                          <ThemedText>{size}</ThemedText>
+                        </TouchableOpacity>
+                        {isSelected && (
+                          <View style={styles.sizeQtyRow}>
+                            <ThemedText style={styles.sizeQtyLabel}>Qty:</ThemedText>
+                            <TextInput
+                              style={[
+                                styles.sizeQtyInput,
+                                {
+                                  color: Colors[colorScheme].text,
+                                  borderColor: Colors[colorScheme].border,
+                                },
+                              ]}
+                              value={sizeInventoryInputs[size] ?? ''}
+                              onChangeText={(value) => updateSizeInventoryInput(size, value)}
+                              keyboardType="number-pad"
+                              placeholder="0"
+                              placeholderTextColor={Colors[colorScheme].text}
+                            />
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               </>
             )}
@@ -610,15 +711,38 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   sizesContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     marginBottom: 12,
+  },
+  sizeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+    width: '100%',
   },
   sizeCheckbox: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '33%',
-    marginBottom: 8,
+    minWidth: 72,
+    marginRight: 8,
+  },
+  sizeQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 120,
+  },
+  sizeQtyLabel: {
+    marginRight: 6,
+    fontSize: 14,
+  },
+  sizeQtyInput: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minWidth: 72,
+    maxWidth: 100,
   },
   colorsContainer: {
     flexDirection: 'row',
