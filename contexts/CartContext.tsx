@@ -49,8 +49,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addToCart = async (product: Product, size?: string) => {
-    // Check if product is in stock
-    if (!product.in_stock) {
+    // Check if product is in stock (handle both field name formats)
+    const isInStock = product.inStock ?? product.in_stock ?? true;
+    if (!isInStock) {
       console.log('🚫 Cannot add out of stock product to cart:', product.name);
       return;
     }
