@@ -27,6 +27,7 @@ export interface Product {
     sizeInventory?: Record<string, number>;
     hasColors?: boolean;
     availableColors?: string[];
+    colorInventory?: Record<string, number>;
     price?: number;
   };
   prices: ProductPrice[]; // Stripe prices for this product
@@ -57,4 +58,5 @@ export interface CartItem {
   product: Product;
   quantity: number;
   size?: string;
+  color?: string;
 }

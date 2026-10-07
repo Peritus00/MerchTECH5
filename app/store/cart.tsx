@@ -67,6 +67,7 @@ export default function CartScreen() {
         productId: c.product.id,
         quantity: c.quantity,
         ...(c.size ? { size: c.size } : {}),
+        ...(c.color ? { color: c.color } : {}),
       }));
       const successUrl = `${absBase}/store/checkout-success`;
       const cancelUrl = `${absBase}/store/cart`;

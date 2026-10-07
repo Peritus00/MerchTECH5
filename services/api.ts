@@ -579,7 +579,7 @@ export const salesAPI = {
 
 export const paymentAPI = {
   async createSession(
-    items: { productId: string | number; quantity: number; size?: string }[],
+    items: { productId: string | number; quantity: number; size?: string; color?: string }[],
     successUrl: string,
     cancelUrl: string,
     couponCode?: string

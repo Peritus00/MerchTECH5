@@ -455,6 +455,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const [sizeSelectorVisible, setSizeSelectorVisible] = useState(false);
   const [selectedProductLink, setSelectedProductLink] = useState<ProductLink | null>(null);
   const [productSizes, setProductSizes] = useState<string[]>([]);
+  const [colorSelectorVisible, setColorSelectorVisible] = useState(false);
+  const [productColors, setProductColors] = useState<string[]>([]);
+  const [selectedSizeForCheckout, setSelectedSizeForCheckout] = useState<string | undefined>(undefined);
   
   const videoRef = useRef<any>(null);
   const audioPlayerRef = useRef<IAudioPlayer | null>(null);
@@ -652,8 +655,17 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
             )
           : [];
 
+      const colorInventory = product.metadata?.colorInventory || {};
+      const availableColorsWithStock =
+        product.metadata?.hasColors && product.metadata?.availableColors
+          ? product.metadata.availableColors.filter(
+              (color: string) => (Number(colorInventory[color]) || 0) > 0
+            )
+          : [];
+
       if (availableSizesWithStock.length > 0) {
         console.log('🛒 PLAYLIST_PLAYER: Product has sizes in stock, showing size selector');
+        setSelectedSizeForCheckout(undefined);
         setSelectedProductLink(productLink);
         setProductSizes(availableSizesWithStock);
         setSizeSelectorVisible(true);
@@ -661,9 +673,18 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       } else if (product.metadata?.hasSizes && product.metadata?.availableSizes?.length > 0) {
         Alert.alert('Out of Stock', 'This product is currently out of stock in all sizes.');
         setIsCheckoutLoading(false);
+      } else if (availableColorsWithStock.length > 0) {
+        console.log('🛒 PLAYLIST_PLAYER: Product has colors in stock, showing color selector');
+        setSelectedSizeForCheckout(undefined);
+        setSelectedProductLink(productLink);
+        setProductColors(availableColorsWithStock);
+        setColorSelectorVisible(true);
+        setIsCheckoutLoading(false);
+      } else if (product.metadata?.hasColors && product.metadata?.availableColors?.length > 0) {
+        Alert.alert('Out of Stock', 'This product is currently out of stock in all colors.');
+        setIsCheckoutLoading(false);
       } else {
-        // No sizes needed - go directly to Stripe checkout
-        console.log('🛒 PLAYLIST_PLAYER: No sizes needed, going directly to Stripe checkout');
+        console.log('🛒 PLAYLIST_PLAYER: No sizes/colors needed, going directly to Stripe checkout');
         await proceedToCheckout(productLink.id);
       }
     } catch (error) {
@@ -679,13 +700,30 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     try {
       console.log('🛒 PLAYLIST_PLAYER: Size selected:', size, 'for product:', selectedProductLink.id);
       
-      // Close the modal first
       setSizeSelectorVisible(false);
       const productId = selectedProductLink.id;
+      const link = selectedProductLink;
+
+      const productDetails = await productsAPI.getProductById(String(productId));
+      const product = productDetails.product || productDetails;
+      const colorInv = product.metadata?.colorInventory || {};
+      const colorsWithStock =
+        product.metadata?.hasColors && product.metadata?.availableColors
+          ? product.metadata.availableColors.filter(
+              (color: string) => (Number(colorInv[color]) || 0) > 0
+            )
+          : [];
+
+      if (colorsWithStock.length > 0) {
+        setSelectedSizeForCheckout(size);
+        setSelectedProductLink(link);
+        setProductColors(colorsWithStock);
+        setColorSelectorVisible(true);
+        return;
+      }
+
       setSelectedProductLink(null);
       setProductSizes([]);
-      
-      // Go directly to Stripe checkout with the selected size
       await proceedToCheckout(productId, size);
     } catch (error) {
       console.error('🔴 PLAYLIST_PLAYER: Error proceeding to checkout with size:', error);
@@ -694,7 +732,27 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
     }
   };
 
-  const proceedToCheckout = async (productId: string | number, size?: string) => {
+  const handleColorSelected = async (color: string) => {
+    if (!selectedProductLink) return;
+
+    try {
+      console.log('🛒 PLAYLIST_PLAYER: Color selected:', color, 'for product:', selectedProductLink.id);
+      setColorSelectorVisible(false);
+      const productId = selectedProductLink.id;
+      const size = selectedSizeForCheckout;
+      setSelectedProductLink(null);
+      setProductSizes([]);
+      setProductColors([]);
+      setSelectedSizeForCheckout(undefined);
+      await proceedToCheckout(productId, size, color);
+    } catch (error) {
+      console.error('🔴 PLAYLIST_PLAYER: Error proceeding to checkout with color:', error);
+      Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
+      setIsCheckoutLoading(false);
+    }
+  };
+
+  const proceedToCheckout = async (productId: string | number, size?: string, color?: string) => {
     setPendingCheckoutUrl(null);
     const preparedCheckoutWindow =
       Platform.OS === 'web' ? prepareStripeCheckoutWindow() : null;
@@ -712,7 +770,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       const items = [{ 
         productId, 
         quantity: 1,
-        ...(size && { size }) // Include size if provided
+        ...(size && { size }),
+        ...(color && { color }),
       }];
       
       console.log('🛒 PLAYLIST_PLAYER: Creating checkout session with items:', items);
@@ -2997,6 +3056,21 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           setSizeSelectorVisible(false);
           setSelectedProductLink(null);
           setProductSizes([]);
+          setSelectedSizeForCheckout(undefined);
+        }}
+      />
+
+      <SizeSelectorModal
+        visible={colorSelectorVisible}
+        productName={selectedProductLink?.title || ''}
+        sizes={productColors}
+        title="Select Color"
+        onSelectSize={handleColorSelected}
+        onClose={() => {
+          setColorSelectorVisible(false);
+          setSelectedProductLink(null);
+          setProductColors([]);
+          setSelectedSizeForCheckout(undefined);
         }}
       />
     </View>

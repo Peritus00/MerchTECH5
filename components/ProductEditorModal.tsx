@@ -41,6 +41,19 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     }
   );
   const [sizeInventoryInputs, setSizeInventoryInputs] = useState<Record<string, string>>({});
+  const [colorInventory, setColorInventory] = useState<Record<string, number>>(
+    () => {
+      const raw = product?.metadata?.colorInventory;
+      if (!raw || typeof raw !== 'object') return {};
+      const parsed: Record<string, number> = {};
+      for (const [color, qty] of Object.entries(raw)) {
+        const n = Number(qty);
+        if (!Number.isNaN(n) && n > 0) parsed[color] = Math.floor(n);
+      }
+      return parsed;
+    }
+  );
+  const [colorInventoryInputs, setColorInventoryInputs] = useState<Record<string, string>>({});
   const [hasColors, setHasColors] = useState(product?.metadata?.hasColors ?? false);
   const [availableColors, setAvailableColors] = useState<string[]>(
     product?.metadata?.availableColors ?? []
@@ -55,7 +68,7 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   }>({});
 
   const SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-  const COLORS = ['Red', 'Blue', 'Green', 'Yellow', 'Black', 'White', 'Gray', 'Pink', 'Purple', 'Orange', 'Brown', 'Navy'];
+  const COLORS = ['Red', 'Blue', 'Green', 'Yellow', 'Black', 'White', 'Gray', 'Pink', 'Purple', 'Orange', 'Brown', 'Navy', 'Camouflage'];
   const CATEGORIES = ['Painting', 'Sculpture', 'Literature', 'Architecture', 'Theater', 'Film', 'Music'];
 
   // Reset fields when product changes
@@ -86,6 +99,20 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setSizeInventoryInputs(invInputs);
       setHasColors(product.metadata?.hasColors ?? false);
       setAvailableColors(product.metadata?.availableColors ?? []);
+      const colorInvRaw = product.metadata?.colorInventory;
+      const colorInv: Record<string, number> = {};
+      const colorInvInputs: Record<string, string> = {};
+      if (colorInvRaw && typeof colorInvRaw === 'object') {
+        for (const [color, qty] of Object.entries(colorInvRaw)) {
+          const n = Number(qty);
+          if (!Number.isNaN(n) && n > 0) {
+            colorInv[color] = Math.floor(n);
+            colorInvInputs[color] = String(Math.floor(n));
+          }
+        }
+      }
+      setColorInventory(colorInv);
+      setColorInventoryInputs(colorInvInputs);
       setCategory(product.category ?? '');
       // Reset service charge acknowledgment for new products
       setAcknowledgeServiceCharge(product.id !== 'new');
@@ -103,6 +130,8 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       setSizeInventoryInputs({});
       setHasColors(false);
       setAvailableColors([]);
+      setColorInventory({});
+      setColorInventoryInputs({});
       setCategory('');
       setAcknowledgeServiceCharge(false);
       setErrors({});
@@ -141,9 +170,34 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
   };
 
   const toggleColor = (color: string) => {
-    setAvailableColors((prevColors) =>
-      prevColors.includes(color) ? prevColors.filter((c) => c !== color) : [...prevColors, color]
-    );
+    setAvailableColors((prevColors) => {
+      if (prevColors.includes(color)) {
+        setColorInventory((prev) => {
+          const next = { ...prev };
+          delete next[color];
+          return next;
+        });
+        setColorInventoryInputs((prev) => {
+          const next = { ...prev };
+          delete next[color];
+          return next;
+        });
+        return prevColors.filter((c) => c !== color);
+      }
+      setColorInventory((prev) => ({ ...prev, [color]: 0 }));
+      setColorInventoryInputs((prev) => ({ ...prev, [color]: '' }));
+      return [...prevColors, color];
+    });
+  };
+
+  const updateColorInventoryInput = (color: string, value: string) => {
+    const digitsOnly = value.replace(/[^\d]/g, '');
+    setColorInventoryInputs((prev) => ({ ...prev, [color]: digitsOnly }));
+    const parsed = digitsOnly === '' ? 0 : parseInt(digitsOnly, 10);
+    setColorInventory((prev) => ({
+      ...prev,
+      [color]: Number.isNaN(parsed) ? 0 : parsed,
+    }));
   };
 
   const handlePickImage = async () => {
@@ -299,6 +353,11 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
+      Alert.alert(
+        'Please fix the following',
+        Object.values(nextErrors).filter(Boolean).join('\n'),
+        [{ text: 'OK' }]
+      );
       return;
     }
 
@@ -310,7 +369,22 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
       if (missingSizeInventory.length > 0) {
         Alert.alert(
           'Missing Size Quantities',
-          `Please enter quantities for: ${missingSizeInventory.join(', ')}.\n\nEither uncheck these sizes or enter the number available.`,
+          `Please enter quantities for sizes: ${missingSizeInventory.join(', ')}.\n\nEither uncheck those sizes or enter the number available.`,
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
+    if (hasColors && availableColors.length > 0) {
+      const missingColorInventory = availableColors.filter(
+        (color) => !colorInventory[color] || colorInventory[color] <= 0
+      );
+
+      if (missingColorInventory.length > 0) {
+        Alert.alert(
+          'Missing Color Quantities',
+          `Please enter quantities for colors: ${missingColorInventory.join(', ')}.\n\nEither uncheck those colors or enter the number available.`,
           [{ text: 'OK' }]
         );
         return;
@@ -347,6 +421,12 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
           : {},
         hasColors,
         availableColors: hasColors ? availableColors : [],
+        colorInventory: hasColors
+          ? availableColors.reduce<Record<string, number>>((acc, color) => {
+              acc[color] = colorInventory[color] ?? 0;
+              return acc;
+            }, {})
+          : {},
         price: Math.round(Number(price) * 100),
       },
     };
@@ -369,6 +449,8 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
     setSizeInventoryInputs({});
     setHasColors(false);
     setAvailableColors([]);
+    setColorInventory({});
+    setColorInventoryInputs({});
     setCategory('');
     setAcknowledgeServiceCharge(false);
     setErrors({});
@@ -565,18 +647,41 @@ export default function ProductEditorModal({ visible, product, onClose, onSave, 
               <>
                 <ThemedText style={{ marginBottom: 8 }}>Available Colors</ThemedText>
                 <View style={styles.colorsContainer}>
-                  {COLORS.map((color) => (
-                    <TouchableOpacity
-                      key={color}
-                      style={styles.colorCheckbox}
-                      onPress={() => toggleColor(color)}
-                    >
-                      <ThemedText style={styles.checkboxText}>
-                        {`[${availableColors.includes(color) ? 'X' : ' '}] `}
-                      </ThemedText>
-                      <ThemedText>{color}</ThemedText>
-                    </TouchableOpacity>
-                  ))}
+                  {COLORS.map((color) => {
+                    const isSelected = availableColors.includes(color);
+                    return (
+                      <View key={color} style={styles.colorRow}>
+                        <TouchableOpacity
+                          style={styles.colorCheckbox}
+                          onPress={() => toggleColor(color)}
+                        >
+                          <ThemedText style={styles.checkboxText}>
+                            {`[${isSelected ? 'X' : ' '}] `}
+                          </ThemedText>
+                          <ThemedText>{color}</ThemedText>
+                        </TouchableOpacity>
+                        {isSelected && (
+                          <View style={styles.colorQtyRow}>
+                            <ThemedText style={styles.colorQtyLabel}>Qty:</ThemedText>
+                            <TextInput
+                              style={[
+                                styles.colorQtyInput,
+                                {
+                                  color: Colors[colorScheme].text,
+                                  borderColor: Colors[colorScheme].border,
+                                },
+                              ]}
+                              value={colorInventoryInputs[color] ?? ''}
+                              onChangeText={(value) => updateColorInventoryInput(color, value)}
+                              keyboardType="number-pad"
+                              placeholder="0"
+                              placeholderTextColor={Colors[colorScheme].text}
+                            />
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               </>
             )}
@@ -745,15 +850,38 @@ const styles = StyleSheet.create({
     maxWidth: 100,
   },
   colorsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     marginBottom: 12,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginBottom: 10,
+    width: '100%',
   },
   colorCheckbox: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '33%',
-    marginBottom: 8,
+    minWidth: 120,
+    marginRight: 8,
+  },
+  colorQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 120,
+  },
+  colorQtyLabel: {
+    marginRight: 6,
+    fontSize: 14,
+  },
+  colorQtyInput: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    minWidth: 72,
+    maxWidth: 100,
   },
   checkboxText: {
     fontWeight: 'bold',

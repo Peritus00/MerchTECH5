@@ -11853,6 +11853,17 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
           return res.status(400).json({ error: `Size ${it.size} is out of stock` });
         }
       }
+
+      if (prodMeta.hasColors) {
+        if (!it.color) {
+          return res.status(400).json({ error: 'Please select a color for this product' });
+        }
+        const colorInventory = prodMeta.colorInventory || {};
+        const colorAvailable = Number(colorInventory[it.color]) || 0;
+        if (colorAvailable < qty) {
+          return res.status(400).json({ error: `Color ${it.color} is out of stock` });
+        }
+      }
     }
 
     const line_items = [];
@@ -11933,7 +11944,9 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
         }
       }
 
-      const displayName = it.size ? `${prod.name} (${it.size})` : prod.name;
+      let displayName = prod.name;
+      if (it.size) displayName += ` (${it.size})`;
+      if (it.color) displayName += ` (${it.color})`;
 
       const lineItem = {
         price_data: {
@@ -11963,6 +11976,7 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
         productId: it.productId,
         quantity: Number(it.quantity) || 1,
         ...(it.size ? { size: it.size } : {}),
+        ...(it.color ? { color: it.color } : {}),
       }))
     );
     if (coupon) metadata.couponId = String(coupon.id);
@@ -14804,35 +14818,66 @@ app.post('/api/webhooks/stripe', async (req, res) => {
               try {
                 const checkoutItems = JSON.parse(session.metadata.items);
                 for (const item of checkoutItems) {
-                  if (!item?.size || !item?.productId) continue;
+                  if (!item?.productId) continue;
                   const decrementQty = Number(item.quantity) || 1;
-                  const sizeKey = String(item.size);
-                  const result = await db.query(
-                    `UPDATE products
-                     SET metadata = jsonb_set(
-                       COALESCE(metadata, '{}'::jsonb),
-                       ARRAY['sizeInventory', $3],
-                       to_jsonb(
-                         GREATEST(
-                           0,
-                           COALESCE((metadata->'sizeInventory'->>$3)::int, 0) - $1
-                         )
+
+                  if (item.size) {
+                    const sizeKey = String(item.size);
+                    const result = await db.query(
+                      `UPDATE products
+                       SET metadata = jsonb_set(
+                         COALESCE(metadata, '{}'::jsonb),
+                         ARRAY['sizeInventory', $3],
+                         to_jsonb(
+                           GREATEST(
+                             0,
+                             COALESCE((metadata->'sizeInventory'->>$3)::int, 0) - $1
+                           )
+                         ),
+                         true
                        ),
-                       true
-                     ),
-                     updated_at = NOW()
-                     WHERE id = $2
-                       AND COALESCE((metadata->'sizeInventory'->>$3)::int, 0) >= $1
-                     RETURNING id`,
-                    [decrementQty, item.productId, sizeKey]
-                  );
-                  if (result.rows.length === 0) {
-                    console.error(
-                      `💳 STRIPE_WEBHOOK: Failed to decrement inventory for product ${item.productId} size ${sizeKey}`
+                       updated_at = NOW()
+                       WHERE id = $2
+                         AND COALESCE((metadata->'sizeInventory'->>$3)::int, 0) >= $1
+                       RETURNING id`,
+                      [decrementQty, item.productId, sizeKey]
                     );
+                    if (result.rows.length === 0) {
+                      console.error(
+                        `💳 STRIPE_WEBHOOK: Failed to decrement inventory for product ${item.productId} size ${sizeKey}`
+                      );
+                    }
+                  }
+
+                  if (item.color) {
+                    const colorKey = String(item.color);
+                    const result = await db.query(
+                      `UPDATE products
+                       SET metadata = jsonb_set(
+                         COALESCE(metadata, '{}'::jsonb),
+                         ARRAY['colorInventory', $3],
+                         to_jsonb(
+                           GREATEST(
+                             0,
+                             COALESCE((metadata->'colorInventory'->>$3)::int, 0) - $1
+                           )
+                         ),
+                         true
+                       ),
+                       updated_at = NOW()
+                       WHERE id = $2
+                         AND COALESCE((metadata->'colorInventory'->>$3)::int, 0) >= $1
+                       RETURNING id`,
+                      [decrementQty, item.productId, colorKey]
+                    );
+                    if (result.rows.length === 0) {
+                      console.error(
+                        `💳 STRIPE_WEBHOOK: Failed to decrement inventory for product ${item.productId} color ${colorKey}`
+                      );
+                    }
                   }
                 }
-                console.log('💳 STRIPE_WEBHOOK: Size inventory decremented for session:', session.id);
+                console.log('💳 STRIPE_WEBHOOK: Product inventory decremented for session:', session.id);
               } catch (invErr) {
                 console.error('💳 STRIPE_WEBHOOK: Error decrementing size inventory:', invErr);
               }

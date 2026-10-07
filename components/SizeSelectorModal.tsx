@@ -16,6 +16,7 @@ interface SizeSelectorModalProps {
   sizes: string[];
   onSelectSize: (size: string) => void;
   onClose: () => void;
+  title?: string;
 }
 
 export default function SizeSelectorModal({
@@ -24,6 +25,7 @@ export default function SizeSelectorModal({
   sizes,
   onSelectSize,
   onClose,
+  title = 'Select Size',
 }: SizeSelectorModalProps) {
   return (
     <Modal
@@ -37,7 +39,7 @@ export default function SizeSelectorModal({
           <TouchableWithoutFeedback>
             <View style={styles.modalContent}>
               <View style={styles.header}>
-                <Text style={styles.title}>Select Size</Text>
+                <Text style={styles.title}>{title}</Text>
                 <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <MaterialIcons name="close" size={24} color="#9ca3af" />
                 </TouchableOpacity>
