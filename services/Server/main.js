@@ -8485,9 +8485,15 @@ const mapProductFields = (product) => {
 // ---------- PRODUCT ROUTES ----------
 
 // Get products – supports ?mine=true to return only caller's items
-app.get('/api/products', authenticateToken, async (req, res) => {
+app.get('/api/products', authenticateTokenOptional, async (req, res) => {
   try {
     const mine = req.query.mine === 'true';
+    
+    // If requesting user's own products, authentication is required
+    if (mine && !req.user?.userId) {
+      return res.status(401).json({ error: 'Authentication required to view your products' });
+    }
+    
     let result;
     if (mine) {
       result = await db.query(
@@ -8564,7 +8570,7 @@ app.get('/api/products/all', async (req, res) => {
 });
 
 // Get single product by ID
-app.get('/api/products/:id', authenticateToken, async (req, res) => {
+app.get('/api/products/:id', authenticateTokenOptional, async (req, res) => {
   try {
     const { id } = req.params;
     console.log('🔍 GET_PRODUCT: Fetching product with ID:', id);
