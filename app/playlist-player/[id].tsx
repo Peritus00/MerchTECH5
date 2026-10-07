@@ -18,6 +18,7 @@ import LiabilityDisclaimerModal from '@/components/LiabilityDisclaimerModal';
 import {
   hasStoredDisclaimerAcceptance,
   playlistDisclaimerStorageKey,
+  createDisclaimerAcceptance,
 } from '@/utils/playlistDisclaimerStorage';
 import { trackMetaViewContent } from '@/utils/metaPixel';
 
@@ -417,7 +418,10 @@ export default function PlaylistPlayerScreen() {
 
   const handleDisclaimerAccept = async () => {
     try {
-      await AsyncStorage.setItem(playlistDisclaimerStorageKey(id), 'true');
+      await AsyncStorage.setItem(
+        playlistDisclaimerStorageKey(id),
+        createDisclaimerAcceptance()
+      );
     } catch {
       // Still allow playback if persistence fails; user explicitly accepted in-session.
     }
