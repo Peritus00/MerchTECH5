@@ -3,12 +3,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '@/services/analyticsService';
 import { getSessionId } from '@/utils/sessionTracking';
 import { Product, CartItem } from '../shared/product-schema';
+import { ProductVariantOptions } from '@/utils/productVariants';
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Product, size?: string) => void;
-  removeFromCart: (productId: number, size?: string) => void;
-  updateQuantity: (productId: number, quantity: number, size?: string) => void;
+  addToCart: (product: Product, options?: ProductVariantOptions) => void;
+  removeFromCart: (productId: number | string, options?: ProductVariantOptions) => void;
+  updateQuantity: (
+    productId: number | string,
+    quantity: number,
+    options?: ProductVariantOptions
+  ) => void;
   clearCart: () => void;
   getTotalPrice: () => number;
   getTotalItems: () => number;
@@ -48,7 +53,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addToCart = async (product: Product, size?: string) => {
+  const addToCart = async (product: Product, options?: ProductVariantOptions) => {
+    const size = options?.size;
+    const color = options?.color;
     // Check if product is in stock (handle both field name formats)
     const isInStock = product.inStock ?? product.in_stock ?? true;
     if (!isInStock) {
@@ -67,7 +74,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setCart(prevCart => {
       const existingItemIndex = prevCart.findIndex(
-        item => item.product.id === product.id && item.size === size
+        (item) =>
+          item.product.id === product.id && item.size === size && item.color === color
       );
 
       if (existingItemIndex !== -1) {
@@ -77,28 +85,44 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return updatedCart;
       } else {
         // Add new item to cart
-        return [...prevCart, { product, quantity: 1, size }];
+        return [...prevCart, { product, quantity: 1, size, color }];
       }
     });
   };
 
-  const removeFromCart = (productId: number, size?: string) => {
-    setCart(prevCart =>
-      prevCart.filter(item => !(item.product.id === productId && item.size === size))
+  const matchesVariant = (
+    item: CartItem,
+    productId: number | string,
+    size?: string,
+    color?: string
+  ) =>
+    String(item.product.id) === String(productId) &&
+    item.size === size &&
+    item.color === color;
+
+  const removeFromCart = (productId: number | string, options?: ProductVariantOptions) => {
+    const size = options?.size;
+    const color = options?.color;
+    setCart((prevCart) =>
+      prevCart.filter((item) => !matchesVariant(item, productId, size, color))
     );
   };
 
-  const updateQuantity = (productId: number, quantity: number, size?: string) => {
+  const updateQuantity = (
+    productId: number | string,
+    quantity: number,
+    options?: ProductVariantOptions
+  ) => {
+    const size = options?.size;
+    const color = options?.color;
     if (quantity <= 0) {
-      removeFromCart(productId, size);
+      removeFromCart(productId, { size, color });
       return;
     }
 
-    setCart(prevCart =>
-      prevCart.map(item =>
-        item.product.id === productId && item.size === size
-          ? { ...item, quantity }
-          : item
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        matchesVariant(item, productId, size, color) ? { ...item, quantity } : item
       )
     );
   };

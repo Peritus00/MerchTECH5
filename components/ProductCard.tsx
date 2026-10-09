@@ -9,7 +9,6 @@ import {
   Share,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useCart } from '@/contexts/CartContext';
 import { paymentAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import ShareButton from '@/components/ShareButton'; // Assuming you have this
@@ -19,6 +18,7 @@ import { ThemedView } from './ThemedView';
 import { MaterialIcons } from '@expo/vector-icons';
 import { MobileCompatibleImage } from './MobileCompatibleImage';
 import { launchStripeCheckout, prepareStripeCheckoutWindow } from '@/utils/stripeCheckout';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 
 interface ProductCardProps {
   product: Product;
@@ -27,8 +27,12 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareButton = false }) => {
-  const { addToCart } = useCart();
   const router = useRouter();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name) => {
+      Alert.alert('Added to Cart', `${name} has been added to your cart!`);
+    },
+  });
   const [base, setBase] = useState('');
 
   useEffect(() => {
@@ -148,6 +152,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
   };
 
   return (
+    <>
     <ThemedView style={styles.card}>
       <TouchableOpacity onPress={handlePress}>
         <MobileCompatibleImage 
@@ -164,7 +169,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
         </View>
       </TouchableOpacity>
       <View style={styles.actionsContainer}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => addToCart(product, '1')}>
+        <TouchableOpacity style={styles.actionButton} onPress={() => void startAddToCart(product)}>
            <MaterialIcons name="add-shopping-cart" size={20} color="#3b82f6" />
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton, styles.buyNowButton]} onPress={buyNow}>
@@ -177,6 +182,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onPress, showShareBu
         )}
       </View>
     </ThemedView>
+    {addToCartVariantModals}
+    </>
   );
 };
 

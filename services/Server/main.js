@@ -11843,25 +11843,57 @@ app.post('/api/checkout/session', authenticateTokenOptional, async (req, res) =>
       const prodMeta = parseProductMetadata(prod.metadata);
       const qty = Number(it.quantity) || 1;
 
-      if (prodMeta.hasSizes) {
-        if (!it.size) {
-          return res.status(400).json({ error: 'Please select a size for this product' });
-        }
+      if (prodMeta.hasSizes && !it.size) {
+        console.warn('⚠️ CHECKOUT: Sized product without size in cart (allowing for legacy cart)', {
+          productId: it.productId,
+          productName: prod.name,
+        });
+      }
+
+      if (prodMeta.hasColors && !it.color) {
+        console.warn('⚠️ CHECKOUT: Colored product without color in cart (allowing for legacy cart)', {
+          productId: it.productId,
+          productName: prod.name,
+        });
+      }
+
+      if (it.size) {
         const sizeInventory = prodMeta.sizeInventory || {};
-        const available = Number(sizeInventory[it.size]) || 0;
-        if (available < qty) {
-          return res.status(400).json({ error: `Size ${it.size} is out of stock` });
+        const hasTrackedSize =
+          sizeInventory &&
+          typeof sizeInventory === 'object' &&
+          Object.prototype.hasOwnProperty.call(sizeInventory, it.size);
+        if (hasTrackedSize) {
+          const available = Number(sizeInventory[it.size]) || 0;
+          if (available < qty) {
+            console.warn('⚠️ CHECKOUT: Size out of stock', {
+              productId: it.productId,
+              size: it.size,
+              available,
+              requested: qty,
+            });
+            return res.status(400).json({ error: `Size ${it.size} is out of stock` });
+          }
         }
       }
 
-      if (prodMeta.hasColors) {
-        if (!it.color) {
-          return res.status(400).json({ error: 'Please select a color for this product' });
-        }
+      if (it.color) {
         const colorInventory = prodMeta.colorInventory || {};
-        const colorAvailable = Number(colorInventory[it.color]) || 0;
-        if (colorAvailable < qty) {
-          return res.status(400).json({ error: `Color ${it.color} is out of stock` });
+        const hasTrackedColor =
+          colorInventory &&
+          typeof colorInventory === 'object' &&
+          Object.prototype.hasOwnProperty.call(colorInventory, it.color);
+        if (hasTrackedColor) {
+          const colorAvailable = Number(colorInventory[it.color]) || 0;
+          if (colorAvailable < qty) {
+            console.warn('⚠️ CHECKOUT: Color out of stock', {
+              productId: it.productId,
+              color: it.color,
+              colorAvailable,
+              requested: qty,
+            });
+            return res.status(400).json({ error: `Color ${it.color} is out of stock` });
+          }
         }
       }
     }

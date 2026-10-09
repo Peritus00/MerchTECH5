@@ -33,6 +33,7 @@ import createAudioPlayer, {
 import { ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 import { useRouter } from 'expo-router';
 import SlideshowChat from './SlideshowChat';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
@@ -101,43 +102,19 @@ const SlideshowPlayer = forwardRef<SlideshowPlayerHandle, SlideshowPlayerProps>(
   const resumeAfterCheckoutReturnRef = useRef(false);
 
   // Cart functionality
-  const { addToCart, getTotalItems } = useCart();
+  const { getTotalItems } = useCart();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name) => {
+      Alert.alert('Added to Cart', `${name} has been added to your cart!`);
+    },
+  });
   const router = useRouter();
   const isMobile = width < 768;
   const isEmbedCompact = embedInPlaylist && !isFullscreen;
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
-    try {
-      const product = {
-        id: productLink.id.toString(),
-        name: productLink.title,
-        description: productLink.description || '',
-        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100,
-        imageUrl: productLink.imageUrl || '',
-        images: productLink.images || [],
-        category: '',
-        in_stock: true,
-        slug: '',
-        hasSizes: false,
-        isSuspended: false,
-        createdAt: new Date().toISOString(),
-        userId: 0,
-        metadata: {},
-        prices: [{
-          id: `price_${productLink.id}`,
-          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100,
-          currency: 'usd',
-          type: 'one_time' as const,
-        }],
-      };
-
-      addToCart(product);
-      Alert.alert('Added to Cart', `${product.name} has been added to your cart!`);
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
+    void startAddToCart(productLink.id);
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
@@ -886,6 +863,7 @@ const SlideshowPlayer = forwardRef<SlideshowPlayerHandle, SlideshowPlayerProps>(
         </TouchableOpacity>
       )}
     </View>
+    {addToCartVariantModals}
     </TouchableWithoutFeedback>
   );
 });

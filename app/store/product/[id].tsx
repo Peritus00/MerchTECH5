@@ -10,6 +10,7 @@ import { Product, ProductRating } from '@/shared/product-schema';
 import { productsAPI, checkoutAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import { useCart } from '@/contexts/CartContext';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 import * as WebBrowser from 'expo-web-browser';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ShareButton from '@/components/ShareButton';
@@ -36,7 +37,19 @@ export default function ProductDetailsScreen() {
   const [comment, setComment] = useState('');
   const [quantity, setQuantity] = useState(1);
 
-  const { addToCart, getTotalItems } = useCart();
+  const { getTotalItems } = useCart();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name) => {
+      Alert.alert(
+        'Added to Cart',
+        `${quantity} ${name}${quantity > 1 ? 's' : ''} added to your cart!`,
+        [
+          { text: 'Continue Shopping', style: 'cancel' },
+          { text: 'View Cart', onPress: () => router.push('/store/cart') },
+        ]
+      );
+    },
+  });
 
   useEffect(() => {
     loadProduct();
@@ -138,19 +151,7 @@ export default function ProductDetailsScreen() {
 
     setAddingToCart(true);
     try {
-      // Add the specified quantity to cart
-      for (let i = 0; i < quantity; i++) {
-        addToCart(product);
-      }
-      
-      Alert.alert(
-        'Added to Cart', 
-        `${quantity} ${product.name}${quantity > 1 ? 's' : ''} added to your cart!`,
-        [
-          { text: 'Continue Shopping', style: 'cancel' },
-          { text: 'View Cart', onPress: () => router.push('/store/cart') }
-        ]
-      );
+      await startAddToCart(product, quantity);
     } catch (error) {
       Alert.alert('Error', 'Failed to add product to cart');
     } finally {
@@ -365,6 +366,7 @@ export default function ProductDetailsScreen() {
   };
 
   return (
+    <>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
@@ -590,6 +592,8 @@ export default function ProductDetailsScreen() {
         </ThemedView>
       </ScrollView>
     </KeyboardAvoidingView>
+    {addToCartVariantModals}
+    </>
   );
 }
 

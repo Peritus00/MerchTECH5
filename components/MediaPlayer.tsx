@@ -33,6 +33,7 @@ import createAudioPlayer, {
 import { MediaFile, ProductLink } from '../shared/media-schema';
 import { api, paymentAPI } from '../services/api';
 import { useCart } from '../contexts/CartContext';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 import { useAuth } from '../contexts/AuthContext';
 import { env } from '@/config/environment';
 import { useRouter } from 'expo-router';
@@ -108,7 +109,28 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   const currentMediaIdRef = useRef<number | null>(null);
 
   // Cart functionality
-  const { addToCart, getTotalItems } = useCart();
+  const { getTotalItems } = useCart();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name) => {
+      Alert.alert(
+        'Added to Cart',
+        `${name} has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          {
+            text: 'View Cart',
+            onPress: () => {
+              if (Platform.OS === 'web') {
+                window.location.href = '/store/cart';
+              } else {
+                router.push('/store/cart');
+              }
+            },
+          },
+        ]
+      );
+    },
+  });
   const { user } = useAuth();
   const router = useRouter();
 
@@ -264,52 +286,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
 
   // Product handling functions
   const handleAddToCart = (productLink: ProductLink) => {
-    try {
-      // Convert ProductLink to Product format for cart
-      const product = {
-        id: productLink.id.toString(),
-        name: productLink.title,
-        description: productLink.description || '',
-        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
-        imageUrl: productLink.imageUrl || '',
-        images: productLink.images || [],
-        category: '',
-        in_stock: true,
-        slug: '',
-        hasSizes: false,
-        isSuspended: false,
-        createdAt: new Date().toISOString(),
-        userId: 0,
-        metadata: {},
-        prices: [{
-          id: `price_${productLink.id}`,
-          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
-          currency: 'usd',
-          type: 'one_time' as const,
-        }],
-      };
-
-      addToCart(product);
-
-      Alert.alert(
-        'Added to Cart',
-        `${product.name} has been added to your cart!`,
-        [
-          { text: 'Continue', style: 'cancel' },
-          { text: 'View Cart', onPress: () => {
-            console.log('Navigate to cart');
-            if (Platform.OS === 'web') {
-              window.location.href = '/store/cart';
-            } else {
-              router.push('/store/cart');
-            }
-          } }
-        ]
-      );
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
+    void startAddToCart(productLink.id);
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
@@ -908,6 +885,7 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
   // Enhanced layout for slideshows with Featured Products and Live Chat
   if (slideshow) {
     return (
+      <>
       <View style={styles.slideshowContainer}>
         <CheckoutLaunchBanner
           checkoutUrl={pendingCheckoutUrl}
@@ -1204,11 +1182,14 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
           </View>
         </View>
       </View>
+      {addToCartVariantModals}
+      </>
     );
   }
 
   // Default layout for regular media (playlists, etc.)
   return (
+    <>
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title} numberOfLines={1}>
@@ -1254,6 +1235,8 @@ const MediaPlayer = ({ mediaId, type, media: externalMedia, playlist, slideshow,
         <View style={styles.controlButton} />
       </View>
     </SafeAreaView>
+    {addToCartVariantModals}
+    </>
   );
 };
 

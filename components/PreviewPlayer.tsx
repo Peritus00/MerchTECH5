@@ -17,6 +17,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { ProductLink } from '@/shared/media-schema';
 import { useCart } from '@/contexts/CartContext';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 import { paymentAPI } from '@/services/api';
 import PlaylistChat from './PlaylistChat';
 import CheckoutLaunchBanner from '@/components/CheckoutLaunchBanner';
@@ -174,6 +175,28 @@ function PreviewPlayer({
   
   const router = useRouter();
   const isMobile = Dimensions.get('window').width < 768;
+  const { getTotalItems } = useCart();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name: string) => {
+      Alert.alert(
+        'Added to Cart',
+        `${name} has been added to your cart!`,
+        [
+          { text: 'Continue', style: 'cancel' },
+          {
+            text: 'View Cart',
+            onPress: () => {
+              if (Platform.OS === 'web') {
+                window.location.href = '/store/cart';
+              } else {
+                router.push('/store/cart');
+              }
+            },
+          },
+        ]
+      );
+    },
+  });
 
   useEffect(() => {
     // Disable right-click on web
@@ -1076,56 +1099,8 @@ function PreviewPlayer({
     }
   };
 
-  const { addToCart, getTotalItems } = useCart();
-
   const handleAddToCart = (productLink: ProductLink) => {
-    try {
-      // Convert ProductLink to Product format for cart
-      const product = {
-        id: productLink.id.toString(),
-        name: productLink.title,
-        description: productLink.description || '',
-        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
-        imageUrl: productLink.imageUrl || '',
-        images: productLink.images || [],
-        category: '',
-        inStock: true,
-        in_stock: true,
-        slug: '',
-        hasSizes: false,
-        isSuspended: false,
-        createdAt: new Date().toISOString(),
-        userId: 0,
-        metadata: {},
-        prices: [{
-          id: `price_${productLink.id}`,
-          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100, // Convert to cents
-          currency: 'usd',
-          type: 'one_time' as const,
-        }],
-      };
-
-      addToCart(product);
-
-      Alert.alert(
-        'Added to Cart',
-        `${product.name} has been added to your cart!`,
-        [
-          { text: 'Continue', style: 'cancel' },
-          { text: 'View Cart', onPress: () => {
-            console.log('Navigate to cart');
-            if (Platform.OS === 'web') {
-              window.location.href = '/store/cart';
-            } else {
-              router.push('/store/cart');
-            }
-          } }
-        ]
-      );
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
+    void startAddToCart(productLink.id);
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
@@ -1285,6 +1260,7 @@ function PreviewPlayer({
   }
 
   return (
+    <>
     <View style={styles.container}>
       <CheckoutLaunchBanner
         checkoutUrl={pendingCheckoutUrl}
@@ -1799,6 +1775,8 @@ function PreviewPlayer({
         </View>
       </View>
     </View>
+    {addToCartVariantModals}
+    </>
   );
 }
 

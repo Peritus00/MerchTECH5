@@ -53,6 +53,7 @@ import { AccountStatusIndicator } from '@/components/AccountStatusIndicator';
 import { continuousAudioEnabled } from '@/config/environment';
 import SizeSelectorModal from '@/components/SizeSelectorModal';
 import { productsAPI } from '@/services/api';
+import { useAddToCartWithVariants } from '@/hooks/useAddToCartWithVariants';
 
 interface MediaItem {
   id: string | number;
@@ -508,7 +509,12 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   const AUTO_SKIP_MAX = 6;
   const [autoSkipCircuitOpen, setAutoSkipCircuitOpen] = useState(false);
 
-  const { addToCart, cart, getTotalItems } = useCart();
+  const { cart, getTotalItems } = useCart();
+  const { startAddToCart, variantModals: addToCartVariantModals } = useAddToCartWithVariants({
+    onAdded: (name) => {
+      Alert.alert('Added to Cart', `${name} has been added to your cart!`);
+    },
+  });
   const { user } = useAuth();
   const router = useRouter();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -599,36 +605,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
   }, []);
 
   const handleAddToCart = (productLink: ProductLink) => {
-    try {
-      const product = {
-        id: productLink.id.toString(),
-        name: productLink.title,
-        description: productLink.description || '',
-        price: parseFloat(productLink.price?.replace('$', '') || '0') * 100,
-        imageUrl: productLink.imageUrl || '',
-        images: productLink.images || [],
-        category: '',
-        in_stock: true,
-        slug: '',
-        hasSizes: false,
-        isSuspended: false,
-        createdAt: new Date().toISOString(),
-        userId: 0,
-        metadata: {},
-        prices: [{
-          id: `price_${productLink.id}`,
-          unit_amount: parseFloat(productLink.price?.replace('$', '') || '0') * 100,
-          currency: 'usd',
-          type: 'one_time' as const,
-        }],
-      };
-
-      addToCart(product);
-      Alert.alert('Added to Cart', `${product.name} has been added to your cart!`);
-    } catch (error) {
-      console.error('Add to cart error:', error);
-      Alert.alert('Error', 'Failed to add item to cart');
-    }
+    void startAddToCart(productLink.id);
   };
 
   const handleBuyNow = async (productLink: ProductLink) => {
@@ -3073,6 +3050,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           setSelectedSizeForCheckout(undefined);
         }}
       />
+
+      {addToCartVariantModals}
     </View>
     </TouchableWithoutFeedback>
   );

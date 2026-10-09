@@ -17,6 +17,11 @@ import { useCart } from '@/contexts/CartContext';
 import { checkoutAPI } from '@/services/api';
 import { env } from '@/config/environment';
 import * as WebBrowser from 'expo-web-browser';
+import {
+  cartItemMissingRequiredColor,
+  cartItemMissingRequiredSize,
+  cartLineKey,
+} from '@/utils/productVariants';
 
 // CSP-safe inline SVG placeholder for cart item images
 const CART_FALLBACK_DATA_URI = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100"><rect width="100%" height="100%" fill="%23f3f4f6"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%239ca3af" font-family="Arial, Helvetica, sans-serif" font-size="12">No Image</text></svg>';
@@ -52,6 +57,32 @@ export default function CartScreen() {
   const handleCheckout = async () => {
     if (cart.length === 0) {
       Alert.alert('Empty Cart', 'Your cart is empty.');
+      return;
+    }
+
+    const incompleteItems = cart.filter(
+      (item) => cartItemMissingRequiredSize(item) || cartItemMissingRequiredColor(item)
+    );
+    if (incompleteItems.length > 0) {
+      Alert.alert(
+        'Selection required',
+        'Some items in your cart need a size or color. Remove them and add them again from the product page so we can collect your choices.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Remove incomplete items',
+            style: 'destructive',
+            onPress: () => {
+              incompleteItems.forEach((item) =>
+                removeFromCart(Number(item.product.id), {
+                  size: item.size,
+                  color: item.color,
+                })
+              );
+            },
+          },
+        ]
+      );
       return;
     }
     
@@ -130,7 +161,10 @@ export default function CartScreen() {
         response: err.response?.data,
         status: err.response?.status,
       });
-      Alert.alert('Error', err.message || 'Failed to start checkout');
+      const serverMessage =
+        err.response?.data?.error ||
+        (typeof err.response?.data === 'string' ? err.response.data : null);
+      Alert.alert('Error', serverMessage || err.message || 'Failed to start checkout');
     }
   };
 
@@ -191,7 +225,10 @@ export default function CartScreen() {
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         {cart.map((item, index) => (
-          <ThemedView key={`${item.product.id}-${item.size || 'default'}`} style={styles.cartItem}>
+          <ThemedView
+            key={cartLineKey(item.product.id, item.size, item.color)}
+            style={styles.cartItem}
+          >
             <Image
               source={{ uri: item.product.imageUrl || (item.product.images && item.product.images[0]) || CART_FALLBACK_DATA_URI }}
               style={styles.itemImage}
@@ -205,6 +242,14 @@ export default function CartScreen() {
               {item.size && (
                 <ThemedText style={styles.itemSize}>Size: {item.size}</ThemedText>
               )}
+              {item.color && (
+                <ThemedText style={styles.itemSize}>Color: {item.color}</ThemedText>
+              )}
+              {(cartItemMissingRequiredSize(item) || cartItemMissingRequiredColor(item)) && (
+                <ThemedText style={styles.itemWarning}>
+                  Select size/color again from the store
+                </ThemedText>
+              )}
               
               <ThemedText style={styles.itemPrice}>
                 {formatPrice(getUnitPrice(item.product))}
@@ -215,7 +260,12 @@ export default function CartScreen() {
               <ThemedView style={styles.quantityControls}>
                 <TouchableOpacity
                   style={styles.quantityButton}
-                  onPress={() => updateQuantity(item.product.id, item.quantity - 1, item.size)}
+                  onPress={() =>
+                    updateQuantity(Number(item.product.id), item.quantity - 1, {
+                      size: item.size,
+                      color: item.color,
+                    })
+                  }
                 >
                   <ThemedText style={styles.quantityButtonText}>-</ThemedText>
                 </TouchableOpacity>
@@ -224,7 +274,12 @@ export default function CartScreen() {
                 
                 <TouchableOpacity
                   style={styles.quantityButton}
-                  onPress={() => updateQuantity(item.product.id, item.quantity + 1, item.size)}
+                  onPress={() =>
+                    updateQuantity(Number(item.product.id), item.quantity + 1, {
+                      size: item.size,
+                      color: item.color,
+                    })
+                  }
                 >
                   <ThemedText style={styles.quantityButtonText}>+</ThemedText>
                 </TouchableOpacity>
@@ -232,7 +287,12 @@ export default function CartScreen() {
 
               <TouchableOpacity
                 style={styles.removeButton}
-                onPress={() => removeFromCart(item.product.id, item.size)}
+                onPress={() =>
+                  removeFromCart(Number(item.product.id), {
+                    size: item.size,
+                    color: item.color,
+                  })
+                }
               >
                 <ThemedText style={styles.removeButtonText}>✕</ThemedText>
               </TouchableOpacity>
@@ -327,6 +387,11 @@ const styles = StyleSheet.create({
   itemSize: {
     fontSize: 14,
     opacity: 0.7,
+    marginBottom: 4,
+  },
+  itemWarning: {
+    fontSize: 13,
+    color: '#dc2626',
     marginBottom: 4,
   },
   itemPrice: {
