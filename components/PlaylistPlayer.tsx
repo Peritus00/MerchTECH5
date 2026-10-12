@@ -126,6 +126,8 @@ const isContinuousAudioEligibleType = (item: MediaItem) => {
 interface FeaturedProductsPanelProps {
   productLinks?: ProductLink[];
   isStackedLayout: boolean;
+  /** Slim single-row cards with no section header (mobile) so the player isn't pushed off-screen. */
+  compact?: boolean;
   preOrderNote?: string;
   productImageIndexes: Record<string, number>;
   onImageNavigate: (productId: string, direction: 'prev' | 'next', imageCount: number) => void;
@@ -138,6 +140,7 @@ interface FeaturedProductsPanelProps {
 const FeaturedProductsPanel = React.memo(({
   productLinks,
   isStackedLayout,
+  compact,
   preOrderNote,
   productImageIndexes,
   onImageNavigate,
@@ -154,18 +157,25 @@ const FeaturedProductsPanel = React.memo(({
   );
 
   return (
-    <View style={[styles.slideshowRightPanel, isStackedLayout && styles.mobileRightPanel]}>
-      <View style={styles.featuredProductsHeader}>
-        <MaterialIcons name="storefront" size={24} color="#374151" />
-        <Text style={styles.featuredProductsTitle}>Featured Products</Text>
-      </View>
+    <View style={[
+      styles.slideshowRightPanel,
+      isStackedLayout && styles.mobileRightPanel,
+      compact && styles.compactRightPanel,
+    ]}>
+      {!compact && (
+        <View style={styles.featuredProductsHeader}>
+          <MaterialIcons name="storefront" size={24} color="#374151" />
+          <Text style={styles.featuredProductsTitle}>Featured Products</Text>
+        </View>
+      )}
       <ScrollView
         style={[
           styles.featuredProductsContent,
           isStackedLayout && styles.mobileFeaturedProductsContent,
+          compact && styles.compactFeaturedProductsContent,
         ]}
         showsVerticalScrollIndicator={true}
-        contentContainerStyle={styles.productsListContent}
+        contentContainerStyle={compact ? styles.compactProductsListContent : styles.productsListContent}
         nestedScrollEnabled
       >
         {activeProducts.length > 0 ? (
@@ -173,6 +183,54 @@ const FeaturedProductsPanel = React.memo(({
             const images = link.images && link.images.length > 0 ? link.images : [link.imageUrl].filter(Boolean);
             const currentImageIndex = productImageIndexes[link.id] || 0;
             const currentImage = images[currentImageIndex];
+
+            if (compact) {
+              return (
+                <View key={link.id} style={styles.compactProductCard}>
+                  <View style={styles.compactProductTopRow}>
+                    {currentImage ? (
+                      <MobileCompatibleImage
+                        uri={currentImage}
+                        style={styles.compactProductThumb}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.compactProductThumbPlaceholder}>
+                        <MaterialIcons name="shopping-bag" size={24} color="#9ca3af" />
+                      </View>
+                    )}
+                    <View style={styles.compactProductInfo}>
+                      <Text style={styles.compactProductTitle} numberOfLines={1}>
+                        {link.title}
+                      </Text>
+                      {link.price ? (
+                        <Text style={styles.compactProductPrice}>{formatPrice(link.price)}</Text>
+                      ) : null}
+                      {preOrderNote ? (
+                        <Text style={styles.compactProductNote} numberOfLines={1}>{preOrderNote}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={styles.productActionButtons}>
+                    <TouchableOpacity
+                      style={styles.buyNowButton}
+                      onPress={() => onBuyNow(link)}
+                    >
+                      <MaterialIcons name="flash-on" size={16} color="#fff" />
+                      <Text style={styles.buyNowButtonText}>Buy Now</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.addToCartButton}
+                      onPress={() => onAddToCart(link)}
+                    >
+                      <MaterialIcons name="add-shopping-cart" size={16} color="#3b82f6" />
+                      <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            }
 
             return (
               <View key={link.id} style={styles.enhancedProductCard}>
@@ -431,6 +489,45 @@ const QuickPayOverlay = React.memo(({
   );
 });
 QuickPayOverlay.displayName = 'QuickPayOverlay';
+
+interface StickyBuyBarProps {
+  product: ProductLink;
+  isCheckoutLoading: boolean;
+  onBuyNow: (productLink: ProductLink) => void;
+  formatPrice: (price: string | number) => string;
+}
+
+const StickyBuyBar = React.memo(({
+  product,
+  isCheckoutLoading,
+  onBuyNow,
+  formatPrice,
+}: StickyBuyBarProps) => (
+  <View style={styles.stickyBuyBar}>
+    <View style={styles.stickyBuyBarInfo}>
+      <Text style={styles.stickyBuyBarTitle} numberOfLines={1}>{product.title}</Text>
+      {product.price ? (
+        <Text style={styles.stickyBuyBarPrice}>{formatPrice(product.price)}</Text>
+      ) : null}
+    </View>
+    <TouchableOpacity
+      style={styles.stickyBuyBarButton}
+      onPress={() => onBuyNow(product)}
+      disabled={isCheckoutLoading}
+      activeOpacity={0.85}
+    >
+      {isCheckoutLoading ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <>
+          <MaterialIcons name="flash-on" size={18} color="#fff" />
+          <Text style={styles.stickyBuyBarButtonText}>Buy Now</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  </View>
+));
+StickyBuyBar.displayName = 'StickyBuyBar';
 
 const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackToken, previewPhoneLeadId, autoPlay = false }: PlaylistPlayerProps) => {
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -846,6 +943,9 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
       .sort((a: ProductLink, b: ProductLink) => (a.displayOrder || 0) - (b.displayOrder || 0)),
     [playlistData?.productLinks]
   );
+
+  // Keep Buy Now pinned on mobile so it's reachable no matter how far the customer scrolls
+  const showStickyBuyBar = isMobile && !isFullscreen && activeProducts.length > 0;
 
   const fetchPlaylist = useCallback(async () => {
     if (externalMedia || playlist) {
@@ -2748,18 +2848,23 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         message="Stripe is ready. Open checkout in a new tab to keep the playlist playing here."
       />
       {!isFullscreen && (
-      <View style={styles.slideshowHeader}>
+      <View style={[styles.slideshowHeader, isMobile && styles.slideshowHeaderCompact]}>
         <TouchableOpacity 
-          style={styles.backButton}
+          style={[styles.backButton, isMobile && styles.backButtonCompact]}
           onPress={() => router.back()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#1f2937" />
+          <MaterialIcons name="arrow-back" size={isMobile ? 20 : 24} color="#1f2937" />
         </TouchableOpacity>
-        <Text style={styles.slideshowTitle}>{playlistTitle}</Text>
+        <Text
+          style={[styles.slideshowTitle, isMobile && styles.slideshowTitleCompact]}
+          numberOfLines={isMobile ? 1 : undefined}
+        >
+          {playlistTitle}
+        </Text>
         <View style={styles.headerActions}>
           <AccountStatusIndicator compact />
-          <TouchableOpacity style={styles.cartButton} onPress={() => {
+          <TouchableOpacity style={[styles.cartButton, isMobile && styles.cartButtonCompact]} onPress={() => {
             console.log('Navigate to cart');
             if (Platform.OS === 'web') {
               window.location.href = '/store/cart';
@@ -2793,6 +2898,7 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
           <FeaturedProductsPanel
             productLinks={playlistData?.productLinks}
             isStackedLayout
+            compact={isMobile}
             preOrderNote={playlistTitle}
             productImageIndexes={productImageIndexes}
             onImageNavigate={handleImageNavigation}
@@ -2892,7 +2998,8 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
                 )}
             </View>
             
-            {!isFullscreen && (
+            {/* On mobile the sticky bar replaces the in-flow quick pay strip */}
+            {!isFullscreen && !showStickyBuyBar && (
             <View>
               <QuickPayOverlay
                 activeProducts={activeProducts}
@@ -3011,6 +3118,16 @@ const PlaylistPlayer = ({ playlistId, playlist, media: externalMedia, playbackTo
         </View>
         )}
       </ScrollView>
+
+      {/* Sticky Buy Now bar (mobile) - always visible while the page scrolls */}
+      {showStickyBuyBar && (
+        <StickyBuyBar
+          product={activeProducts[0]}
+          isCheckoutLoading={isCheckoutLoading}
+          onBuyNow={handleBuyNow}
+          formatPrice={formatPrice}
+        />
+      )}
       
       {/* Fullscreen Exit Button Overlay */}
       {isFullscreen && showExitButton && (
@@ -3098,6 +3215,23 @@ const styles = StyleSheet.create({
         color: '#1f2937',
         textAlign: 'center',
         flex: 1,
+    },
+    // Slim header for mobile: single row, one-line title, smaller touch targets
+    slideshowHeaderCompact: {
+        paddingVertical: 6,
+        paddingHorizontal: 10,
+    },
+    backButtonCompact: {
+        padding: 6,
+        marginRight: 8,
+    },
+    slideshowTitleCompact: {
+        fontSize: 16,
+        textAlign: 'left',
+        minWidth: 0,
+    },
+    cartButtonCompact: {
+        padding: 6,
     },
     headerActions: {
         flexDirection: 'row',
@@ -3715,6 +3849,115 @@ const styles = StyleSheet.create({
   },
   quickPayNavButtonRight: {
     right: 6,
+  },
+
+  // Sticky buy bar (mobile): stays pinned under the scroll area so Buy Now is always reachable
+  stickyBuyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 10,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 8,
+    zIndex: 30,
+  },
+  stickyBuyBarInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  stickyBuyBarTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  stickyBuyBarPrice: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1f2937',
+  },
+  stickyBuyBarButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#2563eb',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    minWidth: 130,
+  },
+  stickyBuyBarButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+  // Compact featured product card (mobile, stacked above the player)
+  compactRightPanel: {
+    minHeight: 0,
+    marginTop: 0,
+    padding: 10,
+  },
+  compactFeaturedProductsContent: {
+    flexGrow: 0,
+    minHeight: 0,
+    maxHeight: 190,
+  },
+  compactProductsListContent: {
+    paddingBottom: 0,
+  },
+  compactProductCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    marginBottom: 8,
+    gap: 8,
+  },
+  compactProductTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  compactProductThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    overflow: 'hidden',
+  },
+  compactProductThumbPlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  compactProductInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  compactProductTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  compactProductPrice: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1f2937',
+  },
+  compactProductNote: {
+    color: '#f59e0b',
+    fontSize: 11,
+    fontWeight: '600',
   },
   
   // Fullscreen-specific styles
