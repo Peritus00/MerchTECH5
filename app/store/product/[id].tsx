@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { PanGestureHandler, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -16,6 +16,8 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import ShareButton from '@/components/ShareButton';
 import { CartHeader } from '@/components/CartHeader';
 import { MobileCompatibleImage } from '@/components/MobileCompatibleImage';
+import SizeSelectorModal from '@/components/SizeSelectorModal';
+import { parseProductMetadata, getSizesWithStock, getColorsWithStock } from '@/utils/productVariants';
 
 const { width } = Dimensions.get('window');
 
@@ -30,6 +32,13 @@ export default function ProductDetailsScreen() {
   const [buyingNow, setBuyingNow] = useState(false);
   const flatListRef = useRef<FlatList<string>>(null);
   const [base, setBase] = useState('');
+
+  // Buy Now variant selection state
+  const [buyNowSizeVisible, setBuyNowSizeVisible] = useState(false);
+  const [buyNowColorVisible, setBuyNowColorVisible] = useState(false);
+  const [buyNowSizes, setBuyNowSizes] = useState<string[]>([]);
+  const [buyNowColors, setBuyNowColors] = useState<string[]>([]);
+  const [buyNowPendingSize, setBuyNowPendingSize] = useState<string | undefined>();
 
   // Ratings & comments
   const [ratings, setRatings] = useState<ProductRating[]>([]);
@@ -159,15 +168,12 @@ export default function ProductDetailsScreen() {
     }
   };
 
-  const handleBuyNow = async () => {
-    if (!product.in_stock) {
-      Alert.alert('Out of Stock', 'This product is currently out of stock.');
-      return;
-    }
+  /** Opens the Stripe checkout session for the given size/color (both optional). */
+  const launchBuyNowCheckout = useCallback(async (size?: string, color?: string) => {
+    if (!product) return;
 
     setBuyingNow(true);
     try {
-      // Ensure base URL is set before creating session
       if (Platform.OS === 'web' && !base) {
         Alert.alert('Error', 'Could not determine checkout URL. Please refresh and try again.');
         return;
@@ -176,9 +182,9 @@ export default function ProductDetailsScreen() {
       const absBase = base || (Platform.OS === 'web' ? (typeof window !== 'undefined' ? window.location.origin : '') : env.frontendUrl.replace(/\/$/, ''));
       const successUrl = `${absBase}/store/checkout-success`;
       const cancelUrl = `${absBase}/store/product/${id}`;
-      
-      const items = Array(quantity).fill({ productId: product.id, quantity: 1 });
-      
+
+      const items = Array(quantity).fill({ productId: product.id, quantity: 1, size, color });
+
       console.log('🔗 BUY_NOW: Creating session with items:', items);
 
       const response = await checkoutAPI.createSession(items, successUrl, cancelUrl);
@@ -192,13 +198,10 @@ export default function ProductDetailsScreen() {
       console.log('🔗 BUY_NOW: Opening URL:', checkoutUrl);
 
       if (Platform.OS === 'web') {
-        // Direct redirect - no popups, works reliably on all devices
         console.log('🔗 BUY_NOW: Redirecting to checkout:', checkoutUrl);
         window.location.href = checkoutUrl;
       } else {
-        // For mobile native apps (iOS/Android)
         if (Platform.OS === 'ios') {
-          // iOS: Try WebBrowser first, fallback to Linking if it fails
           try {
             const result = await WebBrowser.openBrowserAsync(checkoutUrl, {
               dismissButtonStyle: 'done',
@@ -206,13 +209,10 @@ export default function ProductDetailsScreen() {
               controlsColor: '#3b82f6',
             });
             console.log('🔗 BUY_NOW (iOS): WebBrowser result:', result);
-            
-            // If user dismissed the browser, handle it gracefully
             if (result.type === 'cancel') {
               console.log('🔗 BUY_NOW (iOS): User cancelled checkout');
             }
           } catch (webBrowserError) {
-            // Fallback to Linking API for iOS
             console.warn('🔗 BUY_NOW (iOS): WebBrowser failed, trying Linking API:', webBrowserError);
             const canOpen = await Linking.canOpenURL(checkoutUrl);
             if (canOpen) {
@@ -223,22 +223,90 @@ export default function ProductDetailsScreen() {
             }
           }
         } else {
-          // Android: Use WebBrowser
           const result = await WebBrowser.openBrowserAsync(checkoutUrl);
           console.log('🔗 BUY_NOW (Android): WebBrowser result:', result);
         }
       }
     } catch (err: any) {
       console.error('🔴 BUY_NOW ERROR:', err);
-      console.error('🔴 BUY_NOW ERROR Details:', {
-        message: err.message,
-        response: err.response?.data,
-        status: err.response?.status,
-      });
       Alert.alert('Error', 'Failed to initiate checkout. Please try again.');
     } finally {
       setBuyingNow(false);
     }
+  }, [product, base, id, quantity]);
+
+  const handleBuyNow = async () => {
+    if (!product.in_stock) {
+      Alert.alert('Out of Stock', 'This product is currently out of stock.');
+      return;
+    }
+
+    // Resolve full product details (needed for metadata / variant info)
+    let resolvedProduct = product;
+    try {
+      const meta = parseProductMetadata(product.metadata);
+      const needsFetch =
+        Object.keys(meta).length === 0 ||
+        (meta.hasSizes && !meta.availableSizes?.length) ||
+        (meta.hasColors && !meta.availableColors?.length);
+      if (needsFetch) {
+        const details = await productsAPI.getProductById(String(product.id));
+        resolvedProduct = (details.product || details) as Product;
+      }
+    } catch {
+      // If fetch fails, proceed with what we have
+    }
+
+    const meta = parseProductMetadata(resolvedProduct.metadata);
+    const sizesWithStock = getSizesWithStock(meta);
+    const colorsWithStock = getColorsWithStock(meta);
+
+    if (sizesWithStock.length > 0) {
+      // Show size selector — checkout will be launched after selection
+      setBuyNowSizes(sizesWithStock);
+      setBuyNowColors(colorsWithStock);
+      setBuyNowPendingSize(undefined);
+      setBuyNowSizeVisible(true);
+      return;
+    }
+
+    if (meta.hasSizes && meta.availableSizes?.length) {
+      Alert.alert('Out of Stock', 'This product is currently out of stock in all sizes.');
+      return;
+    }
+
+    if (colorsWithStock.length > 0) {
+      setBuyNowColors(colorsWithStock);
+      setBuyNowPendingSize(undefined);
+      setBuyNowColorVisible(true);
+      return;
+    }
+
+    if (meta.hasColors && meta.availableColors?.length) {
+      Alert.alert('Out of Stock', 'This product is currently out of stock in all colors.');
+      return;
+    }
+
+    // No variants — go straight to checkout
+    launchBuyNowCheckout();
+  };
+
+  /** Called when user picks a size in the Buy Now flow. */
+  const handleBuyNowSizeSelected = (size: string) => {
+    setBuyNowSizeVisible(false);
+    if (buyNowColors.length > 0) {
+      // Need a color too — store the size and show color picker
+      setBuyNowPendingSize(size);
+      setBuyNowColorVisible(true);
+    } else {
+      launchBuyNowCheckout(size, undefined);
+    }
+  };
+
+  /** Called when user picks a color in the Buy Now flow. */
+  const handleBuyNowColorSelected = (color: string) => {
+    setBuyNowColorVisible(false);
+    launchBuyNowCheckout(buyNowPendingSize, color);
   };
 
   const submitReview = () => {
@@ -593,6 +661,26 @@ export default function ProductDetailsScreen() {
       </ScrollView>
     </KeyboardAvoidingView>
     {addToCartVariantModals}
+
+    {/* Buy Now — Size selector */}
+    <SizeSelectorModal
+      visible={buyNowSizeVisible}
+      productName={product?.name ?? ''}
+      sizes={buyNowSizes}
+      title="Select Size"
+      onSelectSize={handleBuyNowSizeSelected}
+      onClose={() => setBuyNowSizeVisible(false)}
+    />
+
+    {/* Buy Now — Color selector */}
+    <SizeSelectorModal
+      visible={buyNowColorVisible}
+      productName={product?.name ?? ''}
+      sizes={buyNowColors}
+      title="Select Color"
+      onSelectSize={handleBuyNowColorSelected}
+      onClose={() => setBuyNowColorVisible(false)}
+    />
     </>
   );
 }
