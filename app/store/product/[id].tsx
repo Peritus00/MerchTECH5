@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Dimensions, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert, ActivityIndicator, Linking } from 'react-native';
 import { PanGestureHandler, PinchGestureHandler } from 'react-native-gesture-handler';
 import Animated, { useAnimatedGestureHandler, useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
@@ -169,7 +169,7 @@ export default function ProductDetailsScreen() {
   };
 
   /** Opens the Stripe checkout session for the given size/color (both optional). */
-  const launchBuyNowCheckout = useCallback(async (size?: string, color?: string) => {
+  const launchBuyNowCheckout = async (size?: string, color?: string) => {
     if (!product) return;
 
     setBuyingNow(true);
@@ -233,7 +233,7 @@ export default function ProductDetailsScreen() {
     } finally {
       setBuyingNow(false);
     }
-  }, [product, base, id, quantity]);
+  };
 
   const handleBuyNow = async () => {
     if (!product.in_stock) {
