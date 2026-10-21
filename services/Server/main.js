@@ -267,6 +267,11 @@ app.use(helmet({
         "'self'",
         "https://accounts.google.com", // For Google Sign-In popup/iframe
         "https://appleid.apple.com", // For Apple Sign-In popup/iframe
+        "https://www.facebook.com", // Meta Pixel hidden iframe
+      ],
+      formAction: [
+        "'self'",
+        "https://www.facebook.com", // Meta Pixel event delivery (facebook.com/tr/)
       ],
     },
   },
