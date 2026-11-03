@@ -17480,8 +17480,10 @@ app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired playback token' });
   }
-  const client = await db.getClient();
+  // Client acquired inside try so the finally block always covers it, even on early returns.
+  let client;
   try {
+    client = await db.getClient();
     const slideshowRes = await client.query(
       `SELECT s.* FROM slideshows s WHERE s.id = $1 AND s.deleted_at IS NULL`,
       [slideshowId]
@@ -17583,7 +17585,7 @@ app.get('/api/slideshow-for-playlist/:slideshowId', async (req, res) => {
     console.error('🎬 SLIDESHOW_FOR_PLAYLIST: Error:', err);
     res.status(500).json({ message: 'Internal server error' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -20988,8 +20990,10 @@ let server;
         console.error('⚠️  Startup database fixes failed (non-critical):', err.message);
       }
 
-      // Start Neon keepalive AFTER all startup migrations are done
-      db.startKeepalive();
+      // db.startKeepalive() intentionally removed — the keepalive timer was pinging
+      // the database every 4 minutes, preventing Neon autosuspend.  The pool is now
+      // configured with min:0 / allowExitOnIdle:true / idleTimeoutMillis:10000 so
+      // connections are released naturally and Neon can suspend after 5 min of idle.
     });
 
     server.on('error', (err) => {

@@ -80,12 +80,11 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL?.includes('neon.tech') ? { rejectUnauthorized: false } : false,
   connectionTimeoutMillis: 10000, // 10 seconds to connect
-  idleTimeoutMillis: 30000,       // 30 seconds to release idle clients (increased from 20s)
-  max: getPoolMax(),              // Increased from 10 to 20-50 based on environment
-  min: 2,                         // Minimum connections to maintain
-  allowExitOnIdle: false,         // Keep pool alive even when idle
-  keepAlive: true,                // TCP keepalive to prevent load balancer from dropping idle connections
-  keepAliveInitialDelayMillis: 10000
+  idleTimeoutMillis: 10000,       // 10 seconds — drop idle clients quickly so Neon can autosuspend
+  max: getPoolMax(),              // 20-50 based on environment
+  min: 0,                         // No persistent minimum — allow pool to go fully idle between requests
+  allowExitOnIdle: true,          // Release all connections when pool goes idle (required for Neon autosuspend)
+  // keepAlive intentionally omitted — TCP keepalive would prevent Neon from detecting idle connections
 });
 
 // Pool event handlers for monitoring
@@ -467,34 +466,18 @@ const close = async () => {
   }
 };
 
-// Keepalive ping for Neon serverless databases.
-// Neon suspends the DB after ~5 minutes of idle time, which terminates
-// all existing connections and causes 1-2.6 second cold-start latency on
-// the next request. Pinging every 4 minutes prevents suspension.
-let _keepaliveTimer = null;
-const startKeepalive = () => {
-  if (_keepaliveTimer) return; // already running
-  const INTERVAL_MS = 4 * 60 * 1000; // 4 minutes
-  _keepaliveTimer = setInterval(async () => {
-    try {
-      await query('SELECT 1', [], { queryName: 'db_keepalive', timeout: 5000 });
-      logger.info({ type: 'db_keepalive', message: 'Database keepalive ping successful', timestamp: new Date().toISOString() });
-    } catch (err) {
-      // Don't crash — pool will reconnect on the next real request
-      logger.warn({ type: 'db_keepalive_failed', message: 'Database keepalive ping failed (pool will reconnect)', error: err.message, timestamp: new Date().toISOString() });
-    }
-  }, INTERVAL_MS);
-  // Allow process to exit cleanly even if timer is running
-  if (_keepaliveTimer.unref) _keepaliveTimer.unref();
-  logger.info({ type: 'db_keepalive_started', message: 'Neon DB keepalive started (4-minute interval)', timestamp: new Date().toISOString() });
-};
+// NOTE: The previous "keepalive" setInterval (SELECT 1 every 4 minutes) was removed.
+// That timer was the direct cause of Neon never autosuspending — it kept the database
+// awake 24/7 by design. Neon's autosuspend feature requires the database to see no
+// connections for ≥ 5 minutes. With min:0, allowExitOnIdle:true, and idleTimeoutMillis:10000
+// the pool now releases all connections after 10 s of inactivity, giving Neon the idle
+// window it needs. Accept the ~1-2 s cold-start reconnect cost on the first request after
+// a suspension period — it is far cheaper than paying for 24/7 compute.
 
-const stopKeepalive = () => {
-  if (_keepaliveTimer) {
-    clearInterval(_keepaliveTimer);
-    _keepaliveTimer = null;
-  }
-};
+// startKeepalive / stopKeepalive are kept as no-ops so that any callers that already
+// reference them don't throw a runtime error.
+const startKeepalive = () => {};
+const stopKeepalive = () => {};
 
 module.exports = {
   pool,
