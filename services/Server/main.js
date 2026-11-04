@@ -1416,9 +1416,11 @@ app.get('/api/health/liveness', (req, res) => {
     });
 });
 
-// Health check cache to reduce DB load when hit frequently (5 second TTL)
+// Health check cache — 5-minute TTL so that any external uptime monitors still
+// hitting /api/health only trigger one real DB query per 5-minute window.
+// For zero-DB health checks use /api/health/liveness instead.
 let healthCheckCache = null;
-const HEALTH_CACHE_TTL_MS = 5000;
+const HEALTH_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 // Readiness probe: DB + critical services. Returns 200 healthy, 503 degraded/unhealthy.
 app.get('/api/health', async (req, res) => {

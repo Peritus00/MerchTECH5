@@ -7,6 +7,8 @@
   "deploy": {
     "startCommand": "npm run server:prod",
     "restartPolicyType": "ALWAYS",
-    "restartPolicyMaxRetries": 10
+    "restartPolicyMaxRetries": 10,
+    "healthcheckPath": "/api/health/liveness",
+    "healthcheckTimeout": 30
   }
 } 
