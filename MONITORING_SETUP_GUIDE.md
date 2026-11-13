@@ -6,11 +6,17 @@ This guide helps you set up external monitoring for your MerchTech/MerchTrader p
 
 | Endpoint | Purpose | Expected | Use For |
 |----------|---------|----------|---------|
-| `/api/health/liveness` | Process alive | 200 always | Host liveness probes only |
-| `/api/health` | Readiness (DB + S3) | 200 healthy, 503 degraded/unhealthy | Uptime monitoring, load balancer |
+| `/api/health/liveness` | Process alive (no DB) | 200 always | ✅ Uptime monitors, host liveness probes |
+| `/api/health` | Readiness (DB + S3) | 200 healthy, 503 degraded/unhealthy | ⚠️ Manual diagnostics ONLY — never automate |
 | `/api/health/playback` | Streaming works | 200 healthy, 503 if broken | Playback verification |
 
-**Alert on**: `/api/health` or `/api/health/playback` returning non-200, or response time > 5s.
+> **⚠️ IMPORTANT — Neon autosuspend:** Do NOT point automated monitors at `/api/health`.
+> That endpoint runs `SELECT NOW()` against the database on every call and will prevent
+> Neon from ever autosuspending, causing 24/7 compute charges. Always use
+> `/api/health/liveness` for uptime monitors and health probes — it returns `{status:"alive"}`
+> with zero database queries.
+
+**Alert on**: `/api/health/liveness` returning non-200, or response time > 5s.
 
 ## Phase 1: Basic Uptime Monitoring
 
@@ -19,8 +25,8 @@ This guide helps you set up external monitoring for your MerchTech/MerchTrader p
 1. **Sign up**: Go to https://uptimerobot.com and create a free account
 2. **Add Monitor**:
    - Monitor Type: **HTTP(s)**
-   - Friendly Name: `MerchTrader API Readiness`
-   - URL: `https://www.merchtrader.org/api/health` (or your production URL)
+   - Friendly Name: `MerchTrader Liveness`
+   - URL: `https://www.merchtrader.org/api/health/liveness` ← use liveness, NOT /api/health
    - Monitoring Interval: **5 minutes** (free tier minimum)
    - Alert Contacts: Add your email/SMS
 
@@ -47,7 +53,7 @@ This guide helps you set up external monitoring for your MerchTech/MerchTrader p
 1. **Sign up**: Go to https://www.pingdom.com
 2. **Add Check**:
    - Check Type: **HTTP**
-   - URL: `https://merchtech5-production.up.railway.app/api/health`
+   - URL: `https://merchtech5-production.up.railway.app/api/health/liveness` ← use liveness, NOT /api/health
    - Check Interval: **1 minute** (or as per your plan)
    - Expected Status Code: `200`
    - Response Time Threshold: **3 seconds**
@@ -65,7 +71,7 @@ This simulates what a real customer does when playing media.
 1. **Add Monitor**:
    - Monitor Type: **HTTP(s)**
    - Friendly Name: `MerchTech Playback Health`
-   - URL: `https://merchtech5-production.up.railway.app/api/health/playback`
+   - URL: `https://www.merchtrader.org/api/health/playback`
    - Monitoring Interval: **5 minutes**
    - Expected Status Code: `200`
    - Response Time Threshold: **10 seconds**

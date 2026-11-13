@@ -1416,11 +1416,12 @@ app.get('/api/health/liveness', (req, res) => {
     });
 });
 
-// Health check cache — 5-minute TTL so that any external uptime monitors still
-// hitting /api/health only trigger one real DB query per 5-minute window.
-// For zero-DB health checks use /api/health/liveness instead.
+// Health check cache — 10-minute TTL so that even if an uptime monitor still hits
+// /api/health, it only triggers one real DB query per 10-minute window, giving
+// Neon a clear >5-minute idle window to autosuspend between queries.
+// For zero-DB uptime monitoring always use /api/health/liveness instead.
 let healthCheckCache = null;
-const HEALTH_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const HEALTH_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 // Readiness probe: DB + critical services. Returns 200 healthy, 503 degraded/unhealthy.
 app.get('/api/health', async (req, res) => {
